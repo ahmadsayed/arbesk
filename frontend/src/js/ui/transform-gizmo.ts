@@ -1,10 +1,7 @@
 /**
- * Arbesk Transform Gizmo
- *
- * Viewport controls to translate, rotate, and scale the currently selected
- * node using Babylon.js's built-in GizmoManager. Transform edits are staged
- * in `state.pendingTransformEdits` and persisted to the manifest on the
- * next Save Draft / Publish.
+ * Viewport controls to translate, rotate, and scale the selected node.
+ * @remarks Transform edits are staged and only persisted on the next Save
+ *   Draft / Publish.
  */
 
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -21,9 +18,7 @@ import { pushUndoEntry } from "../engine/undo-stack.ts";
 const TOOLBAR_ID = "transformToolbar";
 
 /**
- * Show/hide the viewport ground grid and in-scene axis lines. Both are
- * viewport chrome owned by scene-graph.js (metadata.isViewportChrome) —
- * this only flips their enabled flags and syncs the toolbar button state.
+ * Toggles the viewport ground grid and in-scene axis lines.
  */
 export function toggleGrid(): boolean {
   const grid = state.scene?.getMeshByName("groundGrid");
@@ -59,8 +54,7 @@ const ICONS = {
 };
 
 /**
- * Initialize the transform gizmo and its viewport toolbar.
- * Called once from scene-graph.js after the engine and scene are ready.
+ * Initializes the transform gizmo and its viewport toolbar.
  */
 function initTransformGizmo(
   scene: BABYLON.Scene,
@@ -115,8 +109,8 @@ function captureNodeTransform(nodeId: string): void {
 }
 
 /**
- * Node ids the gizmo acts on: the multi-selection when present, otherwise the
- * single highlighted node.
+ * Returns the node ids the gizmo acts on: the multi-selection when present,
+ * otherwise the single highlighted node.
  */
 function _selectedIds(): string[] {
   return state.selectedNodeIds.size > 0
@@ -127,9 +121,7 @@ function _selectedIds(): string[] {
 }
 
 /**
- * Stage the transforms of every selected node (single or multi-selection)
- * and notify listeners (e.g. the inspector scale fields) so they can
- * refresh from the anchors.
+ * Stages the transforms of every selected node.
  */
 function captureSelectedTransform(): void {
   const ids = _selectedIds();
@@ -223,11 +215,11 @@ function _ensureGroupPivot(): BABYLON.TransformNode {
 }
 
 /**
- * Selected anchors whose Babylon parent chain contains no other selected
- * anchor. Ctrl+A selects child-asset-internal anchors too; transforming both
- * a parent and its nested child in the same group drag would move the child
- * twice (once via the parent hierarchy, once directly), so only the top-most
- * anchors are driven — nested ones ride along.
+ * Returns selected anchors with no other selected anchor in their parent
+ * chain.
+ * @remarks Transforming both a parent and its nested child in one group drag
+ *   would move the child twice, so only the top-most anchors are driven and
+ *   nested ones ride along.
  */
 function _topLevelSelectedAnchors(): BABYLON.TransformNode[] {
   const anchors = [...state.selectedNodeIds]
@@ -297,8 +289,8 @@ function _startGroupDrag(): void {
 }
 
 /**
- * Re-derive every grouped anchor's local TRS from the pivot's current world
- * matrix. Called per frame while a group drag is active.
+ * Re-derives every grouped anchor's local TRS from the pivot's current world
+ * matrix.
  */
 function _applyGroupDrag(): void {
   if (!_groupSnapshot || !_groupPivot) return;
@@ -497,7 +489,9 @@ function setMode(mode: TransformMode): void {
 
 const _subscribedGizmos = new WeakSet<object>();
 
-/** Babylon position/rotation/scale gizmo */
+/**
+ * @param gizmo a Babylon position/rotation/scale gizmo.
+ */
 function ensureDragEndSubscription(gizmo: any): void {
   if (!gizmo || _subscribedGizmos.has(gizmo)) return;
   let subscribed = false;

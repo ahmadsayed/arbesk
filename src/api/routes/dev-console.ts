@@ -3,14 +3,9 @@ import type { Request, Response } from "express";
 
 /**
  * Dev-only browser console bridge (diagnostics sink).
- *
- * The frontend ships a small console shim (frontend/src/pug/includes/head.pug)
- * that overrides `console.*`, `window.onerror`, and `unhandledrejection`, then
- * POSTs batches here. Each entry is echoed to stdout with a `[BROWSER]` tag so
- * the DeepSeek Harness side-viewer's console (which tails the backend stdout)
- * can surface browser-side logs alongside the Node logs.
- *
- * Fire-and-forget: reads nothing, writes nothing, always succeeds.
+ * @remarks Echoes each entry to stdout with a `[BROWSER]` tag so the
+ *   side-viewer's console (which tails backend stdout) can surface
+ *   browser-side logs alongside Node logs. Fire-and-forget: always succeeds.
  */
 export default () => {
   const router = express.Router();

@@ -1,13 +1,8 @@
 /**
- * Arbesk Parametric Preview & Token Child Inspector
- *
  * Binds Node Inspector inputs to live Babylon.js material/mesh updates.
- * Color edits are applied directly to the source glTF/GLB asset on Save;
- * the inspector only keeps a lightweight pending-edit map for the live
- * preview so the viewport stays responsive.
- *
- * Closing the inspector (X) reverts the live preview to the material colors
- * captured when the inspector opened.
+ * @remarks Color edits are applied directly to the source asset on Save; the
+ *   inspector keeps only a lightweight pending-edit map for the live preview.
+ *   Closing the inspector reverts the preview to the colors captured at open.
  */
 
 import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -92,10 +87,7 @@ registerUndoApplier("color", (item, direction) => {
 });
 
 /**
- * Read the current solid color from a mesh's material (diffuse or albedo).
- *
- * @param {BABYLON.AbstractMesh} mesh
- * @returns {string|null}
+ * Reads the current solid color from a mesh's material (diffuse or albedo).
  */
 function getMeshMaterialColor(mesh: BABYLON.AbstractMesh) {
   if (!mesh?.material) return null;
@@ -115,10 +107,6 @@ function getMeshMaterialColor(mesh: BABYLON.AbstractMesh) {
 
 const MIN_SCALE = 0.01;
 
-/**
- * @param {string|null} nodeId
- * @returns {BABYLON.TransformNode|null}
- */
 function _getLiveAnchor(nodeId: string | null) {
   if (!nodeId) return null;
   const anchor = state.nodeAnchors.get(nodeId);
@@ -126,9 +114,10 @@ function _getLiveAnchor(nodeId: string | null) {
 }
 
 /**
- * Sync the Scale section fields from the active node's anchor. Hides the
- * section when no single selected node has a live anchor, and skips the
- * refresh while a scale field has focus so typing is never clobbered.
+ * Syncs the Scale section fields from the active node's anchor.
+ * @remarks Hides the section when no single selected node has a live anchor,
+ *   and skips the refresh while a scale field has focus so typing isn't
+ *   clobbered.
  */
 function _refreshScaleFields() {
   if (!scaleSection || !nodeScaleFactor || !nodeScalePercent) return;
@@ -146,12 +135,10 @@ function _refreshScaleFields() {
 }
 
 /**
- * Apply an absolute uniform scale factor to the active node and stage the
- * transform for Save/Publish — the same path as the viewport scale gizmo.
- * Keying the same factor into every copy of a model makes them identical
- * in size.
- *
- * @param {number} factor
+ * Applies an absolute uniform scale factor to the active node and stages the
+ * transform for Save/Publish.
+ * @remarks Keying the same factor into every copy of a model makes them
+ *   identical in size.
  */
 function _applyUniformScale(factor: number) {
   const anchor = _getLiveAnchor(activeNodeId);
@@ -176,10 +163,8 @@ function _applyUniformScale(factor: number) {
 }
 
 /**
- * Normalize a child_ref's identity across the legacy flat shape
- * ({tokenId, chainId, contractAddress}) and the collection shape
- * ({collection: {chainId, contractAddress, tokenId}, assetID}).
- * @param {any} childRef
+ * Normalizes a child_ref's identity across the legacy flat shape and the
+ * collection shape.
  */
 function resolveChildRefIdentity(childRef: any) {
   const refTokenId = childRef?.tokenId || childRef?.collection?.tokenId || null;
@@ -190,11 +175,7 @@ function resolveChildRefIdentity(childRef: any) {
 }
 
 /**
- * Populate the token child info DOM fields.
- * @param {any} childRef
- * @param {string|null} refTokenId
- * @param {any} refChainId
- * @param {string|null} refContractAddress
+ * Populates the token child info DOM fields.
  */
 function renderTokenChildFields(
   childRef: any,
@@ -218,9 +199,7 @@ function renderTokenChildFields(
 }
 
 /**
- * Show the Token Child Info panel for a child_ref node.
- *
- * @param {string} nodeId
+ * Shows the Token Child Info panel for a child_ref node.
  */
 function showTokenChildInfo(nodeId: string) {
   if (parametricEditor) parametricEditor.hidden = true;
@@ -283,8 +262,9 @@ function syncInspectorToggleAria() {
 }
 
 /**
- * Ensure the inspector starts open by default. Collapse state is not persisted
- * across reloads, so the panel is reliably open until the user toggles it.
+ * Ensures the inspector starts open by default.
+ * @remarks Collapse state isn't persisted across reloads, so the panel is
+ *   reliably open until the user toggles it.
  */
 function restoreInspectorCollapsedState() {
   expandInspector();
@@ -301,11 +281,9 @@ function _getMultiSelectInfoEl() {
 }
 
 /**
- * Multi-selections get a summary instead of per-node material controls:
- * group transforms happen in the viewport; time travel and material edits
- * stay single-selection features.
- *
- * @param {number} count
+ * Shows a summary for multi-selections instead of per-node material controls.
+ * @remarks Group transforms happen in the viewport; time travel and material
+ *   edits stay single-selection features.
  */
 function showMultiSelectSummary(count: number) {
   activeNodeId = null;
@@ -322,9 +300,7 @@ function showMultiSelectSummary(count: number) {
 }
 
 /**
- * Show the parametric editor for a regular node.
- *
- * @param {string} nodeId
+ * Shows the parametric editor for a regular node.
  */
 async function openInspector(nodeId: string) {
   activeNodeId = nodeId;
@@ -392,9 +368,7 @@ function closeInspector() {
 }
 
 /**
- * Activate a component in the inspector: show the single color editor for it.
- *
- * @param {string} meshName
+ * Activates a component in the inspector and shows its color editor.
  */
 function selectComponent(meshName: string) {
   if (!activeNodeId) return;
@@ -421,11 +395,8 @@ function selectComponent(meshName: string) {
 }
 
 /**
- * Live preview: the selected component's color changed.
- * Live preview: the selected component's color changed.
- * Applies the color immediately to the viewport and records it for Save.
- *
- * @param {Event} e
+ * Applies the selected component's color change immediately to the viewport
+ * (live preview) and records it for Save.
  */
 function onComponentColorChange(e: Event) {
   if (!activeNodeId) return;
@@ -461,17 +432,11 @@ export function clearPendingSourceColorEdits() {
   pendingSourceColorEdits.clear();
 }
 
-/**
- * @param {string} nodeId
- */
 export function clearPendingSourceColorEdit(nodeId: string) {
   pendingSourceColorEdits.delete(nodeId);
 }
 
 // Event bindings
-/**
- * @param {{nodeId: string}} e
- */
 function onNodeSelected(e: { nodeId: string }) {
   // Multi-select: the inspector shows a summary instead of per-node controls.
   if (state.selectedNodeIds.size > 1) {
@@ -500,18 +465,12 @@ on(EVENTS.SELECTION_CHANGED, (e: {nodeIds?: string[]}) => {
   }
 });
 
-/**
- * @param {{nodeId: string}} e
- */
 function onNodeDoubleClicked(e: { nodeId: string }) {
   selectNodeById(e.nodeId);
   openInspector(e.nodeId);
 }
 on(EVENTS.NODE_DOUBLE_CLICKED, onNodeDoubleClicked);
 
-/**
- * @param {{nodeId: string, additive?: boolean}} e
- */
 function onOutlinerNodeSelected(e: { nodeId: string; additive?: boolean }) {
   if (e?.additive) {
     // Ctrl/Cmd+click in the outliner: multi-select summary. The matching
@@ -598,9 +557,6 @@ if (selectedComponentColor) {
 }
 
 // Update token child CID when resolution completes and we're showing the info
-/**
- * @param {{nodeId?: string, resolvedCid?: string}} e
- */
 function onTokenChildAdded(e: { nodeId?: string; resolvedCid?: string }) {
   if (e?.nodeId === activeNodeId && tokenChildCidEl) {
     tokenChildCidEl.textContent = e.resolvedCid || "Resolving…";

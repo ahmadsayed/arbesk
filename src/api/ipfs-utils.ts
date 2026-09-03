@@ -1,10 +1,6 @@
 /**
- * Arbesk IPFS Utilities
- *
- * Shared IPFS read/write helpers with consistent timeout handling.
- * Replaces the duplicated chunk-decoding pattern in:
- *   - api/index.js (getFromIPFS)
- *   - api/assets/generate-node.js (inline, no timeout - bug!)
+ * Shared IPFS read/write helpers.
+ * @remarks Consistent timeout handling.
  */
 
 import zlib from "zlib";
@@ -18,10 +14,7 @@ function toBuffer(data: unknown): Buffer {
   return Buffer.from(data as ArrayBuffer);
 }
 
-/**
- * Decompress gzipped data if needed, otherwise return as-is.
- * Returns the decompressed string if gzipped, the original string otherwise.
- */
+/** Decompresses gzipped data if needed, otherwise returns as-is. */
 export async function maybeDecompress(
   data: Buffer | Uint8Array | ArrayBuffer | string,
 ): Promise<string> {
@@ -60,18 +53,8 @@ export async function maybeDecompress(
 }
 
 /**
- * Read and decode a manifest from IPFS with a configurable timeout.
- *
- * Handles all chunk encoding variants:
- *   - Uint16Array (mock/test)
- *   - Uint8Array / Buffer (real Kubo IPFS node)
- *   - String
- *
- * @param ipfs - ipfs-http-client instance
- * @param cid - IPFS CID to read
- * @param timeoutMs - read timeout in ms (native `AbortOptions.timeout` of ipfs-http-client)
- * @returns Decoded manifest text
- * @throws {Error} If the CID is not found or the operation times out
+ * Reads and decodes a manifest from IPFS with a configurable timeout.
+ * @throws {Error} when the CID is not found or the operation times out.
  */
 export async function catManifest(
   ipfs: KuboClient,
@@ -99,15 +82,10 @@ export async function catManifest(
 }
 
 /**
- * Read raw bytes from IPFS with a configurable timeout.
- * Returns a Buffer so gzip-compressed or binary content can be handled
- * before any text decoding corrupts it.
- *
- * @param ipfs - ipfs-http-client instance
- * @param cid - IPFS CID to read
- * @param timeoutMs - read timeout in ms (native `AbortOptions.timeout` of ipfs-http-client)
- * @returns Raw bytes
- * @throws {Error} If the CID is not found or the operation times out
+ * Reads raw bytes from IPFS with a configurable timeout.
+ * @remarks Returns a Buffer so gzip/binary content can be handled before text
+ *   decoding corrupts it.
+ * @throws {Error} when the CID is not found or the operation times out.
  */
 export async function catBytes(
   ipfs: KuboClient,
@@ -132,9 +110,7 @@ export async function catBytes(
 const IPFS_URI_RE = /ipfs:\/\/([a-zA-Z0-9]+)/g;
 
 /**
- * Recursively extract all ipfs:// CIDs from a JSON value.
- * @param value - A string, array, or object to scan
- * @param cids - Set to collect CIDs into
+ * Recursively extracts all `ipfs://` CIDs from a JSON value.
  */
 export function extractIpfsCids(value: unknown, cids: Set<string>): void {
   if (typeof value === "string") {

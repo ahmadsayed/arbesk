@@ -1,9 +1,7 @@
 /**
- * Arbesk Scene Graph
- *
  * Barrel file: engine init + utilities.
- * Rendering functions are imported from sub-modules and re-exported
- * for backward compatibility.
+ * @remarks Rendering functions are re-exported from sub-modules for backward
+ *   compatibility.
  */
 
 import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -121,15 +119,10 @@ on(EVENTS.THEME_CHANGED, _syncViewportBackground);
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Viewport-relative panning with damped zoom-out. Babylon's pan step is a
- * CONSTANT world distance per pixel (pixels / panningSensibility — no
- * radius factor anywhere in the input→movement→camera chain, verified
- * against 9.12.0 sources), so on a large model a drag covers a vanishing
- * fraction of the viewport. Scale the step to the VISIBLE extent instead:
- * - at/below PAN_TRACK_EXTENT: exact cursor tracking (1px drag moves the
- *   world point under the cursor by 1px worth of world units);
- * - above it: sublinear (power PAN_OUT_EXPONENT) so zoomed-out panning
- *   stays tame instead of jumping in huge world steps.
+ * Viewport-relative panning with damped zoom-out.
+ * @remarks Babylon's pan step is a constant world distance per pixel, so on
+ *   a large model a drag covers a vanishing fraction of the viewport; the
+ *   step is scaled to the visible extent instead.
  */
 const PAN_TRACK_EXTENT = 100; // world units of visible height
 const PAN_OUT_EXPONENT = 0.35; // damping curve above the tracking threshold
@@ -489,28 +482,17 @@ export function initEngine() {
 // Node accessors
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * @param {string} nodeId
- * @returns {BABYLON.TransformNode | null}
- */
 function getNodeAnchor(nodeId: string) {
   return state.nodeAnchors.get(nodeId) || null;
 }
 
-/**
- * @param {string} nodeId
- * @returns {BABYLON.AbstractMesh[]}
- */
 function getNodeMeshes(nodeId: string) {
   return state.nodeMeshes.get(nodeId) || [];
 }
 
 /**
- * Return distinct sub-mesh names for a node. Only useful when a GLTF
- * import produced multiple named meshes (e.g. "flowercenter", "Sphere").
- *
- * @param {string} nodeId
- * @returns {Array<{name: string, mesh: BABYLON.AbstractMesh}>}
+ * Returns distinct sub-mesh names for a node.
+ * @remarks Only useful when a glTF import produced multiple named meshes.
  */
 function getNodeSubMeshes(nodeId: string) {
   const meshes = state.nodeMeshes.get(nodeId);
@@ -526,10 +508,6 @@ function getNodeSubMeshes(nodeId: string) {
   return result;
 }
 
-/**
- * @param {string} nodeId
- * @returns {any | null}
- */
 function getNodeChildRef(nodeId: string) {
   const anchor = state.nodeAnchors.get(nodeId);
   if (anchor) {
@@ -586,20 +564,10 @@ function dismissCreatePulse() {
 // Thumbnail capture
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * @param {HTMLCanvasElement} canvas
- * @param {string} type
- * @param {number} quality
- * @returns {Promise<Blob|null>}
- */
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
-/**
- * @param {{width?: number, height?: number, quality?: number, format?: string}} [options]
- * @returns {Promise<object|null>}
- */
 async function captureAssetThumbnail(options: { width?: number; height?: number; quality?: number; format?: string } = {}) {
   const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement | null;
   if (!canvas) return null;
@@ -713,17 +681,19 @@ export {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Stop the render loop while the Studio view is hidden (Library is active) so a
- * hidden 0×0 canvas doesn't burn GPU/CPU. The engine and scene are kept alive.
+ * Stops the render loop while the Studio view is hidden (Library is active).
+ * @remarks Avoids burning GPU/CPU on a hidden 0×0 canvas; the engine and
+ *   scene are kept alive.
  */
 export function pauseRenderLoop() {
   state.engine?.stopRenderLoop();
 }
 
 /**
- * Restart the render loop when the Studio view becomes visible again and resize
- * the engine — the canvas was hidden (0×0) while Library was active, so the
- * drawing buffer needs to catch up before the next frame.
+ * Restarts the render loop when the Studio view becomes visible and resizes
+ * the engine.
+ * @remarks The canvas was hidden (0×0) while Library was active, so the
+ *   drawing buffer must catch up before the next frame.
  */
 export function resumeRenderLoop() {
   if (!state.engine || !state.renderLoopFn) return;
@@ -733,9 +703,7 @@ export function resumeRenderLoop() {
 }
 
 /**
- * Load whatever asset/manifest the current URL points at (?asset / ?manifest).
- * Extracted from the old DOMContentLoaded bootstrap so the router can invoke it
- * on Studio entry — both on a cold deep-link and on the Library → Studio handoff.
+ * Loads the asset/manifest the current URL points at (?asset / ?manifest).
  */
 export function loadFromParams() {
   const urlParams = new URLSearchParams(window.location.search);

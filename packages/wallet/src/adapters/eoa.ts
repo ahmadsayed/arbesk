@@ -1,7 +1,8 @@
 /**
- * Reference EOA Signer adapter: wraps a raw EIP-1193 provider (injected wallet
- * or WalletConnect) with viem wallet/public clients. personal_sign carries
- * exactly [message, address] — the web3 empty-password quirk is gone.
+ * Reference EOA Signer adapter wrapping a raw EIP-1193 provider (injected
+ * wallet or WalletConnect).
+ * @remarks personal_sign carries exactly [message, address] — the web3
+ *   empty-password quirk is gone.
  */
 import { createPublicClient, createWalletClient, custom } from "viem";
 import type { Signer, SendResult, MinedReceipt } from "../types.ts";

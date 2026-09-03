@@ -169,11 +169,9 @@ async function handleUploadFile(file: File): Promise<void> {
 }
 
 /**
- * OS file drop onto the Library view. Dropping a .glb/.gltf/.3mf runs the
- * exact upload-button flow (validate → IPFS → decompose → asset named after
- * the file → add to the open collection). The overlay mirrors the viewport
- * drop indicator; its label flips to the no-collection hint when the upload
- * would be rejected, so the affordance is honest during the drag.
+ * Wires OS file drops onto the Library view.
+ * @remarks The overlay label flips to a no-collection hint when the upload
+ *   would be rejected, so the affordance stays honest during the drag.
  */
 function initLibraryDropZone(): void {
   const view = document.getElementById("libraryView");

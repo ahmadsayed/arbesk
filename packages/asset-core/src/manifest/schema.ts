@@ -1,10 +1,7 @@
 /**
- * Canonical Arbesk manifest schema (zod).
- *
- * Mirrors the validator that previously lived in `src/api/schemas.ts` — the
- * wire format is unchanged: `version` is the only required field, unknown
- * keys are tolerated (stripped from the parsed `data`, zod default), and all
- * other fields are optional.
+ * Canonical Arbesk manifest schema.
+ * @remarks Wire format: `version` is the only required field; unknown keys are
+ *   tolerated (stripped from the parsed `data`); all other fields are optional.
  */
 
 import { z } from "zod";

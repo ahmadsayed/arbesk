@@ -13,10 +13,9 @@ const Router = express.Router;
  * POST /api/v1/assets/snapshot-comments
  *
  * Snapshots the Nostr comment thread for a published asset to a
- * content-addressed IPFS archive. Called by the browser before it
- * writes a republish manifest, so the archive CID can be embedded
- * in the manifest before it is uploaded. Manifests themselves are
- * written directly to IPFS by the browser.
+ * content-addressed IPFS archive.
+ * @remarks Called before the browser writes a republish manifest, so the
+ *   archive CID can be embedded in the manifest before it is uploaded.
  *
  * Body: { tokenId, chainId, contractAddress, assetId }
  * Response: { cid, eventCount }

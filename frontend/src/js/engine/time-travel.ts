@@ -1,12 +1,8 @@
 /**
- * Arbesk Time-Travel Engine
- *
- * Walks the manifest chain (prev_asset_manifest_cid links) to reconstruct
- * per-node state history. Applies color/scale from any historical manifest
- * version to the current scene meshes.
- *
- * No more variants array - current state lives directly on each node
- * (color, scale, source). History is the manifest chain.
+ * Reconstructs per-node state history by walking the manifest chain and
+ * applies color/scale from historical versions to the current scene meshes.
+ * @remarks Current state lives directly on each node (no variants array);
+ *   history is the manifest chain.
  */
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
@@ -28,9 +24,9 @@ export interface ManifestChainVersion {
 const chainCache = new Map<string, ManifestChainVersion[]>();
 
 /**
- * Clone a mesh's material if it is shared with other meshes.
- * This is required for per-component color overrides so changing one mesh
- * does not bleed into every mesh that originally shared the material.
+ * Clones a mesh's material when it is shared with other meshes.
+ * @remarks Per-component color overrides need a unique material, otherwise
+ *   recoloring one mesh bleeds into every mesh sharing that material.
  */
 function ensureUniqueMaterial(mesh: BABYLON.AbstractMesh) {
   const mat = mesh.material;
@@ -127,11 +123,8 @@ function applyScale(
 }
 
 /**
- * Walk the manifest chain from a CID backward through prev_asset_manifest_cid.
- * Returns an array of versions in chronological order.
- *
- * @param startCid - The latest manifest CID to start walking from
- * @param maxDepth - Maximum chain depth to traverse
+ * Walks the manifest chain backward from a CID.
+ * @returns versions in chronological order.
  */
 async function walkManifestChain(
   startCid: string,

@@ -1,9 +1,7 @@
 /**
- * Arbesk Asset Library - token-centric browser for owned and shared assets.
- * Library is now a sidebar view navigated by the View Switcher.
- *
- * Gallery semantics: each card represents one asset. Collection tokens are
- * expanded so every asset inside the collection gets its own card.
+ * Token-centric browser for owned and shared assets.
+ * @remarks Each card is one asset; collection tokens are expanded so every
+ *   asset in the collection gets its own card.
  */
 
 import {
@@ -48,11 +46,8 @@ import {
 } from "./task-progress.ts";
 
 /**
- * Build a progress reporter for a Studio asset load. The manifest fetch
- * covers the first 5%; the rest is split evenly across the manifest's scene
- * nodes, with byte-level download progress filling each node's slice
- * (wired via the optional onProgress ctx of the format handlers).
- * @param label - stage label shown next to the bar
+ * Builds a progress reporter for a Studio asset load.
+ * @param label stage label shown next to the bar.
  */
 function createAssetLoadReporter(label: string): {
   setNodeCount: (n: number) => void;
@@ -153,10 +148,8 @@ const TRANSFER_EVENT_ABI_ITEM = {
 } as const;
 
 /**
- * Fetch Transfer events for a specific address in small block chunks.
- * Public RPCs like Base Sepolia reject wide eth_getLogs ranges with 413.
- * @param contract - viem contract instance
- * @param latest - pre-fetched current block number
+ * Fetches Transfer events for an address in small block chunks.
+ * @remarks Public RPCs like Base Sepolia reject wide eth_getLogs ranges with 413.
  */
 async function fetchTransferEvents(
   contract: any,
@@ -204,9 +197,6 @@ async function fetchTransferEvents(
 }
 
 
-/**
- * @param contract - Web3 contract instance
- */
 export async function fetchOwnedTokenIds(
   contract: any,
   address: string,
@@ -318,11 +308,10 @@ async function fetchAssetLibrary(
 }
 
 /**
- * Resolve a token into gallery entries.
- * - Standalone asset token → one entry.
- * - Collection token → one entry per asset in the collection's `assets` map.
- *   Each card's "Add to Scene" and "Delete" actions operate on its own asset.
- * @returns gallery entry records (shape varies by branch; may include `{type:"inaccessible"}` markers)
+ * Resolves a token into gallery entries: a standalone asset becomes one
+ * entry; a collection becomes one entry per asset in its `assets` map.
+ * @remarks Returns records whose shape varies by branch and may include
+ *   `{ type: "inaccessible" }` markers.
  */
 export async function expandTokenToAssets(
   tokenId: string | number
@@ -461,12 +450,10 @@ async function openAssetEntry(entry: any): Promise<void> {
 }
 
 /**
- * Ensure the lazily-loaded Babylon engine is ready before rendering an asset.
- * On a cold `/studio?asset=…` deep-link the WALLET_CONNECTED handler can fire
- * before the router has finished `ensureBabylon()`, which otherwise makes
- * `loadAssetManifest` fail with "BABYLON is not defined". A bare
- * `?asset=<collectionTokenId>` link still skips the engine until an asset is
- * actually opened.
+ * Ensures the lazily-loaded Babylon engine is ready before rendering an asset.
+ * @remarks On a cold deep-link the wallet handler can fire before
+ *   ensureBabylon() finishes, which would make loadAssetManifest fail with
+ *   "BABYLON is not defined".
  */
 async function ensureEngineReady(): Promise<void> {
   await ensureBabylon();
@@ -1005,9 +992,8 @@ async function refreshAssetLibrary(): Promise<void> {
 }
 
 /**
- * Update just the active asset's gallery card after publish, using the
- * in-memory manifest. Avoids re-fetching every asset in the collection when
- * only one asset changed.
+ * Updates just the active asset's gallery card after publish.
+ * @remarks Avoids re-fetching every asset when only one changed.
  */
 async function updateActiveAssetCard(): Promise<boolean> {
   if (!assetLibraryBody) return false;
@@ -1106,9 +1092,10 @@ function initAssetLibrary(): void {
 on(EVENTS.SCENE_READY, highlightActiveAsset);
 
 /**
- * Refresh the gallery after a publish signal. Fires on ASSET_PUBLISH_PENDING
- * (tx broadcast — optimistic update) and again on ASSET_PUBLISHED (mined —
- * authoritative). The update is idempotent, so running it twice is harmless.
+ * Refreshes the gallery after a publish signal.
+ * @remarks Runs on ASSET_PUBLISH_PENDING (optimistic) and again on
+ *   ASSET_PUBLISHED (authoritative); the update is idempotent, so running it
+ *   twice is harmless.
  */
 async function handlePublishUpdate(): Promise<void> {
   // Only pay for a gallery update if the library pane is currently visible.
@@ -1128,14 +1115,9 @@ async function handlePublishUpdate(): Promise<void> {
 }
 
 /**
- * Refresh the Studio gallery only when its sidebar view is actually visible.
- *
- * Background triggers (wallet connect, active-collection change, publish)
- * call this so a hidden gallery never pays to expand every asset in the
- * collection. The work is deferred to the SIDEBAR_VIEW_CHANGED handler, which
- * runs refreshAssetLibrary() when the user actually opens the gallery pane.
- * This keeps the Studio page-load cost proportional to the wallet's owned
- * collections rather than the (unbounded) number of assets inside them.
+ * Refreshes the gallery only when its sidebar view is visible.
+ * @remarks Keeps page-load cost proportional to owned collections rather than
+ *   the (unbounded) number of assets inside them.
  */
 function refreshGalleryWhenVisible(): void {
   if (getActiveView() !== "library") {

@@ -1,12 +1,9 @@
 /**
  * Mesh-bounds helpers for glTF/GLB assets.
- *
- * Pure functions over the glTF JSON document — buffer payloads are never
- * read (POSITION accessors carry min/max), so bounds of even a large model
- * cost only the JSON parse. Used to compensate Tripo follow-up endpoints
- * (rig, retarget) re-normalizing model size: the result comes back smaller
- * than its source, so the manifest bakes a post_processor scale that keeps
- * the version visually consistent with the rest of the chain.
+ * @remarks Pure over the glTF JSON — POSITION accessors carry min/max, so
+ *   buffer payloads are never read. Bounds feed a post_processor scale that
+ *   compensates Tripo follow-up endpoints (rig, retarget) re-normalizing
+ *   model size, keeping each version visually consistent with the chain.
  */
 
 const GLB_MAGIC = 0x46546c67; // "glTF"
@@ -18,10 +15,9 @@ export interface GltfBounds {
 }
 
 /**
- * Union the min/max of every mesh POSITION accessor in a glTF JSON
- * document. Only accessors referenced as `attributes.POSITION` count —
- * normals and other VEC3 data would skew the result.
- * @param gltf - parsed glTF JSON
+ * Unions the min/max of every mesh POSITION accessor in a glTF document.
+ * @remarks Only accessors referenced as `attributes.POSITION` count — normals
+ *   and other VEC3 data would skew the result.
  */
 export function computeGltfBounds(gltf: any): GltfBounds | null {
   const positionIndices = new Set<number>();
@@ -51,8 +47,7 @@ export function computeGltfBounds(gltf: any): GltfBounds | null {
 }
 
 /**
- * Compute mesh bounds from GLB bytes. Reads only the header and JSON
- * chunk; returns null when the bytes are not a GLB v2 container.
+ * Computes mesh bounds from GLB bytes, returning null for non-GLB v2 bytes.
  */
 export function boundsFromGlbBytes(
   bytes: Uint8Array | ArrayBuffer
@@ -71,10 +66,11 @@ export function boundsFromGlbBytes(
 }
 
 /**
- * Uniform scale factor that makes resultBounds match sourceBounds (ratio
- * of the largest dimensions). Returns null when either side is missing or
- * degenerate, when the ratio is within 2% of 1 (float noise), or when it
- * falls outside [0.01, 100] (guards against garbage measurements).
+ * Computes the uniform scale factor that makes resultBounds match
+ * sourceBounds.
+ * @remarks Returns null when either side is missing or degenerate, when the
+ *   ratio is within 2% of 1 (float noise), or outside [0.01, 100] (guards
+ *   against garbage measurements).
  */
 export function compensationScale(
   sourceBounds: { size: number[] } | null,

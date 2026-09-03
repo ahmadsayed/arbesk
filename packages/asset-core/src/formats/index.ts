@@ -1,9 +1,7 @@
 /**
  * Format dispatcher — the single public entry point for compose/decompose.
- *
- * Callers invoke only `compose`/`decompose` (never a format-named function).
- * The format is resolved from an explicit hint, a magic-byte sniff, or the
- * `arbesk_format` stored-form marker, then routed to the matching FormatCodec.
+ * @remarks Callers invoke only `compose`/`decompose`, never a format-named
+ *   function.
  */
 
 import type {
@@ -46,11 +44,9 @@ function toUint8(input: unknown): Uint8Array | null {
 }
 
 /**
- * Resolve the format of `input`. Detection order:
- *   1. explicit hint (opts.format),
- *   2. `arbesk_format` marker on a parsed document,
- *   3. magic-byte sniff (glb → 3mf → example),
- *   4. fallback to "gltf".
+ * Resolves the format of `input`.
+ * @remarks Detection order: explicit hint, then the `arbesk_format` marker
+ *   on a parsed document, then magic-byte sniff, then fallback to "gltf".
  */
 export function detectFormat(input: unknown, hint?: string): string {
   if (hint) return hint.toLowerCase();
@@ -80,8 +76,8 @@ export function detectFormat(input: unknown, hint?: string): string {
 }
 
 /**
- * Restore the native/renderable artifact of `input` as bytes, dispatching by
- * detected format. GLB (source-only) has no compose and throws.
+ * Restores the native/renderable artifact of `input` as bytes.
+ * @throws when the detected format has no compose (e.g. source-only GLB).
  */
 export async function compose(
   input: unknown,
@@ -97,8 +93,8 @@ export async function compose(
 }
 
 /**
- * Decompose a raw artifact (glTF JSON, GLB, 3MF, or example bytes) into a
- * content-addressed composite, dispatching by detected format.
+ * Decomposes a raw artifact (glTF JSON, GLB, 3MF, or example bytes) into a
+ * content-addressed composite.
  */
 export async function decompose(
   input: unknown,

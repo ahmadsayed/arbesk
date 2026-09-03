@@ -1,10 +1,7 @@
 /**
- * 3MF composer.
- *
- * Rebuilds a raw .3mf OPC package from a composite 3MF JSON: XML parts are
- * carried verbatim and binary parts are fetched back from IPFS by CID.
- * Entry paths are unchanged from the original package, so the verbatim
- * .rels parts stay valid — round-tripping preserves content exactly.
+ * Rebuilds a raw .3mf OPC package from a composite 3MF JSON.
+ * @remarks Entry paths are unchanged from the original package, so verbatim
+ *   .rels parts stay valid and round-tripping preserves content exactly.
  */
 
 import { getRuntime } from "../../runtime.ts";
@@ -29,9 +26,7 @@ export interface Composite3mf {
 }
 
 /**
- * Compose a composite 3MF JSON back into raw .3mf ZIP bytes.
- *
- * @param composite - composite 3MF JSON (arbesk_format: composite-3mf)
+ * Composes a composite 3MF JSON back into raw .3mf ZIP bytes.
  */
 export async function compose(composite: Composite3mf): Promise<Uint8Array> {
   if (!isComposite3mf(composite)) {

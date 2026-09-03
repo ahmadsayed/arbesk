@@ -1,14 +1,7 @@
 /**
- * Arbesk Asset Save/Publish Controller.
- * Updated for GNOME headerbar - buttons managed individually, no wrapper div.
- *
- * This module is the UI orchestrator. Manifest construction lives in
- * `services/asset-save/manifest-builder.js`; collection and editor publishing
- * live in `services/asset-save/collection-publish.js` and
- * `services/asset-save/editor-publish.js`.
- *
- * Header chrome (title/meta + save/publish/download visibility) is owned by
- * `ui/asset-chrome.js` — this module never writes it.
+ * UI orchestrator for asset save/publish.
+ * @remarks Header chrome (title/meta and button visibility) is owned by
+ *   ui/asset-chrome.ts; this module never writes it.
  */
 
 import { getContractAddress } from "../blockchain/network-config.ts";
@@ -90,8 +83,8 @@ async function onDownloadAsset(): Promise<void> {
 }
 
 /**
- * Prompt for a name only if it hasn't been explicitly set.
- * Returns the final name or null if cancelled.
+ * Prompts for a name only if it hasn't been explicitly set.
+ * @returns the final name, or null if cancelled.
  */
 async function ensureExplicitName(): Promise<string | null> {
   const currentName = getActiveAssetName() || "";
@@ -115,12 +108,10 @@ async function ensureExplicitName(): Promise<string | null> {
 }
 
 /**
- * Save the current draft. Surfaces all failures itself (toast + status); the
- * return value lets callers distinguish outcomes without re-toasting.
- * @returns The `saveAssetDraftCore` result when the save ran to completion
- *   (`ok: true`, or `ok: false` with `reason` "no-changes"/"empty");
- *   `undefined` when the save never ran (busy, no wallet) or threw (the
- *   failure toast has already been shown).
+ * Saves the current draft.
+ * @remarks Surfaces failures itself (toast + status); callers distinguish
+ *   outcomes from the return value without re-toasting.
+ * @returns `undefined` when the save never ran (busy/no wallet) or threw.
  */
 async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?: string } | undefined> {
   if (isSaving) return;

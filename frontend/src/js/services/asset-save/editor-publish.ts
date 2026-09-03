@@ -1,8 +1,5 @@
 /**
  * Editor / collaborator helpers for publish and republish.
- *
- * Wraps Merkle editor-list operations: authorization checks, proof generation,
- * and persistence of the initial editor list for a new token.
  */
 
 import { computeRoot, getProof, makeLeaf } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
@@ -16,7 +13,6 @@ import {
 import { isOwner } from "../team.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 
-/** @param {string|number} tokenId */
 async function getEditorRoot(tokenId: string | number) {
   if (!wallet.contract) return null;
   try {
@@ -29,14 +25,9 @@ async function getEditorRoot(tokenId: string | number) {
 
 /**
  * Build a proof for the current wallet against the current editor set.
- * Falls back to a single-editor owner proof when the editor list cannot be
- * fetched from IPFS/chain/localStorage but the on-chain root proves the owner
- * is the only editor. This keeps existing tokens editable by their owners
- * without changing the smart contract.
- */
-/**
- * @param {string|number} tokenId
- * @param {string} walletAddr
+ * @remarks Falls back to a single-editor owner proof when the editor list
+ *   cannot be fetched but the on-chain root proves the owner is the only
+ *   editor, keeping existing tokens editable without changing the contract.
  */
 async function buildWalletProof(tokenId: string | number, walletAddr: string) {
   // Version and editor list are independent; resolve them in parallel.
@@ -81,9 +72,9 @@ async function buildWalletProof(tokenId: string | number, walletAddr: string) {
 }
 
 /**
- * Build the wallet's Merkle editor proof for the token, or throw an
- * authorization error (with a specific message when the caller is the owner
- * but missing from the editor list).
+ * Builds the wallet's Merkle editor proof for the token, or throws.
+ * @throws {Error} authorization error when the wallet is not an editor; the
+ *   message is specific when the owner is missing from the editor list.
  */
 async function requireEditorProof(tokenId: string | number, walletAddr: string) {
   const proofResult = await buildWalletProof(tokenId, walletAddr);
@@ -100,25 +91,16 @@ async function requireEditorProof(tokenId: string | number, walletAddr: string) 
 }
 
 /**
- * Throw if the connected wallet is not an authorized editor of the token.
- */
-/**
- * @param {string|number} tokenId
- * @param {string} walletAddr
+ * @throws {Error} when the connected wallet is not an authorized editor of the
+ *   token.
  */
 export async function verifyCanEdit(tokenId: string | number, walletAddr: string) {
   await requireEditorProof(tokenId, walletAddr);
 }
 
 /**
- * Republish a collection manifest CID for an existing token, producing a
- * Merkle editor proof for the current wallet.
- * Returns the transaction hash.
- */
-/**
- * @param {string|number} tokenId
- * @param {string} collectionCid
- * @param {string} walletAddr
+ * Republishes a collection manifest CID for an existing token.
+ * @returns the transaction hash
  */
 export async function republishCollection(
   tokenId: string | number,
@@ -132,13 +114,8 @@ export async function republishCollection(
 }
 
 /**
- * Build the initial editor list, Merkle root, and on-chain URI for a brand
- * new token. Persists the editor list to IPFS and localStorage.
- * Returns { editorList, editorRoot, editorListUri }.
- */
-/**
- * @param {string|number} tokenId
- * @param {string} walletAddr
+ * Builds the initial editor list, Merkle root, and on-chain URI for a new token.
+ * @returns { editorList, editorRoot, editorListUri }
  */
 export async function prepareInitialEditors(
   tokenId: string | number,
@@ -157,13 +134,8 @@ export async function prepareInitialEditors(
 }
 
 /**
- * Publish a brand new token with the given collection manifest CID.
- * Returns the transaction hash.
- */
-/**
- * @param {string} collectionCid
- * @param {string|number} tokenId
- * @param {string} walletAddr
+ * Publishes a brand new token with the given collection manifest CID.
+ * @returns the transaction hash
  */
 export async function publishNewToken(
   collectionCid: string,

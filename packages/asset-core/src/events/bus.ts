@@ -1,15 +1,7 @@
 /**
- * Arbesk Studio Event Bus
- *
- * Singleton mitt instance. Import EVENTS constants and on/off/emit from here
- * instead of using document.dispatchEvent - handlers receive the payload
- * directly, not wrapped in a CustomEvent.
- *
- * Usage:
- *   import { on, off, emit, EVENTS } from "../events/bus.ts";
- *   const unsubscribe = on(EVENTS.SCENE_READY, ({ manifest, manifestCid }) => { ... });
- *   emit(EVENTS.SCENE_READY, { manifest, manifestCid });
- *   unsubscribe();
+ * Arbesk Studio Event Bus.
+ * @remarks Singleton mitt instance; handlers receive the payload directly, not
+ *   wrapped in a CustomEvent.
  */
 
 export type EventHandler = (payload?: any) => void;

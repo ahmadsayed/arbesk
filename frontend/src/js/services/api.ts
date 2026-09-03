@@ -55,10 +55,9 @@ export function announceStatus(message: string): void {
 
 /**
  * Create a new session by proving wallet ownership via SIWE (EIP-4361).
- *
- * CDP smart accounts (ERC-4337) sign the SIWE message with the owner EOA;
- * the backend verifies the EOA signature and binds the session to the
- * smart account address.
+ * @remarks CDP smart accounts sign the SIWE message with the owner EOA; the
+ *   backend verifies the EOA signature and binds the session to the smart
+ *   account address.
  */
 export async function createSession(): Promise<{ token: string; expiresAt: number }> {
   const { walletAddress, chainId: walletChainId } = walletState.get();
@@ -130,7 +129,7 @@ registerSessionFactory(createSession);
 /**
  * GET /api/v1/indexer/:kind?address=0x...&chainId=...
  * Returns token IDs from the given indexer list ("owned" | "shared"), or null
- * on failure (callers fall back to an on-chain scan).
+ * on failure.
  */
 async function getIndexerTokens(
   kind: "owned" | "shared",
@@ -242,10 +241,8 @@ async function pollGeneration(taskId: string, signal?: AbortSignal, onProgress?:
 
 /**
  * DELETE /api/v1/generations/:taskId
- *
- * Stop tracking an in-flight generation task: the backend evicts the
- * registry entry (further polls 404) and sends a best-effort upstream
- * cancel. Provider credits already consumed are not refunded.
+ * Stop tracking an in-flight generation task.
+ * @remarks Provider credits already consumed are not refunded.
  */
 export async function cancelGenerationTask(taskId: string): Promise<{ status: string; upstreamCancelled: boolean }> {
   return fetchJsonOrThrow(`/generations/${taskId}`, { method: "DELETE" }, "Cancel failed");
@@ -255,21 +252,17 @@ export async function cancelGenerationTask(taskId: string): Promise<{ status: st
 
 /**
  * POST /api/v1/generations/balance
- *
- * Fetches the Tripo3D credit balance for the user's BYOK key. The key is
- * sent per-request and never persisted server-side.
+ * Fetches the Tripo3D credit balance for the user's BYOK key.
+ * @remarks The key is sent per-request and never persisted server-side.
  */
 export async function getProviderBalance(providerKey: string): Promise<{ balance: number; frozen: number }> {
   return fetchJsonOrThrow("/generations/balance", { body: { providerKey } }, "Balance check failed");
 }
 
 /**
- * Best-effort scale compensation for Tripo follow-ups: the rig and
- * retarget endpoints re-normalize model size (observed live 2026-08-06:
- * generation 2.0 → rig 1.0 → retarget 0.5 units tall), so a follow-up
- * result comes back smaller than its source. Measure both and return the
- * uniform scale that keeps the new version at the source's visual size.
- * Never throws — compensation is cosmetic and must not fail a generation.
+ * Best-effort scale compensation for Tripo follow-ups.
+ * @remarks Rig/retarget re-normalize model size, so a follow-up returns smaller
+ *   than its source; compensation is cosmetic and must never fail a generation.
  * @param sourceCid - the follow-up's source asset CID
  * @param resultBytes - raw bytes of the new asset
  * @returns scale factor, or null to leave default
@@ -384,11 +377,7 @@ interface ReferenceImage {
  * no server-side IPFS writes.
  */
 /**
- * Assemble the POST /generations request body. Conditional fields are added
- * only when present: BYOK key, follow-up context (sourceAssetCid + task id +
- * mode flags), texture quality, image-to-3D data, and multiview views.
- * @param {any} args
- * @param {number|null} chainId
+ * Assemble the POST /generations request body.
  */
 function buildGenerationBody(args: any, chainId: number | null): Record<string, any> {
   const {
@@ -442,11 +431,9 @@ function buildGenerationBody(args: any, chainId: number | null): Record<string, 
 
 /**
  * Pin the image-to-3D reference image(s) to IPFS and build the reference
- * entries recorded in the manifest. Single image → referenceImage; multiview
- * (images[]) → referenceImages with the front view also filling the legacy
- * singular reference_image for back-compat.
- * @param {any} args
- * @param {any} writeToIPFS
+ * entries recorded in the manifest.
+ * @remarks For multiview, the front view also fills the legacy singular
+ *   reference_image for back-compat.
  */
 async function uploadReferenceImages(
   args: { imageData?: string; imageMime?: string; imageName?: string; images?: any[] },
@@ -495,7 +482,6 @@ async function uploadReferenceImages(
 
 /**
  * Build the single source node for a generation.
- * @param {any} args
  */
 function buildGenerationNode(args: any) {
   const {
@@ -533,9 +519,7 @@ function buildGenerationNode(args: any) {
 }
 
 /**
- * Build the asset manifest for this generation: load (or create) the base,
- * bump the version chain, and replace the single source node.
- * @param {any} args
+ * Build the asset manifest for this generation.
  */
 async function buildGenerationManifest(args: any): Promise<any> {
   const {
@@ -756,10 +740,10 @@ export async function generateAsset({
 
 /**
  * POST /api/v1/assets/snapshot-comments
- *
  * Snapshots the Nostr comment thread for a published asset to a
- * content-addressed IPFS archive. Called before manifest upload so
- * the archive CID can be embedded in the manifest.
+ * content-addressed IPFS archive.
+ * @remarks Runs before manifest upload so the archive CID can be embedded in
+ *   the manifest.
  */
 export async function snapshotCommentsArchive(publishContext: { tokenId: string | number; chainId?: number; contractAddress?: string; assetId: string }): Promise<{ cid: string; eventCount: number }> {
   announceStatus("Archiving comments…");

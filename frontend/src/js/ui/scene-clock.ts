@@ -1,9 +1,7 @@
 /**
- * Scene Clock — fixed version dial, bottom-right of the viewport.
- *
- * Collapsed watch face (hand + version badge) that expands to the full
- * scrubbable dial on hover/focus/click. Scrubs the whole asset's manifest
- * chain via the version-history store. Hidden when no chain is loaded.
+ * Version dial for the viewport, bottom-right.
+ * @remarks Collapsed to a watch face and expands on hover/focus/click; hidden
+ *   when no version chain is loaded.
  */
 
 import * as store from "@arbesk/asset-core/domain/version-history-store.js";

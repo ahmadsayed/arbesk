@@ -5,10 +5,9 @@
  * POST /api/v1/auth/email/verify   { email, code }  → verify, resolve/create the
  *   CDP end user + server smart account, and issue a session token.
  *
- * CDP_EMAIL_DEV_MODE=true accepts the fixed code "000000" and — when no CDP
- * client is configured — derives a deterministic dev address (no email send).
- * Real mode generates a code, stores it (10-min TTL, 5 attempts), and emails it
- * via Resend (RESEND_API_KEY).
+ * @remarks CDP_EMAIL_DEV_MODE=true accepts the fixed code "000000" (and, with
+ *   no CDP client, derives a deterministic dev address). Real mode stores the
+ *   code (10-min TTL, 5 attempts) and emails it via Resend.
  */
 import express from "express";
 import crypto from "crypto";

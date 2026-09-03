@@ -1,10 +1,8 @@
 /**
- * Browser wiring for the asset-core version-history store.
- *
- * The store lives in asset-core (environment-agnostic) and exposes a `_deps`
- * seam; this module installs the engine/wallet-backed implementations that
- * used to be dynamic imports inside the store. Imported for its side effect
- * from app-init.ts before any scene/history events can fire.
+ * Installs the browser wiring for the asset-core version-history store.
+ * @remarks The store exposes a `_deps` seam for environment-specific
+ *   implementations; this module provides the engine/wallet-backed ones.
+ * Used by app-init.ts (side-effect import, before any scene/history events).
  */
 import { configureVersionHistoryDeps } from "@arbesk/asset-core/domain/version-history-store.js";
 import { walkManifestChain } from "./time-travel.ts";

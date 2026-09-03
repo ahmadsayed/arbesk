@@ -5,25 +5,12 @@ import type { StorageAdapter } from "./index.ts";
 let _signCallSeq = 0;
 
 /**
- * Log each individual HTTP attempt the Pinata SDK's `createSignedURL()` makes
- * against `/files/sign`, including the ones its own internal retry loop
- * (maxRetries=3, backoff min(1000*2^attempt, 4000)ms - see
- * node_modules/pinata/dist/index.mjs) swallows silently. Without this, a slow
- * mint (e.g. the SDK retrying through a transient Pinata 5xx/429 or a network
- * failure) is invisible - the caller only ever sees the final success or
- * failure, several seconds later, with no way to tell which attempt(s) failed
- * or why.
- *
- * Installed once, lazily, only when a Pinata adapter is actually constructed
- * (never in Kubo-only deployments). Scoped strictly to `/files/sign` URLs -
- * every other fetch call in the process (RPC, other Pinata endpoints, etc.)
- * passes through completely unchanged. Safe under concurrency: there is
- * nothing to toggle or restore, so parallel mints (e.g. mintUploadCredentials'
- * Promise.all batch) can't race on install/uninstall. The sequence number is
- * process-global rather than per-mint (the SDK gives us no correlation id
- * across its own retries), so log lines stay individually orderable even
- * when multiple mints are in flight - adjacent numbers usually belong to the
- * same logical mint, but don't assume that under heavy concurrency.
+ * Logs each `/files/sign` HTTP attempt the Pinata SDK makes, including its
+ * internal retries.
+ * @remarks Without this a slow mint is invisible: the SDK's retry loop
+ *   swallows failures, so the caller only sees the final result. Installed
+ *   lazily, only when a Pinata adapter is constructed, and scoped to
+ *   `/files/sign` URLs.
  */
 function installSignedUrlDiagnostics(): void {
   const currentFetch = globalThis.fetch as typeof fetch & {
@@ -75,8 +62,8 @@ interface PoolEntry {
 }
 
 /**
- * The published Pinata SDK types omit the `gateways` accessor, so we cast
- * through this local interface when performing authenticated gateway reads.
+ * The published Pinata SDK types omit the `gateways` accessor.
+ * @remarks Cast through this local interface for authenticated gateway reads.
  */
 interface PinataWithGateways {
   gateways: {
@@ -94,19 +81,13 @@ export interface PinataAdapterOptions {
 }
 
 /**
- * Pinata storage adapter - Pinata v3 public IPFS.
- * `add` uses the master JWT (backend writes); `mintUploadCredential`
- * returns a short-lived presigned URL for browser uploads (JWT never leaves
- * the server). Public IPFS so CIDs resolve through a normal gateway and can be
- * embedded in on-chain tokenURIs.
- *
- * `mintUploadCredential(s)` are backed by a small pre-minted pool (see
- * `PINATA_POOL_SIZE`) so the request path is never blocked on Pinata's
- * `/files/sign` latency (observed 0.4-6s+ from this environment, sometimes
- * with internal SDK retries pushing it to ~9-10s - see
- * `.claude/skills/arbesk-ipfs-storage/references/pinata-mode.md`). The pool
- * is entirely internal: callers see the exact same credential shape as
- * before, whether served from the pool or minted fresh.
+ * Pinata storage adapter (Pinata v3 public IPFS).
+ * @remarks `add` uses the master JWT (backend writes); `mintUploadCredential`
+ *   returns a short-lived presigned URL for browser uploads (JWT never leaves
+ *   the server). Public IPFS so CIDs resolve through a gateway and can be
+ *   embedded in on-chain tokenURIs. Credential mints are backed by a
+ *   pre-minted pool so the request path is never blocked on `/files/sign`
+ *   latency.
  */
 export function createPinataAdapter(
   pinata: PinataSDK,
@@ -155,14 +136,10 @@ export function createPinataAdapter(
   const MAX_REFILL_ROUNDS = 5;
 
   /**
-   * Mint until the pool reaches `poolSize`, rechecking the shortfall after
-   * each round (not just once) so a burst of pops that all arrive while a
-   * round is in flight still gets fully caught up - not just the shortfall
-   * that existed at the moment the first one triggered a refill. Verified
-   * empirically this matters: a live 5-pop burst against the real Pinata
-   * account topped the pool up by only 1 (the shortfall at the *first* pop)
-   * before this loop existed, leaving it at 1/5 until a later, non-
-   * overlapping trigger recomputed correctly.
+   * Mints until the pool reaches `poolSize`.
+   * @remarks Rechecks the shortfall after each round (not just once) so a
+   *   burst of pops that arrives while a round is in flight still gets fully
+   *   caught up.
    */
   async function refillLoop(): Promise<void> {
     for (let round = 0; round < MAX_REFILL_ROUNDS; round++) {
@@ -192,13 +169,10 @@ export function createPinataAdapter(
   }
 
   /**
-   * Top the pool back up to `poolSize` in the background. Deliberately not
-   * awaited by callers on the request path - fire-and-forget, non-fatal on
-   * failure (same "best-effort" posture as pin calls elsewhere in this
-   * codebase). Returns the in-flight promise (rather than a fresh one) when
-   * already refilling, so concurrent triggers - a pop plus the construction-
-   * time warm-up, or several pops in a burst - collapse into one refill
-   * *chain* (see refillLoop) instead of stacking redundant mints.
+   * Tops the pool back up to `poolSize` in the background.
+   * @remarks Fire-and-forget (not awaited on the request path, non-fatal on
+   *   failure). Returns the in-flight promise when already refilling, so
+   *   concurrent triggers collapse into one refill chain.
    */
   function scheduleRefill(): Promise<void> {
     if (refillPromise) return refillPromise;
@@ -228,10 +202,10 @@ export function createPinataAdapter(
     },
 
     /**
-     * Upload multiple files as a single IPFS directory and return the
-     * directory root CID. Used to group a glTF + its buffers/textures into one
-     * browsable folder (organizational only - loading still uses bare CIDs).
-     * @returns directory root CID
+     * Uploads multiple files as a single IPFS directory and returns the
+     * directory root CID.
+     * @remarks Groups a glTF + its buffers/textures into one browsable folder
+     *   (organizational only — loading still uses bare CIDs).
      */
     async addDirectory(files) {
       const fileObjects = files.map(
@@ -271,8 +245,7 @@ export function createPinataAdapter(
     },
 
     /**
-     * List all pinned CIDs from the public Pinata network.
-     * Paginates through the file list API.
+     * Lists all pinned CIDs from the public Pinata network.
      */
     async listPinned() {
       const cids: string[] = [];
@@ -298,10 +271,9 @@ export function createPinataAdapter(
     },
 
     /**
-     * Serves from the pre-minted pool when available (instant, no Pinata call
-     * on the request path); falls back to minting fresh inline when the pool
-     * is empty or disabled (poolSize 0) - identical behavior to before pooling
-     * existed. Either way, triggers a background top-up before returning.
+     * @remarks Serves from the pre-minted pool when available, else mints
+     *   fresh inline (pool empty or disabled). Triggers a background top-up
+     *   before returning.
      */
     async mintUploadCredential() {
       pruneExpired();
@@ -311,13 +283,11 @@ export function createPinataAdapter(
     },
 
     /**
-     * Mint `count` presigned URLs. Pinata signed URLs are strictly single-use
-     * (a second upload against the same URL gets HTTP 409 "duplicate file id"
-     * - verified empirically, not documented), so callers uploading multiple
-     * files must get one credential per file up front instead of reusing one
-     * mint across a batch. Serves as many as available from the pool first,
-     * mints only the shortfall fresh (in parallel), then triggers a
-     * background top-up.
+     * Mints `count` presigned URLs.
+     * @remarks Pinata signed URLs are strictly single-use (HTTP 409 on
+     *   reuse), so a multi-file upload needs one credential per file. Serves
+     *   from the pool first, mints only the shortfall, then triggers a
+     *   background top-up.
      */
     async mintUploadCredentials(count) {
       pruneExpired();

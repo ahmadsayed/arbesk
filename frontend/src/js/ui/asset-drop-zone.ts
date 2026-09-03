@@ -1,8 +1,5 @@
 /**
  * Viewport drop zone for linked asset composition and OS file drops.
- * The full persistence/rendering path is handled by the linked asset feature
- * and services/asset-file-drop.js; this module provides the clean scene-level
- * UX event surface.
  */
 
 import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";

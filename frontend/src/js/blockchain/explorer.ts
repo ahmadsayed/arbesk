@@ -1,6 +1,4 @@
 /**
- * Arbesk Block Explorer Utilities
- *
  * Builds block explorer URLs for EVM networks.
  */
 
@@ -33,7 +31,7 @@ export function getAddressExplorerUrl(
 }
 
 /**
- * Copy text to clipboard with a callback for feedback.
+ * Copies text to the clipboard.
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {

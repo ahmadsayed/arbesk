@@ -6,8 +6,9 @@ const GLB_MAGIC = 0x46546c67; // "glTF"
 const GLB_VERSION = 2;
 
 /**
- * Copy a Uint8Array view into a standalone ArrayBuffer so DataView reads
- * exactly the bytes the caller passed, never the shared pool behind it.
+ * Copies a Uint8Array view into a standalone ArrayBuffer.
+ * @remarks DataView must read exactly the caller's bytes, never the shared
+ *   buffer pool behind a view.
  */
 function toStandaloneBuffer(bytes: Uint8Array | ArrayBuffer): ArrayBuffer {
   if (bytes instanceof Uint8Array) {
@@ -20,10 +21,9 @@ function toStandaloneBuffer(bytes: Uint8Array | ArrayBuffer): ArrayBuffer {
 }
 
 /**
- * Default kernels. Bodies delegate to the moved pure utils (encoding/hash);
- * the GLB magic check is duplicated from glb-parser.ts inline because
- * importing glb-parser here would create a runtime→kernels→glb-parser→runtime
- * module cycle.
+ * Default kernels.
+ * @remarks The GLB magic check is duplicated inline because importing
+ *   glb-parser here would create a module cycle.
  */
 export const defaultKernels: Kernels = {
   base64: {

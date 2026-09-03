@@ -1,12 +1,8 @@
 /**
  * Fast, non-cryptographic hash helpers for binary deduplication.
- *
- * The default is MurmurHash3 32-bit (x86) over Uint8Array bytes. It is fast,
- * has good distribution, and is sufficient for detecting identical upload
- * payloads within a single asset lineage.
- *
- * A SHA-256 helper is also provided for callers that need collision
- * resistance; it is async because it uses the Web Crypto API.
+ * @remarks Default is MurmurHash3 32-bit (x86); it is fast with good
+ *   distribution and suffices for identical-payload detection within one asset
+ *   lineage. SHA-256 is provided where collision resistance is needed.
  */
 
 export const DEFAULT_HASH_ALGORITHM = "murmur3-128";
@@ -47,11 +43,7 @@ function fmix32(h: number): number {
 }
 
 /**
- * MurmurHash3 32-bit (x86) for Uint8Array bytes.
- *
- * Based on the public-domain reference implementation by Austin Appleby.
- *
- * @returns 32-bit unsigned hash value
+ * MurmurHash3 32-bit (x86) hash for Uint8Array bytes.
  */
 export function murmur3_32(bytes: Uint8Array, seed: number = 0): number {
   if (!(bytes instanceof Uint8Array)) {
@@ -118,17 +110,10 @@ export function murmur3_32(bytes: Uint8Array, seed: number = 0): number {
 }
 
 /**
- * MurmurHash3 x86 128-bit for Uint8Array bytes.
- *
- * The x86_128 variant is used (not x64_128) because it relies solely on 32-bit
- * arithmetic via Math.imul, which is fast and exact in JS without BigInt. The
- * result is a 32-character hex string (four 32-bit lanes). Determinism is
- * guaranteed across the main thread and Web Workers since both import this same
- * function.
- *
- * Based on the public-domain reference implementation by Austin Appleby.
- *
- * @returns 32-character hex-encoded 128-bit hash
+ * MurmurHash3 x86 128-bit hash for Uint8Array bytes (32-character hex).
+ * @remarks The x86_128 variant is used because it relies solely on 32-bit
+ *   Math.imul arithmetic (fast and exact without BigInt). Deterministic across
+ *   the main thread and Web Workers — both import this same function.
  */
 export function murmur3_128(bytes: Uint8Array, seed: number = 0): string {
   if (!(bytes instanceof Uint8Array)) {
@@ -223,9 +208,7 @@ export function murmur3_128(bytes: Uint8Array, seed: number = 0): string {
 }
 
 /**
- * Hash bytes using the chosen algorithm and return a hex string.
- *
- * @returns hex-encoded hash
+ * Hashes bytes using the chosen algorithm.
  */
 export function hashBytes(bytes: Uint8Array, algorithm: string = DEFAULT_HASH_ALGORITHM): string {
   if (algorithm === "murmur3-128") {

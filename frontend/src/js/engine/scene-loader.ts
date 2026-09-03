@@ -1,9 +1,6 @@
 /**
- * Arbesk Scene Loader
- *
- * Extracted from scene-graph.js - handles IPFS asset loading, manifest parsing,
- * token child asset resolution, collection manifest loading, and drag/drop
- * linked asset composition.
+ * Handles IPFS asset loading, manifest parsing, token child asset resolution,
+ * collection manifest loading, and drag/drop linked asset composition.
  */
 
 import { resolveFormatHandler } from "../formats/index.ts";
@@ -149,9 +146,9 @@ type ChildRefResolutionPlan =
     };
 
 /**
- * Decide how a node's child_ref should be resolved: same-collection lookup
- * or cross-collection asset lookup.
- * Pure decision logic - no I/O.
+ * Decides how a node's child_ref is resolved: same-collection lookup or
+ * cross-collection asset lookup.
+ * @remarks Pure decision logic — no I/O.
  */
 function buildChildRefResolutionPlan(
   childRef: any,
@@ -467,9 +464,9 @@ export interface CollectionAssetEntry {
 }
 
 /**
- * Load a collection manifest and populate the active-collection state.
- * Does NOT render any 3D content - returns the manifest plus a flat list
- * of its entries so gallery UI can let the user pick which asset to open.
+ * Loads a collection manifest and populates the active-collection state.
+ * @remarks Does NOT render 3D content; returns the manifest plus a flat list
+ *   of entries so the user can pick which asset to open.
  */
 async function loadCollectionManifest(
   collectionCid: string,
@@ -499,11 +496,9 @@ async function loadCollectionManifest(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Compute a unique node_id for a newly dropped linked asset. The first
- * instance keeps the deterministic `linked_<tokenId>_<assetID>` id;
- * subsequent drops of the same asset get `_2`, `_3`, … (max existing
- * suffix + 1) so each placement is independently keyed in the state maps
- * (anchors, meshes, transform edits) and can be moved on its own.
+ * Computes a unique node_id for a newly dropped linked asset.
+ * @remarks Each placement is independently keyed in the state maps so it can
+ *   be moved on its own.
  */
 function nextLinkedNodeId(
   existingIds: Set<string>,
@@ -530,12 +525,10 @@ export interface LinkedSceneNode {
 }
 
 /**
- * Build the scene node to add when a user pulls in another collection's
- * asset. "fork" freezes the asset's current CID into a plain source node;
- * "live-ref" embeds a child_ref pointing back at the original collection,
- * so future edits there propagate automatically. `nodeId` lets the caller
- * pass a per-instance unique id (see nextLinkedNodeId) so the same asset
- * can be referenced more than once.
+ * Builds the scene node added when a user pulls in another collection's asset.
+ * @remarks "fork" freezes the current CID into a plain source node; "live-ref"
+ *   embeds a child_ref so future edits propagate. `nodeId` lets callers
+ *   reference the same asset more than once.
  */
 function buildForkOrLiveRefNode(
   choice: "fork" | "live-ref",
@@ -577,9 +570,9 @@ function normalizeTokenId(id: any): string {
 }
 
 /**
- * True when a dropped linked asset is the asset currently open in the
- * Studio (same collection token + same assetID). A live-ref to itself is a
- * guaranteed cycle, so such drops must be fork-only.
+ * True when a dropped linked asset is the asset currently open in the Studio.
+ * @remarks A live-ref to itself is a guaranteed cycle, so such drops must be
+ *   fork-only.
  */
 function isSelfLinkedAssetDrop(
   collectionRef: CollectionRef,
@@ -598,10 +591,10 @@ function isSelfLinkedAssetDrop(
 }
 
 /**
- * In-flight linked-asset drop operations. The ASSET_LINKED_DROPPED event is
- * fire-and-forget, so a Save that happens right after "Add to Scene" could
- * read pendingChildRefs before the drop handler pushed its node. Save/publish
- * awaits waitForPendingLinkedDrops() to close that race.
+ * In-flight linked-asset drop operations.
+ * @remarks The ASSET_LINKED_DROPPED event is fire-and-forget, so a Save right
+ *   after "Add to Scene" could read pendingChildRefs before the drop handler
+ *   pushed its node.
  */
 const _inFlightLinkedDrops = new Set<Promise<void>>();
 
@@ -692,9 +685,9 @@ async function _handleLinkedAssetDropped(event: any) {
 }
 
 /**
- * Event-bus entry point for ASSET_LINKED_DROPPED. Tracks the async work so
- * save/publish can wait for it via waitForPendingLinkedDrops().
- * @param event - ASSET_LINKED_DROPPED event detail
+ * Event-bus entry point for ASSET_LINKED_DROPPED.
+ * @remarks Tracks the async work so save/publish can wait for it.
+ * @param event ASSET_LINKED_DROPPED event detail
  */
 function handleLinkedAssetDropped(event: any): Promise<void> {
   const p = _handleLinkedAssetDropped(event)
@@ -709,9 +702,7 @@ function handleLinkedAssetDropped(event: any): Promise<void> {
 }
 
 /**
- * Resolve once every linked-asset drop started so far has finished (node
- * pushed to pendingChildRefs and scene load settled). Awaited by the
- * save/publish manifest builder before it snapshots pendingChildRefs.
+ * Resolves once every linked-asset drop started so far has finished.
  */
 async function waitForPendingLinkedDrops() {
   await Promise.all([..._inFlightLinkedDrops]);
@@ -728,11 +719,9 @@ export interface AssetSourceRef {
 }
 
 /**
- * Replace the model of an existing root node in place: disposes the node's
- * meshes/animation groups (keeping its anchor, which carries the transform)
- * and loads the new source under the same node_id.
- *
- * @returns false when the node has no live anchor
+ * Replaces the model of an existing root node in place.
+ * @remarks The node's anchor is kept because it carries the transform.
+ * @returns false when the node has no live anchor.
  */
 async function replaceRootModelSource(
   nodeId: string,
@@ -749,9 +738,7 @@ async function replaceRootModelSource(
 }
 
 /**
- * Create a fresh single-node draft scene from a dropped file: ensures a
- * root anchor exists, creates `anchor_<nodeId>` under it, and loads the
- * source. Used when a file is dropped with no asset open.
+ * Creates a fresh single-node draft scene from a dropped file.
  */
 async function createRootDraftSource(nodeId: string, source: AssetSourceRef) {
   if (!state.rootSceneAnchor) {

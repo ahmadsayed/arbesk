@@ -1,9 +1,9 @@
 /**
- * Asset chrome — the ONLY writer of the header title/meta and the
- * save/publish/download buttons' visibility. Renders purely from store
- * state (domain snapshot + wallet); feature modules never touch these
- * elements, so render order can never clobber a name (the SCENE_EMPTY
- * header bug).
+ * Sole writer of the header title/meta and the save/publish/download buttons'
+ * visibility.
+ * @remarks Renders purely from store state; feature modules never touch these
+ *   elements, so render order cannot clobber a name (the SCENE_EMPTY header
+ *   bug).
  */
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { subscribeAsset, getAssetState } from "@arbesk/asset-core/domain/asset.js";
@@ -17,7 +17,8 @@ const publishBtn = document.getElementById("publishAssetBtn");
 const downloadBtn = document.getElementById("downloadAssetBtn");
 
 /**
- * Render the chrome from current state. Idempotent.
+ * Renders the chrome from current state.
+ * @remarks Idempotent.
  */
 function renderChrome(): void {
   const s = getAssetState();

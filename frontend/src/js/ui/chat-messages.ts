@@ -1,16 +1,8 @@
 /**
- * Chat message builders for the AI Generation pane — Alpine.js.
- *
- * Every chat bubble is a reactive message object in Alpine.store("chat").messages,
- * rendered declaratively by the x-for template in studio-sidebar.pug. The
- * imperative entry points below (addChatMessage, addAssetMessage, …) are thin
- * wrappers that push/mutate message objects; Alpine re-renders the list.
- *
- * The one genuinely imperative path is the live 3D preview: create-panel
- * awaits Alpine's next tick, then mounts a Babylon engine onto the
- * canvas.chat-asset-canvas that x-for rendered for the asset message
- * (AGENTS.md rule #5 — a Babylon canvas must be created/disposed imperatively,
- * so it stays a post-render mount rather than store-owned DOM).
+ * Chat message builders for the AI Generation pane.
+ * @remarks The live 3D preview mounts a Babylon engine imperatively (a Babylon
+ *   canvas must be created/disposed imperatively, so it stays a post-render
+ *   mount rather than store-owned DOM).
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -368,7 +360,10 @@ export function registerAssetSendHandler(
   assetSendHandlers.set(generationId, handler);
 }
 
-/** Move already-added messages to the front (history renders above live). */
+/**
+ * Moves already-added messages to the front.
+ * @remarks History renders above the live session chat.
+ */
 export function prependChatMessages(messages: ChatMsg[]): void {
   const s = store();
   const ids = new Set(messages.map((m) => m.id));

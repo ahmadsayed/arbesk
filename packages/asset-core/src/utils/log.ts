@@ -1,10 +1,8 @@
 /**
- * Tiny tagged logger for asset-core. Dependency-free and environment-agnostic:
- * no browser-global references — everything is reached through `globalThis`
- * with a safe fallback so the same module runs in Node, tests, and the browser.
- *
- * - `log(tag, ...args)` is silenced unless `globalThis.ARBESK_DEBUG === true`
- *   or `localStorage.arbesk-debug === "true"` (browser debug toggle).
+ * Tiny tagged logger for asset-core.
+ * @remarks Environment-agnostic: reached only through `globalThis`. Logging is
+ *   silenced unless `globalThis.ARBESK_DEBUG === true` or
+ *   `localStorage.arbesk-debug === "true"`.
  */
 
 function isDebugEnabled(): boolean {

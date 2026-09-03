@@ -1,13 +1,9 @@
 /**
- * Lazy Babylon.js loader.
- *
- * The 3D engine only runs in the Studio view, so the Babylon CDN scripts
- * (~5 MB across core + loaders + materials) are fetched on first Studio
- * entry instead of gating every app boot — the Library view and the sign-in
- * modal no longer wait for a 3D engine they never use.
- *
- * Core must execute before the loaders/materials plugins (they extend the
- * BABYLON namespace); the two plugins then load in parallel.
+ * Lazily loads Babylon.js.
+ * @remarks The engine only runs in the Studio view, so the ~5 MB of CDN
+ *   scripts load on first Studio entry instead of gating every app boot.
+ *   Core must run before the loaders/materials plugins (they extend the
+ *   BABYLON namespace).
  */
 
 const BJS_CORE =
@@ -28,9 +24,9 @@ function loadScript(src: string): Promise<void> {
 }
 
 /**
- * Register glTF loader defaults. Babylon's glTF plugin auto-plays the first
- * animation on import; the Studio keeps the viewport static until the user
- * picks a clip in the inspector (see engine/animation-preview.js).
+ * @remarks Babylon's glTF plugin auto-plays the first animation on import;
+ *   the Studio keeps the viewport static until a clip is picked in the
+ *   inspector.
  */
 export function registerGltfLoaderDefaults() {
   const startModes = BABYLON.GLTF2?.GLTFLoaderAnimationStartMode;
@@ -45,9 +41,9 @@ export function registerGltfLoaderDefaults() {
 }
 
 /**
- * Load Babylon core + plugins exactly once. Safe to call repeatedly —
- * subsequent calls return the in-flight (or settled) promise.
- * Resolves when window.BABYLON is fully ready.
+ * Loads Babylon core and plugins exactly once.
+ * @remarks Safe to call repeatedly: later calls return the in-flight (or
+ *   settled) promise. Resolves when window.BABYLON is ready.
  */
 export function ensureBabylon(): Promise<void> {
   if (!_promise) {

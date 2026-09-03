@@ -1,16 +1,9 @@
 /**
- * FormatCodec — the per-format contract shared by every asset format.
- *
- * Every format exposes the same two operations, named without a format
- * suffix:
- *
- *   - `compose`   : restore the native/renderable artifact as bytes.
- *   - `decompose` : split a raw artifact into a content-addressed composite.
- *
- * The dispatcher (formats/index.ts) picks the codec by format (explicit
- * hint, magic-byte sniff, or the `arbesk_format` stored-form marker), so
- * callers only ever invoke `compose`/`decompose` — never a format-named
- * function.
+ * The per-format contract shared by every asset format.
+ * @remarks Every format exposes the same two operations — `compose`
+ *   (restore the native artifact as bytes) and `decompose` (split a raw
+ *   artifact into a content-addressed composite) — so callers invoke only
+ *   those, never a format-named function.
  */
 
 import type { UploadCredential } from "../storage/ipfs/upload-with-credential.ts";
@@ -50,8 +43,8 @@ export interface DecomposeOptions {
 }
 
 /**
- * The per-format contract. `compose` and `decompose` are the only two
- * operations callers need to know; the format is selected by the dispatcher.
+ * The per-format contract: `compose` and `decompose` are the only two
+ * operations callers need to know.
  */
 export interface FormatCodec {
   /** Canonical lowercase format name ("gltf", "glb", "3mf", "example"). */

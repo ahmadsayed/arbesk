@@ -1,16 +1,11 @@
 /**
- * Arbesk glTF Core Transforms
- *
- * Pure compose/decompose logic shared by the main thread (composer.js,
- * decomposer.js, dedup.js) and the glTF Web Worker (workers/gltf-worker.js).
- * This module must stay free of DOM, session, network, and import-map
- * dependencies so the worker can import it — side effects (IPFS fetch,
- * upload) are injected by the caller.
- *
- * Compose:   `ipfs://<CID>` refs → base64 data URIs (self-contained glTF).
- * Decompose: data-URI buffers/images → extracted bytes handed to caller
- *            callbacks (upload to IPFS on the main thread, placeholder swap
- *            in the worker).
+ * Pure glTF compose/decompose transforms shared by the main thread and the
+ * glTF Web Worker.
+ * @remarks Must stay free of DOM, session, network, and import-map
+ *   dependencies so the worker can import it — side effects (IPFS
+ *   fetch/upload) are injected by the caller. Compose resolves `ipfs://<CID>`
+ *   refs to base64 data URIs; decompose extracts data-URI buffers/images and
+ *   hands the bytes to caller callbacks.
  */
 
 import { extractDataURI } from "../../utils/uri.ts";
@@ -23,14 +18,9 @@ const GLB_CHUNK_TYPE_JSON = 0x4e4f534a; // "JSON"
 const GLB_CHUNK_TYPE_BIN = 0x004e4942; // "BIN\0"
 
 /**
- * Fast custom GLB serializer.
- *
- * Packs glTF JSON + optional BIN chunk into a GLB v2 container without
- * decoding/re-encoding mesh data, so content-addressed CIDs remain stable.
- *
- * @param json - glTF JSON object (dynamic schema)
- * @param binaryChunk - Optional BIN chunk
- * @returns GLB bytes
+ * Serializes glTF JSON plus an optional BIN chunk into a GLB v2 container.
+ * @remarks Does not decode/re-encode mesh data, so content-addressed CIDs
+ *   stay stable.
  */
 function serializeGLBCustom(json: any, binaryChunk: ArrayBuffer | Uint8Array | null = null): ArrayBuffer {
   const jsonText = JSON.stringify(json);
@@ -93,16 +83,9 @@ function serializeGLBCustom(json: any, binaryChunk: ArrayBuffer | Uint8Array | n
 }
 
 /**
- * Serialize a glTF JSON + optional binary chunk back into a GLB v2 container.
- *
- * Uses the fast custom serializer. It does not decode/re-encode mesh data, so
- * the binary payload (and therefore its content-addressed CID) stays identical.
- * This is kept as a utility for GLB export/download; the storage/edit path does
- * not re-serialize to GLB.
- *
- * @param json - glTF JSON object (dynamic schema)
- * @param binaryChunk - Optional BIN chunk
- * @returns GLB bytes
+ * Serializes glTF JSON plus an optional binary chunk into a GLB v2 container.
+ * @remarks Kept as a utility for GLB export/download; the storage/edit path
+ *   does not re-serialize to GLB.
  */
 export function serializeGLB(json: any, binaryChunk: ArrayBuffer | Uint8Array | null = null): ArrayBuffer {
   return serializeGLBCustom(json, binaryChunk);
@@ -139,19 +122,15 @@ export function cidFromIpfsUri(uri: string): string | null {
 }
 
 /**
- * Attach Arbesk dedup metadata to a glTF buffer or image entry.
- *
- * @param item - glTF buffer/image entry (dynamic schema)
+ * Attaches Arbesk dedup metadata to a glTF buffer or image entry.
  */
 export function attachDedupMeta(item: any, meta: object): any {
   return { ...item, _arbesk: meta };
 }
 
 /**
- * Remove Arbesk dedup metadata from all buffers/images in a composite glTF.
- * Returns a deep clone; the input is not mutated.
- *
- * @param composite - Composite glTF JSON (dynamic schema)
+ * Removes Arbesk dedup metadata from all buffers/images in a composite glTF.
+ * @remarks Returns a deep clone; the input is not mutated.
  * @returns Clean glTF JSON suitable for any glTF loader or serialization
  */
 export function stripDedupMeta(composite: any): any {
@@ -166,19 +145,12 @@ export function stripDedupMeta(composite: any): any {
 }
 
 /**
- * Compose a full standard glTF JSON from a composite glTF.
- *
- * Resolves every `ipfs://<CID>` buffer/image URI to a base64 data URI via the
- * injected fetcher and strips Arbesk metadata, so the result loads in any
- * standard glTF importer. Data/external URIs pass through unchanged.
- *
- * glTF 2.0 allows either `uri` or `bufferView` on an image, never both. The
- * composite storage form carries both, so the bufferView is dropped from any
- * image that has a uri — strict importers (Blender) reject the file otherwise.
- *
- * @param gltfJson - Composite glTF JSON (not mutated; dynamic schema)
- * @param fetchBase64
- *   Fetches a CID's payload and returns it base64-encoded.
+ * Composes a full standard glTF JSON from a composite glTF.
+ * @remarks Resolves `ipfs://<CID>` buffer/image URIs to base64 data URIs and
+ *   strips Arbesk metadata. glTF 2.0 allows either `uri` or `bufferView` on
+ *   an image, never both, so a composite image's bufferView is dropped —
+ *   strict importers (Blender) reject the file otherwise. The input is not
+ *   mutated.
  * @returns Standard glTF JSON with data URI buffers/images
  */
 export async function composeGltfJson(
@@ -239,14 +211,10 @@ interface DecomposeCallbacks {
 }
 
 /**
- * Walk a standard glTF's buffers/images, extract every inline data URI, and
- * hand the bytes to caller callbacks that decide the replacement entry
- * (e.g. `ipfs://<CID>` after upload, or a worker placeholder).
- *
- * Already-decomposed (`ipfs://`) and external URIs are left untouched.
- * Returns a deep clone; the input is not mutated.
- *
- * @param gltfJson - Standard glTF 2.0 JSON (not mutated; dynamic schema)
+ * Extracts every inline data URI from a standard glTF's buffers/images and
+ * hands the bytes to caller callbacks that decide the replacement entry.
+ * @remarks Already-decomposed (`ipfs://`) and external URIs are left
+ *   untouched. Returns a deep clone; the input is not mutated.
  * @returns Composite-shaped glTF JSON with replaced URIs
  */
 export async function decomposeGltfJson(

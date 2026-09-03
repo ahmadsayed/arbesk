@@ -1,11 +1,8 @@
 /**
- * Arbesk GLB Parser & Direct Decomposer
- *
- * Parses glTF 2.0 GLB files in the browser, extracts the JSON and binary
- * chunks, and directly produces a composite glTF whose buffers and images
- * reference separate IPFS CIDs.
- *
- * This avoids the base64 bloat of converting GLB → standard glTF first.
+ * Parses glTF 2.0 GLB files and directly produces a composite glTF whose
+ * buffers and images reference separate IPFS CIDs.
+ * @remarks This avoids the base64 bloat of converting GLB → standard glTF
+ *   first.
  */
 
 import { WebIO, GLB_BUFFER } from "@gltf-transform/core";
@@ -48,10 +45,7 @@ export function isGLB(arrayBuffer: ArrayBuffer): boolean {
 }
 
 /**
- * Parse a GLB v2 file.
- *
- * Uses @gltf-transform/core for spec-compliant container parsing. The legacy
- * custom DataView-based parser has been removed.
+ * Parses a GLB v2 file.
  */
 export async function parseGLB(
   arrayBuffer: ArrayBuffer
@@ -91,10 +85,9 @@ export async function parseGLB(
 type GlbWriter = (bytes: Uint8Array | string, filename: string) => Promise<string>;
 
 /**
- * Write bytes to IPFS using the provided writer or the default project writer.
- * When no writer is supplied, the dedup-aware upload path is used so unchanged
- * components can reuse their previous CID.
- *
+ * Writes bytes to IPFS via the provided writer or the default project writer.
+ * @remarks With no writer, the dedup-aware upload path is used so unchanged
+ *   components reuse their previous CID.
  * @param bytes - Raw bytes (a JSON string only when `writer` is supplied)
  */
 async function writeBytes(
@@ -347,11 +340,8 @@ async function uploadBufferTask(
 }
 
 /**
- * Decompose a GLB in-memory into a composite glTF JSON with IPFS CID references.
- * This is the `decompose` half of the GLB FormatCodec (formats/codec.ts).
- *
+ * Decomposes a GLB in-memory into a composite glTF JSON with IPFS CID refs.
  * @param arrayBuffer - Raw GLB bytes
- * @param writer - Optional IPFS writer `(bytes, filename) => Promise<cid>`
  */
 export async function decompose(
   arrayBuffer: ArrayBuffer,
@@ -467,8 +457,9 @@ interface ByteRange {
 }
 
 /**
- * bufferViews referenced by accessors (incl. sparse) or mesh extensions
- * (Draco) — pruning one of these would corrupt geometry.
+ * Collects the bufferViews referenced by accessors (incl. sparse) or mesh
+ * extensions (Draco).
+ * @remarks Pruning one of these would corrupt geometry.
  */
 function collectReferencedBufferViews(composite: any): Set<number> {
   const referenced = new Set<number>();
@@ -535,8 +526,9 @@ function mergeRanges(ranges: ByteRange[]): ByteRange[] {
 }
 
 /**
- * True when any surviving bufferView of the given buffer overlaps one of the
- * ranges about to be pruned — the caller must abort the prune in that case.
+ * Reports whether any surviving bufferView overlaps a range about to be
+ * pruned.
+ * @remarks The caller must abort the prune in that case.
  */
 function anyRemainingViewOverlaps(
   composite: any,
@@ -592,12 +584,10 @@ function adjustBufferViewOffsets(
 }
 
 /**
- * Remove image byte ranges from GLB buffers after the images have been extracted
- * to separate IPFS objects. Updates bufferViews, accessors, and buffer byteLength
- * so geometry data is preserved and we don't store the image bytes twice.
- *
- * @param composite - Composite glTF JSON being built (mutated; dynamic schema)
- * @param bufferBytesByIndex - Resolved buffer bytes (mutated)
+ * Removes image byte ranges from GLB buffers after the images were extracted
+ * to separate IPFS objects.
+ * @remarks Updates bufferViews, accessors, and byteLength so geometry is
+ *   preserved and image bytes aren't stored twice. Both inputs are mutated.
  */
 function pruneBufferImageData(
   composite: any,

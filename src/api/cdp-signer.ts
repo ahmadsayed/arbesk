@@ -1,11 +1,8 @@
 /**
- * CDP server Signer (P2b).
- *
- * Implements the @arbesk/wallet Signer port over the CDP server SDK delegated-
- * signing surface: sendTransaction() wraps a single call in an ERC-4337
- * UserOperation and submits it via endUser.sendUserOperation (paymaster-
- * sponsored, Base Sepolia). wait() polls the operation status to terminal.
- * The smart account + end-user id come from the email-auth session.
+ * CDP server Signer (P2b): implements the @arbesk/wallet Signer port over the
+ * CDP server SDK's delegated-signing surface.
+ * @remarks Submits paymaster-sponsored ERC-4337 UserOperations on Base
+ *   Sepolia; the smart account + end-user id come from the email-auth session.
  */
 import type { CdpClient } from "@coinbase/cdp-sdk";
 import type { Signer, SendResult, MinedReceipt } from "@arbesk/wallet/types.js";

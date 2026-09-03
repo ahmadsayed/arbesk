@@ -1,11 +1,6 @@
 /**
- * Library Controller
- *
- * Data + gating logic for the Library view, extracted from the old
- * library-init.js so the unified SPA bootstrap (app-init.js) can import it
- * without dragging in page-level wiring. Owns collection/asset fetching and the
- * sign-in gate; the router calls refreshLibraryData() when the Library view
- * becomes active.
+ * Data and gating logic for the Library view: collection/asset fetching and
+ * the sign-in gate.
  */
 
 import { walletState } from "../state/wallet-state.ts";

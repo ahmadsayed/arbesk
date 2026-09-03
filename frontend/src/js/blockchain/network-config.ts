@@ -1,12 +1,8 @@
 /**
- * Network-aware contract configuration for Arbesk.
- *
- * Each supported network maps to its deployed contract address,
- * USDC token address, RPC URL, and metadata.
- *
- * This replaces the single .env CONTRACT_ADDRESS with per-chain
- * configuration so the UI automatically uses the correct contract
- * when the user switches networks in their wallet.
+ * Network-aware contract configuration: each supported network maps to its
+ * contract address, USDC token address, RPC URL, and metadata.
+ * @remarks Replaces the single .env CONTRACT_ADDRESS with per-chain config so
+ *   the UI uses the correct contract when the wallet switches networks.
  */
 
 import { CHAIN_IDS } from "../../../../constants/chains.js";

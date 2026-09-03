@@ -1,12 +1,7 @@
 /**
- * Arbesk Express Rate Limiters
- *
- * Replaces the custom in-memory map with express-rate-limit for proper
- * fixed/sliding windows, standard RateLimit-* headers, and per-route stores
- * that can be reset in tests.
- *
- * All authenticated routes key the limit by wallet address (res.locals.userAddress);
- * unauthenticated routes fall back to req.ip.
+ * Arbesk Express rate limiters.
+ * @remarks Authenticated routes key limits by wallet address
+ *   (`res.locals.userAddress`); unauthenticated routes fall back to req.ip.
  */
 
 import rateLimit, { MemoryStore } from "express-rate-limit";
@@ -58,10 +53,7 @@ function createLimiter({ max, windowMs = DEFAULT_WINDOW_MS, message }: LimiterOp
   return { middleware, store };
 }
 
-/**
- * Factory for creating a one-off rate-limit middleware (used by tests and any
- * future route that needs a custom limit).
- */
+/** Creates a one-off rate-limit middleware. */
 export default function createRateLimitMiddleware({
   max,
   windowMs = DEFAULT_WINDOW_MS,
@@ -87,7 +79,8 @@ const generationLimiter = createLimiter({
 
 /**
  * BYOK (Bring Your Own Key) requests bypass the server-side generation rate
- * limit because the caller is consuming their own provider quota.
+ * limit.
+ * @remarks The caller consumes their own provider quota.
  */
 function isByok(req: Request): boolean {
   const provider = req.body?.provider;
@@ -150,18 +143,16 @@ export const emailOtpVerifyRateLimit = emailOtpVerifyLimiter.middleware;
 export const walletRelayRateLimit = walletRelayLimiter.middleware;
 
 /**
- * Generation rate-limit middleware. BYOK requests skip the server-side limit
- * and call next() directly; all other generation requests count toward the
- * global generation limit.
+ * Generation rate-limit middleware.
+ * @remarks BYOK requests skip the server-side limit; all other generation
+ *   requests count toward the global limit.
  */
 export const generationRateLimit = (req: Request, res: Response, next: NextFunction) => {
   if (isByok(req)) return next();
   return generationLimiter.middleware(req, res, next);
 };
 
-/**
- * Reset all in-memory rate-limit stores. Used by test teardown.
- */
+/** Resets all in-memory rate-limit stores. */
 export function _resetRateLimiters(): void {
   uploadUrlLimiter.store.resetAll();
   generationLimiter.store.resetAll();

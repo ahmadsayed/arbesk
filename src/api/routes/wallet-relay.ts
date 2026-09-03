@@ -1,11 +1,8 @@
 /**
- * Wallet relay route (P2d).
- *
- * Executes an on-chain write (publish / updateUri / updateEditors / burn) on
- * behalf of an email-auth (server-wallet) session: resolves the CDP end-user
- * id, checks access via @arbesk/authz, ABI-encodes the call through
- * @arbesk/wallet createAssetContract, and submits it as a paymaster-sponsored
- * UserOperation via the CDP server SDK. No browser, no private key on the CLI.
+ * Wallet relay route (P2d): executes an on-chain write
+ * (publish / updateUri / updateEditors / burn) on behalf of an email-auth
+ * (server-wallet) session.
+ * @remarks No browser, no private key on the CLI.
  */
 import express from "express";
 import fs from "fs";
@@ -90,10 +87,10 @@ async function executeRelayOp(
 }
 
 /**
- * Resolve the CDP end-user id for a relay op, logging enough detail to
- * diagnose "Smart account not found for this end user" failures: whether the
- * userId came from the session or an address scan, and which smart-account
- * list the address appeared in.
+ * Resolves the CDP end-user id for a relay op.
+ * @remarks Logs enough detail to diagnose "Smart account not found" failures:
+ *   whether the userId came from the session or an address scan, and which
+ *   smart-account list the address appeared in.
  */
 async function resolveRelayUserId(
   cdp: any,

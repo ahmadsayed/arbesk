@@ -1,16 +1,8 @@
 /**
- * WalletConnect v2 Ethereum Provider
- *
  * Initializes the WalletConnect Ethereum provider for mobile wallet
  * connections via QR code or deep link.
- *
- * Uses dynamic import with CDN fallback so a broken ES-module transform
- * does not crash the entire wallet stack.
- *
- * Usage:
- *   import { getWalletConnectProvider } from './wallet-connect.ts';
- *   const provider = await getWalletConnectProvider();
- *   await provider.enable();
+ * @remarks Uses dynamic import with a CDN fallback so a broken ES-module
+ *   transform does not crash the whole wallet stack.
  */
 
 let provider: any = null;
@@ -31,9 +23,9 @@ const DEFAULT_METHODS = [
 const DEFAULT_EVENTS = ["chainChanged", "accountsChanged"];
 
 /**
- * Dynamically load the WalletConnect EthereumProvider class.
- * Tries esm.sh first (more robust bundler), then jsdelivr +esm.
- * If both fail, WalletConnect is unavailable but injected wallets still work.
+ * Loads the WalletConnect EthereumProvider class.
+ * @remarks If both CDN loads fail, WalletConnect is unavailable but injected
+ *   wallets still work.
  */
 async function loadEthereumProvider() {
   if (EthereumProvider) return EthereumProvider;
@@ -76,8 +68,8 @@ async function loadEthereumProvider() {
 }
 
 /**
- * Initialize the WalletConnect Ethereum provider.
- * Uses a singleton pattern - subsequent calls return the same instance.
+ * Initializes the WalletConnect Ethereum provider.
+ * @remarks Singleton: subsequent calls return the same instance.
  */
 async function initWalletConnect(): Promise<any> {
   if (provider) return provider;
@@ -164,7 +156,7 @@ export async function disconnectWalletConnect(): Promise<void> {
 }
 
 /**
- * Subscribe to WalletConnect events.
+ * Subscribes to WalletConnect events.
  * @param event - 'accountsChanged' | 'chainChanged' | 'disconnect'
  */
 export function onWalletConnectEvent(

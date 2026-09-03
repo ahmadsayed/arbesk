@@ -39,7 +39,7 @@ export interface CredentialPort {
 export interface ChainPort {
   /** On-chain editor-list manifest CID for an asset tag (null when none/no contract). */
   getEditorListURI?(assetTag: string): Promise<string | null>;
-  /** On-chain editor-list version for an asset tag (merkle-editors flow). */
+  /** On-chain editor-list version for an asset tag. */
   getEditorListVersion?(assetTag: string): Promise<number>;
   /** Resolve an email login to a wallet address (backend /users/resolve-email). */
   resolveEmail?(email: string): Promise<string>;
@@ -57,7 +57,7 @@ export interface CollectionReadPort {
 }
 
 export interface HashPort {
-  /** drop-in for Web3.utils.soliditySha3 — implement with viem encodePacked+keccak256. */
+  /** drop-in for Web3.utils.soliditySha3. */
   soliditySha3(...args: any[]): string;
   keccak256(data: Uint8Array | `0x${string}`): string;
 }
@@ -69,11 +69,10 @@ export interface StoragePort {
 }
 
 /**
- * Ops dispatched through the ExecutorPort. The set mirrors exactly what the
- * glTF Web Worker registers (gltf-worker.ts) minus `ping` — async-gltf.ts
- * dispatches these same op names with a single payload object per call, so
- * an ExecutorPort implementation is either a thin pass-through to the worker
- * pool (browser) or the inline main-thread op table (executor/inline.ts).
+ * Ops dispatched through the ExecutorPort.
+ * @remarks Mirrors exactly what the glTF Web Worker registers (minus `ping`);
+ *   each op takes a single payload object, so an ExecutorPort is either a
+ *   worker-pool pass-through or the inline main-thread op table.
  */
 export type ExecutorOp =
   | "compose"

@@ -9,9 +9,9 @@ export class UnsupportedCapabilityError extends Error {
 }
 
 /**
- * Gate a capability: throw UnsupportedCapabilityError when the provider
- * does not declare it. Used by every facade method so a provider's declared
- * capability set is the single source of truth.
+ * Gates a capability, throwing UnsupportedCapabilityError when the provider
+ * does not declare it.
+ * @remarks A provider's declared capability set is the single source of truth.
  */
 export function requireCapability(
   providerId: string,

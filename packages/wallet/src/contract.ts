@@ -1,10 +1,9 @@
 /**
- * @arbesk/wallet contract facade — createAssetContract.
- *
- * Typed contract writes for the ArbeskAsset contracts. Calldata is ABI-encoded
- * with viem (the SDK owns encoding); broadcast + wait are delegated to the
- * injected Signer, so the facade is independent of wallet kind. The generic
- * call() method is the escape hatch for any ABI function.
+ * @arbesk/wallet contract facade — createAssetContract: typed contract writes
+ *   for the ArbeskAsset contracts.
+ * @remarks Broadcast + wait are delegated to the injected Signer, so the facade
+ *   is independent of wallet kind. call() is the escape hatch for any ABI
+ *   function.
  */
 import { encodeFunctionData } from "viem";
 import type { Abi } from "viem";

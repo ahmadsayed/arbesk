@@ -1,8 +1,5 @@
 /**
  * Manifest chain walk.
- *
- * Walks an asset manifest chain backward via `prev_asset_manifest_cid` links,
- * reading each manifest through the injected IpfsReadPort.
  */
 
 import { getRuntime } from "../runtime.ts";
@@ -15,8 +12,7 @@ export interface ManifestChainEntry {
 }
 
 /**
- * Walk a manifest chain backward via prev_asset_manifest_cid links.
- * Returns an array of { cid, version, name } summaries.
+ * Walks a manifest chain backward via `prev_asset_manifest_cid` links.
  */
 export async function getManifestChain(
   cid: string,

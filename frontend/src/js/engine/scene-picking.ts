@@ -1,19 +1,15 @@
 /**
  * Pointer-pick resolution for the Studio viewport.
- *
- * Pure helpers extracted from scene-graph.ts's pointer-observable callback so
- * the parent-chain walk is independently testable (no Babylon dependency).
+ * @remarks Pure helpers so the parent-chain walk is independently testable
+ *   (no Babylon dependency).
  */
 
 /**
- * Resolve the node identity and boundary for a picked mesh by walking the
- * parent chain. Track the first nodeId seen (for regular nodes) but do NOT
- * stop — continue until a childRef boundary is found or the chain ends. A
- * childRef boundary means we are inside a child asset; the parent manifest's
- * node_id is on the outer anchor above it.
- *
- * @param {any} mesh - The picked mesh (or anchor) to walk up from.
- * @returns {{target: any, resolvedNodeId: string|null, isChildAssetNode: boolean}}
+ * Resolves the node identity and boundary for a picked mesh.
+ * @remarks Walks the parent chain past the first nodeId to a childRef
+ *   boundary (or the chain end); a childRef boundary means the pick is inside
+ *   a child asset.
+ * @param mesh the picked mesh (or anchor) to walk up from.
  */
 export function resolvePickedNodeId(mesh: any) {
   let target = mesh;

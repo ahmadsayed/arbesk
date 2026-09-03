@@ -1,7 +1,7 @@
 /**
- * Inspector "Metadata" section: read-only computed facts + editable
- * annotations. Edits write to the pending-annotations store (persisted on
- * save). Renders on ASSET_STATE_CHANGED and SCENE_CLEARED.
+ * Inspector "Metadata" section: read-only computed facts and editable
+ * annotations.
+ * @remarks Edits write to the pending-annotations store (persisted on save).
  */
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getAssetState, getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";

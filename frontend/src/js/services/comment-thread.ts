@@ -1,9 +1,8 @@
 /**
- * Arbesk Comment Thread State
- *
  * Owns a single Nostr comment thread's transport, deduplication, and ordered
- * event list. Emits changes through the global mitt bus so UI layers can
- * subscribe without touching WebSocket or IPFS details.
+ * event list.
+ * @remarks Changes are emitted on the global event bus so UI layers can
+ *   subscribe without touching WebSocket or IPFS details.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -250,7 +249,7 @@ export class CommentThread {
 
   /**
    * Build a Merkle proof for the current wallet against the token's editor list.
-   * Returns null when the wallet is not a listed collaborator.
+   * @returns null when the wallet is not a listed collaborator.
    */
   async _loadEditorProof(tokenId: string | number, _chainId: string | number | null, address: string): Promise<{ proof: string[]; role: number } | null> {
     try {

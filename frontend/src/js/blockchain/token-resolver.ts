@@ -1,14 +1,6 @@
 /**
- * Arbesk Token Resolver
- *
- * Resolves on-chain token references (child_ref) to manifest CIDs.
- * Supports the local ArbeskAsset contract and external ERC-721 contracts.
- *
- * Resolution path:
- *   1. Look up the token contract by chainId + contractAddress
- *   2. Call tokenURI(tokenId) to get the current manifest CID
- *   3. Fetch the manifest from IPFS
- *   4. Return the manifest CID and metadata
+ * Resolves on-chain token references (child_ref) to manifest CIDs, for the
+ * local ArbeskAsset contract and external ERC-721 contracts.
  */
 
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
@@ -17,12 +9,11 @@ import { walletState } from "../state/wallet-state.ts";
 import { getReadClient } from "./viem-clients.ts";
 
 /**
- * Resolve which contract to read a token from. Prefer the current deployment
- * (the connected/configured contract) and fall back to the address embedded
- * in the manifest only when the token isn't on the current contract. This
- * survives a contract redeploy without a static old→new map: a migrated token
- * lives on the current contract, while an unmigrated legacy token still
- * resolves via its manifest's embedded address.
+ * Prefers the current deployment and falls back to the manifest's embedded
+ * address only when the token isn't on the current contract.
+ * @remarks Survives a contract redeploy without a static old→new map: a
+ *   migrated token lives on the current contract, while an unmigrated legacy
+ *   token resolves via its manifest's embedded address.
  */
 async function resolveContractForToken(
   chainId: number | null,
@@ -133,10 +124,8 @@ const minERC721ABI = [
 ] as const;
 
 /**
- * Read a token's tokenURI from an ERC-721 contract via a per-chain cached
- * viem public client. Cross-chain reads resolve the RPC URL from network
- * config (the old web3 HttpProvider path); same-chain reads use the active
- * chain's client.
+ * Reads a token's tokenURI from an ERC-721 contract via a per-chain cached
+ * viem public client.
  */
 async function readTokenURI(
   chainId: number | null,
@@ -156,17 +145,8 @@ async function readTokenURI(
 export { normalizeTokenURI } from "./uri-utils.ts";
 
 /**
- * Resolve a child_ref token reference to a manifest CID.
- *
- * Resolution steps:
- *   1. Fall back to connected wallet's chain/contract when not provided
- *   2. Check in-memory cache using resolved values
- *   3. Call tokenURI() on the contract
- *   4. Normalize the returned URI to a plain CID
- *   5. Optionally validate that the CID resolves to a valid manifest
- *   6. Cache the result
- *
- * @param options.validate - Whether to fetch and validate the manifest
+ * Resolves a child_ref token reference to a manifest CID.
+ * @remarks options.validate controls whether to fetch and validate the manifest.
  */
 export async function resolveChildRef(
   childRef: ChildRef,
@@ -270,9 +250,8 @@ export type AssetIdLookup =
   | { kind: "collection"; value: Record<string, any> };
 
 /**
- * Look up an assetID inside a collection's `assets` map.
- *
- * @param assetsMap - The collection manifest's `assets` field
+ * Looks up an assetID inside a collection's `assets` map.
+ * @param assetsMap - the collection manifest's `assets` field.
  */
 export function resolveAssetIdFromCollection(
   assetsMap: Record<string, any> | null,
@@ -306,14 +285,12 @@ export interface CollectionChildRef {
 }
 
 /**
- * Resolve a generalized collection child reference: `{ collection, assetID }`.
- * `collection` is either `"self"` (resolve against the currently-loaded
- * collection's assets map) or `{chainId, contractAddress, tokenId}`
- * (resolve that token's collection manifest first, then look up assetID
- * inside it).
- *
- * @param activeCollectionAssets - assets map of the collection
- *   currently being loaded; required when childRef.collection === "self"
+ * Resolves a generalized collection child reference.
+ * @remarks `collection` is either `"self"` (resolve against the loaded
+ *   collection's assets map) or `{chainId, contractAddress, tokenId}`
+ *   (resolve that token's collection manifest first, then look up assetID).
+ * @param activeCollectionAssets - assets map of the collection currently
+ *   being loaded; required when `collection` is `"self"`.
  */
 export async function resolveCollectionChildRef(
   childRef: CollectionChildRef,

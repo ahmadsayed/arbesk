@@ -1,14 +1,10 @@
 /**
- * Decomposer for the example format: raw `.example` bytes → content-addressed
- * composite JSON, written through the injected IpfsWritePort — never reaching
- * into the frontend/backend trees. Mirrors 3mf/decomposer.ts and
- * gltf/decomposer.ts.
- *
- * Decomposition strategy (the canonical pattern):
- *   - the (possibly large) payload → stored on IPFS as a binary part via
- *     uploadWithDedup (hash → CID reuse across saves)
- *   - small metadata (name, part CID + length, dedup meta) → kept inline
- *   - the whole thing → ipfsWrite.writeJSON as the composite stored form
+ * Decomposes the example format: raw `.example` bytes → content-addressed
+ * composite JSON.
+ * @remarks Written through the injected IpfsWritePort, never reaching into
+ *   the frontend/backend trees. The payload is stored as one IPFS part via
+ *   uploadWithDedup (hash → CID reuse across saves), with small metadata kept
+ *   inline.
  */
 
 import { getRuntime } from "../../runtime.ts";
@@ -29,9 +25,7 @@ export interface DecomposeExampleOptions {
 }
 
 /**
- * Decompose raw `.example` bytes into a composite stored on IPFS.
- *
- * @param bytes - raw `.example` bytes
+ * Decomposes raw `.example` bytes into a composite stored on IPFS.
  */
 export async function decompose(
   bytes: Uint8Array,

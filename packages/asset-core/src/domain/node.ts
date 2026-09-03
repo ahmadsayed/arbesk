@@ -1,7 +1,7 @@
 /**
- * Domain: Node — one placement inside an asset's tree. Pure data mirroring a
- * manifest `scene.nodes[]` entry. Engine runtime objects (anchors, meshes,
- * animation groups) never live here; the engine keys its maps by nodeId.
+ * Domain: Node — one placement inside an asset's tree.
+ * @remarks Pure data mirroring a manifest `scene.nodes[]` entry; engine runtime
+ *   objects never live here (the engine keys its maps by nodeId).
  */
 import { normalizeAssetRef } from "./asset-ref.ts";
 import type { AssetRef } from "./asset-ref.ts";

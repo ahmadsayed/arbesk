@@ -1,13 +1,10 @@
 /**
- * Optimistic collection-creation flow shared by the toolbar button and the
- * library context menu.
- *
- * The collection card appears with a "minting" spinner the moment the manifest
- * is written to IPFS, the mint transaction runs in the background, and the card
- * flips to confirmed on success or is removed if the transaction fails or the
- * user rejects the wallet prompt. This is identical for EOA and smart-account
- * (social login) wallets: on an EOA the card simply appears just before the
- * wallet popup, and rejecting the popup removes it again.
+ * Optimistic collection-creation flow.
+ * @remarks The card appears with a "minting" spinner as soon as the manifest
+ *   is written to IPFS, then flips to confirmed on success or is removed if
+ *   the mint fails or the user rejects the wallet prompt. Identical for EOA
+ *   and smart-account wallets.
+ * Used by the toolbar button and the library context menu.
  */
 
 import { libraryState } from "../state/library-state.ts";
@@ -25,9 +22,8 @@ function collectionCardId(tokenId: string | number): string {
 }
 
 /**
- * Insert an optimistic "minting" collection card at the top of the list without
- * navigating into it. No-op if a card for this token already exists.
- * @returns the card id
+ * Inserts an optimistic "minting" collection card without navigating into it.
+ * @remarks No-op if a card for this token already exists.
  */
 function addPendingCollectionCard({
   tokenId,
@@ -63,7 +59,7 @@ function addPendingCollectionCard({
 }
 
 /**
- * Flip a pending collection card to the confirmed (besked) state.
+ * Flips a pending collection card to the confirmed state.
  */
 function markCollectionConfirmed(tokenId: string | number): void {
   libraryState.set({
@@ -76,7 +72,8 @@ function markCollectionConfirmed(tokenId: string | number): void {
 }
 
 /**
- * Remove an optimistic collection card (mint failed or the user cancelled).
+ * Removes an optimistic collection card.
+ * @remarks Removal happens on mint failure or user cancellation.
  */
 function removePendingCollectionCard(id: string): void {
   libraryState.set({
@@ -86,9 +83,9 @@ function removePendingCollectionCard(id: string): void {
 }
 
 /**
- * Prompt for a name and create a collection optimistically. Resolves as soon as
- * the dialog is dismissed or the create has been kicked off — it never blocks
- * the caller on the mint transaction, which is reconciled in the background.
+ * Prompts for a name and creates a collection optimistically.
+ * @remarks Resolves without waiting for the mint transaction, which is
+ *   reconciled in the background.
  */
 export async function createCollectionFlow(): Promise<void> {
   const name = await showDialog(

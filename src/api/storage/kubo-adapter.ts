@@ -4,7 +4,6 @@ import type { StorageAdapter } from "./index.ts";
 
 /**
  * Kubo storage adapter - wraps the local ipfs-http-client.
- * Used only by the automated E2E suite (IPFS_BACKEND=kubo).
  */
 export function createKuboAdapter(
   ipfs: KuboClient,
@@ -27,9 +26,10 @@ export function createKuboAdapter(
     },
 
     /**
-     * Upload multiple files as a single IPFS UnixFS directory and return the
-     * directory root CID. Used to group a glTF + its buffers/textures into one
-     * browsable folder (organizational only - loading still uses bare CIDs).
+     * Uploads multiple files as a single IPFS UnixFS directory and returns the
+     * directory root CID.
+     * @remarks Groups a glTF + its buffers/textures into one browsable folder
+     *   (organizational only — loading still uses bare CIDs).
      */
     async addDirectory(files) {
       const source = files.map((f) => ({ path: f.name, content: f.data }));
@@ -95,8 +95,8 @@ export function createKuboAdapter(
     },
 
     /**
-     * Kubo credentials are already reusable across unlimited uploads, so a
-     * batch mint just returns `count` copies of the same credential.
+     * @remarks Kubo credentials are reusable across unlimited uploads, so a
+     *   batch mint returns `count` copies of the same credential.
      */
     async mintUploadCredentials(count) {
       const credential = { strategy: "kubo-api", apiUrl, gateway: gatewayBase, reusable: true };

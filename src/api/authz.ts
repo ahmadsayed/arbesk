@@ -1,10 +1,6 @@
 /**
- * Backend authz wiring (P2c).
- *
- * Connects @arbesk/authz to the deployed ArbeskAsset contracts: resolves the
- * contract + chain via config.ts and reads ownerOf / editorRoot /
- * editorSetVersion / tokenURI through viem readContract. checkAssetAccess then
- * enforces ownership + Merkle editor proofs for the relay route.
+ * Backend authz wiring (P2c): connects @arbesk/authz to the deployed
+ * ArbeskAsset contracts (ownership + Merkle editor proofs).
  */
 import { createAuthz } from "@arbesk/authz";
 import type { ChainReadPort, Authz, AuthzConfig } from "@arbesk/authz";

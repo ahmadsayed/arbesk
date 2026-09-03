@@ -1,21 +1,10 @@
 /**
- * Arbesk Dialog Utility — Alpine.js component
- *
- * GNOME HIG-styled modal dialog that replaces browser prompt().
- * Uses the popover surface tokens, backdrop blur, and
- * keyboard-accessible focus trap (Escape to cancel, Enter to confirm).
- *
- * The DOM lives in app.pug (#appDialogHost fragment, `x-data="dialog"`).
- * Reactive state lives in an Alpine.store so template expressions and the
- * imperative show*() entry points mutate the same reactive proxy. The host
- * shows one dialog at a time: show*() calls that arrive while a dialog is
- * open are parked in a FIFO queue and opened after the current one resolves
- * (each caller's promise resolves with its own dialog's result).
- *
- * Usage:
- *   import { showDialog } from "./ui/dialog.ts";
- *   const result = await showDialog("Name your asset", "Enter a name:", "My Asset");
- *   if (result === null) { /&#42; cancelled &#42;/ }
+ * Modal dialog that replaces browser prompt().
+ * @remarks Reactive state lives in an Alpine.store so template expressions
+ *   and the imperative show*() entry points mutate the same proxy. The host
+ *   shows one dialog at a time: requests that arrive while one is open are
+ *   parked in a FIFO queue and each caller's promise resolves with its own
+ *   dialog's result.
  */
 
 import { Alpine, registerAlpineComponent } from "./alpine.ts";
@@ -137,9 +126,8 @@ function _afterRender(fn: () => void): void {
 }
 
 /**
- * The element that receives initial focus for a dialog kind, matching the
- * pre-Alpine implementation: input (prompt/burn), first action button
- * (confirm), close button (info/custom), confirm button (checkbox).
+ * Returns the element that receives initial focus for a dialog kind.
+ * @remarks Matches the pre-Alpine focus behavior.
  */
 function _initialFocusEl(kind: DialogSpec["kind"], dialogEl: Element): Element | null {
   switch (kind) {
@@ -220,9 +208,8 @@ function _open(spec: DialogSpec, resolve: (value: any) => void): void {
 }
 
 /**
- * Close the open dialog, resolving its promise exactly once (resolve-once
- * guard: a second Escape/Close/backdrop click is a no-op). Deactivates the
- * focus trap before the dialog leaves the DOM, then drains the FIFO queue.
+ * Closes the open dialog, resolving its promise exactly once.
+ * @remarks A second Escape/Close/backdrop click is a no-op.
  */
 function _close(value: any): void {
   const s = state();
@@ -259,9 +246,9 @@ function _drainQueue(): void {
 }
 
 /**
- * Open a dialog for `spec`, preserving the legacy error contract: log with a
- * [DIALOG] prefix and resolve with `errorValue` instead of throwing.
- * @param errorLabel - e.g. "dialog", "confirm dialog"
+ * Opens a dialog for `spec`.
+ * @remarks Preserves the legacy error contract: logs with a [DIALOG] prefix
+ *   and resolves with `errorValue` instead of throwing.
  */
 function _openGuarded(
   spec: DialogSpec,
@@ -310,9 +297,7 @@ interface DialogComponent {
 }
 
 /**
- * Alpine data factory for the shared dialog host (`x-data="dialog"`).
- * Getters read the reactive store, so Alpine effects track them; methods
- * delegate to the module functions above.
+ * Alpine data factory for the shared dialog host.
  */
 export function dialog(): DialogComponent {
   return {
@@ -421,12 +406,8 @@ export function dialog(): DialogComponent {
 // ── Public exports ───────────────────────────────────────────────────────────
 
 /**
- * Create and show a GNOME HIG-styled dialog.
- *
- * @param title    - Dialog heading
- * @param body     - Instructional text above the input
- * @param defaultValue - Pre-filled input value
- * @returns User input or null if cancelled
+ * Shows a prompt dialog.
+ * @returns the user's input, or null if cancelled.
  */
 export function showDialog(
   title: string,
@@ -445,11 +426,8 @@ export function showDialog(
 }
 
 /**
- * Show a confirmation-style dialog with custom buttons.
- *
- * Replaces the input prompt with one or more action buttons.
- *
- * @returns The `value` of the clicked button, or null if cancelled.
+ * Shows a confirmation dialog with custom buttons.
+ * @returns the clicked button's value, or null if cancelled.
  */
 export function showConfirmDialog(
   title: string,
@@ -481,13 +459,10 @@ export function showConfirmDialog(
 }
 
 /**
- * Ask the user whether to fork (copy) or create a live reference to
- * another collection's asset. Fork freezes the CID at copy time;
- * live-ref points back to the original collection and auto-updates.
- *
- * @param options - allowLiveRef: false hides the
- *   live-reference button (used when the drop targets the asset itself, where
- *   a live-ref would be a guaranteed cycle).
+ * Asks whether to fork (copy) or live-reference another collection's asset.
+ * @remarks Fork freezes the CID at copy time; live-ref points back to the
+ *   original and auto-updates. allowLiveRef: false hides the live-ref button
+ *   when the drop targets the asset itself, where a live-ref would cycle.
  */
 export function showForkOrLiveRefDialog(
   assetID: string,
@@ -515,10 +490,8 @@ export function showForkOrLiveRefDialog(
 }
 
 /**
- * Show a read-only informational dialog with trusted internal HTML content.
- * Do NOT pass user-supplied strings as bodyHtml - use showConfirmDialog for that.
- *
- * @param bodyHtml  - Trusted HTML string (no user content)
+ * Shows a read-only info dialog with trusted HTML content.
+ * @remarks Do not pass user-supplied strings as bodyHtml.
  */
 export function showInfoDialog(title: string, bodyHtml: string): Promise<void> {
   return new Promise((resolve) => {
@@ -534,11 +507,8 @@ export function showInfoDialog(title: string, bodyHtml: string): Promise<void> {
 }
 
 /**
- * Show a dialog with a checkbox group and Confirm/Cancel actions.
- *
- * @param body - instructional text (plain text, escaped)
- * @param opts - max selectable; extra checks are refused
- * @returns selected values, or null if cancelled
+ * Shows a dialog with a checkbox group and Confirm/Cancel actions.
+ * @returns the selected values, or null if cancelled.
  */
 export function showCheckboxDialog(
   title: string,
@@ -570,15 +540,10 @@ export function showCheckboxDialog(
 }
 
 /**
- * Show a dialog whose body is a caller-supplied DOM element.
- *
- * Useful when the body needs its own internal state and event handling.
- * The dialog resolves with `null` when closed via the Close button, Escape,
- * or a backdrop click. A body-internal action button can instead close the
- * dialog early with a value by calling `bodyEl.closeDialog(value)` (attached
- * before the dialog opens; idempotent — a later Close/Escape is a no-op).
- *
- * @returns the value passed to bodyEl.closeDialog, or null
+ * Shows a dialog whose body is a caller-supplied DOM element.
+ * @remarks Useful when the body needs its own state and event handling. The
+ *   dialog resolves with null on Close/Escape/backdrop, or with a value passed
+ *   to `bodyEl.closeDialog(value)`.
  */
 export function showCustomDialog(title: string, bodyEl: HTMLElement): Promise<any> {
   return new Promise((resolve) => {
@@ -589,10 +554,9 @@ export function showCustomDialog(title: string, bodyEl: HTMLElement): Promise<an
 }
 
 /**
- * Show a destructive confirmation dialog that requires typing the collection
+ * Shows a destructive confirmation dialog that requires typing the collection
  * name before the burn button is enabled.
- *
- * @returns "burn" if confirmed, null if cancelled.
+ * @returns "burn" if confirmed, otherwise null.
  */
 export function showBurnCollectionDialog(
   collectionName: string

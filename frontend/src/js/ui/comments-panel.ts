@@ -1,11 +1,5 @@
 /**
- * Arbesk Comments Panel — Alpine.js component.
- *
- * Thin view layer for the right-inspector Comments section. Transport,
- * deduplication, and ordering live in CommentThread; this module maps the
- * thread's events/status into a reactive Alpine store that the x-for template
- * in studio-main.pug renders. initCommentsPanel() subscribes to the bus and
- * syncs the store; the DOM is fully declarative.
+ * View layer for the right-inspector Comments section.
  */
 
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";

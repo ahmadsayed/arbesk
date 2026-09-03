@@ -1,15 +1,7 @@
 /**
- * Arbesk Wallet - Re-export Barrel
- *
- * All wallet functionality has been split into domain-specific modules.
- * This file re-exports everything for backward compatibility.
- *
- * Modules:
- *   wallet-core.ts      - init, connect, disconnect, autoConnect, auth
- *   wallet-network.ts   - network switching
- *   wallet-payments.ts  - USDC + free-tier generation payments
- *   wallet-publishing.ts - NFT mint, tokenURI update, editor set, burn
- *   wallet-provider.ts - shared live provider ref + NETWORKS (leaf)
+ * Re-export barrel for the wallet domain.
+ * @remarks All wallet functionality lives in domain-specific modules; this
+ *   file re-exports them for backward compatibility.
  */
 
 // Core (shared state contract + connection lifecycle)

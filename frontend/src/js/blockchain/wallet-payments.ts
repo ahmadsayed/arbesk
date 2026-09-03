@@ -1,13 +1,5 @@
 /**
- * Arbesk Wallet Payments
- *
  * USDC payment flow, free-tier generation recording, and tier constants.
- * Extracted from wallet.js.
- *
- * Shared module-level state is imported from ./wallet-core.ts. The contract
- * address is read from walletState (synced by _initContract).
- *
- * @module wallet-payments
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -27,13 +19,7 @@ const TIER_NAMES = ["Basic", "Standard", "Premium", "Pro"];
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
 /**
- * Get the current contract address.
- *
- * wallet.js does not export its module-level `contractAddress` variable, so we
- * read it from walletState (which _initContract keeps in sync).  When wallet-core.js
- * is created this will become a direct import.
- *
- * @returns {string|null}
+ * Returns the contract address from wallet state.
  */
 function _getContractAddress() {
   return walletState.get().contractAddress || null;
@@ -42,9 +28,8 @@ function _getContractAddress() {
 // ─── Tier detection ──────────────────────────────────────────────────────────
 
 /**
- * Returns true if the currently loaded contract is the free tier
- * (ArbeskAssetFree), which uses recordGeneration() instead of payments.
- * @returns {boolean}
+ * Returns true when the loaded contract is the free tier (ArbeskAssetFree),
+ * which uses recordGeneration() instead of payments.
  */
 function isFreeTierContract() {
   const c = getActiveContract();
@@ -58,12 +43,10 @@ function isFreeTierContract() {
 // ─── Public payment API ──────────────────────────────────────────────────────
 
 /**
- * Pay for a generation using USDC at the selected quality tier.
- * Requires the user to first approve() the contract for the tier cost.
- * @param {string} nodeId - hex or string node identifier
- * @param {string} prompt - generation prompt
- * @param {number} tier - 0=Basic, 1=Standard, 2=Premium, 3=Pro
- * @returns {Promise<string|null>} txHash on success, null on failure
+ * Pays for a generation using USDC at the selected quality tier.
+ * @remarks The caller must first approve() the contract for the tier cost.
+ * @param tier - 0=Basic, 1=Standard, 2=Premium, 3=Pro
+ * @returns txHash on success, null on failure
  */
 async function payForGenerationWithUSDC(
   nodeId: string,
@@ -76,19 +59,16 @@ async function payForGenerationWithUSDC(
 // ─── Free tier generation ────────────────────────────────────────────────────
 
 /**
- * Record a free-tier generation on-chain.
- *
- * Calls ArbeskAssetFree.recordGeneration(bytes32 nodeId, string prompt).
- * No payment is required; the contract enforces a daily limit per wallet.
- *
- * @param {string} nodeId - hex-string or human-readable node identifier
- *   (padded to bytes32 on-chain).
- * @param {string} prompt - generation prompt stored in the event.
- * @returns {Promise<string|null>} transaction hash on success, null on failure.
+ * Records a free-tier generation on-chain.
+ * @remarks No payment is required; the contract enforces a daily limit per
+ *   wallet.
+ * @param nodeId - node identifier, padded to bytes32 on-chain.
+ * @param prompt - generation prompt stored in the event.
+ * @returns transaction hash on success, null on failure.
  */
 /**
- * Shared preamble for generation write paths: requires a connected wallet and
- * a configured contract; toasts and returns null otherwise.
+ * Requires a connected wallet and a configured contract for generation write
+ * paths; toasts and returns null otherwise.
  */
 function _requireGenerationContract(action: string): { c: any; contractAddress: string } | null {
   if (!walletState.get().walletAddress) {

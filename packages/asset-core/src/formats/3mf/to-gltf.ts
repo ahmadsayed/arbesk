@@ -1,11 +1,9 @@
 /**
- * Parsed3mf → glTF 2.0 JSON converter.
- *
- * The output is a self-contained glTF (single base64 data-URI buffer) used
- * purely as an in-memory render representation for Babylon.js — it is never
- * persisted. 3MF is right-handed Z-up; glTF is right-handed Y-up, so all
- * build items are parented to a root node rotated −90° about X (a proper
- * rotation, so triangle winding is preserved).
+ * Converts a Parsed3mf structure to glTF 2.0 JSON.
+ * @remarks The output is a self-contained glTF used only as an in-memory
+ *   render representation and is never persisted. 3MF is Z-up and glTF is
+ *   Y-up, so build items are parented to a root node rotated −90° about X
+ *   (a proper rotation, preserving triangle winding).
  */
 
 import type { Parsed3mf } from "./parser.ts";
@@ -43,11 +41,10 @@ function displayColorToFactor(hex: string | null | undefined): number[] {
 }
 
 /**
- * 3MF 4×3 row-major affine transform → glTF 16-element column-major matrix.
- * 3MF applies transforms to row vectors (v' = v·M); glTF applies them to
- * column vectors (p' = M·p). The row-vector convention and glTF's
- * column-major storage cancel out, so this is a pure re-layout — do NOT
- * transpose the 3×3 part.
+ * Converts a 3MF 4×3 affine transform to a glTF 16-element matrix.
+ * @remarks 3MF applies transforms to row vectors and glTF to column vectors;
+ *   the conventions cancel out, so this is a pure re-layout — do NOT
+ *   transpose the 3×3 part.
  */
 function transformToMatrix4(t: number[]): number[] {
   return [

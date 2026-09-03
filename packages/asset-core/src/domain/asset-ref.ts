@@ -1,7 +1,7 @@
 /**
  * Domain: AssetRef — one asset referencing another (the tree edge).
- * Wraps the persisted `child_ref` manifest shape. IO-free: resolution goes
- * through an injected resolver.
+ * @remarks Wraps the persisted `child_ref` manifest shape; IO-free — resolution
+ *   goes through an injected resolver.
  */
 
 export interface AssetRefCollection {
@@ -42,9 +42,10 @@ export function normalizeAssetRef(childRef: any): AssetRef | null {
 }
 
 /**
- * Canonical identity key: chainId:contract:tokenId:assetID (contract
- * lowercased). Self refs key as self:<assetID> — meaningful only within the
- * currently open collection.
+ * Builds the canonical identity key chainId:contract:tokenId:assetID
+ * (contract lowercased).
+ * @remarks Self refs key as self:<assetID> — meaningful only within the open
+ *   collection.
  */
 export function assetRefKey(ref: AssetRef): string {
   if (ref.collection === "self") return `self:${ref.assetID ?? ""}`;
@@ -58,10 +59,9 @@ export function assetRefsEqual(a: AssetRef | null, b: AssetRef | null): boolean 
 }
 
 /**
- * Resolve a ref to the manifest CID it currently points at. The resolver is
- * injected (`resolveCollectionChildRef` from blockchain/token-resolver.js in
- * the app, a fake in tests).
- * @returns the resolver's {resolved, manifestCid?, error?} result
+ * Resolves a ref to the manifest CID it currently points at.
+ * @remarks The resolver is injected (keeps the module IO-free).
+ * @returns The resolver's {resolved, manifestCid?, error?} result.
  */
 export function resolveAssetRef(
   ref: AssetRef,

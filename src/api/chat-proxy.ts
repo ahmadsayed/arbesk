@@ -1,21 +1,8 @@
 /**
- * Arbesk Chat Proxy
- *
  * WebSocket bridge between the Studio frontend and the private Nostr relay.
- *
- * Authentication: the browser passes the existing SIWE session token in the
- * WebSocket query string. The proxy validates it via src/api/sessions.js,
- * resolves the wallet address, then checks on-chain asset ownership or a
- * Merkle proof that the wallet holds a collaborator role (Viewer+).
- *
- * Authorization model:
- *   - ownerOf(tokenId) === address  => allowed
- *   - valid Merkle proof for the current editorRoot/version/role => allowed
- *   - otherwise => connection closed with 4403
- *
- * The proxy signs all published Nostr events with a service private key and
- * injects the verified Ethereum sender address into the event tags. The relay
- * remains a stock nostr-rs-relay instance; scoping is enforced by the proxy.
+ * @remarks The proxy validates the SIWE session token, checks on-chain asset
+ *   ownership or a Merkle collaborator proof, signs published Nostr events
+ *   with a service key, and enforces asset scoping (the relay stays stock).
  */
 
 import { WebSocket, WebSocketServer } from "ws";
@@ -80,8 +67,8 @@ function initServiceKey(): boolean {
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
- * Attach the chat WebSocket proxy to an existing HTTP server.
- * Returns null if the service key is not configured.
+ * Attaches the chat WebSocket proxy to an existing HTTP server.
+ * @remarks Returns null if the service key is not configured.
  */
 export function createChatProxy(httpServer: Server): WebSocketServer | null {
   if (!initServiceKey()) return null;

@@ -6,26 +6,21 @@ import { paymasterRateLimit } from "../rate-limiter.ts";
 const Router = express.Router;
 
 /**
- * Paymaster proxy routes.
- *
- * POST /api/v1/paymaster
- * Forwards bundler/paymaster JSON-RPC calls to CDP_PAYMASTER_URL.
- * The API key is embedded in CDP_PAYMASTER_URL — it never reaches the browser.
- *
- * Auth: Session token required + wallet-keyed rate limit (default 30/min,
- * PAYMASTER_RATE_LIMIT_MAX) — every proxied call spends the deployment's CDP
- * paymaster quota. Only standard ERC-4337 paymaster JSON-RPC methods (`pm_*`)
- * are forwarded; anything else is rejected with PAYMASTER_METHOD_NOT_ALLOWED.
+ * Paymaster proxy routes: forwards bundler/paymaster JSON-RPC calls to
+ * CDP_PAYMASTER_URL.
+ * @remarks The API key is embedded in CDP_PAYMASTER_URL and never reaches the
+ *   browser. Only standard ERC-4337 `pm_*` methods are forwarded (others are
+ *   rejected with PAYMASTER_METHOD_NOT_ALLOWED).
  */
 export default function paymasterRoutes() {
   const router = Router();
 
   /**
    * POST /api/v1/paymaster
-   * Accepts a standard JSON-RPC body and proxies it verbatim to the CDP
-   * Paymaster URL. Returns CDP's response body and status code unchanged.
    *
-   * Returns 503 if CDP_PAYMASTER_URL is not configured.
+   * Proxies a standard JSON-RPC body verbatim to the CDP Paymaster URL.
+   * @remarks Returns CDP's response body and status code unchanged; 503 when
+   *   CDP_PAYMASTER_URL is not configured.
    */
   router.post("/", authenticate, paymasterRateLimit, async (req, res) => {
     const paymasterUrl = process.env.CDP_PAYMASTER_URL;

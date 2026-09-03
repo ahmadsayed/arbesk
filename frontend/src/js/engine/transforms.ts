@@ -1,9 +1,7 @@
 /**
- * Arbesk Scene Graph - Transforms & Helpers
- *
- * Pure helper functions for CID extraction, format detection,
- * transform matrix application, material defaults, bounding boxes,
- * and manifest node access.
+ * Pure helper functions for CID extraction, format detection, transform
+ * matrix application, material defaults, bounding boxes, and manifest node
+ * access.
  */
 
 import { DEFAULT_WOOD_COLOR, state } from "./state.ts";
@@ -48,12 +46,9 @@ export function applyTransformMatrix(
 }
 
 /**
- * Read the current local transform of one node anchor as a 16-element
- * column-major matrix — the same shape as the manifest `transform_matrix`
- * consumed by `applyTransformMatrix()`. Used by `stageNodeTransform()` and by
- * undo capture sites that snapshot a node's TRS before/after a gesture.
- *
- * Returns null when the anchor is missing or disposed.
+ * Reads a node anchor's local transform as a 16-element column-major matrix
+ * (the manifest `transform_matrix` shape).
+ * @returns null when the anchor is missing or disposed.
  */
 export function readNodeTransformMatrix(nodeId: string): number[] | null {
   const anchor = state.nodeAnchors.get(nodeId);
@@ -73,8 +68,9 @@ export function readNodeTransformMatrix(nodeId: string): number[] | null {
 }
 
 /**
- * Compare two 16-element transform matrices with an absolute epsilon, used to
- * skip no-op undo entries (click-without-drag, unchanged inspector value).
+ * Compares two 16-element transform matrices within an absolute epsilon.
+ * @remarks Used to skip no-op undo entries (click-without-drag, unchanged
+ *   inspector value).
  */
 export function matricesEqual(a: number[], b: number[], eps = 1e-6) {
   for (let i = 0; i < 16; i++) {
@@ -84,11 +80,9 @@ export function matricesEqual(a: number[], b: number[], eps = 1e-6) {
 }
 
 /**
- * Read the current local transform of one node anchor and stage it for
- * persistence in the manifest (`transform_matrix`). Shared by the viewport
- * gizmo (drag end) and the inspector scale fields.
- *
- * Returns true when a transform was staged.
+ * Stages a node anchor's local transform for persistence in the manifest
+ * (`transform_matrix`).
+ * @returns true when a transform was staged.
  */
 export function stageNodeTransform(nodeId: string): boolean {
   const matrix = readNodeTransformMatrix(nodeId);

@@ -1,11 +1,7 @@
 /**
  * Single-bundle entry point.
- *
- * Previously app.pug loaded 22 separate <script type="module"> tags so each
- * module's top-level side effects ran in document order. This module imports
- * them in the exact same order, so esbuild can bundle the whole graph into one
- * minified file while preserving identical evaluation order (ESM caches each
- * module, so imports shared with app-init.ts execute once).
+ * @remarks Imports every module in the exact evaluation order the old
+ *   per-script page relied on, so bundling preserves identical side-effect order.
  */
 import "./engine/scene-graph.ts";
 import "./engine/time-travel.ts";

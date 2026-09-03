@@ -1,6 +1,7 @@
 /**
- * Tiny event emitter (vendored mitt). Typed wrapper so the package stays
- * pure TypeScript with no dependency on the `mitt` npm package.
+ * Tiny event emitter (vendored mitt).
+ * @remarks Typed wrapper so the package has no dependency on the `mitt` npm
+ *   package.
  */
 
 export type MittHandler = (...args: any[]) => void;

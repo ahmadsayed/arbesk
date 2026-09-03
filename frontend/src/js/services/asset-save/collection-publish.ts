@@ -1,6 +1,3 @@
-/**
- * Thin orchestrator around domain/collection.js publishCollection.
- */
 import { publishCollection } from "@arbesk/asset-core/domain/collection.js";
 import type { PublishCollectionResult } from "@arbesk/asset-core/domain/collection.js";
 import { adoptPublishedIdentity } from "@arbesk/asset-core/domain/asset.js";

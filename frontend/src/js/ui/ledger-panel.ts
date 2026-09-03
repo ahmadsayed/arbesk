@@ -1,17 +1,9 @@
 /**
- * Arbesk UI Activity Panel (Manifest-Driven) — Alpine.js component
- *
- * Derives the activity feed entirely from the asset manifest chain.
- * No localStorage. No server-side ledger. No event accumulation.
- * The manifest file (and its version chain via prev_manifest_cid)
- * is the single source of truth.
- *
- * The DOM lives in app.pug ([data-view="ledger"] fragment,
- * `x-data="ledgerPanel"`). Reactive state lives in an Alpine.store so that
- * BOTH template expressions and external code (the bus-event reload
- * subscriptions) mutate the same reactive proxy — mutating a component's
- * captured `this` from outside Alpine's expression evaluation does not
- * trigger reactivity, but store writes always do.
+ * Activity feed derived from the asset manifest chain.
+ * @remarks The manifest chain is the single source of truth — no localStorage,
+ *   server ledger, or event accumulation. Reactive state lives in an
+ *   Alpine.store so template expressions and external code mutate the same
+ *   proxy (store writes always trigger reactivity).
  */
 
 import { truncateAddress, truncateCid } from "../utils/format.ts";
@@ -253,9 +245,7 @@ interface LedgerPanelComponent {
 }
 
 /**
- * Alpine data factory for the ledger panel (`x-data="ledgerPanel"`).
- * Getters read the reactive store, so Alpine effects track them; methods
- * delegate to the module functions above.
+ * Alpine data factory for the ledger panel.
  */
 export function ledgerPanel(): LedgerPanelComponent {
   return {

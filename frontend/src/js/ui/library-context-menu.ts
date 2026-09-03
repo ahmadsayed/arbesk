@@ -206,11 +206,9 @@ async function requestBurnCollection(id: string): Promise<void> {
 }
 
 /**
- * Minimal key/value editor for a collection's `metadata.annotations` map,
- * exposed as a JSON object (annotations are arbitrary values). The user edits
- * JSON in a textarea; on save it is validated as a plain object and written
- * through updateCollectionManifest (applyCollectionMutation + updateAssetURI),
- * the same seam rename/delete use.
+ * Edits a collection's metadata.annotations map as JSON.
+ * @remarks On save it is validated as a plain object and written through the
+ *   same updateCollectionManifest seam rename/delete use.
  */
 export async function requestEditCollectionMetadata(id: string): Promise<void> {
   const collection = getItem(id);

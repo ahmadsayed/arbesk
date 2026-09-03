@@ -1,8 +1,8 @@
 /**
- * Browser platform ports for asset-core — HashPort (viem), StoragePort
- * (localStorage), and ChainPort (wallet.ts contract access + backend email
- * resolution). Lives outside asset-core by design: this file IS the
- * environment-specific implementation.
+ * Browser platform ports for asset-core: HashPort (viem), StoragePort
+ * (localStorage), and ChainPort (contract access + backend email resolution).
+ * @remarks Lives outside asset-core by design — this file is the
+ *   environment-specific implementation.
  */
 import type { ChainPort, HashPort, StoragePort } from "@arbesk/asset-core/types.js";
 import { encodePacked, keccak256 } from "viem/utils";
@@ -10,10 +10,10 @@ import { getActiveContract } from "./wallet.ts";
 import { resolveUserEmail } from "../services/backend-client.ts";
 
 /**
- * HashPort backed by viem. `soliditySha3` mirrors Web3.utils.soliditySha3
- * semantics for the ONE argument shape the editor Merkle flow uses:
- * `{type, value}` pairs (abi-packed keccak256). No general ABI mapper —
- * plain-value inference is intentionally not implemented (YAGNI).
+ * HashPort backed by viem.
+ * @remarks `soliditySha3` mirrors Web3.utils.soliditySha3 semantics for the
+ *   `{type, value}` (abi-packed keccak256) argument shape the editor Merkle
+ *   flow uses. Plain-value inference is intentionally not implemented (YAGNI).
  */
 export function createBrowserHashPort(): HashPort {
   return {
@@ -42,8 +42,7 @@ export function createBrowserStoragePort(): StoragePort {
 }
 
 /**
- * ChainPort over the active wallet contract. The contract calls are the
- * exact ones that used to live in domain/editors.ts.
+ * ChainPort over the active wallet contract.
  */
 export function createBrowserChainPort(): ChainPort {
   return {

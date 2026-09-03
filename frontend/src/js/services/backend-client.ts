@@ -1,13 +1,9 @@
 /**
- * Backend HTTP client — low-level, wallet-free leaf module.
- *
- * Holds the session-token cache, the authenticated-fetch plumbing, and the
- * plain backend endpoints (config, contract artifacts, relay, IPFS upload
- * credentials, unpin) that wallet and IPFS modules need. Those modules must
- * NOT import services/api.ts: api.ts imports the wallet barrel for SIWE
- * signing, so any import back from blockchain/ or ipfs/ closes an import
- * cycle. Session *creation* (SIWE signing) stays in api.ts and is injected
- * here via registerSessionFactory().
+ * Low-level, wallet-free backend HTTP client leaf module.
+ * @remarks Holds the session cache, authenticated-fetch plumbing, and plain
+ *   backend endpoints. blockchain/ and ipfs/ modules must not import api.ts —
+ *   it imports the wallet barrel for SIWE signing, closing an import cycle — so
+ *   session creation stays in api.ts, injected via registerSessionFactory().
  */
 
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -127,9 +123,8 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
 });
 
 /**
- * Session creation requires SIWE signing with the wallet signer, which lives
- * in services/api.ts (wallet-side). api.ts registers its createSession here
- * at module load so this leaf never imports the wallet barrel.
+ * @remarks Session creation needs SIWE signing, which lives in api.ts; it
+ *   registers its factory here so this leaf never imports the wallet barrel.
  */
 type SessionFactory = () => Promise<{ token: string; expiresAt: number }>;
 let sessionFactory: SessionFactory | null = null;
@@ -140,11 +135,8 @@ export function registerSessionFactory(factory: SessionFactory): void {
 
 /**
  * Get a valid session token, creating one if necessary.
- * Reuses cached token from localStorage when valid.
- *
- * Concurrent callers that all need a new session share a single in-flight
- * session-creation promise, so only ONE MetaMask pop-up is shown.
- *
+ * @remarks Concurrent callers share one in-flight creation promise, so only
+ *   one wallet pop-up is shown.
  * @returns session token
  */
 let sessionCreationPromise: Promise<string> | null = null;
@@ -202,11 +194,8 @@ interface FetchWithSessionOptions {
 
 /**
  * fetch() with a session token, retrying once on 401.
- *
- * If the backend rejects the cached token (e.g. server restart wiped the
- * session store), the stale token is cleared, a fresh session is created,
- * and the request is retried exactly once.
- *
+ * @remarks A rejected cached token (e.g. after a server restart) is cleared
+ *   and the request retried once with a fresh session.
  * @param path - path relative to API_BASE (e.g. "/generations")
  */
 export async function fetchWithSession(path: string, { method = "POST", body, headers = {} }: FetchWithSessionOptions = {}): Promise<Response> {
@@ -262,8 +251,8 @@ let _configPromise: Promise<any> | null = null;
 
 /**
  * GET /api/v1/config
- * Config is immutable for the page lifetime, so the (successful) result is
- * memoized; a failed fetch clears the cache so the next call can retry.
+ * @remarks Config is immutable for the page lifetime, so the result is
+ *   memoized; a failed fetch clears the cache so the next call can retry.
  * @returns { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
  */
 export async function getConfig(): Promise<any> {
@@ -282,7 +271,6 @@ export async function getConfig(): Promise<any> {
 
 /**
  * GET /api/v1/config → contractAddress only
- * Prefers network-config for the current chain, falls back to backend.
  */
 export async function getContractAddress(): Promise<string | null> {
   try {
@@ -313,8 +301,7 @@ export async function getContractArtifact(contractName = "ArbeskAsset"): Promise
 
 /**
  * Relay an on-chain write through the backend (server-wallet / delegated).
- * The backend checks access (authz), ABI-encodes, and sends a paymaster-sponsored
- * UserOperation — no browser transaction, no private key on the client.
+ * @remarks No browser transaction and no private key on the client.
  */
 export async function relayWrite(
   op: "publish" | "updateUri" | "updateEditors" | "burn",
@@ -346,10 +333,9 @@ export async function getUploadCredential(): Promise<UploadCredential> {
 
 /**
  * POST /api/v1/ipfs/upload-urls
- * Mint `count` short-lived upload credentials in one call. Pinata signed URLs
- * are single-use, so batch upload flows (e.g. decomposing a glTF into many
- * buffers/images) request one credential per file up front instead of paying
- * a backend + Pinata round trip per file.
+ * Mints `count` short-lived upload credentials in one call.
+ * @remarks Pinata signed URLs are single-use, so batch flows request one
+ *   credential per file up front instead of a round trip per file.
  */
 export async function getUploadCredentials(count: number): Promise<UploadCredential[]> {
   const res = await fetchWithSession("/ipfs/upload-urls", { body: { count } });
@@ -375,10 +361,9 @@ export interface UnpinTokenContext {
 
 /**
  * POST /api/v1/ipfs/unpin
- * Unpin all CIDs in a manifest chain (called before token burn, or after
- * removing an asset from a collection). The backend verifies on-chain that
- * the session wallet owns (or edits) the token and that `cid` belongs to it,
- * so callers must pass the token context.
+ * Unpins all CIDs in a manifest chain.
+ * @remarks The backend verifies on-chain ownership/edit rights and that `cid`
+ *   belongs to the token, so callers must pass the token context.
  * @param cid - Manifest CID to start unpinning from
  */
 export async function unpinAssetCids(
@@ -400,7 +385,7 @@ export async function unpinAssetCids(
 /**
  * POST /api/v1/users/resolve-email
  * Resolve a full email to the CDP end user's smart account address.
- * Exact match only — the backend never lists or autocompletes emails.
+ * @remarks Exact match only — the backend never lists or autocompletes emails.
  */
 export async function resolveUserEmail(email: string): Promise<{ exists: boolean; address?: string | null }> {
   return fetchJsonOrThrow("/users/resolve-email", { body: { email } }, "Email resolution failed");

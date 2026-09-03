@@ -1,8 +1,6 @@
 /**
- * Arbesk Scene Graph - Placeholders
- *
- * Box placeholder creation and disposal for token child nodes
- * in loading or error states.
+ * Box placeholder creation and disposal for token child nodes in loading or
+ * error states.
  */
 
 import { state, PLACEHOLDER_COLOR, ERROR_PLACEHOLDER_COLOR } from "./state.ts";
@@ -63,8 +61,8 @@ export function createPlaceholder(
 }
 
 /**
- * Dispose a placeholder mesh, stopping any running animation first.
- * Also releases the placeholder's material to prevent GPU memory leaks.
+ * Disposes a placeholder mesh and its material.
+ * @remarks Releases the material to prevent GPU memory leaks.
  */
 export function disposePlaceholder(placeholder: BABYLON.Mesh) {
   if (!placeholder || placeholder.isDisposed()) return;

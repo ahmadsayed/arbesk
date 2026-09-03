@@ -1,12 +1,6 @@
 /**
- * Chat provenance history.
- *
- * Renders metadata.chat records from the asset's manifest chain as read-only
- * history bubbles in the AI Generation pane when an asset is opened. Each
- * history bubble is a text message in the reactive chat store (kind "text",
- * extraClass chat-bubble-history) carrying its manifest CID + generation id;
- * the x-for template renders it and its click restores that version via the
- * onTextClick dispatcher in chat-messages.js.
+ * Renders chat-provenance records from the manifest chain as read-only
+ * history bubbles in the AI Generation pane.
  */
 
 import { walkManifestChain } from "../engine/time-travel.ts";
@@ -22,7 +16,7 @@ import { addPendingGeneration } from "../state/pending-generations.ts";
 /** CID of the manifest the history was last rendered for. */
 let renderedForCid: string | null = null;
 
-/** Remove rendered history bubbles (asset switch, new project, clear chat). */
+/** Removes rendered history bubbles. */
 export function clearHistoryBubbles() {
   clearHistoryMessages();
   renderedForCid = null;

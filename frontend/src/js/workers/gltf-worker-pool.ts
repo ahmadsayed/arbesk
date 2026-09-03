@@ -1,10 +1,7 @@
 /**
- * Arbesk glTF Web Worker Pool
- *
- * Thin wrapper around workerpool for offloading glTF operations to a small
- * pool of module Web Workers. If module workers are unsupported or fail to
- * load, the pool reports itself as unavailable and callers fall back to
- * main-thread implementations.
+ * Offloads glTF operations to a small pool of module Web Workers.
+ * @remarks If module workers are unsupported or fail to load, the pool reports
+ *   itself unavailable and callers fall back to main-thread implementations.
  */
 
 import workerpool from "../vendor/workerpool-10.0.2.mjs";

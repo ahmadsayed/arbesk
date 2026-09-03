@@ -2,15 +2,8 @@ const hre = require("hardhat");
 
 /**
  * Proxy-aware Basescan verification for the UUPS-upgradeable contracts.
- *
- * The contracts are deployed behind an ERC1967 proxy (see deploy.js), so the
- * flat-contract `verify:verify` with constructor args no longer applies:
- *   1. resolve the implementation address from the proxy's ERC1967 slot,
- *   2. verify the implementation (initialize()-based, no constructor args),
- *   3. verify the proxy and link it to the implementation so Basescan
- *      renders "Read as Proxy".
- *
- * VERIFY_CONTRACT=ArbeskAssetFree (default) | ArbeskAsset (paid, local).
+ * @remarks Contracts are deployed behind an ERC1967 proxy, so the
+ *   flat-contract `verify:verify` with constructor args does not apply.
  */
 async function main() {
   const contractName = process.env.VERIFY_CONTRACT || "ArbeskAssetFree";

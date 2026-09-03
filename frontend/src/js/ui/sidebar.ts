@@ -1,9 +1,6 @@
 /**
- * Arbesk Unified Sidebar Controller
- *
- * Single sidebar with a 5-view switcher.
- * Views: AI Generation (chat), Settings, Outline, Gallery, Ledger.
- * The width is user-resizable (drag handle, persisted) on wide layouts.
+ * Sidebar with a 5-view switcher (chat, settings, outline, library, ledger).
+ * @remarks Width is user-resizable and persisted, but only on wide layouts.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";

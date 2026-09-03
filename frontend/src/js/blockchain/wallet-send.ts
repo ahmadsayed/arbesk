@@ -1,13 +1,7 @@
 /**
- * Wallet-agnostic contract transaction sending.
- *
- * Routes a contract call through the injected `Signer` port instead of
- * `contract.methods.X().send()`: the call is ABI-encoded here with viem
- * (`encodeFunctionData`), gas is resolved per connection via wallet-gas,
- * and the broadcast + wait are delegated to the Signer (EOA → wallet tx;
- * CDP → sponsored UserOperation). This is what makes contract *writes*
- * independent of wallet kind — the prerequisite for deleting the CDP
- * EIP-1193 shim.
+ * Routes a contract call through the injected Signer port.
+ * @remarks Keeps contract writes independent of wallet kind — the prerequisite
+ *   for deleting the CDP EIP-1193 shim.
  */
 import { encodeFunctionData } from "viem";
 import type { Abi } from "viem";
@@ -37,10 +31,9 @@ export interface SendCallOptions {
 }
 
 /**
- * viem resolves functions by bare name and rejects full signatures, so a
- * web3-era full-signature `functionName` is narrowed to the matching ABI
- * item first (exact canonical-signature match, then same-name candidates).
- * No-op for plain names.
+ * Narrows a full-signature function name to the matching ABI item.
+ * @remarks viem resolves functions by bare name and rejects full signatures;
+ *   plain names are a no-op.
  */
 function narrowToOverload(
   abi: Abi,
@@ -60,11 +53,8 @@ function narrowToOverload(
 }
 
 /**
- * Encode and send a contract call through the active Signer.
- *
- * @param opts - see SendCallOptions
- * @returns the broadcast result ({ hash, wait() }) — `wait()` resolves the
- *   mined receipt ({ transactionHash, status, blockNumber })
+ * Encodes and sends a contract call through the active Signer.
+ * @returns the broadcast result; `wait()` resolves the mined receipt.
  */
 export async function sendContractCall(
   opts: SendCallOptions

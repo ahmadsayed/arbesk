@@ -1,14 +1,9 @@
 /**
- * Library operations - create collections and upload desktop files.
- *
- * These helpers run in the browser, reuse the existing IPFS writers, and
- * anchor changes on-chain via the wallet contract. They deliberately do not
- * import the Studio save module so the Library page stays lightweight.
- *
- * Every upload (glTF, GLB, 3MF) is decomposed into its canonical stored form
- * at upload time — composite.gltf / composite.3mf.json — via the same format
- * handlers the Studio save path uses (lazy-imported from formats/index.js),
- * so Library uploads and Studio-saved assets are stored identically.
+ * Library operations — create collections and upload desktop files.
+ * @remarks Uploads are decomposed to the same canonical stored form the Studio
+ *   save path produces, so Library and Studio assets are stored identically.
+ *   This module deliberately avoids importing the Studio save module to keep
+ *   the Library page lightweight.
  */
 
 import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
@@ -46,11 +41,9 @@ function requireWallet(): string {
 
 /**
  * Create a new named collection for the current wallet.
- *
- * `onPending` is invoked once the collection manifest has been written to IPFS
- * but before the (potentially several-second) mint transaction is sent, so the
- * caller can render an optimistic card. It is not called when the collection
- * already exists on-chain.
+ * @remarks onPending fires after the manifest is written but before the mint,
+ *   so the caller can render an optimistic card; it is not called when the
+ *   collection already exists.
  */
 export async function createNamedCollection(
   name: string,
@@ -148,12 +141,9 @@ export function validateUploadFile(file: File): string {
 }
 
 /**
- * Decompose an uploaded source into its canonical stored form — the same
- * transformation the Studio save/publish path runs via the format handlers
- * (composite.gltf for glTF/GLB, composite.3mf.json for 3MF). Best-effort,
- * mirroring Studio's save: on failure the raw upload is kept — every handler's
- * load() accepts the raw form, and a later Studio save retries decompose.
- *
+ * Decompose an uploaded source into its canonical stored form.
+ * @remarks Best-effort: on failure the raw upload is kept (every handler's
+ *   load() accepts the raw form), and a later Studio save retries decompose.
  * @param assetManifest - Freshly built single-node upload manifest.
  */
 async function decomposeUploadSource(assetManifest: any): Promise<void> {
@@ -183,11 +173,7 @@ async function decomposeUploadSource(assetManifest: any): Promise<void> {
 
 /**
  * Validate, upload, and decompose a desktop glTF/GLB/3MF file into its
- * canonical stored form, returning the staged node source (post-decompose
- * values). Shared by uploadFileToCollection and the Studio viewport
- * file-drop flow so both store sources identically.
- *
- * @param ctx - decompose context
+ * canonical stored form, returning the staged node source.
  */
 export async function stageUploadSource(file: File, { assetName, assetId }: { assetName?: string; assetId?: string } = {}): Promise<{ cid: string; path: string; format: string }> {
   const format = validateUploadFile(file);
@@ -212,11 +198,7 @@ export async function stageUploadSource(file: File, { assetName, assetId }: { as
 }
 
 /**
- * Upload a desktop glTF/GLB/3MF file into an existing collection. The source
- * is decomposed to its canonical stored form before the manifest is written.
- *
- * @param options -
- *   stepped progress updates for the UI (no fake animation: real stages only)
+ * Upload a desktop glTF/GLB/3MF file into an existing collection.
  */
 export async function uploadFileToCollection(
   file: File,

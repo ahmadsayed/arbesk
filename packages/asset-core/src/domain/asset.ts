@@ -1,8 +1,7 @@
 /**
- * Domain: Asset — the one open asset. Facade over the domain asset-store:
- * this module is the ONLY writer of the asset name and the
- * CID/tokenId/currentManifest identity fields, and the single subscription
- * point for chrome rendering.
+ * Domain: Asset — the one open asset.
+ * @remarks Facade over the domain asset-store; the ONLY writer of the asset
+ *   name and CID/tokenId/currentManifest identity fields.
  */
 import { on, emit, EVENTS } from "../events/bus.ts";
 import { assetStore, tagManifestCid } from "./asset-store.ts";
@@ -20,7 +19,7 @@ export interface AssetSnapshot {
 const _listeners = new Set<(snapshot: Readonly<AssetSnapshot>) => void>();
 
 /**
- * Frozen point-in-time view of the active asset for renderers.
+ * Returns a frozen point-in-time view of the active asset.
  */
 export function getAssetSnapshot(): Readonly<AssetSnapshot> {
   const s = assetStore.get();
@@ -34,9 +33,10 @@ export function getAssetSnapshot(): Readonly<AssetSnapshot> {
 }
 
 /**
- * Subscribe to asset changes. Fires immediately with the current snapshot,
- * then on every ASSET_STATE_CHANGED.
- * @returns unsubscribe
+ * Subscribes to asset changes.
+ * @remarks Fires immediately with the current snapshot, then on every
+ *   ASSET_STATE_CHANGED.
+ * @returns An unsubscribe function.
  */
 export function subscribeAsset(
   fn: (snapshot: Readonly<AssetSnapshot>) => void
@@ -76,8 +76,8 @@ export function getCurrentManifest(): object | null {
 }
 
 /**
- * Full read-only snapshot of the asset domain state. For consumers that need
- * several fields at once; prefer individual getters when possible.
+ * Returns a full read-only snapshot of the asset domain state.
+ * @remarks Prefer individual getters when possible.
  */
 export function getAssetState(): Readonly<{
   activeAssetManifestCid: string | null;
@@ -110,16 +110,17 @@ export function isDefaultAssetName(name: string | null | undefined): boolean {
 }
 
 /**
- * Rename the active asset. The only writer of activeAssetName.
+ * Renames the active asset.
+ * @remarks The only writer of activeAssetName.
  */
 export function renameAsset(name: string): void {
   assetStore.set({ activeAssetName: name });
 }
 
 /**
- * Naming rule for a freshly loaded manifest (SCENE_READY): the manifest's
- * name wins; with no manifest name keep the session name; with neither,
- * fall back to "Untitled Asset".
+ * Naming rule for a freshly loaded manifest: the manifest's name wins; with no
+ * manifest name keep the session name; with neither, fall back to "Untitled
+ * Asset".
  */
 export function adoptLoadedManifestName(manifest: any): void {
   const current = assetStore.get().activeAssetName;
@@ -130,9 +131,9 @@ export function adoptLoadedManifestName(manifest: any): void {
 }
 
 /**
- * Naming rule for chat-driven auto-saves: adopt the manifest's name only
- * when it is a real name — a default/absent name must not clobber a good
- * session name. (Moved verbatim from ui/asset-save.js.)
+ * Naming rule for chat-driven auto-saves: adopts the manifest's name only when
+ * it is a real name — a default/absent name must not clobber a good session
+ * name.
  */
 export function adoptManifestName(manifest: any): void {
   const name = manifest?.name?.trim();
@@ -142,10 +143,9 @@ export function adoptManifestName(manifest: any): void {
 }
 
 /**
- * Clear the active asset for a fresh draft: name, CIDs, token identity go;
- * the open collection context survives (activeCollectionTokenId /
- * selectedCollectionId are preserved so a new asset publishes into the
- * collection the user is currently working in).
+ * Clears the active asset for a fresh draft (name, CIDs, token identity go).
+ * @remarks The open collection context survives so a new asset publishes into
+ *   the collection the user is currently working in.
  */
 export function resetForNewAsset(): void {
   const current = assetStore.get();
@@ -161,7 +161,7 @@ export function resetForNewAsset(): void {
 }
 
 /**
- * Close the active asset entirely (library close-out).
+ * Closes the active asset entirely.
  */
 export function closeAsset(): void {
   assetStore.set({
@@ -179,8 +179,8 @@ export function closeAsset(): void {
 // activeAssetTokenId, activeAssetId, currentManifest.
 
 /**
- * Adopt a freshly opened/loaded asset: active + latest CIDs point at `cid`.
- * Identity keys are written only when present (`in` semantics).
+ * Adopts a freshly opened/loaded asset: active + latest CIDs point at `cid`.
+ * @remarks Identity keys are written only when present (`in` semantics).
  */
 export function adoptOpenedAsset(
   cid: string,
@@ -196,9 +196,9 @@ export function adoptOpenedAsset(
 }
 
 /**
- * Root-load tail (scene-loader): the loaded manifest becomes active and is
- * cached as currentManifest. Does NOT touch latestAssetManifestCid — the
- * version-history store's SCENE_READY listener owns the chain tip.
+ * Makes the loaded manifest active and caches it as currentManifest.
+ * @remarks Does not touch latestAssetManifestCid — the version-history store
+ *   owns the chain tip.
  */
 export function activateAssetManifest(cid: string, manifest: any): void {
   assetStore.set({
@@ -216,8 +216,8 @@ export function setLatestManifestCid(cid: string | null): void {
 }
 
 /**
- * Scene cleared: both CIDs go. Token identity and currentManifest survive
- * (clearScene semantics — preserved verbatim from engine/cleanup.js).
+ * Clears both asset manifest CIDs when the scene is cleared.
+ * @remarks Token identity and currentManifest survive.
  */
 export function clearAssetManifestCids(): void {
   assetStore.set({
@@ -227,8 +227,7 @@ export function clearAssetManifestCids(): void {
 }
 
 /**
- * Cache a fetched manifest against its CID without changing active/latest
- * (outliner cache fill, no-changes save path).
+ * Caches a fetched manifest against its CID without changing active/latest.
  */
 export function cacheCurrentManifest(manifest: any, cid: string | null): void {
   assetStore.set({ currentManifest: tagManifestCid(manifest, cid) });
@@ -264,9 +263,8 @@ export function adoptPublishedIdentity(
 // services/asset-save/* (which imports this module for the state commands).
 
 /**
- * Name resolution for saves (verbatim from ui/asset-save.js): the in-session
- * rename wins; a tokenized asset falls back to its on-chain name; drafts fall
- * back to "My Asset".
+ * Name resolution for saves: the in-session rename wins; a tokenized asset
+ * falls back to its on-chain name; drafts fall back to "My Asset".
  */
 async function _resolveAssetName(
   fetchTokenName: (tokenId: string) => Promise<string | null>
@@ -279,10 +277,11 @@ async function _resolveAssetName(
 }
 
 /**
- * Save the current draft. Builds and uploads the manifest via the injected
+ * Saves the current draft: builds and uploads the manifest via the injected
  * serializer, updates the URL for non-tokenized drafts, and emits
- * ASSET_DRAFT_SAVED. Returns the serializer's result verbatim; failures
- * propagate to the caller (the UI owns toasts/progress).
+ * ASSET_DRAFT_SAVED.
+ * @remarks Returns the serializer's result verbatim; failures propagate to the
+ *   caller.
  */
 export async function saveDraftAsset(deps: {
   saveDraft: (assetName: string, options?: any) => Promise<any>;
@@ -304,13 +303,11 @@ export async function saveDraftAsset(deps: {
 }
 
 /**
- * Publish the active asset: save a new version, then anchor it in the
- * collection directory on-chain. All IO is injected; the UI owns dialogs,
- * toasts, and button state. Progress/status hooks fire at the exact legacy
- * points. Collection coordination goes through the injected
- * `publishCollection` dep (services/asset-save/collection-publish.js today;
- * the Collection module).
- * @param assetName - already explicit (UI ran ensureExplicitName)
+ * Publishes the active asset: saves a new version, then anchors it in the
+ * collection directory on-chain.
+ * @remarks All IO is injected; collection coordination goes through the
+ *   injected `publishCollection` dep. `assetName` is already explicit (the UI
+ *   ran ensureExplicitName).
  */
 export async function publishAsset(
   assetName: string,

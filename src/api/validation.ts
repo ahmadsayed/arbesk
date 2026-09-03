@@ -22,9 +22,9 @@ function issuesFromZod(error: ZodError): ValidationIssue[] {
 }
 
 /**
- * Create Express middleware that validates `req.body` against a Zod schema.
- * On success, replaces `req.body` with the parsed value.
- * On failure, responds with 400 and a structured error.
+ * Creates Express middleware that validates `req.body` against a Zod schema.
+ * @remarks On success replaces `req.body` with the parsed value; on failure
+ *   responds with 400 and a structured error.
  */
 export function validateBody(schema: ZodSchema): RequestHandler {
   return (req, res, next) => {

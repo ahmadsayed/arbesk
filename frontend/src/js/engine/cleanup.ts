@@ -1,8 +1,6 @@
 /**
- * Arbesk Scene Graph — Cleanup
- *
- * Scene and node disposal logic. Ensures all Babylon.js resources
- * are properly released when clearing the scene or removing nodes.
+ * Scene and node disposal — ensures all Babylon.js resources are released
+ * when clearing the scene or removing nodes.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -28,9 +26,7 @@ export function clearPendingChildRefRemovals() {
 }
 
 /**
- * Pending post-processor edits (color/scale/meshOverrides) accumulated
- * in the inspector. Mirrors `getPendingChildRefs` / `clearPendingChildRefs`
- * so that Save Draft / Publish can pick both up in one pass.
+ * Pending post-processor edits (color/scale/meshOverrides).
  */
 export function getPendingPostProcessorEdits() {
   return state.pendingPostProcessorEdits;
@@ -76,9 +72,8 @@ export function clearPendingSourceOverride(nodeId: string) {
 }
 
 /**
- * Dispose a node's meshes and animation groups while KEEPING its anchor —
- * the anchor carries the node's transform and parent linkage. Used by the
- * viewport file-drop override, which swaps a node's model in place.
+ * Disposes a node's meshes and animation groups while keeping its anchor.
+ * @remarks The anchor carries the node's transform and parent linkage.
  */
 export function disposeNodeContent(nodeId: string) {
   const meshes = state.nodeMeshes.get(nodeId);
@@ -106,10 +101,10 @@ export function disposeNodeContent(nodeId: string) {
 }
 
 /**
- * Dispose a node and every descendant node it parents. Used for child-asset
- * unlink: a child_ref node's Babylon anchor cascades to the child asset's
- * anchors/meshes, but those descendants are registered under their OWN
- * node_ids in the state maps, so we collect and drop them too.
+ * Disposes a node and every descendant node it parents.
+ * @remarks Descendants are registered under their own node_ids in the state
+ *   maps (a child_ref anchor cascades to them), so they are collected and
+ *   dropped separately.
  */
 export function disposeNodeSubtree(nodeId: string) {
   const top = state.nodeAnchors.get(nodeId);

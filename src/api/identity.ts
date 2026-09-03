@@ -1,8 +1,7 @@
 /**
- * Backend identity composition root — wires @arbesk/wallet's verifyAuthProof to
- * the configured viem PublicClient + viem message recovery, and the
- * SUPPORTED_CHAIN_IDS constant. Replaces the old siwe-verify.ts +
- * proof-verify.ts.
+ * Backend identity composition root: wires @arbesk/wallet's verifyAuthProof to
+ * the configured viem PublicClient, viem message recovery, and
+ * SUPPORTED_CHAIN_IDS.
  */
 import { verifyAuthProof } from "@arbesk/wallet/verify.js";
 import type { SignatureVerifier, AuthProof } from "@arbesk/wallet/types.js";

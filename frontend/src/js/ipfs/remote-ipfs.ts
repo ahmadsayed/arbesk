@@ -1,14 +1,9 @@
 /**
- * Arbesk Remote IPFS Reader (Gateway-Only)
- *
- * All reads go through the IPFS gateway reported by /api/v1/config.
- * All writes go through the backend API (POST /api/v1/generations, etc.).
- *
- * No app-level read cache: CID-addressed content is immutable, so the
- * browser's HTTP cache (Kubo serves /ipfs/ responses with immutable
- * cache headers) plus inflight request coalescing already cover repeat
- * reads. The glTF composition pipeline has its own memory + IndexedDB
- * cache (asset-core/utils/content-cache.js) for heavyweight buffers/images.
+ * Remote IPFS reader (gateway-only): reads go through the IPFS gateway
+ * reported by /api/v1/config; writes go through the backend API.
+ * @remarks No app-level read cache: CID-addressed content is immutable, so the
+ *   browser's HTTP cache plus inflight request coalescing already cover repeat
+ *   reads.
  */
 
 import { getConfig } from "../services/backend-client.ts";
@@ -38,9 +33,8 @@ async function gatewayBase(): Promise<string> {
 }
 
 /**
- * @param onProgress - called with 0..1 as bytes
- *   arrive, when the gateway reports Content-Length. Only the caller that
- *   starts the download gets callbacks; coalesced joiners do not.
+ * @remarks `onProgress` fires only for the caller that starts the download;
+ *   coalesced joiners get no callbacks.
  */
 async function fetchIpfsRawBytes(
   cid: string,
@@ -145,9 +139,7 @@ async function getBlobFromRemoteIPFS(
 }
 
 /**
- * @returns ArrayBuffer in practice; typed as any because
- *   out-of-scope callers (services/api.js toBounds) pass the result where a
- *   Uint8Array is declared.
+ * @returns an ArrayBuffer in practice.
  */
 async function getArrayBufferFromRemoteIPFS(
   cid: string,
@@ -172,7 +164,7 @@ async function getRawArrayBufferFromRemoteIPFS(
 
 /**
  * Lightweight reachability probe for a CID on the configured gateway.
- * Returns true only if the gateway responds with a 2xx status.
+ * @returns true only when the gateway responds with a 2xx status.
  */
 async function isIpfsCidReachable(
   cid: string | null | undefined

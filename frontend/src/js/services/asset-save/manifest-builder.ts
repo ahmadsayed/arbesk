@@ -1,10 +1,5 @@
 /**
  * Manifest construction helpers for save/publish.
- *
- * Handles loading the current manifest, applying pending edits (child refs,
- * source colors, post-processor colors, transforms), decomposing monolithic
- * glTF nodes, versioning the manifest chain, and writing the final manifest
- * to IPFS.
  */
 
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
@@ -49,7 +44,6 @@ import {
 import { log, warn } from "../../utils/log.ts";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
-/** @param {any} err */
 function isRateLimitError(err: any) {
   if (!err || typeof err.message !== "string") return false;
   return (
@@ -59,11 +53,10 @@ function isRateLimitError(err: any) {
 }
 
 /**
- * Use the in-memory manifest if it matches the active CID.
- * Avoids a round-trip to IPFS when the manifest was just produced by a
- * previous save/publish in the same session.
+ * Uses the in-memory manifest when it matches the active CID.
+ * @remarks Avoids an IPFS round-trip for a manifest just produced by a
+ *   previous save/publish.
  */
-/** @param {string|null} activeCid */
 function _useCachedManifest(activeCid: string | null) {
   if (!activeCid) return null;
   const cached = getCurrentManifest() as any;
@@ -80,29 +73,22 @@ function _useCachedManifest(activeCid: string | null) {
 }
 
 /**
- * In-memory cache of CIDs we have already verified are composite glTFs.
- * Persists across saves within the same session so a source only pays the
- * verification fetch once.
+ * In-memory cache of CIDs already verified as composite glTFs.
+ * @remarks Persists across saves so a source only pays the verification fetch
+ *   once.
  */
 const _verifiedCompositeCids = new Set();
 
 /**
  * Heuristic: a source node that already points to its stored form.
- * For glTF this is `format: "gltf"` + `path: "composite.gltf"`; other formats
- * declare their own stored-form predicate via the format handler.
- * Lets us skip an expensive IPFS fetch on no-op save/publish cycles.
+ * @remarks Lets us skip an expensive IPFS fetch on no-op save/publish cycles.
  */
-/** @param {any} node */
 function looksStored(node: any) {
   if (!node.source?.cid || node.child_ref) return false;
   if (_verifiedCompositeCids.has(node.source.cid)) return true;
   return resolveFormatHandler(node.source).isStoredForm(node);
 }
 
-/**
- * @param {any} manifest
- * @param {string|null} latestCid
- */
 export function advanceManifestVersion(manifest: any, latestCid: string | null) {
   manifest.version = (manifest.version || 0) + 1;
   manifest.prev_asset_manifest_cid =
@@ -110,11 +96,8 @@ export function advanceManifestVersion(manifest: any, latestCid: string | null) 
 }
 
 /**
- * Compare two manifests for semantic equality, ignoring auto-generated fields.
- */
-/**
- * @param {any} a
- * @param {any} b
+ * Compares two manifests for semantic equality.
+ * @remarks Ignores auto-generated fields.
  */
 export function manifestsSemanticallyEqual(a: any, b: any) {
   if (!a || !b) return false;
@@ -137,16 +120,11 @@ export function manifestsSemanticallyEqual(a: any, b: any) {
 }
 
 /**
- * Try to decompose a single node's source asset.
- * Returns a { nodeId, cid, path, format } result or null if not applicable.
- *
- * @param {any} node
- * @param {any} manifest
- * @param {Map<string,string>|null} [dedupMap]
- * @param {Map<string,any>|null} [pendingColorEdits] - Source-color edits still to be
- *   applied. When a node has a pending edit we cannot take the fast path,
- *   because baking colors into a GLB produces a monolithic glTF that still
- *   carries the "composite.gltf" path marker and needs one more decomposition.
+ * Decomposes a single node's source asset.
+ * @remarks A pending source-color edit disables the fast path: baking colors
+ *   into a GLB yields a monolithic glTF still carrying the "composite.gltf"
+ *   path marker, which needs one more decomposition.
+ * @returns a { nodeId, cid, path, format } result, or null if not applicable.
  */
 async function _decomposeOneNode(
   node: any,
@@ -206,15 +184,8 @@ async function _decomposeOneNode(
 }
 
 /**
- * Decompose all monolithic glTF source nodes in a manifest.
- * Fetches each glTF, decomposes buffers/images to separate IPFS CIDs,
- * and updates node.source.cid to point to the composite JSON.
- * Already-composite nodes (ipfs:// URIs) are skipped.
- *
- * @param {any} manifest - The manifest being prepared for write
- * @param {Map<string,string>|null} [dedupMap]
- * @param {Map<string,any>|null} [pendingColorEdits]
- * @returns {Promise<number>} Count of nodes decomposed
+ * Decomposes all monolithic glTF source nodes in a manifest.
+ * @returns Count of nodes decomposed
  */
 export async function decomposeManifestNodes(
   manifest: any,
@@ -244,10 +215,9 @@ export async function decomposeManifestNodes(
 
 /**
  * Resolve the canonical "latest" manifest CID for versioning.
- * Prefer the in-memory tip of the version chain (latest draft) so every
- * Save appends linearly. Only fall back to the on-chain tokenURI for
- * tokenized assets when no in-memory latest exists yet (e.g. on first load).
- * For drafts without a token, fall back to the currently loaded manifest.
+ * @remarks Prefers the in-memory chain tip so saves append linearly, falling
+ *   back to the on-chain tokenURI (tokenized assets) or the currently loaded
+ *   manifest (drafts).
  */
 export async function resolveLatestManifestCid() {
   if (getLatestAssetManifestCid()) {
@@ -275,11 +245,9 @@ export async function resolveLatestManifestCid() {
 }
 
 /**
- * Build a hash → CID map from the composite glTFs referenced by one or more
- * asset manifests. Used to skip re-uploading unchanged buffers/images when
- * saving a new version.
+ * Builds a hash → CID map from the composite glTFs referenced by manifests.
+ * @remarks Used to skip re-uploading unchanged buffers/images on a new version.
  */
-/** @param {any[]} manifests */
 async function buildDedupMapFromManifests(manifests: any[]) {
   const composites = [];
   for (const manifest of manifests) {
@@ -310,13 +278,10 @@ async function buildDedupMapFromManifests(manifests: any[]) {
 }
 
 /**
- * Collect chat provenance entries from pending-generation records sent to the
- * Studio since the last saved version, and mark them recorded so each prompt
- * lands in exactly one manifest version. Only records belonging to the active
- * manifest chain are consumed: sent records form a contiguous tail ending at
- * activeCid (a sent record's assetManifestCid becomes the active CID, and
- * later generations link back via prevAssetManifestCid).
- * @param {string|null|undefined} activeCid
+ * Collects and marks recorded the chat provenance entries for pending
+ * generations sent since the last saved version.
+ * @remarks Only records on the active manifest chain are consumed, so each
+ *   prompt lands in exactly one version.
  * @returns {Array<{prompt: string, provider: string, task: string, taskId?: string, timestamp: number}>}
  */
 function collectChatProvenanceEntries(activeCid: string | null | undefined) {
@@ -366,11 +331,7 @@ function collectChatProvenanceEntries(activeCid: string | null | undefined) {
 }
 
 /**
- * Apply viewport gizmo transform edits.
- * Updates node.transform_matrix so the saved manifest renders the node
- * in its edited position/rotation/scale on next load.
- * @param {any} manifest
- * @param {Map<string, any>} pendingTransforms
+ * Applies viewport gizmo transform edits.
  */
 function applyTransformEdits(manifest: any, pendingTransforms: Map<string, any>) {
   if (pendingTransforms.size === 0) return;
@@ -383,14 +344,9 @@ function applyTransformEdits(manifest: any, pendingTransforms: Map<string, any>)
 }
 
 /**
- * Bake pending viewport file-drop source overrides. Must happen after the
- * prevManifest snapshot so a drop-only save is not reported as "no changes".
- * An override replaces the node's source and resets its post_processor to
- * defaults — the old edits described the old geometry. When the node does not
- * exist yet (fresh draft created by a drop with no asset open), a new single
- * node is appended.
- * @param {any} manifest
- * @param {Map<string, any>} pendingOverrides
+ * Bakes pending viewport file-drop source overrides.
+ * @remarks Must run after the prevManifest snapshot so a drop-only save is not
+ *   reported as "no changes".
  */
 function applySourceOverrides(manifest: any, pendingOverrides: Map<string, any>) {
   if (pendingOverrides.size === 0) return;
@@ -421,12 +377,9 @@ function applySourceOverrides(manifest: any, pendingOverrides: Map<string, any>)
 }
 
 /**
- * Bake pending linked-child refs into the manifest, then drop child assets the
- * user unlinked this session. Both MUST happen after the prevManifest snapshot
- * so a "link/remove child → Save" on an otherwise unchanged draft is detected
- * as a change and written.
- * @param {any} manifest
- * @param {any[]} pendingRefs
+ * Bakes pending linked-child refs and drops unlinked child assets.
+ * @remarks Must run after the prevManifest snapshot so a link/remove-child
+ *   save on an unchanged draft is still detected and written.
  */
 function applyPendingChildRefs(manifest: any, pendingRefs: any[]) {
   for (const pendingNode of pendingRefs) {
@@ -443,12 +396,7 @@ function applyPendingChildRefs(manifest: any, pendingRefs: any[]) {
 }
 
 /**
- * Build the async bake job for a single node's source-color edit.
- * @param {any} node
- * @param {string} nodeId
- * @param {Record<string, string>} colorMap
- * @param {any} manifest
- * @param {Map<string, string>} dedupMap
+ * Builds the async bake job for a single node's source-color edit.
  */
 function buildSourceColorJob(
   node: any,
@@ -484,12 +432,8 @@ function buildSourceColorJob(
 }
 
 /**
- * Apply direct source color edits.
- * These mutate the source glTF/GLB asset and update node.source.cid.
- * Each node is independent, so bake them concurrently.
- * @param {any} manifest
- * @param {Map<string, any>} pendingColors - nodeId → (meshName → color)
- * @param {Map<string, string>} dedupMap
+ * Applies direct source color edits.
+ * @param pendingColors - nodeId → (meshName → color)
  */
 async function applySourceColorEdits(
   manifest: any,
@@ -531,9 +475,7 @@ async function applySourceColorEdits(
 }
 
 /**
- * Store a post-processor edit as a runtime overlay on a monolithic node.
- * @param {any} node
- * @param {any} pp
+ * Stores a post-processor edit as a runtime overlay on a monolithic node.
  */
 function applyPostProcessorOverlay(node: any, pp: any) {
   node.post_processor ||= {};
@@ -546,11 +488,7 @@ function applyPostProcessorOverlay(node: any, pp: any) {
 }
 
 /**
- * Apply a composite post-processor bake result: update node.source.cid and
- * reconcile the node's post_processor scale overlay.
- * @param {any} node
- * @param {any} pp
- * @param {any} result
+ * Applies a composite post-processor bake result.
  */
 function applyCompositeBakeResult(node: any, pp: any, result: any) {
   if (result) {
@@ -577,11 +515,7 @@ function applyCompositeBakeResult(node: any, pp: any, result: any) {
 }
 
 /**
- * Build the async composite-color bake job for a decomposed node.
- * @param {any} node
- * @param {string} nodeId
- * @param {any} pp
- * @param {any} manifest
+ * Builds the async composite-color bake job for a decomposed node.
  */
 function buildCompositeBakeJob(node: any, nodeId: string, pp: any, manifest: any) {
   return (async () => {
@@ -615,11 +549,8 @@ function buildCompositeBakeJob(node: any, nodeId: string, pp: any, manifest: any
 }
 
 /**
- * Apply post-processor edits.
- * Decomposed nodes: bake colors directly into the composite glTF.
- * Monolithic nodes: store as node.post_processor (runtime overlay).
- * @param {any} manifest
- * @param {Map<string, any>} pendingPP - nodeId → edit payload
+ * Applies post-processor edits.
+ * @param pendingPP - nodeId → edit payload
  */
 async function applyPostProcessorEdits(manifest: any, pendingPP: Map<string, any>) {
   if (pendingPP.size === 0) return;
@@ -665,11 +596,7 @@ async function applyPostProcessorEdits(manifest: any, pendingPP: Map<string, any
 }
 
 /**
- * Finalize versioning and chat provenance.
- * @param {any} manifest
- * @param {any} prevManifest
- * @param {string|null} latestCid
- * @param {string|null|undefined} activeCid
+ * Finalizes versioning and chat provenance.
  */
 function finalizeVersionAndChat(
   manifest: any,
@@ -700,12 +627,8 @@ function finalizeVersionAndChat(
 }
 
 /**
- * @param {string} assetName
- */
-/**
- * Gather pending edits and load (or build) the base manifest for a save.
- * Returns null when there is no asset open and nothing to save.
- * @param {string} assetName
+ * Gathers pending edits and loads (or builds) the base manifest for a save.
+ * @returns null when there is no asset open and nothing to save.
  */
 async function loadOrBuildBaseManifest(assetName: string) {
   // A linked-asset drop is fire-and-forget: if the user hits Save/Publish
@@ -877,10 +800,6 @@ export async function prepareManifestForWrite(assetName: string) {
   };
 }
 
-/**
- * @param {string} assetName
- * @param {{ captureThumbnail?: boolean, publishContext?: any }} [options]
- */
 export async function saveAssetDraftCore(
   assetName: string,
   { captureThumbnail = false, publishContext = null }: { captureThumbnail?: boolean; publishContext?: any } = {}

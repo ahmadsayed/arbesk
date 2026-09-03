@@ -1,7 +1,7 @@
 /**
  * Deterministic model facts extracted from parsed glTF 2.0 JSON.
- * Pure functions — no buffer reads; counts come from accessor/mesh metadata.
- * No heuristics: values are derived deterministically from glTF metadata. Counts honor primitive mode and dedup shared accessors.
+ * @remarks Pure — no buffer reads; counts come from accessor/mesh metadata.
+ *   Counts honor primitive mode and dedup shared accessors.
  */
 import { computeGltfBounds } from "./bounds.ts";
 import type { GltfBounds } from "./bounds.ts";

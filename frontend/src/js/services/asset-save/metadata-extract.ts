@@ -1,8 +1,8 @@
 /**
  * Compute the "computed" metadata map for an asset manifest from its root
- * source node. Pure over the parsed composite glTF JSON (post-decompose the
- * source format is "gltf"); 3MF and other formats return format-only (all
- * computed fields are optional).
+ * source node.
+ * @remarks Pure over parsed composite glTF JSON; 3MF and other formats return
+ *   format-only (computed fields are optional).
  */
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
 import { computeModelStats } from "@arbesk/asset-core/formats/gltf/model-stats.js";

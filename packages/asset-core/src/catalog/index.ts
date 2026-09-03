@@ -1,14 +1,9 @@
 /**
  * Catalog — collection/asset listing and name resolution.
- *
- * The read half of the Arbesk catalog: walk the chain (indexer → tokenURI →
- * collection manifest → asset manifests) through injected ports. This is the
- * same two-level walk the Library UI performs client-side, expressed as
- * env-agnostic domain functions over CollectionReadPort + IpfsReadPort.
- *
- * No HTTP/web3/chain wiring lives here — the host injects the ports. Access
- * policy (owner/editor/viewer) is deliberately NOT decided here; that is the
- * authz package's job. This module answers what is there, not who may read it.
+ * @remarks The read half of the catalog: walks the chain (indexer → tokenURI →
+ *   collection manifest → asset manifests) through injected ports. No HTTP/web3
+ *   wiring lives here, and access policy is deliberately not decided here —
+ *   this module answers what is there, not who may read it.
  */
 
 import { getRuntime } from "../runtime.ts";
@@ -49,8 +44,9 @@ function collectionPort() {
 }
 
 /**
- * List all collections reachable by address (owned + shared, deduped).
- * A token whose tokenURI reverts or whose manifest is not a collection is skipped.
+ * Lists all collections reachable by address (owned + shared, deduped).
+ * @remarks Tokens whose tokenURI reverts or whose manifest is not a collection
+ *   are skipped.
  */
 export async function listCollections(
   address: string,
@@ -84,8 +80,8 @@ export async function listCollections(
 }
 
 /**
- * List the assets of one collection token. An asset whose manifest is missing
- * or unreadable is skipped.
+ * Lists the assets of one collection token.
+ * @remarks Assets whose manifest is missing or unreadable are skipped.
  */
 export async function getCollectionAssets(
   tokenId: string,
@@ -120,8 +116,7 @@ export async function getCollectionAssets(
 }
 
 /**
- * Resolve a collection by name (case-insensitive, trimmed). Returns the
- * collection summary (with its tokenId) or null.
+ * Resolves a collection by name (case-insensitive, trimmed).
  */
 export async function resolveCollectionByName(
   address: string,
@@ -138,8 +133,7 @@ export async function resolveCollectionByName(
 }
 
 /**
- * Resolve an asset by name within one collection (case-insensitive, trimmed).
- * Returns { assetID, cid } or null.
+ * Resolves an asset by name within one collection (case-insensitive, trimmed).
  */
 export async function resolveAssetByName(
   tokenId: string,
@@ -155,11 +149,10 @@ export async function resolveAssetByName(
 }
 
 /**
- * A collection asset may be stored either as a full asset manifest
- * (type:"asset" with scene.nodes[0].source.cid → the composite) or, for CLI
- * uploads, as the composite glTF/3MF JSON directly. Return the composite
- * source CID when the manifest wraps one, else null (the manifest IS the
- * composite).
+ * Returns the composite source CID when the manifest wraps one.
+ * @remarks A collection asset may be stored either as a full asset manifest or,
+ *   for CLI uploads, as the composite glTF/3MF JSON directly. Returns null when
+ *   the manifest itself is the composite.
  */
 export function resolveCompositeSourceCid(manifest: Record<string, any>): string | null {
   const src = manifest?.scene?.nodes?.[0]?.source?.cid;

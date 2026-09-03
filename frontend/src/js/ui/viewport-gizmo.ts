@@ -1,11 +1,6 @@
 /**
- * Arbesk Viewport Gizmo
- *
- * Blender-style 2D orientation overlay in the top-right corner of the viewport.
- * Shows the world X/Y/Z axes as colored lines that rotate with the camera.
- * When an axis points straight at the camera, it collapses to a dot.
- *
- * Replaces the previous in-scene X-Y-Z axis arrows.
+ * 2D orientation overlay showing world X/Y/Z axes that rotate with the camera.
+ * @remarks When an axis points straight at the camera, it collapses to a dot.
  */
 
 import { getCssVar } from "../engine/theme.ts";

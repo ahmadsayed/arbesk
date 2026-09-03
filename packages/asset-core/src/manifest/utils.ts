@@ -1,10 +1,6 @@
 /**
- * Arbesk Manifest Utilities
- *
- * Shared helpers for working with fractal manifest structures, plus the
- * canonical runtime manifest validation (zod schema in `./schema.ts`).
- * `getSceneNodes` is used by the manifest chain walker; `bumpManifestVersion`
- * is exported for backend tests only (the frontend builds manifests itself).
+ * Arbesk manifest utilities: shared helpers for fractal manifest structures
+ * and the canonical runtime manifest validation.
  */
 
 import { manifestSchema } from "./schema.ts";
@@ -14,8 +10,8 @@ export { manifestSchema };
 export type { Manifest };
 
 /**
- * Safe accessor for manifest scene nodes.
- * Ensures the scene.nodes array always exists.
+ * Returns the manifest's scene nodes.
+ * @remarks Mutates the manifest to ensure scene.nodes always exists.
  */
 export function getSceneNodes(manifest: {
   scene?: { nodes?: any[] };
@@ -44,8 +40,7 @@ export function bumpManifestVersion(
 }
 
 /**
- * Validate a manifest object. Returns { valid: true, data } or
- * { valid: false, errors }.
+ * Validates a manifest object.
  */
 export function validateManifest(
   manifest: unknown,

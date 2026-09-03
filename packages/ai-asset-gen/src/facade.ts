@@ -1,12 +1,8 @@
 /**
- * @arbesk/ai-asset-gen facade — createGenerationProvider.
- *
- * A capability-gated facade over the mock and Tripo3D providers. Every method
- * checks the provider's declared capability set first (UnsupportedCapabilityError
- * when unsupported), so callers never branch on provider kind — they branch on
- * capability. The uniform async lifecycle (start -> poll -> download/cancel)
- * lets mock collapse to "immediately success" while Tripo3D runs its real
- * create -> poll -> download flow.
+ * @arbesk/ai-asset-gen facade — createGenerationProvider: a capability-gated
+ *   facade over the mock and Tripo3D providers.
+ * @remarks Every method checks the provider's declared capability set first, so
+ *   callers branch on capability rather than provider kind.
  */
 import type {
   GenerationBalance,
@@ -31,8 +27,10 @@ export interface GenerationProvider {
   multiviewToModel(input: { views: MultiviewImage[]; textureQuality?: string }): Promise<string>;
 
   // ── follow-ups (source-based) → provider taskId ─────────────────────────
-  /** Upload a model SourceRef, returning a provider source handle (Tripo file_token).
-   *  Lets a multi-step chain (rig-check → rig) upload once and reuse. */
+  /**
+   * Uploads a model SourceRef, returning a provider source handle.
+   * @remarks A multi-step chain (rig-check → rig) uploads once and reuses.
+   */
   uploadSource(source: SourceRef): Promise<string>;
   retexture(input: { prompt: string; source: SourceRef; textureQuality?: string }): Promise<string>;
   retopo(input: { source: SourceRef; faceLimit?: number; quad?: boolean }): Promise<string>;

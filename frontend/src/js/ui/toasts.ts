@@ -1,12 +1,7 @@
 /**
- * Arbesk Toast Notification System - Notyf wrapper
- *
- * Thin adapter over window.Notyf (loaded via CDN in studio.pug).
- * Preserves the same public API as the previous hand-rolled implementation.
- *
- * Usage:
- *   import { showToast, dismissToast, dismissAllToasts } from './ui/toasts.ts';
- *   showToast({ type: 'error', title: 'Payment Failed', message: '...', duration: 0 });
+ * Toast notification system.
+ * @remarks Preserves the same public API as the previous hand-rolled
+ *   implementation.
  */
 
 import { escapeHtml } from "../utils/html.ts";
@@ -20,9 +15,9 @@ export interface ToastAction {
 
 export interface ToastOptions {
   type?: ToastType;
-  /** Short heading (required) */
+  /** Short heading. */
   title: string;
-  /** Optional body text */
+  /** Body text. */
   message?: string;
   /** ms until auto-dismiss. 0 = persist until manual close. */
   duration?: number;
@@ -63,8 +58,6 @@ const activeToasts = new Map<string, any>(); // id → Notyf notification refere
 const MAX_TOASTS = 5;
 
 /**
- * Show a toast notification.
- *
  * @returns toastId
  */
 export function showToast({ type = "info", title, message = "", duration = 3000, actions = [] }: ToastOptions): string {
@@ -114,9 +107,6 @@ export function showToast({ type = "info", title, message = "", duration = 3000,
   return id;
 }
 
-/**
- * Dismiss a toast by ID.
- */
 export function dismissToast(id: string): void {
   const notification = activeToasts.get(id);
   if (!notification) return;
@@ -126,9 +116,6 @@ export function dismissToast(id: string): void {
   getNotyf().dismiss(notification);
 }
 
-/**
- * Dismiss all active toasts.
- */
 export function dismissAllToasts(): void {
   for (const id of Array.from(activeToasts.keys())) {
     dismissToast(id);

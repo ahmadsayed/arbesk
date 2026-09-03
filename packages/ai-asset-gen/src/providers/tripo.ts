@@ -82,11 +82,11 @@ export class TripoApiError extends Error {
 
 /**
  * Low-level fetch wrapper for the Tripo v3 API.
+ * @remarks File-ingesting task-creation endpoints (rig-check, rig, decimate,
+ *   texture) can exceed the default timeout because Tripo ingests the uploaded
+ *   model before answering.
  * @param path - path after base, e.g. "generation/text-to-model"
  * @param body - plain object (JSON) or FormData (multipart)
- * @param timeoutMs - upstream timeout; file-ingesting task-creation
- *   endpoints (rig-check, rig, decimate, texture) pass more, because Tripo
- *   ingests the uploaded model before answering
  */
 async function tripoFetch(
   path: string,
@@ -170,8 +170,7 @@ function requireString(value: unknown, name: string): void {
 }
 
 /**
- * POST a task-creation endpoint and validate the task_id in the response.
- * Every createXxxTask variant funnels through here.
+ * Posts a task-creation endpoint and validates the task_id in the response.
  */
 async function startTask(
   path: string,
@@ -187,8 +186,9 @@ async function startTask(
 }
 
 /**
- * Map the textureQuality option to Tripo's texture_quality field.
- * "standard" is Tripo's default — omitting the field keeps payloads minimal.
+ * Maps the textureQuality option to Tripo's texture_quality field.
+ * @remarks "standard" is Tripo's default — omitting the field keeps payloads
+ *   minimal.
  */
 function textureQualityField(options: TextureQualityOptions): { texture_quality?: string } {
   const q = options.textureQuality;
@@ -226,7 +226,7 @@ export async function createTask(
 }
 
 /**
- * Fetch the credit balance for a BYOK key (GET /account/balance).
+ * Fetches the credit balance for a BYOK key.
  */
 export async function getBalance(
   apiKey: string,
@@ -241,7 +241,7 @@ export async function getBalance(
 }
 
 /**
- * Upload a source image to Tripo (POST /files) and return its file_token.
+ * Uploads a source image to Tripo and returns its file_token.
  * @param imageBuffer - raw image bytes (jpeg/png/webp)
  * @param mime - image MIME type, e.g. "image/png"
  * @returns file_token
@@ -272,9 +272,9 @@ export async function uploadImage(
 }
 
 /**
- * Upload a source 3D model (GLB) to Tripo (POST /files) and return its
- * file_token. Follow-up endpoints (models/texture, mesh/decimate,
- * animations/rig-check, animations/rig) accept the token as `input`.
+ * Uploads a source 3D model (GLB) to Tripo and returns its file_token.
+ * @remarks Follow-up endpoints (models/texture, mesh/decimate,
+ *   animations/rig-check, animations/rig) accept the token as `input`.
  * @param glbBuffer - raw GLB bytes
  * @returns file_token
  */
@@ -337,9 +337,8 @@ const MULTIVIEW_VIEWS = ["front", "left", "back", "right"] as const;
 type MultiviewView = (typeof MULTIVIEW_VIEWS)[number];
 
 /**
- * Create a multiview image-to-3D task (POST /generation/multiview-to-model)
- * from previously uploaded view images. 2–4 views of the same subject; the
- * front view is mandatory.
+ * Creates a multiview image-to-3D task from previously uploaded view images.
+ * @remarks 2–4 views of the same subject; the front view is mandatory.
  * @param viewTokens - file_token per view, from uploadImage()
  * @returns task_id
  */
@@ -386,10 +385,9 @@ export async function createMultiviewTask(
 }
 
 /**
- * Refine an existing model's texture/material via a text prompt.
- * Uses the v3 re-texture endpoint (POST /models/texture) — geometry is
- * unchanged. (Tripo's refine_model endpoint is dead upstream, code 2006,
- * verified 2026-07-22.)
+ * Refines an existing model's texture/material via a text prompt.
+ * @remarks Geometry is unchanged. The refine_model endpoint is dead upstream
+ *   (code 2006, verified 2026-07-22), so this uses the re-texture endpoint.
  * @param fileToken - file_token from uploadModel()
  * @returns task_id
  */
@@ -415,14 +413,12 @@ export async function createRefineTask(
 }
 
 /**
- * Create a smart-retopology task (POST /mesh/decimate, model v2.0): rebuilds
- * the model with clean topology and textures baked onto the low-poly.
- * Intended as the "animation-ready" step between generation and the rig
- * chain. Costs 30 credits per call.
- *
- * NOTE: quad defaults to false on purpose — glTF only stores triangles, so
- * Tripo forces FBX output when quad=true, and the frontend cannot load FBX.
- * The triangulated smart-retopo mesh is what the glTF pipeline needs.
+ * Creates a smart-retopology task: rebuilds the model with clean topology and
+ * textures baked onto the low-poly.
+ * @remarks Intended as the "animation-ready" step between generation and the
+ *   rig chain; costs 30 credits per call. quad defaults to false on purpose:
+ *   glTF stores only triangles, so quad=true forces FBX output, which the
+ *   frontend cannot load.
  * @param fileToken - file_token from uploadModel()
  * @returns task_id
  */
@@ -463,7 +459,7 @@ export async function rigCheckTask(fileToken: string, apiKey: string): Promise<s
 }
 
 /**
- * POST /animations/rig with a single model; returns the task_id.
+ * Starts a rig task with a single model, returning the task_id.
  */
 async function startRigTask(
   fileToken: string,
@@ -480,16 +476,12 @@ async function startRigTask(
 }
 
 /**
- * Create a rig task: attach a skeleton to a model.
- * Bipeds try the humanoid rig line (TRIPO_RIG_BIPED_MODEL) first and fall
- * back to the generic line (TRIPO_RIG_MODEL) when Tripo rejects it (code
- * 1004 — the biped line was retired once before). Creatures always use the
- * generic line. The returned model tells the retarget step which preset
- * namespace the rig accepts (v1.0 biped rigs need `preset:biped:*`).
- *
- * `spec` stays "tripo" (Tripo-native bone naming): retarget rejects rigs
- * built with `spec: "mixamo"` — code 1004, "不支持mixamo骨骼的retarget"
- * (mixamo-skeleton retarget not supported), observed live 2026-08-06.
+ * Creates a rig task: attaches a skeleton to a model.
+ * @remarks Bipeds try the biped rig line first and fall back to the generic
+ *   line on code 1004 (the biped line was retired once before); creatures use
+ *   the generic line. The returned model tells retarget which preset namespace
+ *   the rig accepts (v1.0 biped rigs need `preset:biped:*`). `spec` stays
+ *   "tripo" (Tripo-native bone naming) — retarget rejects `spec: "mixamo"`.
  * @param fileToken - file_token from uploadModel()
  * @param rigType - from rig-check output, e.g. "biped"
  * @returns task_id + rig model used
@@ -591,10 +583,10 @@ export async function retargetTask(
 }
 
 /**
- * Best-effort cancel of a running Tripo task. Tripo documents the
- * `cancelled` task status but (as of 2026-08) no public cancel endpoint —
- * the POST is tolerated to fail; callers must treat cancellation as
- * local-only (stop polling, discard the result).
+ * Best-effort cancel of a running Tripo task.
+ * @remarks Tripo documents the `cancelled` status but no public cancel
+ *   endpoint, so the POST is tolerated to fail; callers must treat
+ *   cancellation as local-only (stop polling, discard the result).
  * @returns true when Tripo accepted the cancel
  */
 export async function cancelTask(taskId: string, apiKey: string): Promise<boolean> {
@@ -615,9 +607,9 @@ export async function cancelTask(taskId: string, apiKey: string): Promise<boolea
 }
 
 /**
- * Map a v3 terminal-failure status to a poll result. Tripo reports
- * error_code + error_message on these — surface both; falling back to the
- * bare status loses the entire diagnosis.
+ * Maps a v3 terminal-failure status to a poll result.
+ * @remarks Tripo reports error_code + error_message on these — surface both;
+ *   falling back to the bare status loses the entire diagnosis.
  */
 function terminalFailureResult(data: any, status: string): TripoPollResult {
   const errorCode =

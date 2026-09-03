@@ -1,16 +1,15 @@
 /**
- * Arbesk Wallet Network Switching
- *
- * Extracted from wallet.js - handles network detection, switching,
- * and wallet_addEthereumChain fallback for chains not yet known to the wallet.
+ * Network detection, switching, and wallet_addEthereumChain fallback for
+ * chains not yet known to the wallet.
  */
 
 import { showToast } from "../ui/toasts.ts";
 import { web3Provider, NETWORKS } from "./wallet-provider.ts";
 
 /**
- * Detect the "chain is not added to wallet" error across wallet vendors.
- * MetaMask returns 4902; Rabby returns -32603 with "Unrecognized chain ID".
+ * Detects the "chain is not added to wallet" error across wallet vendors.
+ * @remarks MetaMask returns 4902; Rabby returns -32603 with "Unrecognized
+ *   chain ID".
  */
 function _isChainUnknownError(error: any): boolean {
   if (!error) return false;

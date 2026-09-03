@@ -1,13 +1,9 @@
 /**
  * Persistent content-addressed cache for large glTF payloads.
- *
- * Uses IndexedDB when available in the browser, with an in-memory Map
- * fallback for environments (like Jest) that lack IndexedDB.
- *
- * Cache keys are the MurmurHash3 hex strings stored in each composite
- * glTF buffer/image under `_arbesk.hash`. Values are the exact stored
- * bytes (gzipped when `compressed` is true) so the key always matches
- * the bytes that were hashed at upload time.
+ * @remarks Uses IndexedDB in the browser, with an in-memory Map fallback where
+ *   IndexedDB is absent. Keys are the MurmurHash3 hex strings stored under
+ *   `_arbesk.hash`; values are the exact stored bytes so the key always matches
+ *   the bytes hashed at upload time.
  */
 
 const DB_NAME = "arbesk-content-cache";
@@ -31,10 +27,7 @@ function getIndexedDB(): { open(name: string, version: number): any } | null {
   return typeof idb !== "undefined" ? idb : null;
 }
 
-/**
- * Payload record shape stored in memory and IndexedDB:
- * { hash, cid, compressed, bytes, bytesCount, storedAt }
- */
+/** Payload record stored in memory and IndexedDB. */
 interface CachedPayloadRecord {
   hash: string;
   cid: string;
@@ -106,9 +99,7 @@ export class ContentCache {
   }
 
   /**
-   * Return the cached payload record for a hash, or null if not cached.
-   *
-   * Record shape: { hash, cid, compressed, bytes, bytesCount, storedAt }
+   * Returns the cached payload record for a hash, or null if not cached.
    */
   async getPayload(hash: string): Promise<any> {
     // Fast path: in-memory cache.
@@ -148,9 +139,9 @@ export class ContentCache {
   }
 
   /**
-   * Store a payload in the cache. Evicts old entries if the byte cap
-   * would be exceeded. Returns true if stored, false if the single payload
-   * is larger than the cap.
+   * Stores a payload in the cache, evicting old entries if the byte cap would be
+   * exceeded.
+   * @returns False when the single payload is larger than the cap.
    */
   async putPayload(hash: string, cid: string, compressed: boolean, bytes: Uint8Array): Promise<boolean> {
     const bytesCount = bytes.length;

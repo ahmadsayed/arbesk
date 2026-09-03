@@ -25,14 +25,12 @@ const Router = express.Router;
 const MAX_COLLECTION_HISTORY_STEPS = 5;
 
 /**
- * Verify that `cid` belongs to the token's collection: it is either the
- * tokenURI CID itself, or an asset manifest CID referenced by the collection
- * manifest's `assets` map — including up to 5 `prev_asset_manifest_cid`
- * ancestors. The ancestor walk covers the delete-asset flow, where the
- * orphaned asset manifest sits in the previous collection version.
- *
- * Fails closed by throwing when a collection manifest cannot be read; the
- * caller must not silently allow the unpin in that case.
+ * Verifies that `cid` belongs to the token's collection: the tokenURI CID
+ * itself, or an asset manifest CID referenced by the collection's `assets`
+ * map (including up to 5 `prev_asset_manifest_cid` ancestors).
+ * @remarks The ancestor walk covers the delete-asset flow, where the orphaned
+ *   manifest sits in the previous collection version. Fails closed by
+ *   throwing when a collection manifest cannot be read.
  */
 async function cidBelongsToToken(
   cid: string,
@@ -85,9 +83,11 @@ export default function ipfsRoutes(storage: StorageAdapter) {
 
   /**
    * POST /api/v1/ipfs/upload-url
-   * Mint a short-lived client upload credential. Session-gated and rate-limited
-   * per wallet. In Pinata mode returns a presigned URL; in Kubo mode returns the
-   * local API URL. The master Pinata JWT never reaches the client.
+   *
+   * Mints a short-lived client upload credential.
+   * @remarks Session-gated and rate-limited per wallet. Pinata mode returns a
+   *   presigned URL; Kubo mode returns the local API URL. The master Pinata
+   *   JWT never reaches the client.
    */
   router.post(
     "/upload-url",
@@ -110,12 +110,10 @@ export default function ipfsRoutes(storage: StorageAdapter) {
   /**
    * POST /api/v1/ipfs/upload-urls
    *
-   * Mint several short-lived upload credentials in one call. Session-gated
-   * and rate-limited per wallet (same budget as /upload-url). Pinata signed
-   * URLs are single-use, so a client uploading N files must request N
-   * credentials up front rather than reusing one mint - this endpoint lets it
-   * do that in one round trip plus one parallelized Pinata sign burst,
-   * instead of N sequential backend + Pinata round trips.
+   * Mints several short-lived upload credentials in one call.
+   * @remarks Session-gated and rate-limited per wallet. Pinata signed URLs are
+   *   single-use, so a multi-file upload needs one credential per file — this
+   *   endpoint does it in one round trip.
    *
    * Body: { count: number } (1-200, default 1)
    */
@@ -142,42 +140,23 @@ export default function ipfsRoutes(storage: StorageAdapter) {
   /**
    * POST /api/v1/ipfs/unpin
    *
-   * Unpin the asset-unique CIDs owned by a manifest chain. Called before token
-   * burn or after asset removal from a collection.
+   * Unpins the asset-unique CIDs owned by a manifest chain (called before
+   * token burn or after asset removal).
+   * @remarks Shared CIDs (source glTFs, bundle dirs, embedded buffers/images)
+   *   are NOT unpinned — they may be referenced by other tokens — so this
+   *   only unpins manifest-chain CIDs, thumbnails, and comments archives;
+   *   shared CIDs are reclaimed by the GC. The session wallet must own the
+   *   token or hold an editor proof, and the CID must belong to the claimed
+   *   token (current/previous collection manifests), so a caller cannot unpin
+   *   a victim's CIDs. A body-supplied `contractAddress` must be a configured
+   *   contract (free/paid), or INVALID_CONTRACT is returned to stop spoofed
+   *   ownerOf()/tokenURI() answers. Accepted residual risk: the membership
+   *   anchors are attacker-settable for their own token at gas cost, so full
+   *   closure needs reachability-based deletion (GC).
    *
-   * Because source glTFs, bundle directories, and their embedded buffers/images
-   * can be shared across multiple assets via deduplication, this endpoint does
-   * NOT unpin them. It only unpins:
-   *   - the manifest chain CIDs themselves
-   *   - asset manifest thumbnails
-   *   - asset manifest comments archives
+   * Body: { cid, tokenId, chainId?, contractAddress?, proof? }
    *
-   * Shared CIDs are reported in `skipped` and reclaimed later by the
-   * reachability garbage collector (`POST /api/v1/ipfs/gc`).
-   *
-   * Body: { cid: "baf...", tokenId: "123", chainId?, contractAddress?, proof? }
-   *
-   * Auth: Session token required. The session wallet must own the token or be
-   * an editor (Merkle proof), verified on-chain via checkAssetAccess while the
-   * token is still live — the frontend therefore unpins BEFORE burning. The
-   * CID must also belong to the claimed token (it is the tokenURI CID or an
-   * asset CID in the current/previous collection manifests), so a caller
-   * cannot unpin a victim's CIDs by passing their own tokenId.
-   *
-   * Contract selection: a body-supplied `contractAddress` must be one of the
-   * chain's configured contracts (free or paid tier) — anything else is
-   * rejected with INVALID_CONTRACT, because an attacker-deployed contract
-   * could otherwise spoof ownerOf()/tokenURI() answers. When omitted, the
-   * configured contracts are tried in order (free, then paid) and the first
-   * one where ownership + CID membership fully pass wins.
-   *
-   * Residual risk (accepted, documented): the membership anchors — tokenURI
-   * and the collection's assets map — are attacker-settable for the
-   * attacker's OWN token at gas cost (updateAssetURI does no URI validation,
-   * and fork mode legitimately shares asset CIDs across collections), so a
-   * determined caller can anchor a foreign CID to their own token; every such
-   * attempt is attributed on-chain. Full closure requires reachability-based
-   * deletion (GC semantics) and is a known mainnet follow-up.
+   * Auth: Session token required.
    */
 async function findMatchingContract(
   tokenId: string,
@@ -369,15 +348,11 @@ async function findMatchingContract(
   /**
    * POST /api/v1/ipfs/gc
    *
-   * Run the reachability garbage collector. Requires session auth plus an
-   * admin token in the `X-Admin-Token` header (configured via GC_ADMIN_TOKEN).
+   * Runs the reachability garbage collector.
+   * @remarks Requires session auth plus an admin token in the `X-Admin-Token`
+   *   header (GC_ADMIN_TOKEN).
    *
-   * Body (all optional):
-   *   {
-   *     "dryRun": true,           // default true
-   *     "maxUnpin": 1000,         // default Infinity
-   *     "chainId": 31337          // default from env
-   *   }
+   * Body (all optional): { dryRun, maxUnpin, chainId }
    */
   router.post(
     "/gc",

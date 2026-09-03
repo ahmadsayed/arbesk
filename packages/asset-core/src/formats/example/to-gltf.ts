@@ -1,14 +1,9 @@
 /**
- * ParsedExample → glTF 2.0 JSON converter (pure).
- *
- * This is the render-side bridge: asset-core never talks to Babylon, so any
- * format Babylon can't import natively must convert to a self-contained glTF
- * (single base64 data-URI buffer) that any loader consumes — exactly what
- * 3mf/to-gltf.ts does. The glTF is produced in memory for rendering only and
- * is never persisted; the composite example form is the stored truth.
- *
- * A real format would convert its parsed meshes/materials here; this dummy
- * always emits a single unit triangle so the pipeline is fully exercised.
+ * Converts a ParsedExample to glTF 2.0 JSON (pure).
+ * @remarks Asset-core never talks to Babylon, so formats it can't import
+ *   natively convert to a self-contained glTF. The glTF is produced in memory
+ *   for rendering only and is never persisted; the composite example form is
+ *   the stored truth. This dummy emits a single unit triangle.
  */
 
 import { arrayBufferToBase64 } from "../../utils/encoding.ts";

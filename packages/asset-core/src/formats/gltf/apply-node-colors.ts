@@ -1,10 +1,8 @@
 /**
  * Per-node material color baking on a glTF JSON document.
- *
- * Pure module: no IPFS, no runtime ports, no @gltf-transform — safe to import
- * from the Web Worker (no import map there, so bare specifiers are off
- * limits). source-color-editor.ts builds on this for the IPFS-backed edit
- * flow; the worker calls applyNodeColors directly for the bake op.
+ * @remarks Pure — no IPFS, runtime ports, or @gltf-transform — so it is safe
+ *   to import from the Web Worker (no import map there). Used by
+ *   source-color-editor.ts and by the worker's bake op.
  */
 
 /**
@@ -104,10 +102,8 @@ function ensureUniqueMaterialForNodes(
 }
 
 /**
- * Apply color edits directly to a glTF JSON object.
- *
- * @param gltf - glTF JSON object (mutated in place; dynamic schema)
- * @param nodeColors - { "nodeName": "#RRGGBB", ... }
+ * Applies color edits directly to a glTF JSON object.
+ * @param gltf - glTF JSON object (mutated in place)
  */
 export function applyNodeColors(
   gltf: any,
@@ -149,9 +145,9 @@ export function applyNodeColors(
 }
 
 /**
- * The bakeSourceColors executor op, shared by the Web Worker and the inline
- * (same-thread) executor: validate the payload, deep-copy the glTF document,
- * bake the colors into the copy.
+ * The bakeSourceColors executor op.
+ * @remarks Shared by the Web Worker and the inline executor. Validates the
+ *   payload, deep-copies the glTF document, and bakes colors into the copy.
  */
 export function bakeSourceColorsOp(payload: any): {
   bakedJson: any;

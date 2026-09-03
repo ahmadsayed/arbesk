@@ -1,15 +1,11 @@
 /**
- * Domain: Editors — Merkle editor-list operations, local cache, and proof commands.
- *
- * Centralizes editor list caching (StoragePort), on-chain version lookup
- * (ChainPort), Merkle root computation (HashPort), and proof generation for
- * the publish, team, delete, library, and comment flows.
- *
- * MIRROR: the makeLeaf/computeRoot/getProof/verify primitives here are a
- * byte-identical copy of @arbesk/wallet/merkle.ts (the canonical source of
- * truth). This package cannot import wallet (they are declared independent),
- * so the duplication is intentional — keep them in lockstep.
- * test/merkle-parity.test.js pins parity.
+ * Domain: Editors — Merkle editor-list operations, local cache, and proof
+ * commands.
+ * @remarks Centralizes editor-list caching (StoragePort), version lookup
+ *   (ChainPort), root computation (HashPort), and proof generation. The
+ *   makeLeaf/computeRoot/getProof/verify primitives are a byte-identical copy
+ *   of @arbesk/wallet/merkle.ts — this package cannot import wallet, so the
+ *   duplication is intentional; keep them in lockstep.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import { getRuntime } from "../runtime.ts";
@@ -26,9 +22,10 @@ export interface EditorEntry {
 }
 
 /**
- * ABI-packed keccak256 via the injected HashPort — same semantics (and
- * `{type, value}` arguments) as Web3.utils.soliditySha3.
- * @returns hex string from the HashPort
+ * ABI-packed keccak256 via the injected HashPort.
+ * @remarks Same semantics (and `{type, value}` arguments) as
+ *   Web3.utils.soliditySha3.
+ * @returns Hex string from the HashPort.
  */
 function _soliditySha3(...args: any[]): any {
   const h = getRuntime().hash;
@@ -39,8 +36,8 @@ function _soliditySha3(...args: any[]): any {
 }
 
 /**
- * Build a leaf hash for the editor Merkle tree.
- * @returns 32-byte hex string
+ * Builds a leaf hash for the editor Merkle tree.
+ * @returns 32-byte hex string.
  */
 export function makeLeaf(
   address: string,
@@ -59,7 +56,7 @@ export function makeLeaf(
 }
 
 /**
- * @returns SimpleMerkleTree instance, or null for an empty list
+ * Builds a Merkle tree, or null for an empty list.
  */
 function _buildTree(leaves: string[]): SimpleMerkleTree | null {
   if (!leaves || leaves.length === 0) return null;
@@ -67,8 +64,8 @@ function _buildTree(leaves: string[]): SimpleMerkleTree | null {
 }
 
 /**
- * Compute the Merkle root for an editor list at a given token/version.
- * @returns 32-byte hex root
+ * Computes the Merkle root for an editor list at a given token/version.
+ * @returns 32-byte hex root.
  */
 export function computeRoot(
   editorList: EditorEntry[],
@@ -136,7 +133,7 @@ export function verifyProof(
 // ─── Cache ─────────────────────────────────────────────────────────────────
 
 /**
- * @returns localStorage key
+ * Returns the editor-list storage key.
  */
 function editorListKey(tag: string): string {
   return EDITOR_LIST_PREFIX + tag;
@@ -219,10 +216,10 @@ const EDITOR_ROLE_EDITOR = 2;
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
 /**
- * Result of an editor-list mutation. `root`/`version` are what an on-chain
- * updateEditors transaction would submit — the command itself only persists
- * the list (IPFS write + local cache); the ChainPort has no write op yet, so
- * submitting the transaction stays the caller's job.
+ * Result of an editor-list mutation.
+ * @remarks `root`/`version` are what an on-chain updateEditors transaction
+ *   would submit; the command only persists the list (IPFS write + local
+ *   cache), so submitting the transaction stays the caller's job.
  */
 export interface EditorListUpdate {
   cid: string;
@@ -251,9 +248,7 @@ async function _persistEditorList(
 }
 
 /**
- * Add an editor to a token's editor list and persist the updated list.
- * Mirrors services/team.ts addTeamMember minus the on-chain updateEditors
- * transaction (see EditorListUpdate).
+ * Adds an editor to a token's editor list and persists the updated list.
  */
 export async function addEditorCommand(
   tag: string,
@@ -280,9 +275,7 @@ export async function addEditorCommand(
 }
 
 /**
- * Remove an editor from a token's editor list and persist the updated list.
- * Mirrors services/team.ts removeTeamMember minus the on-chain updateEditors
- * transaction (see EditorListUpdate).
+ * Removes an editor from a token's editor list and persists the updated list.
  */
 export async function removeEditorCommand(
   tag: string,
@@ -302,7 +295,8 @@ export async function removeEditorCommand(
 }
 
 /**
- * List the current editors of a token (IPFS list with local cache fallback).
+ * Lists the current editors of a token.
+ * @remarks Reads from IPFS with local cache fallback.
  */
 export async function listEditorsCommand(tag: string): Promise<EditorEntry[]> {
   return loadEditorList(tag);

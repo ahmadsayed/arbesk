@@ -1,11 +1,7 @@
 /**
- * Canonical asset-level Nostr tag builder.
- *
- * Comments are scoped to an asset, not the whole collection: each asset gets
- * its own isolated thread keyed by the tag
- * `<chainId>:<contractAddress>:<tokenId>:<assetId>`. Shared by the chat proxy
- * (`chat-proxy.js`) and the comments archive route (`routes/comments.js`) so
- * both compute the exact same tag for the same asset.
+ * Builds the canonical asset-level Nostr tag '<chainId>:<contract>:<tokenId>:<assetId>'.
+ * @remarks Comments are scoped per asset, not per collection.
+ * Used by chat-proxy.ts and the comments-archive route.
  */
 
 import { getContractAddress } from "../config.ts";

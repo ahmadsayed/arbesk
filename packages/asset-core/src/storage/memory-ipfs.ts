@@ -5,9 +5,9 @@ import { compress, decompress, isGzipped } from "../utils/compression.ts";
 let counter = 0;
 
 /**
- * In-memory IPFS double. Deterministic fake CIDs; honors the compress
- * option so getJSON/getBytes exercise the same gunzip paths as production.
- * Also serves as the backend-side adapter for benchmarks and tests.
+ * In-memory IPFS double with deterministic fake CIDs.
+ * @remarks Honors the compress option so getJSON/getBytes exercise the same
+ *   gunzip paths as production.
  */
 export function createMemoryIpfs(): {
   read: IpfsReadPort;

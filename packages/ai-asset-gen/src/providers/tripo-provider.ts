@@ -1,7 +1,5 @@
 /**
- * Tripo3D provider — wraps the raw adapter (./tripo.ts) behind the
- * capability-gated GenerationProvider facade. The BYOK key is captured at
- * composition, so the raw functions' apiKey argument is supplied here.
+ * Tripo3D provider behind the capability-gated GenerationProvider facade.
  */
 import type { GenerationConfig, GenerationProvider } from "../facade.ts";
 import type { SourceRef, TaskStatus } from "../types.ts";

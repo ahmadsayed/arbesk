@@ -1,11 +1,7 @@
 /**
  * Pending-generation store.
- *
- * Tracks generation results that have been uploaded to IPFS but not yet sent
- * to the Studio viewport. Each record backs one asset chat bubble; its status
- * moves "pending" → "sent" | "discarded". Pure in-memory state — no events,
- * no persistence (a page reload drops undecided generations, same as any
- * unsaved Studio state).
+ * @remarks Pure in-memory with no events or persistence — a page reload drops
+ *   undecided generations, like any unsaved Studio state.
  */
 
 export interface PendingGeneration {
@@ -38,7 +34,6 @@ const records = new Map<string, PendingGeneration>();
 let nextId = 1;
 
 /**
- * Register a new pending generation.
  * @returns the new record id
  */
 export function addPendingGeneration(
@@ -49,15 +44,12 @@ export function addPendingGeneration(
   return id;
 }
 
-/**
- * Look up a record by id.
- */
 export function getPendingGeneration(id: string): PendingGeneration | null {
   return records.get(id) || null;
 }
 
 /**
- * Patch a record in place. No-op for unknown ids.
+ * @remarks No-op for unknown ids.
  */
 export function updatePendingGeneration(
   id: string,
@@ -68,13 +60,12 @@ export function updatePendingGeneration(
 }
 
 /**
- * List all records in insertion order.
+ * @remarks Records are listed in insertion order.
  */
 export function listPendingGenerations(): PendingGeneration[] {
   return [...records.values()];
 }
 
-/** Reset the store. Used by Clear Chat and tests. */
 export function _resetPendingGenerations(): void {
   records.clear();
   nextId = 1;

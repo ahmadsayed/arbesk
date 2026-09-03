@@ -1,17 +1,13 @@
 /**
- * Library → Studio navigation — leaf module.
- *
- * Both library-grid and library-context-menu need openInStudio; keeping it
- * here (router-only dependency) avoids a library-grid ↔ library-context-menu
- * import cycle.
+ * Library → Studio navigation.
+ * @remarks A leaf module: both library-grid and library-context-menu need
+ *   openInStudio, and keeping it here avoids an import cycle between them.
  */
 
 /**
- * Open an asset in the Studio view.
- *
- * SPA in-app transition — no full reload, so the wallet/session stay alive.
- * The router activates the Studio view and calls loadFromParams() to open the
- * asset the query string points at.
+ * Opens an asset in the Studio view.
+ * @remarks In-app transition (no full reload) so the wallet and session stay
+ *   alive.
  */
 export function openInStudio(tokenId: string | number, assetId?: string | number): void {
   const params = new URLSearchParams();

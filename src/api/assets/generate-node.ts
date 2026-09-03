@@ -65,39 +65,25 @@ const MSG_SOURCE_UNSUPPORTED =
 /** 400 message prefix for glTF JSON with references we cannot inline (→ SOURCE_ASSET_UNSUPPORTED_FORMAT). */
 const MSG_SOURCE_UNRESOLVABLE_PREFIX = "Source glTF has external references that cannot be resolved";
 
-/**
- * Check whether a buffer is a binary GLB (magic "glTF", 0x46546C67).
- */
+/** Checks whether a buffer is a binary GLB. */
 function isGlb(buf: Buffer): boolean {
   return buf.length >= 4 && buf.readUInt32LE(0) === GLB_MAGIC;
 }
 
 /**
- * Check whether a buffer looks like glTF JSON (starts with `{`). Any glTF
- * JSON — composite with `ipfs://` refs or self-contained with data URIs —
- * is composed to GLB before upload. Only the first byte is checked: a
- * fixed head window misses composites whose `ipfs://` refs sit deeper in
- * the document, and those then fail Tripo-side with code 1004.
+ * Checks whether a buffer looks like glTF JSON (starts with `{`).
+ * @remarks Any glTF JSON (composite or self-contained) is composed to GLB
+ *   before upload. Only the first byte is checked: a fixed head window misses
+ *   composites whose `ipfs://` refs sit deeper, and those then fail
+ *   Tripo-side with code 1004.
  */
 function looksLikeGltfJson(buf: Buffer): boolean {
   return buf.length >= 1 && buf[0] === 0x7B; // '{'
 }
 
 /**
- * Resolve a glTF JSON document into a self-contained GLB binary buffer
- * suitable for Tripo upload, via the asset-core compose pipeline (facade):
- * `compose` inlines `ipfs://<CID>` refs as base64 data URIs and strips dedup
- * metadata (reading through the backend IpfsReadPort, with the same
- * gzip/dedup-metadata handling as the browser composer); `serializeGLB` packs
- * the result. Data URIs pass through; any other external URI (relative path,
- * http(s)) cannot be inlined here and fails fast with a 400 TripoApiError
- * instead of producing a corrupt GLB.
- *
- * We only run this for the Tripo file_token path — browser rendering uses
- * the frontend compose (composer.js).
- *
- * @param compositeBuf - raw bytes of the glTF JSON
- * @returns self-contained GLB binary
+ * Validates that a composed glTF has no external (non-data-URI) buffer/image refs.
+ * @throws TripoApiError (400) when any buffer or image URI is not a data URI.
  */
 function validateComposedUris(composed: any): void {
   for (const buf of composed.buffers || []) {
@@ -254,9 +240,10 @@ function sendGenerationError(res: Response, err: Error): Response {
 
 /**
  * BYOK (Bring Your Own Key) gate: real providers require a user-supplied API
- * key. The user pays the provider directly, so the on-chain quota/payment
- * gate is bypassed entirely. The key is used transiently and is never logged
- * or persisted. The mock provider needs no key.
+ * key.
+ * @remarks The user pays the provider directly, so the on-chain quota/payment
+ *   gate is bypassed entirely. The key is used transiently and never logged or
+ *   persisted; the mock provider needs no key.
  * @returns true when the request was rejected with 400 MISSING_PROVIDER_KEY
  */
 function rejectMissingProviderKey(
@@ -288,9 +275,8 @@ function rejectMissingProviderKey(
 }
 
 /**
- * Run a mock-provider generation and return the sample asset bytes as base64.
- * The mock provider only does text-to-3D; image-only requests fall back to a
- * placeholder prompt (image input is Tripo3D-only).
+ * @remarks Mock is text-to-3D only; image-only requests fall back to a
+ *   placeholder prompt (image input is Tripo3D-only).
  */
 async function runMockGeneration(
   res: Response,
@@ -319,14 +305,10 @@ async function runMockGeneration(
 }
 
 /**
- * Fetch a source GLB from IPFS and upload it to Tripo, returning the
- * file_token. Throws TripoApiError(400, SOURCE_ASSET_UNAVAILABLE-shaped)
- * when the CID cannot be read or yields an empty buffer,
- * TripoApiError(400, SOURCE_ASSET_UNSUPPORTED_FORMAT-shaped) when the
- * content is neither glTF JSON nor GLB (or has unresolvable external
- * references), and TripoApiError(400, SOURCE_ASSET_TOO_LARGE-shaped)
- * when the GLB exceeds Tripo's 150 MB file limit.
- * @returns file_token
+ * Fetches a source asset from IPFS and returns it as a self-contained GLB.
+ * @remarks Decompresses gzipped assets and composes glTF JSON to GLB.
+ * @throws TripoApiError (400) when the source is unavailable, unsupported, or >150 MB.
+ * @returns self-contained GLB Buffer
  */
 async function resolveSourceGlb(
   cid: string,
@@ -398,9 +380,10 @@ interface TripoGenerationInput {
 /**
  * Registry lookup for the retarget-only shortcut: the caller references a
  * completed rig-only entry whose skeleton still lives Tripo-side (registry
- * TTL). Skipped when the caller explicitly picked a different rig model —
- * the full chain with the user's chosen model is needed then. Everything
- * else goes through the GLB — the canonical, expiry-free path.
+ * TTL).
+ * @remarks Skipped when the caller explicitly picked a different rig model
+ *   (the full chain with the chosen model is needed then); everything else
+ *   goes through the GLB — the canonical, expiry-free path.
  */
 function findRigSource(
   userAddress: string,
@@ -453,11 +436,9 @@ async function tryRetargetOnly(
 }
 
 /**
- * Start a follow-up task (animate chain, retopo, or retexture) on a source
- * asset: upload the source GLB to Tripo, then dispatch on the action flag.
+ * Starts a follow-up task (animate chain, retopo, or retexture) on a source
+ * asset: uploads the source GLB to Tripo, then dispatches on the action flag.
  * @returns the 202 response when an action flag matched, undefined otherwise
- *   (the caller then falls through to fresh generation — unreachable in
- *   practice: the schema guarantees exactly one action flag)
  */
 async function startSourceFollowUp(
   res: Response,
@@ -499,9 +480,10 @@ async function startSourceFollowUp(
 }
 
 /**
- * Start a fresh Tripo3D generation (multiview, image, or text) and register
- * the task. Action flags without sourceAssetCid are ignored here — the
- * prompt/image starts a new model.
+ * Starts a fresh Tripo3D generation (multiview, image, or text) and registers
+ * the task.
+ * @remarks Action flags without sourceAssetCid are ignored here — the
+ *   prompt/image starts a new model.
  */
 async function startFreshGeneration(
   res: Response,
@@ -546,8 +528,9 @@ async function startFreshGeneration(
 }
 
 /**
- * Poll body for in-flight tasks, with the chain stage label for animate
- * tasks so the UI can say which step is running.
+ * Builds the poll body for in-flight tasks, with the chain stage label for
+ * animate tasks.
+ * @remarks Lets the UI show which step is running.
  */
 function buildProgressBody(
   entry: TaskEntry,
@@ -568,10 +551,10 @@ function buildProgressBody(
 }
 
 /**
- * Error mapping for GET /generations/:taskId: TripoApiErrors keep their HTTP
- * status (auth/credit failures are terminal for the task — evict the entry
- * and its transient BYOK key instead of waiting for the TTL); anything
- * unexpected is a 500 GENERATION_FAILED.
+ * Error mapping for GET /generations/:taskId.
+ * @remarks TripoApiErrors keep their HTTP status (auth/credit failures are
+ *   terminal — evict the entry and its transient BYOK key instead of waiting
+ *   for the TTL); anything unexpected is a 500 GENERATION_FAILED.
  */
 function sendPollError(res: Response, err: Error, taskId: string): Response {
   console.error("[GEN] get error:", err.message);
@@ -584,9 +567,9 @@ function sendPollError(res: Response, err: Error, taskId: string): Response {
 }
 
 /**
- * Terminal failure/cancel: evict the task and report PROVIDER_TASK_FAILED,
- * including the chain stage so the user knows which step died (the upstream
- * message alone says "Task failed").
+ * Terminal failure/cancel: evicts the task and reports PROVIDER_TASK_FAILED.
+ * @remarks Includes the chain stage so the user knows which step died (the
+ *   upstream message alone says "Task failed").
  */
 function sendTaskFailed(
   res: Response,
@@ -617,8 +600,9 @@ function sendTaskFailed(
 }
 
 /**
- * Terminal success: download the GLB, mark the task complete (kept in the
- * registry for the retarget-only shortcut), and return the bytes as base64.
+ * Terminal success: downloads the GLB and marks the task complete.
+ * @remarks The completed entry stays in the registry for the retarget-only
+ *   shortcut.
  */
 async function completeTask(
   res: Response,
@@ -648,8 +632,9 @@ async function completeTask(
 
 /**
  * Animate chain: a succeeded rig-check or rig task starts the next phase
- * instead of finishing. rig-check → rig (failing fast when Tripo reports the
- * model is not riggable); rig → retarget with the requested presets.
+ * instead of finishing.
+ * @remarks rig-check → rig (failing fast when Tripo reports the model is not
+ *   riggable); rig → retarget with the requested presets.
  */
 async function advanceAnimateChain(
   res: Response,
@@ -716,8 +701,9 @@ async function advanceAnimateChain(
 }
 
 /**
- * Resolve the requested provider: defaults to "mock", and the mock adapter
- * also serves provider-less requests when MOCK_3D_GENERATION=true.
+ * Resolves the requested provider.
+ * @remarks Defaults to "mock"; the mock adapter also serves provider-less
+ *   requests when MOCK_3D_GENERATION=true.
  */
 function resolveProvider(provider: string | undefined): {
   effectiveProvider: string;
@@ -799,9 +785,9 @@ async function respondToPoll(
 }
 
 /**
- * Generation route factory. Receives the asset-core facade (for composing
- * glTF JSON sources to GLB) and the storage adapter (for reading source GLBs)
- * from the composition root — no on-demand lookups.
+ * Generation route factory.
+ * @remarks Receives the asset-core facade and the storage adapter from the
+ *   composition root — no on-demand lookups.
  */
 export default function generateAssetNode(
   core: ArbeskCore,
@@ -825,12 +811,10 @@ export default function generateAssetNode(
   /**
    * POST /api/v1/generations
    *
-   * Validates the session, checks the rate limit, calls the generation
-   * adapter (mock or cloud), and returns the raw asset bytes to the
-   * browser. The browser uploads the asset to IPFS, constructs the
-   * manifest, and writes it to IPFS directly - no server-side IPFS
-   * writes. The only server-side concerns are auth, rate limiting,
-   * and the adapter call (which may need filesystem or API key access).
+   * Validates the session, checks the rate limit, calls the generation adapter
+   * (mock or cloud), and returns the raw asset bytes to the browser.
+   * @remarks The browser uploads the asset to IPFS and writes the manifest
+   *   directly — no server-side IPFS writes.
    */
   router.post(
     "/",
@@ -899,11 +883,11 @@ export default function generateAssetNode(
   /**
    * POST /api/v1/generations/balance
    *
-   * Returns the Tripo3D credit balance for a user-supplied BYOK key. The key
-   * is used transiently for this single upstream call — never logged or
-   * persisted. Session-gated so the route cannot be used as an anonymous
-   * key-probing oracle. No rate limit: balance checks are cheap and do not
-   * consume generation quota.
+   * Returns the Tripo3D credit balance for a user-supplied BYOK key.
+   * @remarks The key is used transiently for this single upstream call (never
+   *   logged or persisted). Session-gated so the route cannot be used as an
+   *   anonymous key-probing oracle; no rate limit because balance checks are
+   *   cheap and don't consume generation quota.
    */
   router.post(
     "/balance",
@@ -927,10 +911,10 @@ export default function generateAssetNode(
   /**
    * DELETE /api/v1/generations/:taskId
    *
-   * Stop an in-flight task: the registry entry is evicted (the GET poll then
-   * 404s, so the browser stops waiting) and a best-effort cancel is sent
-   * upstream. Provider credits already consumed are not refunded — the
-   * frontend warns the user before calling this.
+   * Stops an in-flight task: evicts the registry entry and sends a best-effort
+   * cancel upstream.
+   * @remarks Provider credits already consumed are not refunded — the frontend
+   *   warns the user before calling this.
    */
   router.delete("/:taskId", authenticate, async (req: Request, res: Response) => {
     const taskId = String(req.params.taskId);
@@ -953,10 +937,10 @@ export default function generateAssetNode(
   /**
    * GET /api/v1/generations/:taskId
    *
-   * Polls an in-flight Tripo3D generation task. Requires a valid session;
-   * the task must belong to the authenticated wallet. On success the GLB is
-   * downloaded, the task entry is evicted, and the model bytes are returned
-   * to the browser for client-side IPFS upload.
+   * Polls an in-flight Tripo3D generation task.
+   * @remarks Requires a valid session and task ownership; on success the GLB
+   *   is downloaded and the model bytes are returned for client-side IPFS
+   *   upload.
    */
   router.get("/:taskId", authenticate, async (req: Request, res: Response) => {
     try {

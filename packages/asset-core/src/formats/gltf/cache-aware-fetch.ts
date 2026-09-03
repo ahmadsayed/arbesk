@@ -1,16 +1,9 @@
 /**
  * Cache-aware CID → base64 fetch helper.
- *
- * Shared between the main-thread composer and the glTF Web Worker so both
- * can use the MurmurHash3-based IndexedDB cache for large buffers/images.
- *
- * The caller supplies two fetch functions:
- *   - fetchRaw(cid) returns the exact stored bytes (possibly gzipped).
- *   - fetchDecompressed(cid) returns the uncompressed payload.
- *
- * When `_arbesk` metadata is present and the stored payload is large enough,
- * the helper checks the content cache by hash before fetching. Cache misses
- * are fetched raw and stored for the next load.
+ * @remarks Shared by the main-thread composer and the glTF Web Worker so both
+ *   use the MurmurHash3-based IndexedDB cache for large buffers/images. When
+ *   `_arbesk` metadata marks a payload large enough, it checks the content
+ *   cache by hash before fetching; misses are fetched raw and stored.
  */
 
 import { arrayBufferToBase64 } from "../../utils/encoding.ts";
@@ -40,10 +33,8 @@ function bytesFromBuffer(buffer: ArrayBufferLike): Uint8Array {
 }
 
 /**
- * Fetch a CID as a base64 string, using the content cache when possible.
- *
+ * Fetches a CID as a base64 string, using the content cache when possible.
  * @param arbeskMeta - `_arbesk` metadata from a composite glTF entry (dynamic shape)
- * @returns base64-encoded payload
  */
 export async function fetchCIDAsBase64(
   cid: string,

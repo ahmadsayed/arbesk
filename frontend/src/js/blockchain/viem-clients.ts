@@ -1,12 +1,8 @@
 /**
- * viem clients for the browser. Reads go through per-chain cached public
- * clients (HTTP RPC); user transactions go through a wallet client wrapping
- * the injected EIP-1193 provider. This module replaces the web3 instances
- * wallet-core used to own.
- *
- * The default chain is the connected wallet's, read from the shared
- * wallet-state store — importing wallet-core here would create an import
- * cycle (wallet-core imports this module's consumers).
+ * viem clients for the browser: cached public clients for reads, and a wallet
+ * client wrapping the injected EIP-1193 provider for user transactions.
+ * @remarks The default chain is the connected wallet's, read from wallet-state;
+ *   importing wallet-core here would create an import cycle.
  */
 import { createPublicClient, http } from "viem";
 import type { PublicClient } from "viem";
@@ -17,8 +13,8 @@ import { walletState } from "../state/wallet-state.ts";
 const readClients = new Map<number, PublicClient>();
 
 /**
- * The chain reads default to: the connected wallet's chain, or Hardhat local
- * when disconnected (the dev default, matching getRpcUrl's fallback).
+ * The chain reads default to the connected wallet's chain, or Hardhat local
+ * (the dev default) when disconnected.
  */
 function activeChainId(): number {
   const stored = walletState.get().chainId;
@@ -27,7 +23,6 @@ function activeChainId(): number {
 
 /**
  * Cached read client for a chain (default: the active network).
- * @param chainId - chain to read from; defaults to the wallet's active chain
  */
 export function getReadClient(chainId?: number): PublicClient {
   const id = chainId ?? activeChainId();

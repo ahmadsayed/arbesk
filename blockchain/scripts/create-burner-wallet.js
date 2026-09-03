@@ -1,14 +1,11 @@
 /**
- * Create TWO random burner wallets for testnet use.
- *
- * Wallet 1 = Deployer (pays gas to deploy the contract)
- * Wallet 2 = Treasury (receives generation payments)
+ * Creates two random burner wallets for testnet use.
+ * @remarks Wallet 1 is the Deployer (pays gas to deploy the contract); Wallet 2
+ *   is the Treasury (receives generation payments). Store the keys temporarily
+ *   only — never use burner wallets for mainnet or with real funds.
  *
  * Usage:
  *   docker compose run --rm hardhat node scripts/create-burner-wallet.js
- *
- * WARNING: This generates random key pairs. Store them temporarily only.
- *          Never use burner wallets for mainnet or with real funds.
  */
 
 const { Wallet } = require("ethers");

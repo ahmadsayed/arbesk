@@ -1,9 +1,7 @@
 /**
- * @arbesk/wallet facade — createWalletFacade.
- *
- * The client-facing identity facade: three methods (sign, getSiwe,
- * getMerkleProof) over an injected Signer (EOA or CDP). The facade is
- * signer-agnostic — it never branches on wallet kind.
+ * @arbesk/wallet facade — createWalletFacade: sign, getSiwe, getMerkleProof
+ *   over an injected Signer (EOA or CDP).
+ * @remarks The facade is signer-agnostic: it never branches on wallet kind.
  */
 import type { Signer, UserIdentity } from "./types.ts";
 import { buildSiweMessage, generateNonce } from "./siwe.ts";
@@ -37,9 +35,9 @@ function shortAddress(address: string): string {
 }
 
 /**
- * Build the UserIdentity for a connected wallet (moved from auth-mechanism.ts).
- * Identity is the "who", the Signer is the "how-on-chain" — stored separately
- * so an OAuth login can have identity without a signer.
+ * Builds a UserIdentity for a connected wallet.
+ * @remarks Identity is the "who" and the Signer is the "how-on-chain"; they
+ *   are stored separately so an OAuth login can have identity without a signer.
  */
 export function buildUserIdentity(opts: {
   address: string;
@@ -59,16 +57,15 @@ export interface WalletFacade {
   sign(message: string): Promise<string>;
   /** Build + sign the SIWE proof for session creation. */
   getSiwe(opts: GetSiweOptions): Promise<SiweProof>;
-  /** Produce the ordered bytes32[] proof that signer.getAddress() holds a role
-   *  in the token's current editor tree (pure — the editor list + version are
-   *  supplied, so no chain/IPFS reads happen here). */
+  /** @remarks Pure: the editor list and version are supplied, so no chain/IPFS
+   *  reads happen here. */
   getMerkleProof(opts: GetMerkleProofOptions): string[];
 }
 
 /**
- * Build + sign a SIWE proof for the given signer (standalone form of the
- * facade's getSiwe, so callers holding a raw Signer — e.g. services/api.ts —
- * can produce a proof without a WalletFacade).
+ * Builds and signs a SIWE proof for a raw Signer.
+ * @remarks Standalone form of the facade's getSiwe, so callers with a raw
+ *   Signer can produce a proof without a WalletFacade.
  */
 export async function buildSiweProof(opts: {
   signer: Signer;

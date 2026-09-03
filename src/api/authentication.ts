@@ -1,11 +1,8 @@
 /**
- * Arbesk API Authentication Middleware
- *
- * Accepts only:
- *   Authorization: Session <token>
- *
- * The session token is created by POST /api/v1/sessions after the user
- * signs a SIWE (EIP-4361) message. The opaque token is valid for 24 hours.
+ * Arbesk API authentication middleware.
+ * @remarks Accepts only `Authorization: Session <token>`; the opaque token is
+ *   created by POST /api/v1/sessions after a SIWE (EIP-4361) signature and is
+ *   valid for 24 hours.
  */
 
 import { validateSession } from "./sessions.ts";

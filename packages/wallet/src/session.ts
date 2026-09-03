@@ -1,8 +1,7 @@
 /**
  * Session store — the environment seam for opaque wallet-bound session tokens.
- * The backend uses createMemorySessionStore (moved from src/api/sessions.ts);
- * the browser uses a localStorage-backed store; tests use a memory store with
- * a fixed clock.
+ * Used by the backend (in-memory), the browser (localStorage-backed), and
+ * tests (fixed clock).
  */
 import type { SessionStore } from "./types.ts";
 
@@ -24,8 +23,7 @@ interface SessionRecord {
 }
 
 /**
- * In-memory SessionStore with hourly expiry cleanup. Matches the previous
- * in-process sessions.ts Map.
+ * Creates an in-memory SessionStore with hourly expiry cleanup.
  */
 export function createMemorySessionStore(
   opts: MemorySessionStoreOptions = {},

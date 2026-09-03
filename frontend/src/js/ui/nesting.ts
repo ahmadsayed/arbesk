@@ -1,8 +1,6 @@
 /**
- * Arbesk Nesting Navigation - Dive/Ascend State Machine
- *
- * Manages breadcrumb path bar, back button, and depth gating
- * for fractal asset nesting.
+ * Dive/ascend navigation for fractal asset nesting (breadcrumb bar, back
+ * button, and depth gating).
  */
 
 import { clearScene, loadAssetManifest } from "../engine/scene-graph.ts";
@@ -71,7 +69,9 @@ function initNesting(): void {
 
 // ─── Dive ────────────────────────────────────────────────────────────
 
-/** NESTING_DIVE_REQUESTED payload */
+/**
+ * @remarks `e` is the NESTING_DIVE_REQUESTED event payload.
+ */
 async function onDiveRequested(e: any): Promise<void> {
   const { childRef, nodeId: _nodeId } = e;
   if (!childRef) return;

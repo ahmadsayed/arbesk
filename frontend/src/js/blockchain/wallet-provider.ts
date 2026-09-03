@@ -1,10 +1,7 @@
 /**
  * Shared wallet connection state — leaf module.
- *
- * Holds the EIP-1193 provider reference and the wallet_addEthereumChain
- * network definitions shared by wallet-core (writer) and wallet-network
- * (reader). Kept import-free of both so wallet-network doesn't have to
- * import wallet-core (which dynamic-imports wallet-network back — a cycle).
+ * @remarks Holds the provider reference and network definitions, and stays
+ *   import-free of consumers to avoid an import cycle.
  */
 
 import { CHAIN_IDS } from "../../../../constants/chains.js";
@@ -33,7 +30,7 @@ export const NETWORKS = {
 /** The connected wallet's provider, or null when disconnected. */
 export let web3Provider: any = null;
 
-/** Called by wallet-core whenever the active provider changes. */
+/** Sets the connected wallet's provider. */
 export function setWeb3Provider(provider: any): void {
   web3Provider = provider;
 }

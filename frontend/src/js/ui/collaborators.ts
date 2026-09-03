@@ -1,9 +1,8 @@
 /**
- * Arbesk Collaborator Manager - Studio read-only indicator
- *
- * The Studio only shows who can edit the current collection. Actual add/remove
- * management happens in the Library collection menu, which matches the
- * collection-level authorization model.
+ * Studio read-only collaborator indicator.
+ * @remarks The Studio only shows who can edit the current collection; add/remove
+ *   management lives in the Library collection menu, matching the
+ *   collection-level authorization model.
  */
 
 import { initCollaboratorPanel } from "./collaborators-panel.ts";

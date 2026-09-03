@@ -1,12 +1,9 @@
 /**
  * Shared encoding utilities for binary data and base64 conversion.
- * Consolidated from glb-parser.js, decomposer.js, composer.js, and remote-ipfs.js.
  */
 
 /**
- * Convert a base64 string to a Uint8Array.
- * @param base64 - The base64 encoded string
- * @returns The decoded bytes
+ * Converts a base64 string to a Uint8Array.
  */
 export function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -18,11 +15,9 @@ export function base64ToBytes(base64: string): Uint8Array {
 }
 
 /**
- * Convert an ArrayBuffer or Uint8Array to a base64 string.
- * Uses chunked processing (32 KiB) to avoid argument list limits
- * with large buffers.
- * @param buffer - The buffer to convert
- * @returns The base64 encoded string
+ * Converts an ArrayBuffer or Uint8Array to a base64 string.
+ * @remarks Processes in 32 KiB chunks to avoid argument-list limits on large
+ *   buffers.
  */
 export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);

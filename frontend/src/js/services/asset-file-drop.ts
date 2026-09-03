@@ -1,16 +1,8 @@
 /**
- * Viewport OS file drop — override or create.
- *
- * Handles EVENTS.ASSET_FILE_DROPPED (emitted by ui/asset-drop-zone.js when an
- * OS file lands on the viewport):
- *  - Asset open: replaces the root model node's source in place (linked child
- *    assets, transforms, and version history survive) and stages a pending
- *    source override for the next Save Draft / Publish.
- *  - No asset open: creates a fresh unsaved draft named after the file.
- *
- * The dropped file is uploaded to IPFS and decomposed to its canonical stored
- * form at drop time via the same stageUploadSource helper the Library upload
- * flow uses, so the save pipeline sees an already-stored source.
+ * Handles viewport OS file drops: overrides the open asset's root source or
+ * creates a fresh draft.
+ * @remarks The dropped file is uploaded and decomposed to its canonical stored
+ *   form at drop time, so the save pipeline sees an already-stored source.
  */
 
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -31,17 +23,15 @@ import { showToast } from "../ui/toasts.ts";
 import { log, warn } from "../utils/log.ts";
 
 /**
- * In-flight file-drop operations. The ASSET_FILE_DROPPED event is
- * fire-and-forget, so a Save that happens right after a drop could read the
- * pending source overrides before the drop handler staged its entry.
- * Save/publish awaits waitForPendingFileDrops() to close that race —
- * mirrors the linked-drop pattern in scene-loader.js.
+ * @remarks The ASSET_FILE_DROPPED event is fire-and-forget, so a save right
+ *   after a drop could read the pending overrides before the drop handler
+ *   stages its entry; tracking in-flight drops lets save/publish wait for them.
  */
 const _inFlightFileDrops = new Set<Promise<void>>();
 
 /**
- * The root model node is the first manifest node with a source and no
- * child_ref — linked children are never the override target.
+ * Finds the first manifest node with a source and no child_ref.
+ * @remarks Linked children are never the override target.
  */
 function findRootModelNode(manifest: any): any {
   return (
@@ -143,8 +133,8 @@ async function _handleAssetFileDropped(detail: any): Promise<void> {
 }
 
 /**
- * Event-bus entry point for ASSET_FILE_DROPPED. Tracks the async work so
- * save/publish can wait for it via waitForPendingFileDrops().
+ * Event-bus entry point for ASSET_FILE_DROPPED.
+ * @remarks Tracks the async work so a save can wait for it.
  */
 export function handleAssetFileDropped(event: any): Promise<void> {
   const p = _handleAssetFileDropped(event)
@@ -164,9 +154,8 @@ export function handleAssetFileDropped(event: any): Promise<void> {
 }
 
 /**
- * Resolve once every file drop started so far has finished (pending source
- * override staged and scene load settled). Awaited by the save/publish
- * manifest builder before it snapshots the pending overrides.
+ * Resolves once every file drop started so far has finished.
+ * @remarks Awaited before the save pipeline snapshots pending overrides.
  */
 export async function waitForPendingFileDrops(): Promise<void> {
   await Promise.all([..._inFlightFileDrops]);

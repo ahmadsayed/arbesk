@@ -1,6 +1,7 @@
 /**
- * Thin wrappers around fflate so the rest of the 3MF module never imports
- * fflate directly. Works in the browser (importmap), workers, and Node/Jest.
+ * Thin wrappers around fflate.
+ * @remarks Keeps the rest of the 3MF module free of direct fflate imports;
+ *   works in the browser, workers, and Node/Jest.
  */
 
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";

@@ -1,11 +1,8 @@
 /**
- * Composer for the example format: composite JSON → raw `.example` bytes,
- * reading the payload part through the injected IpfsReadPort. Mirrors
- * 3mf/composer.ts and gltf/composer.ts.
- *
- * Reads use ipfsRead.getBytes (auto-gunzip): a part CID shared via the
- * cross-format dedup map may hold a gzipped payload; plain bytes pass through
- * unchanged.
+ * Composes the example format: composite JSON → raw `.example` bytes.
+ * @remarks Reads auto-gunzip (ipfsRead.getBytes): a part CID shared via the
+ *   cross-format dedup map may hold a gzipped payload; plain bytes pass
+ *   through unchanged.
  */
 
 import { getRuntime } from "../../runtime.ts";
@@ -14,9 +11,7 @@ import type { CompositeExample } from "./format.ts";
 import { serializeExample } from "./parser.ts";
 
 /**
- * Rebuild raw `.example` bytes from a composite example document.
- *
- * @param composite - composite example JSON (arbesk_format: "composite-example")
+ * Rebuilds raw `.example` bytes from a composite example document.
  */
 export async function compose(
   composite: CompositeExample

@@ -1,22 +1,11 @@
 /**
- * Arbesk glTF Web Worker
- *
  * Offloads CPU/network-heavy glTF operations from the browser main thread:
- *   - composition (ipfs:// CID → data URI)
- *   - decomposition (data URI → extracted bytes + placeholder composite)
- *   - GLB parsing/decomposition
- *   - source color baking (per-node material color mutation)
- *
- * The worker runs in a separate context without the page's import map, DOM,
- * or session state, so it only imports *bare-free* project modules — every
- * @arbesk/asset-core subpath above must transitively avoid bare specifiers
- * (fflate, @gltf-transform/core, …), which is why applyNodeColors comes from
- * the pure apply-node-colors.js and NOT from source-color-editor.js (that one
- * pulls glb-parser → @gltf-transform/core). The GLB parse prologue below uses
- * @gltf-transform/core from the vendored bundle by relative path for the same
- * reason (see frontend/src/js/vendor/README.md). The build rewrites the bare
- * @arbesk/asset-core specifiers to ../vendor/asset-core/ relative paths
- * (frontend/scripts/render-ts.js).
+ * composition, decomposition, GLB parsing/decomposition, and source color
+ * baking.
+ * @remarks The worker runs without the page's import map, so it only imports
+ *   bare-free modules: every @arbesk/asset-core subpath must transitively
+ *   avoid bare specifiers (fflate, @gltf-transform/core, …). The build
+ *   rewrites the bare @arbesk/asset-core specifiers to relative vendor paths.
  */
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
@@ -61,13 +50,10 @@ function getIO(): any {
 // ─── Remaining Worker Utilities ─────────────────────────────────────────
 
 /**
- * Decompress a gzip stream (magic bytes 0x1f 0x8b) using the native
- * DecompressionStream API. Web Workers can't use the page import map, so we
- * can't import fflate here - but DecompressionStream is a global in module
- * workers in all evergreen browsers (Chrome 80+, FF 113+, Safari 16.4+).
- * Assets are stored gzipped on IPFS (see commit 401da4b), so without this the
- * worker hands compressed bytes to Babylon.js, which fails with errors like
- * "Invalid typed array length".
+ * Detects gzip content by its magic bytes (0x1f 0x8b).
+ * @remarks Assets are stored gzipped on IPFS, so the worker must decompress
+ *   them (undecompressed bytes make Babylon fail); it can't import fflate
+ *   (no page import map) and uses the native DecompressionStream API instead.
  */
 function isGzipped(bytes: Uint8Array): boolean {
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
@@ -84,11 +70,10 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
 }
 
 /**
- * Gzip-compress bytes using the native CompressionStream. The worker can't
- * import fflate (no page import map), but CompressionStream is a module-worker
- * global in all evergreen browsers - the symmetric counterpart to gunzip().
- * Compressing here keeps IPFS uploads small (fewer bytes to the pinning
- * service); reads sniff the gzip magic bytes so the encoding is transparent.
+ * Gzip-compresses bytes.
+ * @remarks Can't import fflate (no page import map), so it uses the native
+ *   CompressionStream. Compression keeps IPFS uploads small; reads sniff the
+ *   gzip magic bytes, so the encoding is transparent.
  */
 async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("gzip");
@@ -250,9 +235,9 @@ function resolveBufferBytes(
 }
 
 /**
- * Buffer loop of decomposeGlb: resolve each embedded buffer to bytes (skips
- * ipfs:// refs and external URIs) and rewrite the composite entries to worker
- * placeholders. Mutates composite.buffers.
+ * Resolves each embedded GLB buffer to bytes and rewrites the composite
+ * entries to worker placeholders.
+ * @remarks Skips ipfs:// refs and external URIs; mutates composite.buffers.
  */
 function extractGlbBuffers(
   composite: any,
@@ -301,10 +286,10 @@ function extractGlbBuffers(
 }
 
 /**
- * Image loop of decomposeGlb: extract each embedded image (data-URI or
- * bufferView) and rewrite the composite entries to worker placeholders.
- * ipfs:// refs become skip entries; external URIs stay as-is. Mutates
- * composite.images.
+ * Extracts each embedded GLB image and rewrites the composite entries to
+ * worker placeholders.
+ * @remarks ipfs:// refs become skip entries; external URIs stay as-is.
+ *   Mutates composite.images.
  */
 function extractGlbImages(
   composite: any,
@@ -401,9 +386,8 @@ function rewritePlaceholderTargets(
 }
 
 /**
- * Upload a list of extracted { name, bytes, placeholder, meta? } items using a
- * single batch call when possible, and rewrite the matching placeholder URIs
- * in the composite target arrays.
+ * Uploads a list of extracted items and rewrites the matching placeholder
+ * URIs in the composite target arrays.
  */
 async function uploadExtractedItems(
   items: ExtractedImageEntry[],
@@ -496,8 +480,8 @@ async function uploadBuffersAndImages(
 }
 
 /**
- * Decompose a standard glTF and upload its buffers/images from the worker.
- * Returns the composite with ipfs:// URIs already in place.
+ * Decomposes a glTF and uploads its buffers/images.
+ * @returns the composite with ipfs:// URIs already in place.
  */
 async function decomposeAndUploadGltf(payload: any) {
   const { gltfJson, credential, options = {} } = payload || {};
@@ -514,8 +498,9 @@ async function decomposeAndUploadGltf(payload: any) {
 }
 
 /**
- * Decompose a GLB and upload its buffers/images from the worker. When
- * storeComposite is true, also uploads the composite JSON and returns its CID.
+ * Decomposes a GLB and uploads its buffers/images.
+ * @remarks When storeComposite is true, also uploads the composite JSON and
+ *   returns its CID.
  */
 async function decomposeAndUploadGlb(payload: any) {
   const { arrayBuffer, credential, options = {} } = payload || {};

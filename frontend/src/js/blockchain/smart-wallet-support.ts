@@ -1,8 +1,7 @@
 /**
  * Smart-wallet chain support constants.
- *
- * Kept in a standalone module so other modules can check smart-wallet support
- * without pulling in the CDP wallet bundle.
+ * @remarks Standalone module so consumers can check support without pulling
+ *   in the CDP wallet bundle.
  */
 
 import { CHAIN_IDS } from "../../../../constants/chains.js";

@@ -19,14 +19,14 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
  *      Uses plain ERC721 (not ERC721Enumerable) to avoid the all/owned
  *      token arrays, which add ~3 extra storage slots per mint.
  *
- *      Concrete contracts: ArbeskAsset (paid), ArbeskAssetFree (free).
- *
  *      Editor leaves are asset-scoped: `assetScope = bytes32(0)` means a
  *      collection-wide grant; `assetScope = keccak256(assetId)` grants rights
  *      on a single asset within the collection.
  *
  *      `migrateAsset` / `finalizeMigration` provide a one-shot, owner-only
- *      window for the v1→v2 data migration (see blockchain/scripts/migrate-v2.js).
+ *      window for the v1→v2 data migration.
+ *
+ *      Used by ArbeskAsset (paid) and ArbeskAssetFree (free).
  */
 abstract contract ArbeskAssetBase is
     Initializable,
@@ -79,8 +79,8 @@ abstract contract ArbeskAssetBase is
     event MigrationComplete();
 
     // ── Initializer ──
-    /// @dev Shared initializer. Concrete contracts call this from their own
-    ///      `initialize()` (guarded by the `initializer` modifier).
+    /// @dev Called from each concrete contract's `initialize()` (guarded by
+    ///      the `initializer` modifier).
     function __ArbeskAssetBase_init(
         string memory name_,
         string memory symbol_
@@ -191,11 +191,9 @@ abstract contract ArbeskAssetBase is
 
     // ── Migration (one-shot) ──
 
-    /// @notice Re-mint an existing token to its original owner with its
+    /// @notice Re-mints an existing token to its original owner with its
     ///         historical URI + editor state, under the new leaf schema.
-    ///         The migration script recomputes `editorRoot_` from the old
-    ///         editor list using the new asset-scoped leaf. Owner-only,
-    ///         gated by the migration window.
+    ///         Owner-only, gated by the migration window.
     function migrateAsset(
         uint256 tokenId,
         address owner,
@@ -252,8 +250,7 @@ abstract contract ArbeskAssetBase is
             revert NotAuthorizedEditor(tokenId, caller);
     }
 
-    /// @dev One-time initialization of the editor root for a newly minted
-    ///      token. Called internally by publishAsset only.
+    /// @dev One-time initialization of the editor root for a newly minted token.
     function initEditors(uint256 tokenId, bytes32 root, string memory listUri) internal {
         editorRoot[tokenId] = root;
         editorSetVersion[tokenId] = 1;

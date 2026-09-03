@@ -1,8 +1,7 @@
 /**
- * Email delivery (P5) — Resend HTTP API.
- * Config: RESEND_API_KEY (required), RESEND_FROM (optional, defaults to the
- * Resend onboarding address). Throws a RESEND_API_KEY message when unset so
- * the route can map it to a clear 503.
+ * Email delivery (P5) via the Resend HTTP API.
+ * @throws Error when RESEND_API_KEY is unset, so the route can map it to a
+ *   clear 503.
  */
 export async function sendOtpEmail(email: string, code: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;

@@ -1,15 +1,11 @@
 /**
- * CDP server-wallet service (P0).
- *
- * Shared CDP server-SDK access for email-login identity. The `@coinbase/cdp-sdk`
- * client is loaded lazily (heavy dependency — must not be imported statically)
- * and cached per env credential pair. End-user lookup/creation and
- * server-controlled EVM smart-account provisioning live here so email auth
- * (routes/email-auth.ts) and email→address resolution (routes/users.ts) share
- * one client and one scan.
- *
- * Keys live in CDP's Trusted Execution Environment; this module only issues
- * commands through the project API key (CDP_API_KEY_ID / CDP_API_KEY_SECRET).
+ * CDP server-wallet service: shared CDP server-SDK access for email-login
+ * identity.
+ * @remarks The SDK client is loaded lazily (heavy dependency, must not be
+ *   imported statically) and cached per credential pair. Keys live in CDP's
+ *   Trusted Execution Environment; this module only issues commands through
+ *   the project API key.
+ * Used by email-auth and users routes.
  */
 import type { CdpClient } from "@coinbase/cdp-sdk";
 
@@ -17,8 +13,8 @@ let _cdpClient: CdpClient | null = null;
 let _cdpClientKey = "";
 
 /**
- * Returns null when CDP_API_KEY_ID / CDP_API_KEY_SECRET are not configured
- * (feature unavailable, not an error).
+ * @remarks Returns null when CDP_API_KEY_ID / CDP_API_KEY_SECRET are not
+ *   configured (feature unavailable, not an error).
  */
 export async function getCdpClient(): Promise<CdpClient | null> {
   const apiKeyId = process.env.CDP_API_KEY_ID;
@@ -48,8 +44,8 @@ export interface CdpEndUser {
 }
 
 /**
- * Page through listEndUsers and return the first user matching `matches`,
- * mapped to the minimal end-user view, or null.
+ * Returns the first end user matching `matches` (mapped to the minimal view),
+ * or null.
  */
 async function scanEndUsers(
   cdp: CdpClient,
@@ -81,8 +77,7 @@ async function scanEndUsers(
 }
 
 /**
- * Find an end user by exact email (trimmed/lowercased). Scans listEndUsers;
- * returns a minimal end-user view or null.
+ * Finds an end user by exact email (trimmed/lowercased).
  */
 export async function findEndUserByEmail(
   cdp: CdpClient,
@@ -104,8 +99,9 @@ export async function findEndUserByEmail(
 }
 
 /**
- * Find an end user by smart-account address (for browser-assisted sessions,
- * whose session carries the address but not the CDP user id).
+ * Finds an end user by smart-account address.
+ * @remarks For browser-assisted sessions, whose session carries the address
+ *   but not the CDP user id.
  */
 export async function findEndUserByAddress(
   cdp: CdpClient,
@@ -122,8 +118,9 @@ export async function findEndUserByAddress(
 }
 
 /**
- * Resolve an end user by email, creating one server-side when absent.
- * The created end user starts with no accounts; ensureSmartAccount() adds one.
+ * Resolves an end user by email, creating one server-side when absent.
+ * @remarks The created end user starts with no accounts; ensureSmartAccount()
+ *   adds one.
  */
 export async function resolveOrCreateEndUser(
   cdp: CdpClient,
@@ -149,8 +146,8 @@ export async function resolveOrCreateEndUser(
 }
 
 /**
- * Ensure the end user has a smart account; use the existing one when present,
- * otherwise create a server-controlled EVM smart account. Returns the address.
+ * Ensures the end user has a smart account, using the existing one when
+ * present, otherwise creating a server-controlled EVM smart account.
  */
 export async function ensureSmartAccount(
   cdp: CdpClient,

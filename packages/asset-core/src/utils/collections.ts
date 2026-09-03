@@ -1,18 +1,16 @@
 /**
  * Shared collection/asset ID helpers.
- *
- * Pure functions used by Studio save/publish, the Library page, and the
- * create-panel collection selector. Keeping them in one place prevents the
- * duplicated derivations that previously drifted across modules.
+ * @remarks Centralized to prevent duplicated derivations drifting across
+ *   modules.
  */
 
 import { getRuntime } from "../runtime.ts";
 import type { HashPort } from "../types.ts";
 
 /**
- * The injected HashPort, or null when the runtime is uninitialized / has no
- * hash port (mirrors the historical `window.Web3` guard: callers treat null
- * as "cannot derive right now").
+ * Returns the injected HashPort, or null when the runtime is uninitialized or
+ * has no hash port.
+ * @remarks Callers treat null as "cannot derive right now".
  */
 function _hashPort(): HashPort | null {
   try {
@@ -23,11 +21,9 @@ function _hashPort(): HashPort | null {
 }
 
 /**
- * Derive a deterministic default collection token ID from a wallet address.
- * Uses keccak256(soliditySha3(address)) so the contract can recompute and
- * verify ownership. One wallet = one default collection.
- *
- * @returns hex token id, or null if inputs are missing
+ * Derives a deterministic default collection token ID from a wallet address.
+ * @remarks Uses keccak256(soliditySha3(address)) so the contract can recompute
+ *   and verify ownership; one wallet maps to one default collection.
  */
 export function deriveDefaultCollectionId(walletAddr: string): string | null {
   const hash = _hashPort();
@@ -39,9 +35,7 @@ export function deriveDefaultCollectionId(walletAddr: string): string | null {
 }
 
 /**
- * Derive a deterministic named collection token ID from wallet + name.
- *
- * @returns hex token id, or null if inputs are missing
+ * Derives a deterministic named collection token ID from wallet + name.
  */
 export function deriveNamedCollectionId(walletAddr: string, name: string): string | null {
   const hash = _hashPort();
@@ -53,10 +47,8 @@ export function deriveNamedCollectionId(walletAddr: string, name: string): strin
 }
 
 /**
- * Merge an asset CID into a collection manifest's `assets` map.
- * Pure function - does not touch IPFS or chain state.
- *
- * @returns new collection manifest object
+ * Merges an asset CID into a collection manifest's `assets` map.
+ * @remarks Pure: does not touch IPFS or chain state, returns a new manifest.
  */
 export function mergeAssetIntoCollection(
   collectionManifest: Record<string, any> | null,
@@ -95,8 +87,8 @@ export function identityMatrix(): number[] {
 }
 
 /**
- * Build the canonical v1 collection manifest literal. The ONE place this
- * shape is constructed — Studio (library-ops) and the besk CLI both call it.
+ * Builds the canonical v1 collection manifest literal.
+ * @remarks This is the single place the shape is constructed.
  */
 export function buildCollectionManifest(name: string): Record<string, any> {
   return {
@@ -111,15 +103,10 @@ export function buildCollectionManifest(name: string): Record<string, any> {
 }
 
 /**
- * Apply a mutation to a collection manifest following the immutable-chain
- * convention: the mutation runs on a shallow copy, `version` is bumped, and
- * `prev_asset_manifest_cid` links back to the manifest this one replaces.
- *
- * Mirrors the Studio's updateCollectionManifest (asset-delete.ts) exactly —
- * every collection write (Studio or CLI) MUST go through this so the chain
- * stays walkable.
- *
- * @returns the new manifest (input is not mutated)
+ * Applies a mutation to a collection manifest, following the immutable-chain
+ * convention (version bumped, prev_asset_manifest_cid links back).
+ * @remarks Every collection write MUST go through this so the chain stays
+ *   walkable; the input is not mutated.
  */
 export function applyCollectionMutation(
   collection: Record<string, any>,

@@ -1,12 +1,5 @@
 /**
  * Download an asset's source model file to the user's machine.
- *
- * Resolves the asset manifest from IPFS, finds the primary source node
- * (type "source_asset" with a source.cid), and saves the bytes as a file:
- * - GLB (and other binary formats): downloaded raw from IPFS as-is.
- * - Composite glTF: buffers/images are inlined as data URIs first (the same
- *   compose step used at render time) so the downloaded .gltf is
- *   self-contained.
  */
 
 import {

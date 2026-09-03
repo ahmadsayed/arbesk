@@ -1,10 +1,8 @@
 /**
- * Arbesk Child Asset Removal (TODO #18)
- *
- * Unlinks selected child assets (manifest nodes carrying `child_ref`) from the
- * current asset. Mirrors the linked-asset "add" flow: the unlink is staged in
- * memory and persisted on the next Save Draft / Publish. Ctrl/Cmd+Z restores a
- * removed child via the registered "child_ref" undo applier.
+ * Child asset removal (TODO #18): unlinks selected child assets (manifest
+ * nodes carrying `child_ref`) from the current asset.
+ * @remarks The unlink is staged in memory and persisted on the next
+ *   Save Draft / Publish; Ctrl/Cmd+Z restores a removed child.
  */
 
 import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -18,8 +16,9 @@ import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
 
 /**
- * Pure helper: keep only the selected ids that are child assets. Non-child
- * selections are ignored — removal unlinks child assets, never plain geometry.
+ * Keeps only the selected ids that are child assets.
+ * @remarks Non-child selections are ignored — removal unlinks child assets,
+ *   never plain geometry.
  */
 export function collectRemovableChildIds(
   selectedIds: Iterable<string>,
@@ -121,8 +120,8 @@ function reinsertChildAssetNode(captured: {
 }
 
 /**
- * Unlink every selected child asset. `nodeIds` defaults to the engine's
- * multi-selection (`state.selectedNodeIds`).
+ * Unlinks every selected child asset.
+ * @remarks `nodeIds` defaults to the engine's multi-selection.
  */
 export function removeChildAssetNodes(nodeIds?: Iterable<string>): void {
   const selected = nodeIds ? [...nodeIds] : [...state.selectedNodeIds];

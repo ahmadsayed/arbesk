@@ -1,12 +1,8 @@
 /**
  * asset-core benchmark harness.
- *
- * Builds a core over the in-memory IPFS double and times the SDK's heavy
- * operations (decompose, compose, base64 encode/decode, murmur3_128) on
- * real GLB fixtures. The CLI entry prints a table and writes a JSON artifact
- * to test-results/asset-core-bench.json.
- *
- * Run with: npm run bench:asset-core
+ * @remarks Times the SDK's heavy operations (decompose, compose, base64
+ *   encode/decode, murmur3_128) over the in-memory IPFS double on real GLB
+ *   fixtures.
  */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
@@ -46,8 +42,8 @@ function nowMs(): () => number {
 }
 
 /**
- * Time one async operation, returning total milliseconds over `iterations`
- * (not divided, so a single smoke-test iteration is a real elapsed time).
+ * Times one async operation, returning total milliseconds over `iterations`.
+ * @remarks Not divided, so a single iteration is a real elapsed time.
  */
 async function timeAsync(fn: () => Promise<unknown>, iterations: number): Promise<number> {
   const elapsed = nowMs();

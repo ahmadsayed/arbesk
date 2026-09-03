@@ -1,6 +1,6 @@
 // TODO: tighten types for Babylon mesh API and strict event typing; currently too dynamic for checkJs.
 /**
- * Model Clock Gizmo — 3D Babylon ring for scrubbing a node's version history.
+ * 3D ring for scrubbing a node's version history.
  */
 
 import * as store from "@arbesk/asset-core/domain/version-history-store.js";
@@ -20,11 +20,8 @@ const CLOCK_SCREEN_HEIGHT_FACTOR = 1 / 3;
 type Vec3Like = { x: number; y: number; z: number };
 
 /**
- * Root scaling that keeps the clock a constant on-screen size for the
- * current camera. Perspective: visible frustum height at the anchor's
- * distance. Ortho: the ortho frustum height (duck-typed via orthoTop/
- * orthoBottom, so no BABYLON.Camera dependency). Returns 1 when the camera
- * shape is unrecognized.
+ * Returns the root scaling that keeps the clock a constant on-screen size.
+ * @remarks Returns 1 when the camera shape is unrecognized.
  */
 export function _computeClockScale(camera: any, anchorPos: Vec3Like): number {
   let viewHeight: number;
@@ -57,10 +54,10 @@ export function _indexForAngle(angleDeg: number, n: number): number {
 }
 
 /**
- * Ray/plane intersection. Inputs may be plain {x,y,z} objects or
- * BABYLON.Vector3 instances; the returned hit point is a plain object.
- * Returns null when the ray is parallel to the plane or the plane lies
- * behind the ray origin.
+ * Computes the ray/plane intersection.
+ * @remarks Inputs may be plain {x,y,z} objects or BABYLON.Vector3 instances.
+ * @returns the hit point, or null when the ray is parallel to or behind the
+ *   plane.
  */
 export function _rayPlaneIntersect(
   origin: Vec3Like,
@@ -170,9 +167,10 @@ const ARC_SHADER_NAME = "modelClockArc";
 const ARC_THICKNESS_FACTOR = 0.021; // slightly fatter than the track so it fully covers it
 const ARC_Z_OFFSET_FACTOR = 0.01; // nudged toward the viewer to avoid z-fighting the track
 
-/** Register the arc-clipping shader sources once per page. The fragment
- * shader discards everything outside the clockwise sweep from startAngle,
- * so drags only ever update one float uniform — no mesh rebuilds. */
+/**
+ * Registers the arc-clipping shader sources once per page.
+ * @remarks Dragging updates one float uniform — no mesh rebuilds.
+ */
 function ensureArcShader(): void {
   if (BABYLON.Effect.ShadersStore[`${ARC_SHADER_NAME}VertexShader`]) return;
   BABYLON.Effect.ShadersStore[`${ARC_SHADER_NAME}VertexShader`] = `
@@ -218,9 +216,10 @@ function placeHandle(g: any, angleRad: number): void {
   }
 }
 
-/** Copy the anchor's world position/rotation to the unparented gizmo root.
- * Scale is intentionally NOT copied: the root's scale is managed per frame
- * for constant screen size, and inheriting anchor scale would fight it.
+/**
+ * Copies the anchor's world position/rotation to the unparented gizmo root.
+ * @remarks Scale is intentionally not copied — the root's scale is managed per
+ *   frame for constant screen size.
  */
 function syncRootToAnchor(root: any, anchor: any): void {
   if (!anchor || anchor.isDisposed?.()) return;

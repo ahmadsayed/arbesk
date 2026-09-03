@@ -1,9 +1,6 @@
 /**
  * Port + config types for @arbesk/wallet. No runtime code here.
- *
- * Signer / MinedReceipt / SendResult / UserIdentity / AuthProof / AuthMechanism
- * move verbatim from the old frontend/src/js/blockchain/wallet-ports.ts.
- * SessionStore and SignatureVerifier are the environment seams.
+ * @remarks SessionStore and SignatureVerifier are the environment seams.
  */
 
 // ─── On-chain signer ────────────────────────────────────────────────────────
@@ -21,8 +18,9 @@ export interface MinedReceipt {
 }
 
 /**
- * The result of Signer.sendTransaction. Resolves as soon as the transaction
- * is broadcast (never blocks on mining). wait() blocks until inclusion.
+ * The result of Signer.sendTransaction.
+ * @remarks Resolves as soon as the transaction is broadcast (never blocks on
+ *   mining); wait() blocks until inclusion.
  */
 export interface SendResult {
   /** Hash the wallet broadcast: EVM tx hash (EOA) or UserOperation hash (CDP). */
@@ -32,9 +30,9 @@ export interface SendResult {
 }
 
 /**
- * On-chain signing & sending capability. getAddress and getSignerAddress
- * differ only for CDP smart accounts (owner = smart account, signer =
- * embedded EOA); for an EOA they are the same key.
+ * On-chain signing & sending capability.
+ * @remarks getAddress and getSignerAddress differ only for CDP smart accounts
+ *   (owner vs embedded EOA); for an EOA they are the same key.
  */
 export interface Signer {
   source: SignerSource;
@@ -66,16 +64,16 @@ export interface UserIdentity {
 }
 
 /**
- * A proof that authenticates a user, exchanged by the backend for a session.
+ * A proof that authenticates a user, exchanged for a session.
  */
 export type AuthProof =
   | { kind: "siwe"; message: string; signature: string; eoaAddress?: string }
   | { kind: "oidc"; provider: string; idToken: string; nonce?: string };
 
 /**
- * An identity/auth mechanism. Concrete instances: EOA (SIWE), CDP (email OTP
- * → SIWE via embedded EOA), OAuth/OIDC (ID token). A mechanism does NOT imply
- * on-chain signing; that capability is the separate Signer.
+ * An identity/auth mechanism.
+ * @remarks A mechanism does NOT imply on-chain signing; that capability is the
+ *   separate Signer.
  */
 export interface AuthMechanism {
   /** Stable id: "eoa" | "cdp" | "oauth-google" | ... */
@@ -97,9 +95,8 @@ export interface SessionStore {
 // ─── Signature verification (environment seam) ──────────────────────────────
 
 /**
- * EIP-191 signature verification + recovery. The backend wires this to viem
- * verifyMessage + web3 accounts.recover; the frontend leaves it null (it only
- * builds proofs).
+ * EIP-191 signature verification + recovery.
+ * @remarks The frontend leaves this null (it only builds proofs).
  */
 export interface SignatureVerifier {
   verifyMessage(address: string, message: string, signature: string, chainId: number): Promise<boolean>;

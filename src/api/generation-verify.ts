@@ -1,16 +1,9 @@
 /**
  * On-chain generation verification (#48).
- *
- * The generation route historically gated on session + rate limit only — the
- * free-tier daily quota and the paid-tier USDC payment were a client-side
- * honor system. This module closes that gap: the client records its on-chain
- * `recordGeneration` (free) or `payForGenerationWithUSDC` (paid) transaction
- * and passes the resulting `generationTxHash`; the backend verifies the
- * emitted event in that receipt (correct wallet, correct nodeId, not replayed).
- *
- * BYOK (user-supplied provider key) intentionally bypasses this gate — the
- * user pays the 3D provider directly, so there is no Arbesk quota/payment to
- * verify. The mock adapter also bypasses it (no real provider cost).
+ * @remarks Closes the gap where the free/paid quota was a client-side honor
+ *   system: verifies the emitted event's wallet, nodeId, and replay status.
+ *   BYOK bypasses this (the user pays the provider directly); the mock adapter
+ *   also bypasses it (no real cost).
  */
 import {
   getPublicClient,
@@ -49,7 +42,7 @@ const GENERATION_EVENTS = [
   },
 ] as const;
 
-/** Event topic0 hashes (keccak256 of the event signature), computed once. */
+/** Event topic0 hashes (keccak256 of the event signature). */
 const RECORDED_TOPIC = (
   encodeEventTopics({ abi: GENERATION_EVENTS, eventName: "AssetGenerationRecorded" } as any)[0]
 ).toLowerCase();
@@ -62,8 +55,8 @@ const usedTxHashes = new Map<string, number>();
 const REPLAY_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Reconstruct the on-chain bytes32 `nodeId` exactly as the frontend encodes
- * it in wallet-payments.ts: `pad(stringToHex(nodeId), { size: 32 })`.
+ * Reconstructs the on-chain bytes32 `nodeId` exactly as the frontend encodes
+ * it.
  */
 function nodeIdToBytes32(nodeId: string): `0x${string}` {
   return pad(stringToHex(nodeId), { size: 32 });
@@ -75,15 +68,11 @@ export interface GenerationVerification {
 }
 
 /**
- * Verify that the claimed on-chain generation transaction matches the
+ * Verifies that the claimed on-chain generation transaction matches the
  * request (wallet + nodeId) and has not been replayed.
- *
- * @param opts.chainId  chain the transaction was submitted on
- * @param opts.userAddress  authenticated wallet (lowercased internally)
- * @param opts.nodeId  request nodeId (must equal the value passed to
- *                     recordGeneration / payForGenerationWithUSDC)
- * @param opts.txHash  claimed transaction hash (optional — when absent the
- *                     gate is a no-op for backward compatibility)
+ * @remarks `nodeId` must equal the value passed to recordGeneration /
+ *   payForGenerationWithUSDC. When `txHash` is absent the gate is a no-op for
+ *   backward compatibility.
  */
 export async function verifyOnChainGeneration(opts: {
   chainId: number;

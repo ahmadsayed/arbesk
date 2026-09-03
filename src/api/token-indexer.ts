@@ -18,8 +18,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000".toLowerCase();
 
 /**
  * Event ABIs the indexer subscribes to: ERC-721 Transfer mints/burns and
- * EditorSetChanged. Passed to viem getLogs, which decodes each log's args —
- * no manual topic slicing.
+ * EditorSetChanged.
  */
 const INDEXER_EVENTS = [
   {
@@ -44,7 +43,7 @@ const INDEXER_EVENTS = [
   },
 ] as const;
 
-/** ABI for the editorListURI view function, read via readContract. */
+/** ABI for the editorListURI view function. */
 const EDITOR_LIST_URI_ABI = [
   {
     inputs: [{ internalType: "uint256", name: "tokenId", type: "uint256" }],
@@ -162,8 +161,8 @@ class TokenIndexer {
   }
 
   /**
-   * Fetch Transfer and EditorSetChanged logs for a single block range.
-   * Returns viem-decoded logs (eventName + args).
+   * Fetches Transfer and EditorSetChanged logs for a single block range.
+   * @returns viem-decoded logs (eventName + args)
    */
   async _fetchLogs(fromBlock: number, toBlock: number): Promise<any[]> {
     const start = Date.now();
@@ -201,8 +200,9 @@ class TokenIndexer {
   }
 
   /**
-   * Fetch the current editor list for a token from chain/IPFS and update maps.
-   * Only entries with role === Editor (2) are indexed.
+   * Fetches the current editor list for a token from chain/IPFS and updates
+   * the maps.
+   * @remarks Only entries with role === Editor (2) are indexed.
    */
   async _refreshTokenEditors(tokenId: string): Promise<void> {
     try {
@@ -250,9 +250,7 @@ class TokenIndexer {
   }
 
   /**
-   * Apply Transfer and EditorSetChanged logs to the index.
-   * Logs are pre-decoded by viem: eventName + args (args.tokenId is bigint,
-   * args.to a checksummed address — lowered to match the legacy topic slice).
+   * Applies Transfer and EditorSetChanged logs to the index.
    */
   _applyLogs(logs: any[]): { maxBlock: number; editorTokensToRefresh: Set<string> } {
     let maxBlock = this.lastScannedBlock;
@@ -279,10 +277,9 @@ class TokenIndexer {
   }
 
   /**
-   * Index a range of blocks. Safe to call repeatedly.
-   * Processes logs in chain-specific chunks and saves state after each chunk
-   * so a restart can resume from the last completed chunk instead of starting
-   * the whole backfill over.
+   * Indexes a range of blocks.
+   * @remarks Saves state after each chunk so a restart resumes from the last
+   *   completed chunk instead of restarting the backfill.
    */
   async _indexRange(fromBlock: number, toBlock: number): Promise<void> {
     if (fromBlock > toBlock) return;
@@ -311,9 +308,9 @@ class TokenIndexer {
   }
 
   /**
-   * Catch up to the current chain tip.
-   * Concurrent callers share the same in-flight catch-up promise so forced
-   * API requests don't race with the background poll.
+   * Catches up to the current chain tip.
+   * @remarks Concurrent callers share the same in-flight catch-up promise so
+   *   forced API requests don't race with the background poll.
    */
   async catchUp(): Promise<void> {
     if (this._catchUpPromise) {

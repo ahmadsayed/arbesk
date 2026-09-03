@@ -1,14 +1,8 @@
 /**
- * Viewport-top task progress overlay (save/publish flows).
- *
- * GNOME infobar-style banner pinned to the top edge of the 3D viewport:
- * visible without blocking interaction (pointer-events: none), with a stage
- * label telling the user what is happening right now (e.g. "Waiting for
- * wallet confirmation…"). Progress is stepped — callers advance the fill at
- * each orchestrator stage; there is no fake indeterminate animation.
- *
- * DOM lookups are lazy so the module is safe to import on pages without the
- * viewport markup (and testable under jsdom).
+ * Viewport-top task progress overlay for save/publish flows.
+ * @remarks Progress is stepped — there is no fake indeterminate animation.
+ *   DOM lookups are lazy so the module is safe to import on pages without
+ *   the viewport markup.
  */
 
 const FADE_DELAY_MS = 2200;
@@ -17,8 +11,9 @@ const ERROR_FADE_DELAY_MS = 4000;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * @param rootId element id prefix; the label and fill elements are resolved
- *   as `<rootId>Label` / `<rootId>Fill`
+ * Resolves the overlay, label and fill elements.
+ * @remarks The label and fill elements are addressed as `<rootId>Label` /
+ *   `<rootId>Fill`.
  */
 function els(rootId = "taskProgress") {
   return {
@@ -28,9 +23,6 @@ function els(rootId = "taskProgress") {
   };
 }
 
-/**
- * @param fraction 0..1
- */
 function render(fraction: number, text: string, rootId?: string): void {
   const { overlay, label, fill } = els(rootId);
   if (!overlay || !label || !fill) return;
@@ -62,25 +54,21 @@ function scheduleHide(delay: number, rootId?: string) {
 }
 
 /**
- * Show the overlay at a starting fraction with a stage label.
- * @param text what is happening, e.g. "Saving draft — uploading to IPFS…"
- * @param rootId overlay id prefix (default: viewport "#taskProgress")
+ * Shows the overlay at a starting fraction with a stage label.
  */
 export function startTaskProgress(text: string, fraction = 0.1, rootId?: string): void {
   render(fraction, text, rootId);
 }
 
 /**
- * Advance the bar to a new stage.
- * @param fraction 0..1
+ * Advances the bar to a new stage.
  */
 export function setTaskProgress(fraction: number, text: string, rootId?: string): void {
   render(fraction, text, rootId);
 }
 
 /**
- * Complete the bar (100%) and fade the overlay out shortly after.
- * @param text final stage, e.g. "Draft saved."
+ * Completes the bar (100%) and fades the overlay out shortly after.
  */
 export function finishTaskProgress(text: string, rootId?: string): void {
   render(1, text, rootId);
@@ -88,8 +76,7 @@ export function finishTaskProgress(text: string, rootId?: string): void {
 }
 
 /**
- * Mark the bar as failed (error styling) and fade out after a longer delay.
- * @param text failure summary
+ * Marks the bar as failed and fades it out after a longer delay.
  */
 export function failTaskProgress(text: string, rootId?: string): void {
   render(1, text, rootId);

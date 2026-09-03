@@ -1,12 +1,6 @@
 /**
- * Solidity Transaction Revert Reason Decoder
- *
  * Decodes custom error selectors and parameters from failed transaction
- * revert data, producing human-readable error messages.
- *
- * Usage:
- *   import { decodeRevertReason } from './error-decoder.ts';
- *   const msg = await decodeRevertReason(error, contractABI);
+ * revert data into human-readable error messages.
  */
 
 import { decodeErrorResult } from "viem";
@@ -21,10 +15,9 @@ function formatErrorName(name: string): string {
 }
 
 /**
- * Decode a transaction revert reason from an error object.
- * @param error - The error from a failed transaction
- * @param contractABI - Optional contract ABI for custom error decoding
- * @returns Human-readable error message
+ * Decodes a transaction revert reason from an error object.
+ * @param contractABI - contract ABI used to decode custom errors.
+ * @returns human-readable error message.
  */
 export async function decodeRevertReason(
   error: any,

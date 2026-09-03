@@ -1,14 +1,11 @@
 /**
  * Shared URI and string utilities.
- * Consolidated from glb-parser.js, decomposer.js, write-to-ipfs.js, and remote-ipfs.js.
  */
 
 import { base64ToBytes } from "./encoding.ts";
 
 /**
- * Extract bytes and MIME type from a data URI.
- * @param uri - The data URI to parse (e.g., "data:image/png;base64,...")
- * @returns The extracted bytes and MIME type, or null if invalid
+ * Extracts bytes and MIME type from a data URI.
  */
 export function extractDataURI(uri: string): { bytes: Uint8Array; mimeType: string } | null {
   if (!uri || !uri.startsWith("data:")) return null;
@@ -26,10 +23,7 @@ export function extractDataURI(uri: string): { bytes: Uint8Array; mimeType: stri
 }
 
 /**
- * Sanitize a name for use as a filename.
- * Converts to lowercase, replaces special characters with underscores, and truncates to 40 chars.
- * @param name - The name to sanitize
- * @returns A safe filename
+ * Sanitizes a name for use as a filename.
  */
 export function sanitizeFileName(name: string): string {
   return String(name || "asset")

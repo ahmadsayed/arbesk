@@ -1,11 +1,7 @@
 /**
  * SIWE (EIP-4361) build + verify — the single shared contract.
- *
- * buildSiweMessage/generateNonce are the browser side (moved from
- * frontend/src/js/blockchain/siwe.ts); parseSiweMessage/verifySiwe are the
- * backend side (moved from src/api/siwe-verify.ts). Keeping both in one module
- * guarantees the emitted message round-trips through verification by
- * construction, instead of by the two halves independently importing siwe.
+ * @remarks Both halves live in one module so the emitted message round-trips
+ *   through verification by construction.
  */
 import { SiweMessage, generateNonce } from "siwe";
 import { getAddress } from "viem/utils";

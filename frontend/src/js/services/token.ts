@@ -1,8 +1,6 @@
 /**
- * Arbesk Token Service
- *
  * Service layer for blockchain token operations.
- * Wraps contract calls to provide a clean abstraction for UI components.
+ * @remarks Provides a clean abstraction over the contract for UI components.
  */
 
 import { getActiveContract } from "../blockchain/wallet.ts";
@@ -25,7 +23,6 @@ export async function getTokenURI(tokenId: string | number): Promise<string | nu
 }
 
 /**
- * Fetch the owner of a token.
  * @returns Owner address or null
  */
 export async function getOwnerOf(tokenId: string | number): Promise<string | null> {
@@ -42,7 +39,6 @@ export async function getOwnerOf(tokenId: string | number): Promise<string | nul
 
 /**
  * Check if a token exists on-chain.
- * @returns True if token exists
  */
 export async function tokenExists(tokenId: string | number): Promise<boolean> {
   const owner = await getOwnerOf(tokenId);
@@ -50,7 +46,7 @@ export async function tokenExists(tokenId: string | number): Promise<boolean> {
 }
 
 /**
- * Fetch the asset name for a token by resolving tokenURI → manifest → name.
+ * Fetch the asset name for a token.
  * @returns Asset name or null
  */
 export async function getAssetName(tokenId: string | number): Promise<string | null> {
@@ -65,7 +61,6 @@ export async function getAssetName(tokenId: string | number): Promise<string | n
 }
 
 /**
- * Fetch the collection manifest for a token.
  * @returns Collection manifest or null
  */
 export async function getCollectionManifest(tokenId: string | number): Promise<object | null> {

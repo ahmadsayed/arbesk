@@ -1,22 +1,9 @@
 /**
- * Library Details Pane
- *
- * Windows-Explorer-style details sidebar docked on the right of the
- * full-page Library view (mockup: docs/mockups/library-details-sidebar.html).
- * Shows metadata for the single selected library item plus — for assets — a
- * live, orbitable 3D preview reusing the chat-bubble preview pipeline.
- *
- * Read-only display module: it never writes domain/library state, only reads
- * `libraryState` and reacts to EVENTS.LIBRARY_STATE_CHANGED.
- *
- * Lifecycle notes:
- * - At most one preview handle is owned here (PREVIEW_ID); it is disposed
- *   before any new preview, on deselect, and when the Library view hides
- *   (WebGL contexts are scarce). The chat-preview module also disposes all
- *   previews on pagehide.
- * - Async work (manifest fetch, ownerOf, Babylon load) is race-guarded by a
- *   request counter: a continuation whose seq is no longer current discards
- *   its result (and disposes any preview it just created).
+ * Details sidebar for the single selected library item, with a live 3D
+ * preview for assets.
+ * @remarks Read-only: never writes domain/library state. At most one preview
+ *   handle is owned (WebGL contexts are scarce), and async work is
+ *   race-guarded by a request counter.
  */
 
 import { libraryState } from "../state/library-state.ts";
@@ -75,10 +62,10 @@ function truncateAddress(addr: string): string {
 }
 
 /**
- * Display string for a token owner: the CDP email when the owner is the
- * connected smart account, otherwise the truncated address. There is no
- * address→email lookup (the resolve-email endpoint is email→address only,
- * need-to-know by design), so other users always render as addresses.
+ * Returns the display string for a token owner: the CDP email for the
+ * connected smart account, otherwise the truncated address.
+ * @remarks There is no address→email lookup (email→address only, need-to-know
+ *   by design), so other users always render as addresses.
  */
 function ownerDisplay(address: string): string {
   const w = walletState.get();
@@ -163,10 +150,9 @@ function emptyStatePrompt(multi: boolean): string {
 }
 
 /**
- * Empty / multi-select state, styled like the item details view (title,
- * badge, k/v rows). The overview row shows the location's item count from
- * libraryState — no fetches — followed by a context-aware upload hint and
- * the prompt line.
+ * Renders the empty / multi-select state.
+ * @remarks The overview row reads the item count from libraryState without
+ *   fetching.
  */
 function renderEmptyState(selectedCount = 0): void {
   _requestSeq++;
@@ -305,8 +291,9 @@ function chainName(): string {
 const VERSION_WALK_CAP = 30;
 
 /**
- * Version count = manifest-chain length. Walks prev_manifest_cid links,
- * capped so long histories don't stall the pane; `more` flags a capped walk.
+ * Counts versions as the manifest-chain length.
+ * @remarks Walks prev_manifest_cid links, capped so long histories don't
+ *   stall the pane; `more` flags a capped walk.
  */
 async function countVersions(
   manifest: any
@@ -397,10 +384,9 @@ async function startCollectionMosaic(
 }
 
 /**
- * Render the Metadata row from a manifest's `metadata.annotations` map,
- * flattened into a single "key: value · key: value" string (an em dash when
- * empty). Collections are editable via the "Edit metadata…" button (Step 3);
- * assets show annotations read-only (they are edited in Studio).
+ * Renders the Metadata row from a manifest's metadata.annotations.
+ * @remarks Collections are editable via the "Edit metadata…" button; assets
+ *   show annotations read-only.
  */
 function renderMetadata(manifest: any, isCollection: boolean): void {
   const target = el("libraryDetailsMetadata");

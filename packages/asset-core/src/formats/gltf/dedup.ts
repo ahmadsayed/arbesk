@@ -1,10 +1,8 @@
 /**
  * Component-level deduplication helpers for glTF decomposition.
- *
- * The composite glTF stores a small `_arbesk` block on each buffer/image
- * entry with the hash of the bytes that were uploaded and the CID they
- * received. On a subsequent save, if a new component hashes to the same
- * value, the existing CID is reused and the upload is skipped.
+ * @remarks The composite glTF stores an `_arbesk` block (hash + CID) on each
+ *   buffer/image entry; a subsequent save that hashes to the same value
+ *   reuses the CID and skips the upload.
  */
 
 import {
@@ -63,8 +61,7 @@ function dedupEntryFromItem(item: any): { hash: string; cid: string } | null {
 }
 
 /**
- * Build a hash → CID map from one or more composite glTF JSONs.
- *
+ * Builds a hash → CID map from one or more composite glTF JSONs.
  * @param composites - Composite glTF JSON or array of them (dynamic schema)
  */
 export function buildDedupMap(composites: any): Map<string, string> {
@@ -85,17 +82,10 @@ export function buildDedupMap(composites: any): Map<string, string> {
 }
 
 /**
- * Hash the upload payload for a byte array and either reuse an existing CID
- * from the dedup map or upload the bytes to IPFS.
- *
- * The hash is computed over the exact bytes that will be stored (gzipped if
- * `options.compress` is true). When a match is found, the upload is skipped
- * and the previously returned CID is reused.
- *
- * @param bytes - Raw component bytes
- * @param filename - Base filename for IPFS storage
- * @param credential - Reusable upload credential
- * @param dedupMap - Existing hash → CID map
+ * Hashes the upload payload and either reuses an existing CID from the dedup
+ * map or uploads the bytes to IPFS.
+ * @remarks When a hash matches the dedup map, the upload is skipped and the
+ *   previously returned CID is reused.
  */
 export async function uploadWithDedup(
   bytes: Uint8Array,

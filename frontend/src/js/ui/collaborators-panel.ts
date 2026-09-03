@@ -1,20 +1,10 @@
 /**
- * Arbesk Collaborator Panel - Reusable Merkle Editor UI (Alpine.js)
- *
- * Renders the editor list for a token and optionally allows add/remove/role
- * changes. Used by the Studio read-only indicator and by the Library's
- * collection-level "Manage Collaborators" dialog.
- *
- * The list is a reactive Alpine component: each host injects the static
- * template below, points `x-data` at the registered "collaboratorPanel"
- * component (passing tokenId/editable/id), and initializes the subtree with
- * Alpine.initTree(). Because there are two independent hosts (the Studio
- * #teamPanel and the Library dialog's dynamically-created container), state
- * is per-instance (keyed by the generated id), NOT a single global store.
- *
- * The DOM keeps every id/class byte-identical to the pre-Alpine build (E2E
- * contract): #collaboratorList, #collaboratorAddInput, #collaboratorAddBtn,
- * #collaboratorRoleSelect, .team-item[data-address], .team-role-badge, etc.
+ * Reusable Merkle editor list UI with add/remove/role changes.
+ * @remarks State is per-instance (keyed by a generated id), not a global
+ *   store, because there are two independent hosts. The DOM keeps every
+ *   id/class byte-identical to the pre-Alpine build (E2E contract).
+ * Used by the Studio read-only indicator and the Library's "Manage
+ *   Collaborators" dialog.
  */
 
 import {
@@ -201,9 +191,7 @@ interface CollaboratorPanelComponent {
 }
 
 /**
- * Alpine data factory for a single collaborator panel. Getters read the
- * reactive per-instance store, so Alpine effects track them; methods
- * delegate to the module functions above.
+ * Alpine data factory for a single collaborator panel.
  */
 function collaboratorPanel(params: {
   id: string;
@@ -283,8 +271,8 @@ function collaboratorPanel(params: {
 registerAlpineComponent("collaboratorPanel", collaboratorPanel);
 
 /**
- * Build (or rebuild) a collaborator panel inside `container` for `tokenId`.
- * Preserves the legacy return contract { refresh, destroy }.
+ * Builds (or rebuilds) a collaborator panel inside `container`.
+ * @remarks Preserves the legacy { refresh, destroy } return contract.
  */
 export function initCollaboratorPanel(
   container: HTMLElement,

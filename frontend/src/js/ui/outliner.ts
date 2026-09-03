@@ -1,9 +1,6 @@
 /**
- * Arbesk Outliner - Scene Hierarchy Tree
- *
- * Renders the scene graph from the current level's manifest.
- * Click to select, double-click child assets to dive in.
- * Supports drag reorder and drag-from-library to add children.
+ * Scene hierarchy tree: renders the current level's manifest; click to
+ * select, double-click child assets to dive, and drag to reorder or add.
  */
 
 import { switchView } from "./sidebar.ts";
@@ -100,10 +97,9 @@ function getNodes(): any[] {
 }
 
 /**
- * Build a hierarchical outline tree from the flat manifest nodes array.
- * Child-asset nodes (nodes with child_ref) are grouped under the nearest
- * preceding regular node so the outline reflects the parent/child relationship
- * shown in the viewport.
+ * Builds a hierarchical outline tree from the flat manifest nodes array.
+ * @remarks Child-asset nodes are grouped under their parent so the outline
+ *   mirrors the viewport's parent/child relationship.
  */
 function buildOutlineTree(nodes: any[]): any[] {
   if (!Array.isArray(nodes)) return [];
@@ -347,8 +343,10 @@ function updateFooter(totalNodes: number, childCount: number): void {
   } · ${childCount} child${childCount !== 1 ? "ren" : ""} · Depth ${depth}/5`;
 }
 
-/** True when a node_id is a child asset (saved or pending) — the only
- * node kind the [-] button can remove. */
+/**
+ * Returns true when a node_id is a child asset (saved or pending).
+ * @remarks The only node kind the [-] button can remove.
+ */
 function _isChildAssetNode(nodeId: string): boolean {
   if (getNodes().some((n) => n?.node_id === nodeId && !!n?.child_ref)) {
     return true;
@@ -414,8 +412,8 @@ function clearSelection(): void {
 }
 
 /**
- * Mirror an engine-driven selection change (viewport pick, Ctrl+A, Escape)
- * without re-emitting — the engine is the source of truth.
+ * Mirrors an engine-driven selection change.
+ * @remarks The engine is the source of truth, so this never re-emits.
  */
 function syncFromEngine(e: any): void {
   const ids = Array.isArray(e?.nodeIds) ? e.nodeIds : [];

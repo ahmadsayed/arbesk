@@ -83,8 +83,9 @@ export function registerTask({
 }
 
 /**
- * Patch a running task entry (e.g. advance an animate chain to its next
- * phase). No-op when the entry is missing or owned by another wallet.
+ * Patches a running task entry (e.g. advances an animate chain to its next
+ * phase).
+ * @remarks No-op when the entry is missing or owned by another wallet.
  */
 export function updateTaskEntry(
   taskId: string,
@@ -97,8 +98,9 @@ export function updateTaskEntry(
 }
 
 /**
- * Look up a task entry in a given lifecycle status. Returns undefined if
- * expired, missing, in another status, or owned by a different wallet address.
+ * Looks up a task entry in a given lifecycle status.
+ * @remarks Returns undefined if expired, missing, in another status, or owned
+ *   by a different wallet.
  */
 function getTaskInStatus(
   taskId: string,
@@ -117,16 +119,18 @@ function getTaskInStatus(
 }
 
 /**
- * Look up a running task entry. Returns undefined if expired, missing,
- * already complete, or owned by a different wallet address.
+ * Looks up a running task entry.
+ * @remarks Returns undefined if expired, missing, already complete, or owned
+ *   by a different wallet.
  */
 export function getTask(taskId: string, userAddress: string): TaskEntry | undefined {
   return getTaskInStatus(taskId, userAddress, "running");
 }
 
 /**
- * Mark a running task as complete. Refreshes the TTL window so the entry
- * remains available as a refine source for a full TTL after completion.
+ * Marks a running task as complete.
+ * @remarks Refreshes the TTL window so the entry remains available as a
+ *   refine source for a full TTL after completion.
  */
 export function markTaskComplete(taskId: string, userAddress: string): void {
   const entry = registry.get(taskId);
@@ -136,8 +140,9 @@ export function markTaskComplete(taskId: string, userAddress: string): void {
 }
 
 /**
- * Look up a completed task entry (refine source). Returns undefined if
- * missing, expired, not complete, or owned by a different wallet.
+ * Looks up a completed task entry (refine source).
+ * @remarks Returns undefined if missing, expired, not complete, or owned by a
+ *   different wallet.
  */
 export function getCompletedTask(
   taskId: string,

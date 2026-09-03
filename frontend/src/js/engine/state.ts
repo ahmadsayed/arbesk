@@ -1,8 +1,7 @@
 /**
- * Arbesk Scene Graph - Shared State
- *
  * Mutable module-level state shared across engine sub-modules.
- * Uses an object wrapper because ESM imported bindings are read-only.
+ * @remarks Uses an object wrapper because ESM imported bindings are
+ *   read-only.
  */
 
 export const DEFAULT_WOOD_COLOR = "#C19A6B";

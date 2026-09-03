@@ -1,12 +1,5 @@
 /**
- * Wallet Picker Modal
- *
- * GNOME HIG-styled modal that lists discovered EIP-6963 wallets.
- * Uses the existing dialog backdrop pattern and implements focus trapping.
- *
- * Usage:
- *   import { showWalletModal, hideWalletModal } from './ui/wallet-modal.ts';
- *   showWalletModal({ onSelect: (provider, source) => { ... } });
+ * Modal that lists discovered EIP-6963 wallets.
  */
 
 import {
@@ -18,8 +11,9 @@ import type { EIP6963Wallet } from "../blockchain/wallet-discovery.ts";
 import { escapeHtml } from "../utils/html.ts";
 
 /**
- * Result the modal promise resolves with. Injected wallets set
- * walletName/walletRdns; the CDP email flow sets walletAddress/eoaAddress/email.
+ * Result the modal promise resolves with.
+ * @remarks Injected wallets set walletName/walletRdns; the CDP email flow
+ *   sets walletAddress/eoaAddress/email.
  */
 export interface WalletModalResult {
   /** EIP-1193 provider (or CDP SDK provider object) */
@@ -45,10 +39,9 @@ let removeWalletListener: (() => void) | null = null;
 let focusTrapCleanup: (() => void) | null = null;
 
 /**
- * Show the wallet picker modal.
- * @returns
- *   Resolves when user selects a wallet.
- *   Rejects when user cancels (Escape, backdrop click, close button).
+ * Shows the wallet picker modal.
+ * @returns resolves on selection, rejects on cancel (Escape, backdrop, or
+ *   close button).
  */
 export function showWalletModal(): Promise<WalletModalResult> {
   return new Promise((resolve, reject) => {
@@ -357,8 +350,7 @@ function readEmailOrShowError(
 }
 
 /**
- * User clicked "Send code" — start the CDP email OTP flow.
- * Shows the OTP input step and wires the Verify button.
+ * Starts the CDP email OTP flow.
  */
 async function selectEmailWallet(): Promise<void> {
   if (!resolvePromise) return;
@@ -457,7 +449,7 @@ async function selectEmailWallet(): Promise<void> {
 }
 
 /**
- * Setup focus trap within the modal.
+ * Sets up the focus trap within the modal.
  * @returns cleanup function
  */
 function setupFocusTrap(container: HTMLElement): () => void {

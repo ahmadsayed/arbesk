@@ -1,10 +1,7 @@
 /**
  * Tiny promise-based concurrency limiter.
- *
- * Limits the number of concurrently executing async tasks. Additional tasks
- * are queued and started as soon as a slot frees up. This avoids head-of-line
- * blocking and connection-pool exhaustion when the browser fires many
- * concurrent upload/download requests.
+ * @remarks Avoids head-of-line blocking and connection-pool exhaustion when
+ *   the browser fires many concurrent upload/download requests.
  */
 
 export interface Limiter {

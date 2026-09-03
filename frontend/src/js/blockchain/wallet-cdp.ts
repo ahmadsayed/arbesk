@@ -1,10 +1,8 @@
 /**
- * CDP Email-OTP Wallet + Smart Account integration.
- *
- * An email OTP flow creates an embedded EOA (the signer),
- * which is wrapped in an ERC-4337 smart account (the token owner on-chain).
- * Transactions are sent as sponsored UserOperations via the CDP Paymaster.
- * Smart wallets are supported on Base Sepolia only.
+ * CDP email-OTP wallet + smart-account integration: an OTP flow creates an
+ * embedded EOA wrapped in an ERC-4337 smart account, with transactions sent
+ * as sponsored UserOperations.
+ * @remarks Smart wallets are supported on Base Sepolia only.
  */
 
 import { initialize, signInWithEmail, verifyEmailOTP, getCurrentUser, createEvmSmartAccount, signEvmMessage, sendUserOperation, getUserOperation, signOut, createDelegation } from "@coinbase/cdp-core";
@@ -36,7 +34,7 @@ const CDP_EMAIL_KEY = "arbesk-cdp-email";
 // ─── Verified email persistence ─────────────────────────────────────────────
 
 /**
- * @returns the verified CDP email stored from a previous session
+ * Returns the verified CDP email stored from a previous session.
  */
 export function getCdpEmail(): string | null {
   return localStorage.getItem(CDP_EMAIL_KEY);
@@ -53,9 +51,9 @@ export function clearCdpEmail() {
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 /**
- * Initialize the CDP SDK with a project ID.
- * Must be called once before any other CDP functions.
- * @param projectId - CDP project ID from the Coinbase Developer Platform
+ * Initializes the CDP SDK with a project ID.
+ * @remarks Must be called once before any other CDP function.
+ * @param projectId - CDP project ID from the Coinbase Developer Platform.
  */
 export async function initCdpClient(projectId: string): Promise<void> {
   if (_cdpInitialized) {
@@ -79,11 +77,10 @@ export async function initCdpClient(projectId: string): Promise<void> {
 }
 
 /**
- * Fire-and-forget CDP warmup: fetch backend config and initialize the SDK.
- * Memoized so app-init can kick it off at page load (overlapping the ~800ms
- * CDP token-refresh round trip with UI setup) and autoConnectWallet can await
- * the same in-flight promise instead of re-running the chain serially.
- * @returns true when the SDK ended up initialized
+ * Warms up the CDP SDK: fetches backend config and initializes the SDK.
+ * @remarks Memoized so page-load warmup overlaps the CDP round trip with UI
+ *   setup, and concurrent awaits share one in-flight promise.
+ * @returns true when the SDK ends up initialized.
  */
 let _warmupPromise: Promise<boolean> | null = null;
 export function warmupCdpClient(): Promise<boolean> {
@@ -105,10 +102,11 @@ export function warmupCdpClient(): Promise<boolean> {
 }
 
 /**
- * Wipe CDP/Coinbase browser state (localStorage keys, IndexedDB databases)
- * and sign out. Stale state from a previous session causes "User is already
- * authenticated" or "EVM account not found" errors on the next login.
- * Best-effort — failures are swallowed since this is a pre-login cleanup.
+ * Wipes CDP/Coinbase browser state (localStorage keys, IndexedDB databases)
+ * and signs out.
+ * @remarks Stale state from a previous session causes "User is already
+ *   authenticated" or "EVM account not found" errors on the next login.
+ *   Best-effort: failures are swallowed (pre-login cleanup).
  */
 export async function resetCdpStorage(): Promise<void> {
   try {
@@ -135,8 +133,8 @@ export async function resetCdpStorage(): Promise<void> {
 }
 
 /**
- * Set (or clear, when `eoaAccount` is null) the module-level CDP session
- * state and rebuild the EIP-1193 provider from it.
+ * Sets (or clears, when `eoaAccount` is null) the module-level CDP session
+ * state and the signer built from it.
  */
 function _applyCdpSession(
   eoaAccount: any,
@@ -153,8 +151,8 @@ export function getCdpSigner(): Signer | null {
 }
 
 /**
- * Grant the one-time delegation so the backend can relay writes for this
- * embedded wallet without the browser being present. Best-effort.
+ * Grants a one-time delegation so the backend can relay writes for this
+ * embedded wallet without the browser present (best-effort).
  */
 export async function grantDelegation(days = 30): Promise<void> {
   if (!_cdpInitialized) {
@@ -193,10 +191,7 @@ export async function requestEmailOtp(email: string): Promise<{ flowId: string }
 }
 
 /**
- * Complete the email OTP flow with the user-provided code.
- * Populates module-level state (_currentEoaAccount, _smartAccountAddress, _signer).
- * @param flowId - from requestEmailOtp
- * @param otp - the code the user entered
+ * Completes the email OTP flow with the user-provided code.
  */
 export async function verifyEmailOtp(
   flowId: string,
@@ -259,8 +254,8 @@ export async function verifyEmailOtp(
 // ─── Connection state ────────────────────────────────────────────────────────
 
 /**
- * Attempt to restore a previous CDP session silently.
- * Returns null if no session is available (user must sign in again).
+ * Restores a previous CDP session silently.
+ * @returns null when no session is available (the user must sign in again).
  */
 export async function autoConnectCdpWallet(): Promise<{
   eoaAddress: string;
@@ -320,9 +315,10 @@ export async function disconnectCdpWallet(): Promise<void> {
 // ─── UserOperation Helpers ───────────────────────────────────────────────────
 
 /**
- * Poll CDP until a UserOperation is mined and return its on-chain txHash.
- * Web3.js expects eth_sendTransaction to return an EVM transaction hash, not a
- * UserOperation hash, so we block here until CDP reports the real txHash.
+ * Polls CDP until a UserOperation is mined and returns its on-chain tx hash.
+ * @remarks Web3.js expects eth_sendTransaction to return an EVM transaction
+ *   hash, not a UserOperation hash, so this blocks until CDP reports the real
+ *   tx hash.
  */
 async function _waitForUserOperationTransaction(
   userOpHash: string,
@@ -372,10 +368,11 @@ async function _waitForUserOperationTransaction(
 // ─── Native Signer (the de-shim target) ─────────────────────────────────────
 
 /**
- * Build a native `Signer` over the CDP SDK — no EIP-1193 shim. The on-chain
- * owner is the smart account (or the EOA when none); the signer is the
- * embedded EOA. `sendTransaction` resolves on broadcast (UserOperation hash)
- * and `wait()` blocks until the op is mined, returning the real tx hash.
+ * Builds a native Signer over the CDP SDK (no EIP-1193 shim).
+ * @remarks The on-chain owner is the smart account (or the EOA when none);
+ *   the signer is the embedded EOA. `sendTransaction` resolves on broadcast
+ *   (UserOperation hash); `wait()` blocks until mined and returns the real tx
+ *   hash.
  */
 export function createCdpSigner(
   eoaAccount: any,

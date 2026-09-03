@@ -1,11 +1,8 @@
 /**
- * Version Clock face — reusable SVG dial for scrubbing the manifest chain.
- *
- * Pure view: no engine or store imports. One tick per version around the
- * dial, newest at 12 o'clock running clockwise into the past, a draggable
- * hand, a green ring on the published tick, version badge + detail in the
- * center. Emits onCommit(index) when the user lands on a version (pointer
- * release, wheel debounce, or keyboard step).
+ * Reusable SVG dial for scrubbing the manifest chain.
+ * @remarks Pure view — no engine or store imports. Emits onCommit(index) when
+ *   the user lands on a version (pointer release, wheel debounce, or keyboard
+ *   step).
  */
 
 export interface VersionClockEntry {
@@ -37,7 +34,8 @@ const WHEEL_COMMIT_MS = 400;
 const THIN_ABOVE = 24; // start thinning ticks past this many versions
 
 /**
- * Angle in degrees for entry index i of n. Exported for tests.
+ * Returns the dial angle in degrees for entry index i of n.
+ * @remarks Exported for tests.
  */
 export function _angleForIndex(i: number, n: number): number {
   return -90 + ((n - 1 - i) * 360) / n;

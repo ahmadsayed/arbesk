@@ -1,16 +1,15 @@
 /**
- * Arbesk Theme Helpers
- *
- * Read CSS custom properties from `:root` and convert them to Babylon.js
- * Color3 / Color4 values. This lets the SCSS token system drive 3D scene
- * colors so a single token change themes the entire studio.
+ * Reads CSS custom properties from `:root` and converts them to Babylon.js
+ * Color3/Color4 values.
+ * @remarks Lets the SCSS token system drive 3D scene colors, so one token
+ *   change themes the entire studio.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 /**
- * Read a CSS custom property from :root, trimmed of whitespace.
- * Returns the empty string if the variable is undefined.
+ * Reads a CSS custom property from :root, trimmed of whitespace.
+ * @returns empty string when the variable is undefined.
  */
 export function getCssVar(name: string): string {
   if (typeof document === "undefined") return "";
@@ -20,8 +19,9 @@ export function getCssVar(name: string): string {
 }
 
 /**
- * Parse a 6-digit hex string ("#RRGGBB" or "RRGGBB") to normalized [r, g, b]
- * floats. Returns null when invalid.
+ * Parses a 6-digit hex string ("#RRGGBB" or "RRGGBB") to normalized
+ * [r, g, b] floats.
+ * @returns null when invalid.
  */
 function hexToRgb(hex: string): [number, number, number] | null {
   const h = normalizeHex(hex);
@@ -34,8 +34,8 @@ function hexToRgb(hex: string): [number, number, number] | null {
 }
 
 /**
- * Parse a 6-digit hex string ("#RRGGBB" or "RRGGBB") to a BABYLON.Color3.
- * Returns the engine fallback if Babylon is unavailable.
+ * Parses a 6-digit hex string to a BABYLON.Color3.
+ * @returns null when the hex is invalid.
  */
 export function hexToColor3(hex: string): BABYLON.Color3 | null {
   const rgb = hexToRgb(hex);
@@ -53,7 +53,8 @@ export function hexToColor4(hex: string, alpha = 1): BABYLON.Color4 | null {
 }
 
 /**
- * Strip a leading "#" and ensure 6 hex digits. Returns null if invalid.
+ * Strips a leading "#" and requires 6 hex digits.
+ * @returns null when invalid.
  */
 function normalizeHex(hex: string): string | null {
   if (typeof hex !== "string") return null;
@@ -69,8 +70,7 @@ const THEME_STORAGE_KEY = "arbesk-theme";
 type ThemeName = "light" | "dark";
 
 /**
- * Initialize theme on page load. Reads saved preference from localStorage,
- * falls back to system preference, and sets data-theme on <html>.
+ * Initializes the theme on page load.
  */
 export function initTheme() {
   const saved = localStorage.getItem(THEME_STORAGE_KEY);

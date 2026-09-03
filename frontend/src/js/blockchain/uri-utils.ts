@@ -1,20 +1,11 @@
 /**
- * Arbesk URI Utilities
- *
  * Pure functions for normalizing IPFS URIs and extracting CIDs.
- * Zero external dependencies - safe to import from Node.js test runners.
+ * @remarks Zero external dependencies, so safe to import from Node.js test
+ *   runners.
  */
 
 /**
- * Normalize a tokenURI response to a plain CID string.
- * Handles:
- *   - Plain CID: "bafkreiABC123..."
- *   - ipfs:// URI: "ipfs://bafkreiABC123..."
- *   - ipfs:// with path: "ipfs://bafkreiABC123/path/to/manifest.json"
- *   - HTTP gateway URL: "http://127.0.0.1:8080/ipfs/bafkreiABC123..."
- *   - Full URL: "https://ipfs.io/ipfs/bafkreiABC123..."
- *
- * @returns Plain CID
+ * Normalizes a tokenURI response to a plain CID string.
  */
 export function normalizeTokenURI(uri: string): string {
   if (!uri || typeof uri !== "string") return "";

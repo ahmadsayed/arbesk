@@ -1,15 +1,10 @@
 /**
  * asset-core SDK facade — createArbeskCore.
- *
- * One-call composition root for any environment (backend, browser, tests):
- * `createArbeskCore(config)` installs the process-wide runtime (initRuntime)
- * and returns a thin object composing the format pipeline (formats/ — the
- * compose/decompose dispatcher), manifest chain walk/validation (manifest/),
- * and editor commands (domain/editors.ts).
- *
- * The facade contains no format logic of its own: `compose`/`decompose`
- * dispatch to the FormatCodec selected by format (formats/index.ts), and
- * `upload` sniffs the raw input to choose the right codec.
+ * @remarks One-call composition root: installs the process-wide runtime and
+ *   returns a thin object composing the format pipeline, manifest chain
+ *   walk/validation, and editor commands. Contains no format logic of its own —
+ *   compose/decompose dispatch to the selected FormatCodec and upload sniffs
+ *   the input to choose the codec.
  */
 
 import type { ArbeskCoreConfig } from "./types.ts";

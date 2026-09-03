@@ -1,9 +1,7 @@
 /**
  * Browser-safe gzip / gunzip helpers.
- *
- * Uses `fflate` (small pure-JS zlib) so it works in the browser without
- * bundler polyfills. The consumer code is responsible for deciding whether
- * to compress; reads auto-detect the gzip magic bytes and decompress.
+ * @remarks Reads auto-detect the gzip magic bytes and decompress; the caller
+ *   decides whether to compress.
  */
 
 import { gzipSync, gunzipSync } from "fflate";
@@ -21,8 +19,8 @@ function toUint8Array(data: string | Uint8Array | ArrayBuffer): Uint8Array {
 }
 
 /**
- * Return the input as a Uint8Array, preserving the original bytes.
- * Unlike toUint8Array, this does NOT re-encode strings.
+ * Returns the input as a Uint8Array, preserving the original bytes.
+ * @remarks Does not re-encode strings (binary input only).
  */
 function toBytes(data: Uint8Array | ArrayBuffer): Uint8Array {
   if (data instanceof Uint8Array) return data;

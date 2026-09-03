@@ -1,13 +1,6 @@
 /**
- * Arbesk Wallet Core
- *
- * Core wallet connection logic extracted from wallet.js.
- * Handles: provider init, contract init, balance checks,
- * auto-connect, full connect/disconnect flow, SIWE auth.
- *
- * Payment, publishing, network switching, and burn logic
- * live in sub-modules (wallet-payments.ts, wallet-publishing.ts,
- * wallet-network.ts).
+ * Core wallet connection logic: provider/contract init, balance checks,
+ * auto-connect, connect/disconnect, and SIWE auth.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -63,9 +56,9 @@ const LAST_WALLET_KEY = "arbesk-last-wallet";
 const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
 
 /**
- * Resolve the active wallet's chain id without a web3 instance.
- * CDP smart accounts are pinned to Base Sepolia; EOA/WalletConnect read the
- * chain from the injected EIP-1193 provider.
+ * Resolves the active wallet's chain id.
+ * @remarks CDP smart accounts are pinned to Base Sepolia; EOA/WalletConnect
+ *   read the chain from the injected EIP-1193 provider.
  */
 async function _getWalletChainId(): Promise<number> {
   if (activeConnectionSource === "cdp") return CHAIN_IDS.BASE_TESTNET;
@@ -79,9 +72,8 @@ async function _getWalletChainId(): Promise<number> {
 // ─── Initialization ───
 
 /**
- * Initialize wallet system. Starts EIP-6963 discovery.
- * Auto-restores the previous connection (CDP, EOA, or WalletConnect) via silent
- * eth_accounts / session checks — no popup is shown.
+ * Initializes the wallet system: starts EIP-6963 discovery and silently
+ * auto-restores the previous connection (no popup).
  */
 function initWallet() {
   startDiscovery();
@@ -97,12 +89,9 @@ function initWallet() {
 }
 
 /**
- * Initialize contract instance if ABI and address are available.
- * Uses network-aware configuration: picks the contract address
- * based on the wallet's current chainId.
- *
- * @param knownChainId - chainId already resolved by the caller,
- *   avoiding a redundant eth_chainId round trip.
+ * Initializes the contract instance from the wallet's current network config.
+ * @remarks `knownChainId` lets callers pass an already-resolved chain id to
+ *   avoid a redundant eth_chainId round trip.
  */
 async function _initContract(knownChainId: number | null = null) {
   try {
@@ -217,8 +206,7 @@ async function _checkBalance() {
 // ─── Auto-connect ───
 
 /**
- * Auto-sign-in on page load if previously authorized.
- * Uses silent methods (no popup) to restore connection.
+ * Auto-signs in on page load if previously authorized (no popup).
  */
 async function autoConnectWallet() {
   try {
@@ -317,7 +305,8 @@ async function autoConnectWallet() {
 // ─── Shared setup ───
 
 /**
- * Shared setup after provider is established (accounts, chain, contract, listeners).
+ * Finishes wallet setup after a provider is established (accounts, chain,
+ * contract, listeners).
  */
 async function _finishWalletSetup(
   address: string,
@@ -468,11 +457,10 @@ function _attachProviderListeners() {
 // ─── Authentication ───
 
 /**
- * Eagerly authenticate the user after wallet connection.
- * Tries to create/reuse a session token. If the user rejects the sign,
- * dispatches user:auth-required so the UI can show a "Sign In" prompt.
- *
- * Uses dynamic import to avoid circular dependency with api.js
+ * Eagerly authenticates the user after wallet connection.
+ * @remarks On sign rejection it dispatches user:auth-required so the UI can
+ *   show a "Sign In" prompt. Uses a dynamic import to avoid a circular
+ *   dependency with api.js.
  */
 async function authenticateUser() {
   const _tAuth = performance.now();
@@ -567,7 +555,6 @@ async function connectWallet() {
 }
 
 /**
- * Return the currently active connection source.
  * @returns 'injected' | 'walletconnect' | 'cdp' | null
  */
 function getActiveConnectionSource() {
@@ -576,7 +563,8 @@ function getActiveConnectionSource() {
 
 /**
  * The injected on-chain Signer for the active connection, or null when
- * disconnected. Prefer this over the raw provider for signing/sending.
+ * disconnected.
+ * @remarks Prefer this over the raw provider for signing/sending.
  */
 function getSigner(): Signer | null {
   return signer;
@@ -628,9 +616,7 @@ async function disconnectWallet() {
 // ─── Exports ───
 
 /**
- * Get the active contract instance, preferring the module-level binding and
- * falling back to walletState (both are kept in sync by _initContract).
- * @returns viem contract instance, or null when not initialized
+ * @returns the active viem contract instance, or null when not initialized.
  */
 function getActiveContract(): any {
   return contract || walletState.get().contract || null;

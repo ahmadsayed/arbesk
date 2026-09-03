@@ -1,21 +1,11 @@
 /**
- * Arbesk Manifest Chain Walker
- *
- * Shared logic for walking fractal manifest chains and classifying the CIDs
- * they reference. Used by:
- *   - `POST /api/v1/ipfs/unpin` (conservative: only asset-unique CIDs)
- *   - `POST /api/v1/ipfs/gc`     (reachability: every reachable CID)
- *
- * The walker distinguishes two buckets:
- *   - `assetUnique` — CIDs that belong to the manifest chain itself and are
- *     safe to unpin when that chain is removed (manifest CIDs, thumbnails,
- *     comments archives for asset manifests).
- *   - `shared` — CIDs that may be referenced by other live tokens and must NOT
- *     be unpinned during ordinary delete/burn (source glTFs, bundle dirs,
- *     embedded buffers/images, and asset manifests referenced by collections).
- *
- * `allReachable` is the union of both buckets and is used by the GC job to
- * decide what is still alive.
+ * Walks fractal manifest chains and classifies the CIDs they reference.
+ * @remarks `assetUnique` CIDs (manifest chain, thumbnails, comments archives)
+ *   are safe to unpin when the chain is removed; `shared` CIDs (source glTFs,
+ *   bundle dirs, embedded buffers/images, collection-referenced manifests) may
+ *   be referenced by other live tokens and must not be unpinned on
+ *   delete/burn.
+ * Used by the ipfs/unpin and ipfs/gc routes.
  */
 
 import type { StorageAdapter } from "./storage/index.ts";
@@ -41,11 +31,11 @@ async function collectEmbeddedIpfsCids(
 }
 
 export interface WalkOptions {
-  /** For composite glTFs, also collect embedded buffer/image CIDs. Used by GC;
-   * unpin keeps this false to avoid deleting shared mesh/texture data. */
+  /** For composite glTFs, also collect embedded buffer/image CIDs (unpin keeps
+   * this false to avoid deleting shared mesh/texture data). */
   recurseIntoSources?: boolean;
   /** For collection manifests, recurse into each `assets[assetId]` manifest
-   * chain. Used by GC. */
+   * chain. */
   recurseIntoCollectionAssets?: boolean;
   /** Maximum manifests to walk per chain. */
   maxDepth?: number;

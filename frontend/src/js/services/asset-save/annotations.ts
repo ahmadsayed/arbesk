@@ -1,6 +1,7 @@
 /**
- * Pending-annotations store for the Inspector metadata editor. Holds the FULL
- * annotations map (prior + edits); baked into the manifest on save.
+ * Pending-annotations store.
+ * @remarks Holds the full annotations map (prior + edits), baked into the
+ *   manifest on save.
  */
 let pending: Record<string, unknown> | null = null;
 

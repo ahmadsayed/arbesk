@@ -1,16 +1,10 @@
 /**
- * Anchor node factory — leaf module.
- *
- * scene-loader needs anchors while loading; scene-graph needs the loader for
- * linked assets. Keeping the factory here (BABYLON global only) avoids a
- * scene-graph ↔ scene-loader import cycle.
+ * Anchor node factory (leaf module).
+ * @remarks Keeping the factory here (BABYLON global only) avoids a
+ *   scene-graph ↔ scene-loader import cycle: scene-loader needs anchors while
+ *   loading, and scene-graph needs the loader for linked assets.
  */
 
-/**
- * @param {string} name
- * @param {BABYLON.Scene} scene
- * @returns {BABYLON.TransformNode | BABYLON.Mesh}
- */
 export function createAnchorNode(name: string, scene: BABYLON.Scene) {
   if (
     typeof BABYLON !== "undefined" &&

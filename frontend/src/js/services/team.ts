@@ -1,9 +1,6 @@
 /**
- * Arbesk Team / Editor Management Service - Merkle Architecture
- *
- * Editor list is stored on IPFS; on-chain only has the Merkle root.
- * All reads go through IPFS (with localStorage cache fallback).
- * All writes go through updateEditors (Merkle root update).
+ * Team / editor management (Merkle architecture).
+ * @remarks The editor list lives on IPFS; only the Merkle root is on-chain.
  */
 
 import * as wallet from "../blockchain/wallet.ts";
@@ -23,8 +20,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Return the normalized email when a collaborator input is an email address,
- * undefined for 0x addresses and other input. Used to tag editor entries
- * with their invite email for display.
+ * undefined for 0x addresses and other input.
  */
 export function collaboratorInputEmail(input: string): string | undefined {
   const value = (input || "").trim();
@@ -37,9 +33,6 @@ export const CollaboratorRole = Object.freeze({
   Editor: 2,
 });
 
-/**
- * List editors for a token from IPFS (with localStorage cache fallback).
- */
 export async function fetchEditors(tokenId: string | number): Promise<EditorEntry[]> {
   return loadEditorList(tokenId as string);
 }
@@ -114,11 +107,9 @@ async function _updateEditorRoot(
 
 /**
  * Resolve the "add collaborator" input to a wallet address.
- *
- * Accepts either a 0x address (returned as-is) or the full email of a CDP
- * email-login user, resolved to their smart account address via the backend.
- * Exact email match only — the backend never lists or autocompletes emails.
- *
+ * @remarks Accepts a 0x address (as-is) or a CDP email-login user's full email
+ *   (resolved via the backend). Exact email match only — the backend never
+ *   lists or autocompletes emails.
  * @param input - raw input field value
  * @returns wallet/smart account address to add
  * @throws {Error} user-friendly message when the input cannot be resolved
@@ -155,7 +146,8 @@ export async function resolveCollaboratorInput(input: string): Promise<string> {
 }
 
 /**
- * Add a new editor to a token. Caller must already be an editor.
+ * Add a new editor to a token.
+ * @remarks Caller must already be an editor.
  * @param email - invite email for CDP email-login users (display only)
  * @returns transaction hash
  */
@@ -181,7 +173,8 @@ export async function addTeamMember(tokenId: string | number, address: string, e
 }
 
 /**
- * Remove an editor from a token. Caller must already be an editor.
+ * Remove an editor from a token.
+ * @remarks Caller must already be an editor.
  * @returns transaction hash
  */
 export async function removeTeamMember(tokenId: string | number, address: string): Promise<string> {

@@ -1,9 +1,9 @@
 import { emit } from "../events/bus.ts";
 
 /**
- * Create a small event-emitting state store.
- * @param defaults - initial state; `reset()` restores these values
- * @param eventName - bus event emitted on every set/reset, with the full new state
+ * Creates a small event-emitting state store.
+ * @remarks Emits `eventName` (full new state) on every set/reset; `reset()`
+ *   restores `defaults`.
  */
 export function createStore<T extends Record<string, any>>(
   defaults: T,

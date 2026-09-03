@@ -1,10 +1,7 @@
 /**
- * Arbesk API Authorization Service
- *
- * Thin adapter over @arbesk/authz: builds the viem ChainReadPort + session
- * validator, then delegates the access policy to createAuthz. The policy
- * itself lives in packages/authz so it's reusable and testable independently
- * of the Express/viem wiring.
+ * Thin adapter over @arbesk/authz for the Express/viem backend.
+ * @remarks The access policy lives in packages/authz so it stays reusable and
+ *   testable independently of the Express/viem wiring.
  */
 
 import { createAuthz } from "@arbesk/authz/facade.js";
@@ -48,10 +45,10 @@ const MINIMAL_COLLAB_ABI = [
 ] as const;
 
 /**
- * Resolve the collection contract for a chain into a ChainReadPort.
- * viem returns bigint for uint256 where web3 returned strings — values are
- * stringified at this port boundary so the authz policy sees strings either
- * way.
+ * Resolves the collection contract for a chain into a ChainReadPort.
+ * @remarks Values are stringified at this boundary because viem returns
+ *   bigint for uint256 where web3 returned strings, so the authz policy sees
+ *   strings either way.
  */
 function resolveContract(
   chainId: number | null,

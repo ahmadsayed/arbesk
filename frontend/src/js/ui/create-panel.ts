@@ -1,10 +1,7 @@
 /**
- * Arbesk AI Generation UI Controller
- *
- * Generation flow: session auth → backend generation → asset chat bubble
- * with a live 3D preview → explicit "Show in Studio" (manifest load →
- * scene graph registration). Owns the AI Generation sidebar pane: chat
- * history, prompt input, provider selection, and the BYOK key dialog.
+ * AI Generation sidebar controller.
+ * @remarks Generation runs session auth → backend generation → chat bubble
+ *   with a live preview → explicit "Show in Studio".
  */
 
 import {
@@ -103,8 +100,8 @@ function getByokKey(): string {
 }
 
 /**
- * True when the selected provider is a real (non-mock) provider.
- * Real providers require a BYOK key; the mock provider does not.
+ * Returns true when the selected provider is real (non-mock).
+ * @remarks Real providers require a BYOK key; the mock provider does not.
  */
 function isRealProvider(): boolean {
   return getProvider() !== "mock";
@@ -140,8 +137,8 @@ function updateDialogBalance(text: string | null) {
 }
 
 /**
- * Fetch the Tripo3D credit balance and update the caption(s). Stale
- * responses (key changed mid-flight) are dropped.
+ * Fetches the Tripo3D credit balance and updates the caption(s).
+ * @remarks Stale responses (key changed mid-flight) are dropped.
  */
 async function fetchProviderBalance(key: string) {
   if (providerBalance) {
@@ -167,10 +164,10 @@ async function fetchProviderBalance(key: string) {
 }
 
 /**
- * Refresh the Tripo3D credit-balance caption for the registered BYOK key.
- * Debounced (the key dialog persists on every keystroke) and cached per key
- * value. Hidden for the mock provider, when no key is set, or when no wallet
- * is connected (fetching would trigger a sign-in prompt).
+ * Refreshes the Tripo3D credit-balance caption.
+ * @remarks Debounced and cached per key. Hidden for the mock provider, with
+ *   no key set, or with no wallet connected (fetching would trigger a
+ *   sign-in prompt).
  */
 function refreshProviderBalance({ force = false }: { force?: boolean } = {}) {
   const key = getByokKey();
@@ -221,8 +218,9 @@ function clearAttachedImage() {
 }
 
 /**
- * The attach button only applies to Tripo3D (image-to-3D). Switching back to
- * the mock provider hides it and discards any attached images.
+ * Syncs the attach button; it only applies to Tripo3D (image-to-3D).
+ * @remarks Switching back to the mock provider hides it and discards attached
+ *   images.
  */
 function syncImageAttachUI() {
   const enabled = getProvider() === "tripo3d";
@@ -231,10 +229,7 @@ function syncImageAttachUI() {
 }
 
 /**
- * Re-render the chip row from attachedImages (canonical view order). A lone
- * image renders exactly like the legacy single chip — no view selector. With
- * 2+ images each chip gets a Front/Left/Back/Right selector and the multiview
- * hint line appears below the chips.
+ * Re-renders the chip row from attachedImages in canonical view order.
  */
 function renderAttachChips() {
   if (!imageAttachChips) return;
@@ -305,10 +300,9 @@ function renderAttachChips() {
 }
 
 /**
- * Read and validate image files selected via the attach input, then add them
- * to the set (up to 4, views auto-assigned in attach order). Invalid files
- * are rejected with a toast; a selection that would exceed 4 views is
- * rejected wholesale.
+ * Reads, validates, and adds image files to the set (up to 4).
+ * @remarks Invalid files are rejected with a toast; a selection that would
+ *   exceed 4 views is rejected wholesale.
  */
 function attachImageFiles(files: File[]) {
   if (files.length === 0) return;
@@ -436,10 +430,8 @@ if (composerSettings) {
 }
 
 /**
- * Build the key dialog body: a password input (prefilled from localStorage,
- * persisted on input), a show/hide toggle, and a Clear Key action. The input
- * only exists while the dialog is open; the stored key lives in localStorage.
- * All markup is static — no user content is injected.
+ * Builds the key dialog body (password input, show/hide toggle, Clear Key).
+ * @remarks All markup is static — no user content is injected.
  */
 function buildProviderKeyBody(): HTMLElement {
   const wrap = document.createElement("div");
@@ -502,9 +494,7 @@ if (providerKeyBtn) {
 // ─── Collection Selector ───
 
 /**
- * Populate the collection dropdown with available collections.
- * Currently shows only the wallet-derived "Default" collection.
- * Named collections will be added here in the future.
+ * Populates the collection dropdown.
  */
 function syncCollectionSelect() {
   if (!collectionSelect) return;
@@ -545,9 +535,10 @@ function syncCollectionSelect() {
 const assetMessages = new Map<string, AssetMessageHandle>();
 
 /**
- * Active version for typed-prompt retexture. Set on generation result,
- * Show-in-Studio, and bubble/history restore; cleared by detach, Clear
- * Chat, and asset switch. The GLB CID is the durable reference — no expiry.
+ * Active version for typed-prompt retexture.
+ * @remarks Set on generation result, Show-in-Studio, and bubble/history
+ *   restore; cleared by detach, Clear Chat, and asset switch. The GLB CID is
+ *   the durable reference — no expiry.
  */
 interface ActiveVersion {
   sourceAssetCid: string;
@@ -570,9 +561,9 @@ function setActiveVersion(version: ActiveVersion | null) {
 refineIndicatorDetach?.addEventListener("click", () => setActiveVersion(null));
 
 /**
- * Clear the chat: dispose all live previews, reset the pending-generation
- * store and bubble handles, restore the welcome placeholder, and break the
- * refine chain so the next generation starts a brand-new model.
+ * Clears the chat: disposes live previews, resets pending generations and
+ * bubble handles, and breaks the refine chain so the next generation starts
+ * fresh.
  */
 function clearChat() {
   disposeAllChatPreviews();
@@ -620,12 +611,10 @@ async function attachChatPreview(
 }
 
 /**
- * Send a pending generation to the Studio viewport: runs the same
- * clear → state → URL → load tail that generation used to run inline,
- * then disposes the preview and collapses the bubble.
- * @param options - restore=true preserves the
- *   manifest-chain tip across the load so the auto-save chains onto the
- *   prior tip instead of forking at the restored (older) version.
+ * Sends a pending generation to the Studio viewport.
+ * @remarks `restore=true` preserves the manifest-chain tip across the load so
+ *   auto-save chains onto the prior tip instead of forking at the older
+ *   version.
  */
 async function sendGenerationToStudio(
   generationId: string,
@@ -723,11 +712,8 @@ async function sendGenerationToStudio(
 }
 
 /**
- * Re-send an already-sent generation to the Studio — the path taken when the
- * user re-clicks Show in Studio on a sent bubble. Resets the record to
- * pending so the send path accepts it again, then runs the normal
- * Show-in-Studio tail (which also makes the restored version the active
- * version).
+ * Re-sends an already-sent generation to the Studio when Show in Studio is
+ * re-clicked.
  */
 async function restoreGeneration(generationId: string) {
   const assetMessage = assetMessages.get(generationId);
@@ -798,17 +784,16 @@ function buildTransformMatrix() {
 // ─── Stoppable Generation Tasks ───
 
 /**
- * True for a user-initiated cancel — call sites surface a neutral message
- * instead of the error mapping.
+ * Returns true for a user-initiated cancel.
+ * @remarks Call sites surface a neutral message instead of the error mapping.
  */
 function isGenerationCancelled(err: unknown): boolean {
   return err instanceof ApiError && err.code === "GENERATION_CANCELLED";
 }
 
 /**
- * Stop confirmation dialog: resolves true only via the Stop button.
- * Credits spent with the provider are not refunded — the warning is the
- * point of the dialog.
+ * Shows the stop confirmation dialog; resolves true only via the Stop button.
+ * @remarks Spent credits are not refunded — the warning is the point.
  */
 function showStopTaskDialog(): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
@@ -825,9 +810,10 @@ function showStopTaskDialog(): Promise<boolean> {
 }
 
 /**
- * Confirm stopping an in-flight generation, then abort polling and evict
- * the backend task (best-effort upstream cancel; the registry TTL sweeps
- * the entry regardless).
+ * Confirms stopping an in-flight generation, then aborts polling and evicts
+ * the backend task.
+ * @remarks The upstream cancel is best-effort; the registry TTL sweeps the
+ *   entry regardless.
  */
 async function confirmStopTask(
   controller: AbortController,
@@ -880,7 +866,6 @@ function addStoppableWorkingMessage(workingText: string): {
 /**
  * Shared pre-flight for the follow-up actions: wallet connected (else alert)
  * and session established (else a sign-in toast naming the action).
- * @returns true when both gates pass
  */
 async function ensureFollowupGates(action: string): Promise<boolean> {
   if (!walletState.get().walletAddress) {
@@ -929,12 +914,9 @@ function beginFollowup(prompt: string, workingText: string, kind: string) {
 }
 
 /**
- * Error mapping for the follow-up actions. All variants share the same
- * skeleton; the options pick which canned messages apply:
- * - notRiggable: message for MODEL_NOT_RIGGABLE (rig/animate paths)
- * - timeout: message for GENERATION_TIMEOUT (retopo/animate)
- * - auth: canned 401/402 Tripo3D messages (retopo/rig/animate, not retries)
- * - passThroughMessage: non-ApiError err.message fallback (retopo/animate)
+ * Maps a follow-up error to user-facing copy.
+ * @remarks The option flags select which canned messages apply
+ *   (notRiggable, timeout, auth, passThroughMessage).
  */
 function followupErrorMessage(
   err: unknown,
@@ -1062,9 +1044,9 @@ function animatePresetLabel(preset: string): string {
  * @returns the pending generation id
  */
 /**
- * Wire a bubble's Show in Studio button — the ONLY way a bubble's model
- * enters the Studio (the preview is orbit-only). The button stays live
- * after sending: re-clicking a sent bubble restores that version.
+ * Wires a bubble's Show in Studio button.
+ * @remarks The only way a bubble's model enters the Studio (the preview is
+ *   orbit-only); re-clicking a sent bubble restores that version.
  */
 function wireSendButton(generationId: string, assetMessage: AssetMessageHandle) {
   registerAssetSendHandler(generationId, (id) => {
@@ -1134,9 +1116,9 @@ function presentGenerationResult(
 }
 
 /**
- * Attach the version-card action row to a generation bubble. Availability
- * comes from followupActionsFor; each action runs against the bubble's own
- * GLB (sourceAssetCid), so any bubble stays actionable indefinitely.
+ * Attaches the version-card action row to a generation bubble.
+ * @remarks Each action runs against the bubble's own GLB (sourceAssetCid), so
+ *   any bubble stays actionable indefinitely.
  */
 function addFollowupActions(generationId: string, _bubbleEl: HTMLElement | null = null) {
   const record = getPendingGeneration(generationId);
@@ -1156,15 +1138,10 @@ function addFollowupActions(generationId: string, _bubbleEl: HTMLElement | null 
 }
 
 /**
- * Present a staged model (uploaded, dropped, or already open) as a chat
- * bubble with live preview and the follow-up action row (Retexture · Retopo ·
- * Auto-rig · Animate…) — the actions run off the staged sourceAssetCid, so
- * any glTF/GLB with a CID is immediately retopo-able.
- *
- * `assetManifestCid` is null for viewport drops (the model is already in the
- * Studio as an unsaved change) — the bubble's Send button is disabled there.
- * Otherwise the bubble keeps the usual Show-in-Studio behavior against that
- * manifest (re-clicking the button restores the version).
+ * Presents a staged model (uploaded, dropped, or already open) as an
+ * actionable chat bubble with a live preview.
+ * @remarks Actions run off the staged sourceAssetCid. `assetManifestCid` is
+ *   null for viewport drops, where the Send button is disabled.
  * @returns the pending generation id
  */
 function presentStagedModel({
@@ -1220,10 +1197,8 @@ function presentStagedModel({
 }
 
 /**
- * ASSET_FILE_STAGED entry point (viewport drop, Library upload): present the
- * freshly staged model as an actionable bubble. `assetManifestCid` is null
- * for viewport drops (the model is already in the Studio as an unsaved
- * change) — the bubble's Send button is disabled there.
+ * Presents a freshly staged model (viewport drop or Library upload) as an
+ * actionable bubble.
  * @returns the pending generation id
  */
 function presentUploadedModel({
@@ -1239,11 +1214,10 @@ function presentUploadedModel({
 }
 
 /**
- * Present an already-open asset's root model as an actionable bubble, so
- * assets that predate chat provenance (or were never generated in-app) still
- * offer Retopo/Retexture/Auto-rig/Animate against the open model. Skipped
- * when the chat already has live bubbles (a fresh generation session) or the
- * tip manifest carries provenance (its history bubbles are actionable).
+ * Presents an already-open asset's root model as an actionable bubble so
+ * assets that predate chat provenance still offer follow-up actions.
+ * @remarks Skipped when the chat already has live bubbles or the tip manifest
+ *   carries provenance.
  */
 function presentOpenedAssetModel(manifest: any, manifestCid: string) {
   if (assetMessages.size > 0) return; // live session bubbles already present
@@ -1270,8 +1244,8 @@ const RIG_MODEL_OPTIONS = [
 ];
 
 /**
- * Build a rig model radio group as a DOM fragment. When `selectedValue`
- * is provided that radio is pre-checked; the caller reads `wrap.dataset.value`.
+ * Builds a rig model radio group as a DOM fragment.
+ * @remarks The caller reads the selection back from `wrap.dataset.value`.
  */
 function buildRigModelSelector(selectedValue = ""): HTMLElement {
   const wrap = document.createElement("div");
@@ -1324,9 +1298,8 @@ function buildRigModelSelector(selectedValue = ""): HTMLElement {
 }
 
 /**
- * Rig model selector dialog — standalone, used by Auto-rig and retry chips.
- * @param title - dialog title
- * @returns rig model value (empty = auto), or null
+ * Shows the rig model selector dialog.
+ * @returns the rig model value (empty = auto), or null.
  */
 function showRigModelDialog(title = "Rig Model"): Promise<string | null> {
   return new Promise<string | null>((resolve) => {
@@ -1491,8 +1464,8 @@ async function retryAnimate(generationId: string, rigModel: string) {
 }
 
 /**
- * Polygon-budget dialog for retopo. Returns the face limit, undefined for
- * adaptive, or null when cancelled.
+ * Shows the polygon-budget dialog for retopo.
+ * @returns the face limit, undefined for adaptive, or null when cancelled.
  */
 function showFaceLimitDialog(): Promise<number | undefined | null> {
   return new Promise<number | undefined | null>((resolve) => {
@@ -1517,8 +1490,8 @@ function showFaceLimitDialog(): Promise<number | undefined | null> {
 }
 
 /**
- * Texture prompt dialog for retexture. Returns the trimmed prompt, or null
- * when cancelled or left empty.
+ * Shows the texture prompt dialog for retexture.
+ * @returns the trimmed prompt, or null when cancelled or empty.
  */
 function showTexturePromptDialog(): Promise<string | null> {
   return new Promise<string | null>((resolve) => {
@@ -1582,10 +1555,9 @@ async function onRetexture(generationId: string) {
 }
 
 /**
- * Smart retopology: rebuild a completed Tripo3D generation with clean
- * topology and baked textures (Tripo mesh/decimate v2.0). The retopo'd model
- * lands as a new chat bubble and can itself be rigged & animated — clean
- * topology deforms far better than raw generation output.
+ * Rebuilds a completed generation with clean topology and baked textures.
+ * @remarks The retopo'd model lands as a new bubble and can itself be rigged
+ *   and animated — clean topology deforms better than raw output.
  */
 async function onRetopo(generationId: string) {
   const record = getPendingGeneration(generationId);
@@ -1644,9 +1616,9 @@ async function onRetopo(generationId: string) {
 }
 
 /**
- * Auto-rig a generation bubble (no animation): backend rig-check → rig →
- * Rigged-GLB chat bubble (Tripo-native skeleton). The rigged result keeps the Animate action,
- * which then takes the retarget-only path.
+ * Auto-rigs a generation bubble (no animation) into a rigged GLB bubble.
+ * @remarks The rigged result keeps the Animate action, which then takes the
+ *   retarget-only path.
  */
 async function onAutoRig(generationId: string) {
   const record = getPendingGeneration(generationId);
@@ -1694,9 +1666,7 @@ async function onAutoRig(generationId: string) {
 }
 
 /**
- * Rig & animate a generation bubble: preset picker → backend animate chain
- * (rig-check → rig → retarget, or retarget-only on an already-rigged bubble
- * via sourceTaskId) → animated GLB chat bubble.
+ * Rigs and animates a generation bubble into an animated GLB bubble.
  */
 async function onAnimate(generationId: string) {
   const record = getPendingGeneration(generationId);
@@ -1869,9 +1839,7 @@ async function onAnimate(generationId: string) {
 }
 
 /**
- * Map a generation failure to the user-facing chat message. ApiError status
- * codes get canned copy (400 keeps the server's message), anything else falls
- * back to err.message, then to a generic line.
+ * Maps a generation failure to user-facing chat copy.
  */
 function generationErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -1917,13 +1885,10 @@ interface PromptAndImagePayload {
 }
 
 /**
- * Shape the prompt + attached images into the wire payload. Returns null when
- * there is nothing to generate (empty prompt, no images). Image-only
- * generations get a synthesized prompt so chat history, manifest provenance,
- * and display names all carry meaningful text. Wire contract: 1 image →
- * legacy imageData/imageMime; 2+ → images array of {imageData, imageMime,
- * view} in canonical view order (imageName rides along for the manifest but
- * is stripped from the POST body by api.js).
+ * Shapes the prompt and attached images into the wire payload.
+ * @remarks Returns null when there is nothing to generate. Image-only
+ *   generations get a synthesized prompt so chat history, provenance, and
+ *   display names all carry meaningful text.
  */
 function buildPromptAndImagePayload(): PromptAndImagePayload | null {
   const prompt = promptInput.value.trim();
@@ -1999,10 +1964,7 @@ function echoPromptInChat({
 }
 
 /**
- * Assemble the generateAsset request body. Conditional fields: BYOK key (real
- * providers only), retexture source (typed follow-ups), image payload,
- * texture quality (Tripo3D only), and the stoppable-task wiring (real
- * providers only).
+ * Assembles the generateAsset request body.
  */
 function buildGenerateAssetArgs({
   effectivePrompt,

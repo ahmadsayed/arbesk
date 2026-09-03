@@ -5,9 +5,7 @@ import "./ArbeskAssetBase.sol";
 
 /**
  * @title ArbeskAssetFree
- * @dev Free-tier contract: NFT + Merkle-root editor architecture.
- *      Inherits base NFT/Merkle logic from ArbeskAssetBase.
- *      Adds free `recordGeneration()` with a 10/day per-wallet quota.
+ * @dev Free-tier contract that adds a 10/day per-wallet generation quota.
  *
  *      MAX_EDITORS_PER_TOKEN = 5000 (safety net — full list on IPFS).
  */

@@ -1,11 +1,9 @@
 /**
- * Image MIME sniffing for the glTF pipeline — the single implementation used
- * by the GLB parser (main thread) and the glTF Web Worker.
- *
- * Magic-byte signature table: required byte values at absolute offsets, -1 as
- * a wildcard (the WebP RIFF size field). KTX2 is what keeps Basis-compressed
- * glTF textures working — generic sniffers (file-type et al.) don't cover it,
- * which is why this table exists instead of a library.
+ * Image MIME sniffing for the glTF pipeline.
+ * @remarks KTX2 keeps Basis-compressed glTF textures working — generic
+ *   sniffers don't cover it, which is why this signature table exists
+ *   instead of a library.
+ * Used by the GLB parser and the glTF Web Worker.
  */
 
 const IMAGE_SIGNATURES: Array<{ mime: string; magic: number[] }> = [

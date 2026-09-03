@@ -11,8 +11,7 @@ export type GenerationCapability =
   | "animate"
   | "balance";
 
-/** A source model/image for a follow-up op. Tripo wants a file_token; mock
- *  reads local files; the caller only hands the facade one of these. */
+/** A source model/image for a follow-up op. */
 export type SourceRef =
   | { kind: "fileToken"; fileToken: string }
   | { kind: "buffer"; buffer: Uint8Array; mime: string }

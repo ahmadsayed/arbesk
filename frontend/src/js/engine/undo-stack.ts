@@ -1,10 +1,7 @@
 /**
- * Arbesk Undo Stack
- *
- * Headless, scene-agnostic undo/redo stacks shared by every Studio edit type
- * (transforms, parametric colors). Capture sites push one snapshot entry per
- * completed gesture; engine/undo-controller.js pops entries and applies them.
- * In-memory only — survives Save Draft/Publish, cleared on scene reload.
+ * Headless, scene-agnostic undo/redo stacks for every Studio edit type.
+ * @remarks In-memory only — survives Save Draft/Publish, cleared on scene
+ *   reload.
  */
 
 export interface UndoItem {
@@ -34,8 +31,9 @@ function _notify() {
 }
 
 /**
- * Push a completed edit. Clears the redo stack (standard invalidation).
- * The entry must not be mutated after push (stored by reference).
+ * Pushes a completed edit.
+ * @remarks Clears the redo stack, and the entry must not be mutated after
+ *   push (it is stored by reference).
  */
 export function pushUndoEntry(entry: UndoEntry) {
   if (!entry || !Array.isArray(entry.items) || entry.items.length === 0) return;
@@ -87,8 +85,8 @@ export function clearUndoStacks() {
 }
 
 /**
- * @param cb called after every stack mutation
- * @returns unsubscribe
+ * @remarks cb is called after every stack mutation.
+ * @returns unsubscribe function.
  */
 export function onUndoStackChange(cb: () => void): () => void {
   listeners.add(cb);

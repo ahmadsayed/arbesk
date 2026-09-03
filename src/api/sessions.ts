@@ -1,14 +1,9 @@
 /**
- * Session-based authentication for Arbesk API.
- *
- * Uses SIWE (EIP-4361) for wallet ownership proof.
- * The user signs a standard SIWE message once, the backend verifies it,
- * and issues an opaque session token valid for 24 hours.
- * Subsequent generation calls use that token instead of a new signature.
- *
- * The token is stored in the browser's localStorage. The only attack vector
- * is physical access to the browser - accepted as a reasonable trade-off
- * for eliminating the per-generation MetaMask pop-up.
+ * Session-based authentication for the Arbesk API.
+ * @remarks A one-time SIWE (EIP-4361) signature mints an opaque 24-hour token
+ *   that replaces per-generation signatures. The token lives in browser
+ *   localStorage; the accepted trade-off is physical browser access versus
+ *   eliminating the per-generation MetaMask pop-up.
  */
 
 import express from "express";

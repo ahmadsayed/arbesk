@@ -1,11 +1,9 @@
 /**
- * Direct Source Color Editor
- *
- * Edits per-component colors directly inside a monolithic glTF/GLB source asset.
- * No post-processor overrides - the color is baked into the source CID.
- *
- * The pure glTF-JSON mutation lives in apply-node-colors.ts (worker-safe: no
- * runtime ports, no @gltf-transform); this module adds the IPFS-backed flow.
+ * Edits per-component colors directly inside a monolithic glTF/GLB source
+ * asset.
+ * @remarks No post-processor overrides — the color is baked into the source
+ *   CID. The pure glTF-JSON mutation lives in apply-node-colors.ts; this
+ *   module adds the IPFS-backed flow.
  */
 
 import { getRuntime } from "../../runtime.ts";
@@ -15,16 +13,12 @@ import { applyNodeColors } from "./apply-node-colors.ts";
 export { applyNodeColors };
 
 /**
- * Edit colors in a source asset (glTF JSON or GLB) and upload the new asset.
- *
- * The stored result is always glTF JSON: GLB sources are decomposed into a
- * composite glTF first (colors live in JSON, so we never re-serialize back to
- * GLB). The returned `format`/`path` let the caller keep the manifest node in
- * sync - a node whose source was a GLB must stop claiming `format: "glb"` once
- * its content is glTF JSON, or the loader picks the binary-GLB path and fails.
- *
- * @param sourceCid - Current source CID
- * @param nodeColors - { "nodeName": "#RRGGBB", ... }
+ * Edits colors in a source asset (glTF JSON or GLB) and uploads the new asset.
+ * @remarks The stored result is always glTF JSON — GLB sources are decomposed
+ *   first (colors live in JSON, never re-serialized to GLB). The returned
+ *   `format`/`path` keep the manifest node in sync: a node whose source was
+ *   GLB must stop claiming `format: "glb"`, or the loader takes the binary-GLB
+ *   path and fails.
  */
 export async function editSourceColors(
   sourceCid: string,

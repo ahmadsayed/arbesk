@@ -1,8 +1,6 @@
 /**
- * Theme Initializer
- *
- * Runs before page render to prevent flash of wrong theme.
- * Reads saved theme from localStorage or system preference.
+ * Initializes the page theme.
+ * @remarks Runs before page render to prevent a flash of the wrong theme.
  */
 (function () {
   const s = localStorage.getItem("arbesk-theme");

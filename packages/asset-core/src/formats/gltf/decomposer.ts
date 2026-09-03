@@ -1,19 +1,10 @@
 /**
- * Arbesk glTF Decomposer
- *
- * Takes a standard glTF 2.0 JSON (with data-URI buffers and images) and
- * decomposes it into individually content-addressed components on IPFS. This
- * is the `decompose` half of the glTF FormatCodec (formats/codec.ts).
- *
- * Decomposition strategy:
- *   - buffers (.bin binary)  ->  stored individually on IPFS, referenced by CID
- *   - images (.png/.jpg/...)  ->  stored individually on IPFS, referenced by CID
- *   - materials, nodes, scenes, meshes, accessors, bufferViews, textures,
- *     samplers, animations, skins, cameras  ->  kept inline in the composite JSON
- *
- * The output is a "composite glTF" referencing components by `ipfs://<CID>`.
- * When a user edits material colors, only the composite CID changes;
- * buffers and images stay at their original CIDs (IPFS deduplication).
+ * Decomposes a standard glTF 2.0 JSON into content-addressed components on
+ * IPFS.
+ * @remarks Buffers and images are stored by CID while materials, nodes,
+ *   scenes, and the rest stay inline in the composite JSON. Editing material
+ *   colors changes only the composite CID; buffers and images keep their
+ *   original CIDs (IPFS deduplication).
  */
 
 import { sanitizeFileName } from "../../utils/uri.ts";
@@ -30,17 +21,12 @@ import type { DecomposeOptions } from "../codec.ts";
 export { isComposite };
 
 /**
- * Decompose a standard glTF JSON: extract buffers and images, store each
- * on IPFS, replace URIs with `ipfs://<CID>`, and return the composite JSON
- * together with its CID (when stored).
- *
- * If the glTF is already composite, extraction is skipped (the composite is
- * returned as-is); `store: true` still persists it so the caller always gets
- * a `compositeCid` — matching the previous decomposeAndStore behavior.
- *
- * @param gltf - Standard glTF 2.0 JSON (with data-URI buffers/images; dynamic schema)
- * @param opts - credential, compress, assetName/assetId, dedupMap, store
- * @returns { composite, compositeCid? } composite glTF JSON with ipfs:// URIs
+ * Decomposes a standard glTF JSON into a composite, storing buffers/images
+ * on IPFS and replacing their URIs with `ipfs://<CID>`.
+ * @remarks If the glTF is already composite, extraction is skipped; with
+ *   `store: true` it is still persisted so the caller always gets a
+ *   `compositeCid`.
+ * @param gltf - Standard glTF 2.0 JSON (with data-URI buffers/images)
  */
 export async function decompose(
   gltf: any,

@@ -1,11 +1,9 @@
 /**
- * Pure view-assignment logic for multiview image-to-3D attach chips.
- *
- * Each attached image carries a `view` ("front" | "left" | "back" | "right").
- * Views are unique across the set, chips always render in canonical order,
- * changing a view swaps with the current holder, and removing the front chip
- * promotes the earliest remaining canonical view to front. Every operation
- * returns a NEW canonical-sorted array — nothing mutates in place.
+ * View-assignment logic for multiview image-to-3D attach chips.
+ * @remarks Views are unique and always render in canonical order; changing a
+ *   view swaps with the holder, removing the front chip promotes the earliest
+ *   remaining view, and every operation returns a new array (nothing mutates
+ *   in place).
  */
 
 export const VIEW_ORDER = ["front", "left", "back", "right"];
@@ -20,8 +18,9 @@ export const VIEW_LABELS: Record<string, string> = {
 export const MAX_ATTACH_IMAGES = VIEW_ORDER.length;
 
 /**
- * An attached reference image. `view` is managed here; the remaining fields
- * (base64, mime, name, dataUrl, …) are owned by the caller and carried through.
+ * An attached reference image.
+ * @remarks `view` is managed here; the remaining fields are owned by the
+ *   caller and carried through.
  */
 export interface AttachedImage {
   view: string;
@@ -49,10 +48,7 @@ export function nextAvailableView(images: AttachedImage[]): string {
 }
 
 /**
- * Append an image, auto-assigning the earliest free canonical view.
- * @param images
- * @param entry - image fields (base64, mime, name, dataUrl); `view` is set here
- * @returns new canonical-sorted array
+ * Appends an image, auto-assigning the earliest free canonical view.
  */
 export function addAttachedImage(
   images: AttachedImage[],
@@ -65,12 +61,8 @@ export function addAttachedImage(
 }
 
 /**
- * Change one chip's view. When the target view is already held by another
- * chip, the two chips SWAP views so uniqueness is preserved.
- * @param images
- * @param index - index into `images`
- * @param view - target view
- * @returns new canonical-sorted array
+ * Changes one chip's view, swapping with the holder when the target view is
+ * already taken.
  */
 export function setAttachedImageView(
   images: AttachedImage[],
@@ -89,11 +81,8 @@ export function setAttachedImageView(
 }
 
 /**
- * Remove a chip. When the removed chip held "front", the remaining chip with
- * the earliest canonical view (left → back → right) is promoted to front.
- * @param images
- * @param index - index into `images`
- * @returns new canonical-sorted array
+ * Removes a chip, promoting the earliest remaining view to front when the
+ * removed chip held "front".
  */
 export function removeAttachedImage(
   images: AttachedImage[],

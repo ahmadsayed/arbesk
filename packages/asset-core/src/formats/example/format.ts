@@ -1,21 +1,15 @@
 /**
- * "example" — a minimal dummy format that exists purely as a reference for
- * adding a real format (OBJ, STL, FBX, USDZ…) to asset-core.
+ * A minimal dummy format used purely as a reference for adding a real format
+ * (OBJ, STL, FBX, USDZ…) to asset-core.
  *
- * START HERE. This file owns the canonical constants, types, and predicates.
- * It is PURE: no IPFS, no browser globals, no Babylon. All I/O lives in
- * composer.ts (reads via the injected IpfsReadPort) and decomposer.ts (writes
- * via the injected IpfsWritePort + uploadWithDedup) — the exact split every
- * real format in this package should follow (see gltf/ and 3mf/).
+ * @remarks This file owns the canonical constants, types, and predicates and
+ *   is pure (no IPFS, browser globals, or Babylon); all I/O lives in
+ *   composer.ts/decomposer.ts, the split every real format should follow.
  *
- * Raw on-disk form (extension `.example`):
- *   line 1:  "ARBESK-EXAMPLE <name>\n"   (UTF-8 header)
- *   line 2+: opaque payload bytes        (text or binary, preserved verbatim)
- *
- * Stored form (composite JSON): the payload is content-addressed to IPFS as a
- * single binary part; the name and part metadata are kept inline. This is the
- * same "small metadata inline, blobs by CID" split glTF and 3MF use, and it is
- * what lets repeated saves deduplicate unchanged bytes.
+ *   Raw on-disk form: line 1 is an "ARBESK-EXAMPLE <name>" header; the rest
+ *   is opaque payload bytes. Stored form: the payload is content-addressed to
+ *   IPFS as one binary part, with name and part metadata inline, so repeated
+ *   saves deduplicate unchanged bytes.
  */
 
 export const EXAMPLE_FORMAT = "example";
@@ -25,7 +19,7 @@ export const COMPOSITE_EXAMPLE_PATH = "composite.example.json";
 export const COMPOSITE_EXAMPLE_MARKER = "composite-example";
 export const EXAMPLE_MAGIC = "ARBESK-EXAMPLE";
 
-/** Neutral in-memory representation produced by parser.ts. */
+/** Neutral in-memory representation. */
 export interface ParsedExample {
   name: string;
   payload: Uint8Array;

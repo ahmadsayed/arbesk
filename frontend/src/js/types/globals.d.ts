@@ -1,10 +1,8 @@
 /**
  * Minimal ambient declarations for libraries loaded via CDN script tags.
- *
- * These are intentionally broad (`any`) because the project does not pull
- * Babylon.js or IpfsHttpClient from npm, so full type packages are
- * not available. Keep this file small and only declare globals that are
- * actually referenced by the checked source files.
+ * @remarks Declarations are broad (`any`) because Babylon.js and IpfsHttpClient
+ *   come from CDNs, not npm, so full type packages are unavailable. Keep this
+ *   file small and only declare globals the checked sources reference.
  */
 
 declare const IpfsHttpClient: any;

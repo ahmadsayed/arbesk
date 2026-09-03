@@ -1,9 +1,7 @@
 /**
- * Arbesk Shared Backend Configuration
- *
- * Supports multiple networks with per-chain contract addresses,
- * USDC tokens, and RPC URLs. Falls back to legacy env vars for
- * backward compatibility.
+ * Arbesk backend configuration: per-network contract addresses, USDC tokens,
+ * and RPC URLs.
+ * @remarks Falls back to legacy env vars for backward compatibility.
  */
 
 import { createPublicClient, http } from "viem";
@@ -67,12 +65,10 @@ export function getContractAddress(chainId: any): string | null {
 }
 
 /**
- * Return the chain's configured Arbesk contract set: the free-tier contract
- * first, then the paid-tier contract when configured for that chain. For the
- * default/unknown chain this falls back to the single address
- * `getContractAddress()` would resolve (env override or first network).
- * Used to allowlist caller-supplied contract addresses and to try both tiers
- * when the caller does not specify one.
+ * Returns the chain's configured Arbesk contract set: free-tier first, then
+ * paid-tier when configured.
+ * @remarks For the default/unknown chain this falls back to the single address
+ *   `getContractAddress()` resolves (env override or first network).
  */
 export function getConfiguredContracts(chainId: any): string[] {
   const cfg = getNetworkConfig(chainId);
@@ -123,10 +119,9 @@ export function getPublicClient(chainId?: number): PublicClient {
 }
 
 /**
- * Get a viem public client for the given chain.
- * Used for ERC-6492 / EIP-1271 universal signature verification.
- * Thin wrapper over getPublicClient that returns null (instead of the
- * default-chain client) when no chain id is given.
+ * Returns a viem public client for the given chain.
+ * @remarks Returns null (not the default-chain client) when no chain id is
+ *   given; used for ERC-6492/EIP-1271 signature verification.
  */
 export function getViemPublicClient(chainId: any): PublicClient | null {
   const id = chainId ? Number(chainId) : null;

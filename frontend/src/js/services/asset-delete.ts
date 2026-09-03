@@ -1,9 +1,7 @@
 /**
- * Shared collection asset deletion helper.
- *
- * Removes a single asset from a collection manifest, saves the updated
- * collection, and updates the on-chain tokenURI. The NFT token itself is
- * never burned.
+ * Removes a single asset from a collection manifest and updates the on-chain
+ * tokenURI.
+ * @remarks The NFT token itself is never burned.
  */
 
 import {
@@ -26,7 +24,8 @@ import { identityMatrix, applyCollectionMutation } from "@arbesk/asset-core/util
 
 /**
  * Build a Merkle editor proof for the wallet against the token's current
- * editor list (defaulting to a fresh wallet-only list when none exists).
+ * editor list.
+ * @remarks Defaults to a fresh wallet-only list when none exists.
  */
 async function buildLocalEditorProof(
   tokenId: string,
@@ -176,8 +175,7 @@ export async function burnCollection(tokenId: string): Promise<string | null> {
 
 /**
  * Load a collection manifest, apply a mutation, write the new manifest to IPFS,
- * and update the on-chain tokenURI. Reuses editor-list/proof logic from delete.
- *
+ * and update the on-chain tokenURI.
  * @param mutate - Receives the collection manifest; should mutate and return it.
  * @returns New collection CID.
  */
@@ -226,9 +224,10 @@ export async function updateCollectionManifest(
 }
 
 /**
- * Link an asset from one collection to another as either a fork (independent
- * copy of the current CID) or a live reference (child_ref pointing back at the
- * source collection asset so future edits propagate).
+ * Link an asset from one collection to another as a fork (independent copy)
+ * or a live reference.
+ * @remarks A live reference is a child_ref pointing back at the source, so
+ *   future edits propagate.
  */
 export async function sendAssetToCollection({
   sourceTokenId,

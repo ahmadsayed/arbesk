@@ -1,14 +1,6 @@
 /**
- * EIP-6963 Multi-Injected Wallet Discovery
- *
- * Detects all browser-installed wallets via the standardized
- * eip6963:announceProvider event. Maintains a registry of available
- * wallets that the user can choose from.
- *
- * Usage:
- *   import { getWallets, requestWallets, onWalletsUpdated, connectWalletByRdns } from './wallet-discovery.ts';
- *   requestWallets();
- *   onWalletsUpdated((wallets) => { console.log('Available:', wallets); });
+ * Detects browser-installed wallets via eip6963:announceProvider and
+ * maintains a registry of available wallets to choose from.
  */
 
 export interface EIP6963Wallet {
@@ -68,8 +60,7 @@ function onAnnounceProvider(event: Event) {
 }
 
 /**
- * Start listening for wallet announcements.
- * Call once at app startup.
+ * Starts listening for wallet announcements.
  */
 export function startDiscovery() {
   if (typeof window === "undefined") return;
@@ -81,8 +72,7 @@ export function startDiscovery() {
 }
 
 /**
- * Request all wallets to announce themselves.
- * Call before showing the wallet picker.
+ * Requests all wallets to announce themselves.
  */
 export function requestWallets() {
   if (typeof window === "undefined") return;
@@ -90,9 +80,8 @@ export function requestWallets() {
 }
 
 /**
- * Register a callback for wallet list updates.
- * @param callback - receives array of EIP6963Wallet
- * @returns unsubscribe function
+ * Registers a callback for wallet list updates.
+ * @returns unsubscribe function.
  */
 export function onWalletsUpdated(
   callback: (wallets: EIP6963Wallet[]) => void

@@ -1,17 +1,13 @@
 /**
- * Wallet readiness guard - shared by services that require a connected wallet.
- *
- * Consolidates scattered "Wallet not connected" / "Wallet or contract not ready"
- * checks from team.js, asset-delete.js, and other service layers.
+ * Wallet-readiness guard for services that require a connected wallet.
+ * @remarks Consolidates the scattered wallet-readiness checks into one place.
  */
 
 import { walletState } from "../state/wallet-state.ts";
 
 /**
- * Assert the wallet is connected and return web3 + contract + address.
- * Throws with a consistent error message if the wallet is not ready.
- *
- * @throws {Error} if wallet is not connected or contract is not initialized
+ * Asserts the wallet is connected and returns the contract and wallet address.
+ * @throws when the wallet is not connected or the contract is not initialized.
  */
 export function requireWallet(): { contract: any; walletAddress: string } {
   const { contract, walletAddress } = walletState.get();

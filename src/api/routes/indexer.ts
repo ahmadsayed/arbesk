@@ -12,13 +12,10 @@ function ts(): string {
 }
 
 /**
- * Resolve the indexer for a chain and force a catch-up before returning so
- * freshly minted tokens show up instead of waiting for the next background
- * poll. The catch-up is skipped if one already ran recently to keep the API
- * fast; the background poll runs every 15s, so new tokens appear within that
- * window even when skipped. A `force=true` query parameter bypasses the
- * throttle so the frontend can request an immediate catch-up right after
- * publishing.
+ * Resolves the indexer for a chain and forces a catch-up before returning so
+ * freshly minted tokens show up.
+ * @remarks Catch-up is skipped if one ran recently (the 15s background poll
+ *   covers the gap); `force=true` bypasses the throttle.
  */
 async function withFreshIndexer(
   chainId: number,

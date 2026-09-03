@@ -1,12 +1,7 @@
 /**
- * Arbesk Animation Preview
- *
- * Inspector "Animations" section: when the single selected node's model
- * contains glTF animation groups (captured per nodeId in
- * state.nodeAnimationGroups by scene-loader), the user can pick a clip to
- * preview it looped in the viewport. Purely ephemeral — nothing is staged
- * or persisted. Babylon's glTF loader is configured with
- * animationStartMode NONE (babylon-loader.js) so nothing auto-plays.
+ * Inspector "Animations" section: lets the user preview a glTF animation clip
+ * from the single selected node, looped in the viewport.
+ * @remarks Purely ephemeral — nothing is staged or persisted.
  */
 
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";

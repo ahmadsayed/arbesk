@@ -16,14 +16,9 @@ export interface MockGenerateResult {
 }
 
 /**
- * Generate a mock asset from local files.
- *   - box.3mf for 3MF prompts ("3mf")
- *   - howdy.glb for cowboy/western prompts
- *   - suka.gltf for character/figure/person/avatar prompts
- *   - intro.gltf for everything else
- *
- * `_opts` is accepted for interface compatibility with real cloud adapters;
- * the mock ignores them.
+ * Generates a mock asset from local files.
+ * @remarks `_opts` is accepted for interface compatibility with real cloud
+ *   adapters; the mock ignores it.
  */
 export async function mockGenerate(
   prompt: string,

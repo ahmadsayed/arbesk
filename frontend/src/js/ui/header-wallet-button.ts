@@ -1,16 +1,7 @@
 /**
- * Header wallet button — Alpine.js component.
- *
- * Renders the headerbar wallet controls from the reactive
- * `Alpine.store("headerWallet")`:
- *   - disconnected: show #connectWalletBtn, hide #disconnectWalletBtn
- *   - connected via CDP email: email/"Account" label, hide network selector
- *   - connected via crypto wallet: truncated address + optional Sign In dot
- *
- * The DOM lives in app.pug (.headerbar-actions, `x-data="headerWallet"`).
- * The store syncs itself from walletState + auth bus events, and the legacy
- * exported updaters remain as thin store writers so existing callers
- * (app-init.js) keep working unchanged.
+ * Headerbar wallet controls.
+ * @remarks The legacy exported updaters remain as thin store writers so
+ *   existing callers keep working unchanged.
  */
 
 import { truncateAddress } from "../utils/format.ts";
@@ -93,10 +84,9 @@ export function headerWallet(): HeaderWalletComponent {
     },
 
     /**
-     * Alpine init hook: SEED from current state, then follow bus events.
-     * Seeding is mandatory: auto-connect on page load can set walletState and
-     * emit WALLET_CONNECTED before Alpine.start() (DOMContentLoaded), and a
-     * subscriber registered here would never see those earlier events.
+     * Alpine init hook: seeds from current state, then follows bus events.
+     * @remarks Seeding is mandatory — page-load auto-connect can emit before
+     *   Alpine.start(), and a subscription-only init would miss those events.
      */
     init() {
       const syncFromStore = (s: any) => {
@@ -121,8 +111,7 @@ export function headerWallet(): HeaderWalletComponent {
 // ─── Legacy imperative API (now thin store writers) ──────────────────
 
 /**
- * Update the header wallet button and network selector.
- * Writes to the reactive store; Alpine bindings update the DOM.
+ * Updates the header wallet button and network selector.
  */
 export function updateHeaderWalletButton(
   address: string | null,
@@ -138,8 +127,8 @@ export function updateHeaderWalletButton(
 }
 
 /**
- * Update the header wallet button using the current walletSource/email from
- * walletState, so callers only need to pass what actually changed.
+ * Updates the header wallet button using the current walletSource/email.
+ * @remarks Callers only pass what actually changed.
  */
 export function updateHeaderWalletButtonFromState(
   address: string | null,

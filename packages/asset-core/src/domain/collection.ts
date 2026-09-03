@@ -1,8 +1,6 @@
 /**
  * Domain: Collection — collection-context state commands.
- *
- * Owns reads/writes of activeCollectionTokenId and selectedCollectionId.
- * The canonical publish seam is added in Task 2.
+ * @remarks Owns reads/writes of activeCollectionTokenId and selectedCollectionId.
  */
 import { assetStore } from "./asset-store.ts";
 import {
@@ -31,7 +29,7 @@ export function adoptOpenedCollection(
 }
 
 /**
- * Select a target collection for the next publish (collection dropdown).
+ * Selects a target collection for the next publish.
  */
 export function selectCollection(tokenId: string | number | null) {
   assetStore.set({
@@ -44,7 +42,7 @@ export function clearSelectedCollection() {
   assetStore.set({ selectedCollectionId: null });
 }
 
-/** Clear the active collection context entirely (library close-out / error). */
+/** Clears the active collection context entirely. */
 export function clearActiveCollection() {
   assetStore.set({
     activeCollectionTokenId: null,
@@ -80,9 +78,9 @@ export interface PublishCollectionResult {
 }
 
 /**
- * Build the next collection manifest for the asset, write it to IPFS, and
- * anchor it on-chain. Canonical implementation; the thin service wrapper
- * injects chain/IPFS/editor helpers.
+ * Builds the next collection manifest for the asset, writes it to IPFS, and
+ * anchors it on-chain.
+ * @remarks This is the canonical publish path.
  */
 export async function publishCollection(
   assetCid: string,

@@ -1,10 +1,8 @@
 /**
- * Arbesk Scene Camera
- *
  * Camera framing, content-adaptive zoom range/clip planes, and viewport
- * chrome (grid/axes) scaling. Extracted from scene-graph.js.
- * The Studio viewport is perspective-only — same projection as the library
- * and chat preview cameras, one code path for all of them.
+ * chrome (grid/axes) scaling.
+ * @remarks The Studio viewport is perspective-only (one code path shared with
+ *   the library and chat preview cameras).
  */
 
 import { state } from "./state.ts";
@@ -54,7 +52,7 @@ function _getNonChromeMeshes(): BABYLON.AbstractMesh[] {
 }
 
 /**
- * Frame all non-chrome meshes in the scene (Home key).
+ * Frames all non-chrome meshes in the scene.
  */
 function frameAll() {
   if (!state.scene) return;
@@ -70,8 +68,9 @@ function frameAll() {
 }
 
 /**
- * Frame the current selection (F key). With a multi-selection, frames the
- * combined bounds of every selected node.
+ * Frames the current selection.
+ * @remarks A multi-selection frames the combined bounds of every selected
+ *   node.
  */
 function frameSelected() {
   const ids =
@@ -95,10 +94,10 @@ function frameSelected() {
 }
 
 /**
- * Resize the camera zoom range and viewport chrome (ground grid / axes) to
- * match the currently-loaded scene. Large models need a much larger max zoom
- * (radius) than the default 500, and the grid/axes must grow so they still
- * frame the model instead of disappearing inside it.
+ * Resizes the camera zoom range and viewport chrome (grid/axes) to match the
+ * loaded scene.
+ * @remarks Large models need a much larger max zoom than the default 500, and
+ *   the grid/axes must grow so they still frame the model.
  */
 function updateCameraRangeForScene() {
   if (!state.camera || !state.scene) return;
@@ -181,11 +180,9 @@ let _gridBaseScale = 1;
 let _gridAppliedScale = 1;
 
 /**
- * Keep the ground grid covering the visible area as the camera zooms out.
- * The grid is a finite 40×40 plane — far enough out, its edge becomes
- * visible. Grow it in power-of-two steps (never below the model-driven base
- * scale) so cells step coarser at thresholds instead of continuously
- * resizing. Cheap enough to call every frame; writes only on a step change.
+ * Keeps the ground grid covering the visible area as the camera zooms out.
+ * @remarks The grid is a finite 40×40 plane whose edge becomes visible when
+ *   zoomed far enough out.
  */
 function updateGridCoverage() {
   if (!state.camera || !state.scene) return;

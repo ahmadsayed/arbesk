@@ -10,14 +10,13 @@ import { userResolveRateLimit } from "../rate-limiter.ts";
 const Router = express.Router;
 
 /**
- * Scan the project's CDP end users for an exact full-email match and return
- * that user's smart account address. Need-to-know by design: exact match
- * only, no partial search, and only the smart account address is extracted —
- * never the userId, EOA, or the email itself.
- *
- * `email` must be normalized (trimmed, lowercased). Returns null when no end
- * user has this email; `address` is null when the user exists but has no
- * EVM smart account.
+ * Scans the project's CDP end users for an exact full-email match and returns
+ * that user's smart account address.
+ * @remarks Need-to-know by design: exact match only, and only the smart
+ *   account address is extracted (never the userId, EOA, or email). `email`
+ *   must be normalized (trimmed, lowercased). Returns null when no end user
+ *   has this email; `address` is null when the user exists but has no EVM
+ *   smart account.
  */
 async function resolveSmartAccountByEmail(
   cdp: CdpClient,
@@ -31,21 +30,15 @@ async function resolveSmartAccountByEmail(
 /**
  * POST /api/v1/users/resolve-email
  *
- * Checks whether an email belongs to a CDP end user of this project and, if
- * so, returns the user's smart account address — the address an owner adds
- * to a token's Merkle editor list ("Add Editor via Email"). The requester
- * must supply the full, exact email: no listing, no partial matching, no
- * autocomplete. The response is minimal on purpose:
- *   { exists: false }                    — unknown email
- *   { exists: true, address }            — addable as an editor
- *   { exists: true, address: null }      — known user without a smart account
- *
- * Inviting emails that do not exist yet is a deliberate future enhancement
- * and out of scope here.
+ * Checks whether an email belongs to a CDP end user and, if so, returns the
+ * user's smart account address (the address an owner adds to a token's Merkle
+ * editor list).
+ * @remarks No listing, partial matching, or autocomplete: the requester must
+ *   supply the full, exact email, and the email is never written to logs.
+ *   Inviting not-yet-existing emails is a deliberate future enhancement.
  *
  * Body: { email }
- * Auth: Session token required. Rate-limited per wallet to blunt email
- * enumeration. The email is never written to logs.
+ * Auth: Session token required. Rate-limited per wallet.
  */
 export default function usersRoutes() {
   const router = Router();

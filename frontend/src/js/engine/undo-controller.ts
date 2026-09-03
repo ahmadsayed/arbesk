@@ -1,12 +1,8 @@
 /**
- * Arbesk Undo Controller
- *
- * Applies undo/redo entries from undo-stack.js to the live scene and owns the
- * single Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y keyboard dispatcher. Transform entries
- * are applied natively; other entry types (color) register an applier via
- * registerUndoApplier(). Stacks survive Save Draft/Publish and are cleared on
- * SCENE_CLEARED (scene load and time-travel jumps), which rebuilds the scene
- * from a manifest and invalidates every in-memory snapshot.
+ * Applies undo/redo entries to the live scene and owns the keyboard
+ * dispatcher.
+ * @remarks Stacks survive Save Draft/Publish and are cleared on scene reload
+ *   (which rebuilds the scene and invalidates every in-memory snapshot).
  */
 
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -31,10 +27,10 @@ type UndoApplier = (item: UndoItem, direction: UndoDirection) => void;
 const _appliers = new Map<string, UndoApplier>();
 
 /**
- * Register the applier for one entry type. Called per item with the direction
- * being applied ("before" for undo, "after" for redo).
- *
- * @param type - e.g. "transform", "color"
+ * Registers the applier for one entry type.
+ * @remarks The applier is called per item with the direction ("before" for
+ *   undo, "after" for redo).
+ * @param type e.g. "transform" or "color".
  */
 export function registerUndoApplier(type: string, applier: UndoApplier) {
   _appliers.set(type, applier);
@@ -101,12 +97,10 @@ onUndoStackChange(_syncToolbarButtons);
 on(EVENTS.SCENE_CLEARED, () => clearUndoStacks());
 
 /**
- * Decide whether a Ctrl/Cmd+Z / Ctrl/Cmd+Y keydown should trigger undo/redo.
- * Returns null when the key is not z/y or the focus is in a text-editing
- * context (a color input is the one exception — undo is allowed there).
- * @param {string} key - lowercased key
- * @param {boolean} shiftKey
- * @param {HTMLElement|null} activeEl
+ * Decides whether a Ctrl/Cmd+Z / Ctrl/Cmd+Y keydown should trigger undo/redo.
+ * @remarks Returns null when the key is not z/y or focus is in a text-editing
+ *   context (a color input is the exception — undo is allowed there).
+ * @param key lowercased key
  */
 function resolveUndoKeydown(
   key: string,

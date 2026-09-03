@@ -1,16 +1,10 @@
 /**
- * Merkle editor-tree primitives — pure (no runtime/ports), used by the wallet
+ * Merkle editor-tree primitives — pure (no runtime/ports). Used by the wallet
  * facade's getMerkleProof and the @arbesk/authz asset-access check.
- *
- * Leaf encoding matches ArbeskAssetBase._requireEditor:
- *   keccak256(abi.encodePacked(address, role, tokenId, assetScope, editorSetVersion))
- * implemented with viem encodePacked + keccak256 (byte-identical to
- * Web3.utils.soliditySha3 and the asset-core HashPort path).
- *
- * CANONICAL: this is the Merkle source of truth. @arbesk/asset-core keeps an
- * independent copy (domain/editors.ts) because it cannot import this package —
- * the two MUST stay byte-identical for makeLeaf/computeRoot/getProof/verify.
- * A change here must be mirrored there; test/merkle-parity.test.js pins parity.
+ * @remarks Leaf encoding is byte-identical to ArbeskAssetBase._requireEditor and
+ *   asset-core's HashPort path. This module is the Merkle source of truth;
+ *   asset-core keeps an independent copy that MUST stay byte-identical, and
+ *   test/merkle-parity.test.js pins the parity.
  */
 import { SimpleMerkleTree } from "@openzeppelin/merkle-tree";
 import { encodePacked, keccak256 } from "viem/utils";

@@ -6,7 +6,7 @@ import { _setRuntime, getRuntime } from "./runtime-state.ts";
 
 export { getRuntime };
 
-/** Set the process-wide runtime. Called once per environment by createArbeskCore(). */
+/** Sets the process-wide runtime. */
 export function initRuntime(config: ArbeskCoreConfig): ArbeskRuntime {
   const runtime: ArbeskRuntime = {
     ipfsRead: config.ipfsRead,

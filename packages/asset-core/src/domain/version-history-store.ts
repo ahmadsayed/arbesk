@@ -1,15 +1,9 @@
 /**
- * Version History Store (headless)
- *
- * Owns the asset's manifest-chain state: entries (oldest→newest), the active
- * and published CIDs, loading state, and the isHistoryNavigation guard.
- * Logic extracted from the retired ui/asset-history.js; the scene clock and
- * model clock views subscribe here and render it as clock dials.
- *
- * Heavy dependencies (engine, wallet) are injected through the `_deps` seam
- * (`configureVersionHistoryDeps`) so the package stays environment-agnostic
- * and unit tests can stub them without loading the 3D engine. The browser wiring
- * lives in `frontend/src/js/engine/version-history-deps.ts`.
+ * Version History Store (headless).
+ * @remarks Owns the asset's manifest-chain state: entries (oldest→newest),
+ *   active/published CIDs, loading state, and the isHistoryNavigation guard.
+ *   Heavy dependencies (engine, wallet) are injected through the `_deps` seam
+ *   so the package stays environment-agnostic and tests can stub them.
  */
 
 import { on, EVENTS } from "../events/bus.ts";
@@ -46,10 +40,7 @@ export const _deps: VersionHistoryDeps = {
 };
 
 /**
- * Install the environment-specific dependency implementations (browser:
- * engine/time-travel + engine/scene-graph + blockchain/wallet). Called once
- * from the host app's boot wiring; tests may still assign `_deps` fields
- * directly.
+ * Installs the environment-specific dependency implementations.
  */
 export function configureVersionHistoryDeps(deps: Partial<VersionHistoryDeps>) {
   Object.assign(_deps, deps);
@@ -104,7 +95,7 @@ export function activeIndex() {
 }
 
 /**
- * @param cid manifest CID to load
+ * Loads a version by manifest CID.
  */
 export async function loadVersion(cid: string) {
   if (isLoading || cid === activeCid) return;

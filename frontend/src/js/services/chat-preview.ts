@@ -1,19 +1,10 @@
 /**
  * Chat bubble 3D previews.
- *
- * Each pending generation gets a small live, orbitable preview rendered into a
- * canvas inside its chat bubble. Babylon ties one engine to one canvas, so
- * each live preview owns its own engine + scene; the count is hard-capped
- * (MAX_LIVE_PREVIEWS) and previews are disposed as soon as the user sends the
- * model to the Studio, so the page's WebGL context count stays bounded.
- *
- * Rendering is visibility-gated: a preview only runs its render loop while
- * visible in the chat scrollport (IntersectionObserver). Per the project
- * resize rule, engine.resize() runs inside the loop before scene.render().
- *
- * Previews reuse the standard format-handler pipeline (glTF/GLB/3MF) with a
- * scene-local importFromBlob, so a preview loads exactly what the Studio
- * would load — without ever touching the main engine state.
+ * @remarks Babylon ties one engine to one canvas, so each preview owns its own
+ *   engine + scene and the count is hard-capped; previews are disposed on send
+ *   to keep the page's WebGL context count bounded. Previews reuse the standard
+ *   format-handler pipeline so they load exactly what the Studio would load,
+ *   without touching the main engine state.
  */
 
 import { resolveFormatHandler } from "../formats/index.ts";
@@ -96,8 +87,8 @@ function frameCameraOnMeshes(camera: any, meshes: any[]): void {
 }
 
 /**
- * Capture the current canvas contents as a WebP blob. Requires the engine to
- * have been created with preserveDrawingBuffer.
+ * Capture the current canvas contents as a WebP blob.
+ * @remarks Requires the engine to have been created with preserveDrawingBuffer.
  */
 function captureCanvas(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => {
@@ -111,12 +102,10 @@ function captureCanvas(canvas: HTMLCanvasElement): Promise<Blob | null> {
 
 /**
  * Create a live 3D preview for a generation result on the given canvas.
- * Enforces the live-preview cap: when full, the oldest preview is disposed
- * (capturing a snapshot) and reported via onAutoCollapse so its bubble can
- * collapse to the static image.
- *
+ * @remarks Enforces the live-preview cap: when full, the oldest preview is
+ *   disposed (capturing a snapshot) and reported via onAutoCollapse so its
+ *   bubble can collapse to the static image.
  * @param id - pending-generation id
- * @param src - manifest source ref
  * @returns null when the preview could not be created
  */
 export async function createChatPreview(
@@ -242,23 +231,16 @@ export async function createChatPreview(
   }
 }
 
-/**
- * Fetch a live preview handle by id.
- */
 export function getChatPreview(id: string): PreviewHandle | null {
   return livePreviews.get(id) || null;
 }
 
-/**
- * Dispose a live preview by id.
- */
 export async function disposeChatPreview(id: string, opts: { captureSnapshot?: boolean } = {}): Promise<Blob | null> {
   const handle = livePreviews.get(id);
   if (!handle) return null;
   return handle.dispose(opts);
 }
 
-/** Dispose every live preview (page unload / view teardown). */
 export function disposeAllChatPreviews(): void {
   for (const handle of [...livePreviews.values()]) {
     void handle.dispose();

@@ -1,11 +1,8 @@
 /**
- * Unified App Initializer (Studio + Library SPA)
- *
- * Replaces the old per-page engine/studio-init.js + library-init.js. Both views
- * now live in one document (app.html), so this runs ONCE: it initializes the
- * shared shell (theme, wallet, popover, network selector), the Studio panels,
- * the Library controls, and finally the router which activates the initial view
- * from the URL. Top-level script → no CSP 'unsafe-inline' needed.
+ * Initializes the shared Studio + Library app shell once per page load.
+ * @remarks Both views live in one document, so this runs once and the router
+ *   then activates the initial view from the URL. Top-level script, so no CSP
+ *   'unsafe-inline' is needed.
  */
 
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";

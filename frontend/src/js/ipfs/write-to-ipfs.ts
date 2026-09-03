@@ -1,9 +1,6 @@
 /**
- * Arbesk Browser-Side IPFS Writer
- *
- * Fetches a short-lived upload credential from the backend, then uploads
- * directly to the chosen storage backend using the worker-safe primitives in
- * upload-with-credential.js.
+ * Browser-side IPFS writer: fetches a short-lived upload credential from the
+ * backend, then uploads directly to the chosen storage backend.
  */
 
 import { getUploadCredential } from "../services/backend-client.ts";
@@ -41,11 +38,8 @@ function compressedFilename(filename: string): string {
 }
 
 /**
- * Write raw binary/string data to IPFS and return its CID.
- * @param credential -
- *   Optional upload credential. When omitted, a fresh credential is fetched.
- *   Callers reusing a credential must ensure it is marked `reusable` by the
- *   backend.
+ * Writes raw binary/string data to IPFS and returns its CID.
+ * @remarks Reused credentials must be marked `reusable` by the backend.
  */
 export async function writeToIPFS(
   data: Uint8Array | ArrayBuffer | Blob | string,
@@ -87,9 +81,7 @@ export async function writeToIPFS(
 }
 
 /**
- * Write JSON data to IPFS and return its CID.
- * @param credential -
- *   Optional reusable upload credential.
+ * Writes JSON data to IPFS and returns its CID.
  */
 export async function writeJSONToIPFS(
   json: Record<string, any>,

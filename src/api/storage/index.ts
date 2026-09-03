@@ -19,15 +19,11 @@ export interface StorageAdapter {
 }
 
 /**
- * Build the process storage adapter from environment configuration, selected
- * by IPFS_BACKEND ("kubo" | "pinata"), defaulting to "kubo" so the E2E suite
- * and local Docker stack keep working.
- *
- * This is a pure factory: it constructs and returns an adapter and caches
- * nothing. The composition root (src/index.ts) calls it exactly once at boot
- * and injects the result into the API routes — mirroring how the frontend
- * (`initAssetCoreBrowser`) and the asset-core SDK receive their ports. No
- * module should call this to look up storage on demand.
+ * Builds the process storage adapter from environment configuration, selected
+ * by IPFS_BACKEND ("kubo" | "pinata").
+ * @remarks Defaults to kubo so the E2E suite and local Docker stack keep
+ *   working. Pure factory: caches nothing, and no module should call this to
+ *   look up storage on demand.
  */
 export function createStorageAdapter(): StorageAdapter {
   const backend = process.env.IPFS_BACKEND || "kubo";

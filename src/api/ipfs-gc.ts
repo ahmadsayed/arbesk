@@ -1,14 +1,8 @@
 /**
- * Arbesk IPFS Reachability Garbage Collector
- *
- * Walks the blockchain for live Arbesk tokens, resolves each tokenURI, walks
- * the manifest chains (collection + asset + source + embedded buffers/images),
- * and builds the set of CIDs that are still reachable. Any pinned CID that is
- * not in the reachable set is considered orphaned and can be unpinned.
- *
- * This is the companion to the conservative `POST /api/v1/ipfs/unpin` endpoint:
- * unpin no longer removes shared source CIDs, and this job reclaims them once
- * no live token can reach them anymore.
+ * Walks the blockchain for live tokens, builds the reachable CID set, and
+ * identifies pinned CIDs outside it as orphaned (unpinnable).
+ * @remarks Companion to the conservative POST /api/v1/ipfs/unpin: shared
+ *   source CIDs are reclaimed here once no live token can reach them.
  */
 
 import fs from "fs";
@@ -51,9 +45,9 @@ function loadAbi(name: string): any[] {
 }
 
 /**
- * Everything the GC needs to read from one contract: its address, its ABI,
- * and the viem client for the chain it lives on (so block-number reads and
- * log scans always come from the same chain as the contract).
+ * Everything the GC needs to read from one contract: address, ABI, and the
+ * viem client for its chain.
+ * @remarks Keeps block-number reads and log scans on the contract's own chain.
  */
 interface ContractRef {
   address: `0x${string}`;
@@ -72,12 +66,8 @@ function getContractInstance(
 }
 
 /**
- * Discover token IDs that have been minted (Transfer from zero address) and
- * are still alive (ownerOf does not revert and is not zero address).
- *
- * @param contract - contract ref (address + ABI + viem client for its chain)
- * @param deployBlock - block to start scanning from
- * @param batchSize - RPC log query chunk size
+ * Discovers token IDs that have been minted (Transfer from zero address) and
+ * are still alive.
  * @returns live token IDs as decimal strings
  */
 async function discoverLiveTokenIds(
@@ -134,11 +124,8 @@ interface GCContractEntry {
 }
 
 /**
- * Build the set of CIDs reachable from a list of live tokens.
- *
- * For each token, resolves tokenURI (collection manifest CID), walks the
- * collection chain and every asset manifest chain, and also protects the
- * current editor list URI.
+ * Builds the set of CIDs reachable from a list of live tokens.
+ * @remarks Also protects the current editor list URI.
  */
 async function buildReachableSet(
   tokenIds: string[],

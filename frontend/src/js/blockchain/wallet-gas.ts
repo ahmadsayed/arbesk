@@ -1,11 +1,7 @@
 /**
- * Arbesk Wallet Gas
- *
- * Shared gas resolution for contract sends. CDP ERC-4337 smart accounts skip
- * estimation entirely (sponsored UserOperations); EOA wallets estimate through
- * the viem read client and pad by 20%.
- *
- * @module wallet-gas
+ * Resolves gas for contract sends.
+ * @remarks CDP smart accounts skip estimation (sponsored UserOperations);
+ *   EOA wallets estimate via the viem read client and pad by 20%.
  */
 
 import { getActiveConnectionSource } from "./wallet-core.ts";
@@ -35,12 +31,11 @@ export interface ResolveGasOptions {
 }
 
 /**
- * Resolve the gas option for a contract call send.
- * CDP smart accounts skip estimation entirely; EOA wallets estimate and pad
- * by 20%. For EOA wallets, when estimation fails and `fallbackGas` is given,
- * the padded fallback is used instead of throwing.
- * @param opts see ResolveGasOptions
- * @returns the padded gas limit (bigint), or the smart-account ceiling
+ * Resolves the gas option for a contract call send.
+ * @remarks CDP smart accounts skip estimation; EOA wallets estimate and pad
+ *   by 20%. For EOA wallets, when estimation fails and `fallbackGas` is
+ *   given, the padded fallback is used instead of throwing.
+ * @returns the padded gas limit, or the smart-account ceiling.
  */
 async function resolveGas({
   to,

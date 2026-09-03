@@ -1,6 +1,6 @@
 import type { StoragePort } from "../types.ts";
 
-/** In-memory StoragePort — backend default and test double. */
+/** In-memory StoragePort. */
 export function memoryStorage(): StoragePort {
   const map = new Map<string, string>();
   return {

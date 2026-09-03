@@ -1,16 +1,10 @@
 /**
- * Arbesk Wallet Popover — Alpine.js component
- *
- * GNOME HIG-compliant dropdown for the connected wallet button.
- * Shows: address (with copy), explorer link, sign-in / disconnect actions.
- * Network switching lives in the headerbar - not duplicated here.
- *
- * The DOM lives in app.pug (#walletPopover fragment, `x-data="walletPopover"`).
- * Reactive state lives in an Alpine.store so that BOTH template expressions
- * and external code (the walletState bus subscription, the header toggle
- * button) mutate the same reactive proxy — mutating a component's captured
- * `this` from outside Alpine's expression evaluation does not trigger
- * reactivity, but store writes always do.
+ * Dropdown for the connected wallet button (address, explorer link, sign-in
+ * and disconnect actions).
+ * @remarks Reactive state lives in an Alpine.store so template expressions and
+ *   external code mutate the same proxy — mutating a component's captured
+ *   `this` from outside Alpine does not trigger reactivity, but store writes
+ *   do. Network switching lives in the headerbar, not here.
  */
 
 import {
@@ -104,9 +98,7 @@ interface WalletPopoverComponent {
 }
 
 /**
- * Alpine data factory for the wallet popover (`x-data="walletPopover"`).
- * Getters read the reactive store, so Alpine effects track them; methods
- * delegate to the module functions above.
+ * Alpine data factory for the wallet popover.
  */
 export function walletPopover(): WalletPopoverComponent {
   return {

@@ -1,8 +1,7 @@
 /**
- * Mock provider — wraps mockGenerate behind the async GenerationProvider
- * facade. Fresh text-to-3D results are held in an in-memory task store, so the
- * uniform start -> poll -> download lifecycle collapses to "immediately
- * success". All non-text capabilities throw UnsupportedCapabilityError.
+ * Mock provider behind the async GenerationProvider facade.
+ * @remarks Text-to-3D collapses the start → poll → download lifecycle to
+ *   "immediately success"; non-text capabilities throw UnsupportedCapabilityError.
  */
 import type { GenerationConfig, GenerationProvider } from "../facade.ts";
 import type { GenerationCapability } from "../types.ts";

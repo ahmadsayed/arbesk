@@ -1,14 +1,7 @@
 /**
- * Arbesk Alpine.js loader
- *
- * Single entry point for Alpine (loaded via the importmap in app.pug in the
- * browser, from frontend/node_modules in tests). UI modules register their
- * components with registerAlpineComponent(); Alpine.start() runs once, after
- * DOMContentLoaded, so every deferred module script has registered first.
- *
- * Usage:
- *   import { registerAlpineComponent } from "./alpine.ts";
- *   registerAlpineComponent("myPanel", myPanelComponentFactory);
+ * Single entry point for Alpine.js.
+ * @remarks Alpine.start() runs once, after DOMContentLoaded, so every
+ *   deferred module has registered its components first.
  */
 
 import AlpineModule from "alpinejs";
@@ -20,10 +13,9 @@ const Alpine = (AlpineModule as any).default || AlpineModule;
 let _startScheduled = false;
 
 /**
- * Register an Alpine data component (usable as `x-data="name"`) and schedule
- * the one-time Alpine.start().
- * @param factory - returns the component's reactive data + methods. Accepts
- *   optional parameters passed from an `x-data="name(...)"` expression.
+ * Registers an Alpine data component and schedules the one-time Alpine.start().
+ * @remarks The factory returns the component's reactive data and methods, and
+ *   may accept parameters passed from an `x-data="name(...)"` expression.
  */
 export function registerAlpineComponent(
   name: string,

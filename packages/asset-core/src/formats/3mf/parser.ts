@@ -1,9 +1,8 @@
 /**
- * 3MF core-spec parser: turns the XML of a `.model` part into a neutral
- * Parsed3mf structure. No DOM, Babylon, or IPFS dependencies.
- *
- * Extension elements (slice, production, beam lattice) are ignored.
- * <components> objects are rejected explicitly — not supported in v1.
+ * Parses the XML of a 3MF `.model` part into a neutral Parsed3mf structure.
+ * @remarks No DOM, Babylon, or IPFS dependencies. Extension elements (slice,
+ *   production, beam lattice) are ignored; `<components>` objects are
+ *   rejected (not supported in v1).
  */
 
 import { XMLParser } from "fast-xml-parser";
@@ -48,8 +47,6 @@ function toArray(value: any): any[] {
 }
 
 /**
- * Parse a 3MF core model document.
- *
  * @param xml - contents of the `.model` part
  */
 export function parse3mfModel(xml: string): Parsed3mf {

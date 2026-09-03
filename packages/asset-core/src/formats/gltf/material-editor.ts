@@ -1,27 +1,14 @@
 /**
- * Arbesk glTF Material Editor
- *
- * Operates on composite glTF JSON (ipfs:// URI format). Fetches the
- * composite, modifies material properties, and uploads a new composite
- * CID - leaving buffer and image CIDs untouched (IPFS deduplication).
- *
- * Supported edits:
- *   - baseColorFactor (RGBA array)
- *   - metallicFactor
- *   - roughnessFactor
- *   - emissiveFactor (RGB array)
- *   - alphaCutoff
- *   - alphaMode (OPAQUE, MASK, BLEND)
- *   - doubleSided (boolean)
+ * Edits material properties on a composite glTF JSON.
+ * @remarks Fetches the composite, modifies material properties, and uploads
+ *   a new composite CID, leaving buffer and image CIDs untouched (IPFS
+ *   deduplication).
  */
 
 import { getRuntime } from "../../runtime.ts";
 
 /**
- * Fetch a composite glTF JSON from IPFS by CID.
- *
- * @param compositeCid - IPFS CID of the composite glTF JSON
- * @returns Composite glTF JSON
+ * Fetches a composite glTF JSON from IPFS by CID.
  */
 export async function fetchComposite(compositeCid: string): Promise<any> {
   if (!compositeCid) throw new Error("fetchComposite: compositeCid is required");
@@ -37,11 +24,9 @@ export async function fetchComposite(compositeCid: string): Promise<any> {
 }
 
 /**
- * Find a material by index in the glTF.
- *
+ * Finds a material by index in the glTF.
  * @param composite - Composite glTF JSON (dynamic schema)
- * @param materialIndex - Index into materials array
- * @returns The material object (mutable reference)
+ * @returns The material object (a mutable reference)
  */
 export function getMaterial(composite: any, materialIndex: number = 0): any {
   if (!composite.materials || !composite.materials[materialIndex]) {
@@ -59,13 +44,10 @@ interface MaterialMatch {
 }
 
 /**
- * Find all materials referenced by primitives of a named mesh.
- * A mesh may have multiple primitives each pointing to a different material
- * (e.g. vehicle body + glass window). Returns every match so callers can
- * apply edits to all of them, not just the first.
- *
+ * Finds all materials referenced by the primitives of a named mesh.
+ * @remarks A mesh may have multiple primitives with different materials
+ *   (e.g. body + glass), so it returns every match for callers to edit.
  * @param composite - Composite glTF JSON (dynamic schema)
- * @param meshName - Name of the mesh to find (e.g., "flowercenter")
  */
 export function findMaterialByMeshName(
   composite: any,
@@ -98,10 +80,8 @@ export function findMaterialByMeshName(
 }
 
 /**
- * Set the base color factor of a PBR material.
- * The factor is multiplied with the base color texture (if any).
- *
- * @param material - The material object to modify
+ * Sets the base color factor of a PBR material.
+ * @remarks The factor multiplies the base color texture (if any).
  * @param color - RGBA array [r,g,b,a] or hex string "#RRGGBB"
  * @returns The modified material (same reference)
  */
@@ -130,12 +110,9 @@ export function setBaseColorFactor(material: any, color: number[] | string): any
 }
 
 /**
- * Apply a mesh-override color map to a composite glTF.
- * For each mesh name in overrides, finds its material and sets baseColorFactor.
- *
+ * Applies a mesh-override color map to a composite glTF.
  * @param composite - Composite glTF JSON (dynamic schema)
- * @param meshOverrides - { "meshName": { color: "#RRGGBB" }, ... }
- * @param defaultColor - Hex color to apply to all materials as baseline
+ * @param defaultColor - Hex color applied to all materials as a baseline
  */
 export function applyMeshOverrideColors(
   composite: any,
@@ -222,13 +199,9 @@ export function setDoubleSided(material: any, value: boolean): any {
 }
 
 /**
- * Commit changes: upload the modified composite JSON to IPFS.
- *
- * Since only the composite JSON changed (not buffers or images),
- * the new CID reflects only the material edits. Buffers and images
- * remain at their original CIDs.
- *
- * @param composite - Modified composite glTF JSON
+ * Uploads the modified composite JSON to IPFS.
+ * @remarks Only the composite JSON changes (buffers and images stay at their
+ *   original CIDs), so the new CID reflects only the material edits.
  * @returns New composite CID
  */
 export async function commitCompositeChanges(
@@ -246,10 +219,7 @@ export async function commitCompositeChanges(
 }
 
 /**
- * Full round-trip: fetch composite, apply mesh overrides, commit.
- *
- * @param compositeCid - Current composite CID
- * @param meshOverrides - Per-mesh color overrides
+ * Fetches the composite, applies mesh overrides, and commits.
  * @param defaultColor - Baseline color for all materials
  */
 export async function editCompositeColors(

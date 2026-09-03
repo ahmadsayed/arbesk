@@ -1,10 +1,6 @@
 /**
- * Arbesk Wallet Publishing
- *
- * Asset publishing, tokenURI updates, Merkle editor management,
- * role-based collaboration, and token burn.
- *
- * Extracted from wallet.js to isolate publish-side functions.
+ * Asset publishing, tokenURI updates, Merkle editor management, role-based
+ * collaboration, and token burn.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -38,9 +34,8 @@ function _canPublishWithCurrentWallet() {
 }
 
 /**
- * Shared write-path preamble: resolve the active contract, verify a wallet is
- * connected and allowed to publish. Returns null (after logging/toasting)
- * when not ready.
+ * Resolves the active contract and verifies a wallet is connected and allowed
+ * to publish; returns null when not ready.
  */
 function _readyContract() {
   const c = getActiveContract();
@@ -53,9 +48,9 @@ function _readyContract() {
 }
 
 /**
- * For CDP (email) sessions, write through the backend relay (no browser tx).
- * Returns { handled, txHash }; when not CDP, handled=false and the caller falls
- * through to the existing EOA browser-transaction path.
+ * Writes through the backend relay for CDP (email) sessions (no browser tx).
+ * @returns { handled, txHash }; when not CDP, handled=false and the caller
+ *   falls through to the EOA browser-transaction path.
  */
 async function _relayForCdp(
   op: "publish" | "updateUri" | "updateEditors" | "burn",
@@ -76,11 +71,7 @@ async function _relayForCdp(
 // ── Asset Publishing ──
 
 /**
- * @param {string} tokenURI
- * @param {number|string} tokenId
- * @param {string} editorRoot
- * @param {string} editorListUri
- * @returns {Promise<string|null>} txHash on success, null on failure
+ * @returns txHash on success, null on failure.
  */
 async function publishAsset(
   tokenURI: string,
@@ -135,10 +126,7 @@ async function publishAsset(
 }
 
 /**
- * @param {number|string} tokenId
- * @param {string} newTokenURI
- * @param {string[]} proof
- * @returns {Promise<string|null>} txHash on success, null on failure
+ * @returns txHash on success, null on failure.
  */
 async function updateAssetURI(
   tokenId: number | string,
@@ -193,14 +181,13 @@ const CollaboratorRole = Object.freeze({
 });
 
 /**
- * Replace the entire editor set with a new Merkle root.
- * Caller must be a current Editor (proved via callerProof).
- * @param {number|string} tokenId
- * @param {string} newRoot - bytes32 hex string, the new Merkle root
- * @param {string} newListUri - IPFS URI of the new editor list
- * @param {number} callerRole - CollaboratorRole.Editor (2)
- * @param {string[]} callerProof - Merkle proof for the caller
- * @returns {Promise<string|null>} txHash on success
+ * Replaces the entire editor set with a new Merkle root.
+ * @remarks Caller must be a current Editor (proved via callerProof).
+ * @param newRoot - bytes32 hex string: the new Merkle root.
+ * @param newListUri - IPFS URI of the new editor list.
+ * @param callerRole - CollaboratorRole.Editor (2).
+ * @param callerProof - Merkle proof for the caller.
+ * @returns txHash on success.
  */
 async function updateEditors(
   tokenId: number | string,
@@ -237,9 +224,7 @@ async function updateEditors(
 // ── Token Burn ──
 
 /**
- * @param {number|string} tokenId
- * @param {string[]} proof
- * @returns {Promise<string|null>} txHash on success, null on failure
+ * @returns txHash on success, null on failure.
  */
 async function burn(tokenId: number | string, proof: string[]) {
   const c = _readyContract();

@@ -1,11 +1,9 @@
 /**
- * Backend asset-core adapters — map the asset-core IpfsReadPort/IpfsWritePort
- * onto the existing storage adapter (src/api/storage/, kubo or pinata via
- * IPFS_BACKEND) and expose a ready-to-use ArbeskCore for backend modules.
- *
- * The storage adapter is injected as a parameter — the composition root
- * builds it once (createStorageAdapter) and passes it in, so these ports stay
- * environment-agnostic like everything else in asset-core.
+ * Backend asset-core adapters: map the asset-core IpfsReadPort/IpfsWritePort
+ * onto the storage adapter (kubo or pinata) and expose a ready-to-use
+ * ArbeskCore.
+ * @remarks The storage adapter is injected so these ports stay
+ *   environment-agnostic, like the rest of asset-core.
  */
 import {
   createArbeskCore,
@@ -32,9 +30,9 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 /**
- * IpfsReadPort over the backend storage adapter. Mirrors the port contract:
- * getJSON/getBytes auto-gunzip (decomposed components are stored gzipped),
- * getRawBytes returns the exact stored bytes.
+ * IpfsReadPort over the backend storage adapter.
+ * @remarks getJSON/getBytes auto-gunzip (decomposed components are stored
+ *   gzipped); getRawBytes returns the exact stored bytes.
  */
 function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort {
   return {
@@ -55,10 +53,9 @@ function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort {
 }
 
 /**
- * IpfsWritePort over the backend storage adapter. Kubo uploads need no
- * credential; the credential argument is accepted for port compatibility and
- * ignored (the backend writes through its own storage adapter, not the
- * browser's signed-URL flow).
+ * IpfsWritePort over the backend storage adapter.
+ * @remarks Kubo uploads need no credential; the credential argument is accepted
+ *   for port compatibility and ignored.
  */
 function createBackendIpfsWritePort(storage: StorageAdapter): IpfsWritePort {
   const write: IpfsWritePort["write"] = async (
@@ -91,9 +88,10 @@ function createBackendIpfsWritePort(storage: StorageAdapter): IpfsWritePort {
 }
 
 /**
- * Backend ArbeskCore — IPFS through the storage adapter, inline executor
- * (default), no credentials/chain/hash ports (generation follow-ups only
- * compose; they never upload or touch editor lists).
+ * Backend ArbeskCore.
+ * @remarks IPFS goes through the storage adapter with no credentials/chain/hash
+ *   ports — generation follow-ups only compose, never upload or touch editor
+ *   lists.
  */
 export function createBackendCore(storage: StorageAdapter): ArbeskCore {
   return createArbeskCore({

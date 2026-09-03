@@ -1,9 +1,6 @@
 /**
- * @arbesk/authz facade — createAuthz.
- *
- * Asset access policy (ownership or Merkle editor proof) on top of an injected
- * ChainReadPort + validateSession. Moved from src/api/authorization.ts; the
- * backend keeps the web3 contract wiring in its resolveContract adapter.
+ * @arbesk/authz facade — createAuthz: asset access policy (ownership or Merkle
+ *   editor proof) on top of an injected ChainReadPort + validateSession.
  */
 import { makeLeaf, verifyEditorProof } from "@arbesk/wallet/merkle.js";
 import type { AssetAccessOptions, AssetAccessResult, AuthzConfig } from "./types.ts";

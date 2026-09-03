@@ -1,8 +1,6 @@
 /**
- * Domain asset store — shared state for domain/asset.js and
- * domain/collection.js. Replaces the legacy state/asset-state.js wrapper.
- * Production writes must go through the domain modules; tests may import
- * the store directly for setup/assertions.
+ * Domain asset store — shared state for domain/asset.ts and domain/collection.ts.
+ * @remarks Production writes must go through the domain modules.
  */
 import { createStore } from "../state/create-store.ts";
 import { EVENTS } from "../events/bus.ts";
@@ -35,11 +33,10 @@ const { store: assetStore, _resetForTesting } = createStore(
 export { assetStore, _resetForTesting };
 
 /**
- * Tag an in-memory manifest with the CID it represents before storing it in
- * `currentManifest`. Cache-hit checks compare `activeAssetManifestCid`
- * against `currentManifest._manifestCid` to skip an IPFS refetch, so every
- * writer of `currentManifest` must stamp the CID — this is the single
- * definition of that convention.
+ * Tags an in-memory manifest with the CID it represents.
+ * @remarks Every writer of `currentManifest` must stamp the CID so cache-hit
+ *   checks can skip an IPFS refetch; this is the single definition of that
+ *   convention.
  */
 export function tagManifestCid<T>(
   manifest: T,

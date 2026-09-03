@@ -1,8 +1,7 @@
 /**
  * Authentication proof verification — the dispatcher for session creation.
- * Accepts a discriminated proof envelope (siwe | oidc) and routes to the
- * right verifier, so wallet (SIWE) and future OAuth/OIDC logins share one
- * session entry point. Moved from src/api/proof-verify.ts.
+ * @remarks A discriminated proof envelope (siwe | oidc) routes to one verifier,
+ *   so wallet (SIWE) and future OAuth/OIDC logins share one entry point.
  */
 import { verifySiwe } from "./siwe.ts";
 import type { AuthProof, SignatureVerifier } from "./types.ts";
@@ -21,9 +20,7 @@ export interface VerifyProofContext {
 }
 
 /**
- * Verify an OIDC ID token. Design seam only — not implemented. When OAuth is
- * added, validate the JWT signature against the provider's JWKS, the aud/iss,
- * and the nonce, then return the subject as the identity.
+ * Verifies an OIDC ID token — design seam only, not implemented.
  */
 async function verifyOidc(proof: {
   provider: string;

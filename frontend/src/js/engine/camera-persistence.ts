@@ -1,22 +1,11 @@
 /**
- * Camera pose persistence
- *
- * Stores the viewport camera pose (orbit angles, radius, target) in
- * localStorage, keyed per ASSET (chain:contract:token:assetId),
- * not per manifest version — the pose follows the asset across publishes and
- * version-history restores. Reopening the same asset in the same browser
- * restores the exact view the user left it in. Unsaved drafts (no on-chain
- * identity) fall back to a per-manifest-CID key. Best-effort: storage
- * failures (private mode, quota) are silently ignored.
- *
- * Correctness notes:
- * - The storage key is snapshotted WHEN THE MOVE HAPPENS, not when the
- *   debounced write fires — so a pose can never be written under the key of
- *   an asset the user switched to in the meantime.
- * - Assets with no stored pose get the default starting view on load, so a
- *   scene never inherits the camera of whatever was open before it.
- * - The pending write is flushed on tab close/hide so the last second of
- *   movement isn't lost.
+ * Persists the viewport camera pose in localStorage, keyed per asset.
+ * @remarks Keyed per asset (not per manifest version) so the pose follows the
+ *   asset across publishes and restores; unsaved drafts fall back to a per-CID
+ *   key. Storage failures are ignored (best-effort). The storage key is
+ *   snapshotted when the move happens (never the debounced write), so a pose
+ *   is never written under a later asset's key. Assets with no stored pose get
+ *   the default view, and the pending write is flushed on tab close/hide.
  */
 
 import { state } from "./state.ts";
@@ -38,8 +27,8 @@ interface StoredCameraPose {
 }
 
 /**
- * Starting view for assets with no stored pose. Must match the camera
- * creation values in initEngine() (scene-graph.ts).
+ * Starting view for assets with no stored pose.
+ * @remarks Must match the camera creation values in initEngine().
  */
 const DEFAULT_POSE: StoredCameraPose = {
   alpha: -Math.PI / 2,
@@ -49,10 +38,8 @@ const DEFAULT_POSE: StoredCameraPose = {
 };
 
 /**
- * Storage key for the currently-open asset: the canonical asset identity
- * when it has one, otherwise the manifest CID of the unsaved draft.
- *
- * @param fallbackCid - manifest CID to use when no asset identity exists
+ * Storage key for the currently-open asset: the canonical asset identity when
+ * it has one, otherwise the unsaved draft's manifest CID.
  */
 function _poseStorageKey(fallbackCid: string | null): string | null {
   const tokenId = getActiveAssetTokenId();
@@ -121,12 +108,10 @@ function _applyPose(camera: BABYLON.ArcRotateCamera, pose: StoredCameraPose) {
 }
 
 /**
- * Frames to keep enforcing a freshly restored pose. Babylon v9's smooth
- * wheel-zoom transitions (and other per-frame camera writers) are not covered
- * by stopAnimation/inertia zeroing and can keep dragging the camera for over
- * a second after a restore — long enough that the drifted pose gets saved
- * over the good one. Re-applying for ~1.5s stomps every such writer; any real
- * pointer/wheel input cancels immediately so the user is never fought.
+ * Frames to keep enforcing a freshly restored pose.
+ * @remarks Babylon v9's per-frame camera writers keep dragging the camera
+ *   after a restore, long enough that the drifted pose gets saved over the
+ *   good one.
  */
 const SETTLE_FRAMES = 90;
 
@@ -174,8 +159,8 @@ function _flushPendingSave() {
 }
 
 /**
- * Start persisting the camera pose on every view change (debounced to one
- * write per second). Call once after the camera is created in initEngine().
+ * Starts persisting the camera pose on every view change (debounced to one
+ * write per second).
  */
 export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
   camera.onViewMatrixChangedObservable.add(() => {
@@ -205,13 +190,8 @@ export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
 }
 
 /**
- * True when a stored pose exists for the currently-open asset (same key
- * resolution as restoreCameraPose). Read-only — does not apply, flush, or
- * settle. Used to decide whether a freshly loaded scene should restore the
- * saved view or frame the model instead.
- *
- * @param fallbackCid - manifest CID to fall back on when the asset has no
- *                      on-chain identity yet
+ * True when a stored pose exists for the currently-open asset.
+ * @remarks Read-only — does not apply, flush, or settle.
  */
 export function hasStoredCameraPose(fallbackCid?: string): boolean {
   const key = _poseStorageKey(fallbackCid ?? null);
@@ -219,11 +199,9 @@ export function hasStoredCameraPose(fallbackCid?: string): boolean {
 }
 
 /**
- * Forget the stored camera pose for the currently-open asset (same key
- * resolution as restoreCameraPose). Used by the "0" reset-view shortcut:
- * after clearing, the next load treats the asset as never viewed and frames
- * it whole. Any pending debounced write is dropped too, so it cannot rewrite
- * the pose right after the clear.
+ * Forgets the stored camera pose for the currently-open asset.
+ * @remarks The next load frames the asset whole, and any pending debounced
+ *   write is dropped so it cannot rewrite the pose right after the clear.
  */
 export function clearStoredCameraPose(): void {
   if (_saveTimer) {
@@ -241,14 +219,10 @@ export function clearStoredCameraPose(): void {
 }
 
 /**
- * Restore the stored camera pose for the currently-open asset, if any.
- * Snaps instantly (no animation) so the view lands exactly where the user
- * left it. Assets with no stored pose get the default starting view, so a
- * scene never inherits the previous scene's camera.
- *
- * @param fallbackCid - manifest CID to fall back on when the asset has no
- *                      on-chain identity yet
- * @returns true when a stored pose was applied
+ * Restores the stored camera pose for the currently-open asset, if any.
+ * @remarks Snaps instantly (no animation); assets with no stored pose get the
+ *   default view so a scene never inherits the previous scene's camera.
+ * @returns true when a stored pose was applied.
  */
 export function restoreCameraPose(fallbackCid?: string): boolean {
   const camera = state.camera;

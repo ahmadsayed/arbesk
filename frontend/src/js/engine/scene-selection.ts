@@ -1,13 +1,8 @@
 /**
- * Arbesk Scene Selection
- *
  * Node/sub-mesh selection, highlight management, and deselection.
- * Extracted from scene-graph.js to keep that file focused on scene construction.
- *
- * Multi-select: `state.selectedNodeIds` holds the full selection set;
- * `state.highlightedNodeId` is the primary (last-added) member. Single-node
- * consumers (inspector, sub-mesh toggle, model clock) act only when the set
- * has exactly one entry.
+ * @remarks `state.selectedNodeIds` holds the full multi-selection set and
+ *   `state.highlightedNodeId` is the primary (last-added) member; single-node
+ *   consumers act only when the set has exactly one entry.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -82,9 +77,10 @@ function selectNode(nodeId: string, mesh?: BABYLON.AbstractMesh | null) {
 }
 
 /**
- * Ctrl/Cmd+click: toggle a node in/out of the multi-selection. The most
- * recently added node becomes the primary (`highlightedNodeId`); removing the
- * primary promotes the last remaining member.
+ * Toggles a node in/out of the multi-selection.
+ * @remarks The most recently added node becomes primary
+ *   (`highlightedNodeId`); removing the primary promotes the last remaining
+ *   member.
  */
 function toggleNodeSelection(nodeId: string, mesh?: BABYLON.AbstractMesh | null) {
   if (state.selectedNodeIds.has(nodeId)) {
@@ -111,7 +107,8 @@ function toggleNodeSelection(nodeId: string, mesh?: BABYLON.AbstractMesh | null)
 }
 
 /**
- * Select every given node at once (Ctrl+A). The last id becomes primary.
+ * Selects every given node at once.
+ * @remarks The last id becomes primary.
  */
 function selectAllNodes(nodeIds: string[]) {
   const ids = (nodeIds || []).filter(Boolean);
@@ -148,8 +145,8 @@ function selectSubMesh(nodeId: string, meshName: string) {
 }
 
 /**
- * Highlight a node by ID alone (from outliner or programmatic selection).
- * Does not re-fire node:selected if already highlighted.
+ * Highlights a node by ID alone.
+ * @remarks Does not re-fire node:selected if already highlighted.
  */
 function selectNodeById(nodeId: string) {
   selectNode(nodeId, null);
@@ -163,8 +160,8 @@ function clearHighlight() {
 }
 
 /**
- * Remove specific node ids from the selection, promoting a new primary if the
- * old one was removed. Used when child assets are unlinked and disappear.
+ * Removes specific node ids from the selection, promoting a new primary if
+ * the old one was removed.
  */
 function deselectNodes(nodeIds: string[]) {
   const remove = new Set(nodeIds);

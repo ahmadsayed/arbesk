@@ -1,11 +1,8 @@
 /**
- * 3MF decomposer.
- *
- * Extracts a raw .3mf OPC package into individually content-addressed parts
- * on IPFS and writes a "composite 3MF" JSON that carries the small XML parts
- * verbatim and references binary parts (textures, package thumbnails) by CID.
- * The composite JSON is the native stored form of a 3MF asset in Arbesk —
- * it is never converted to glTF for storage.
+ * Extracts a raw .3mf OPC package into content-addressed parts and writes a
+ * composite 3MF JSON.
+ * @remarks The composite JSON is the native stored form of a 3MF asset — it
+ *   is never converted to glTF for storage.
  */
 
 import { getRuntime } from "../../runtime.ts";
@@ -41,9 +38,7 @@ export interface Decompose3mfOptions {
 }
 
 /**
- * Decompose a raw .3mf package into a composite 3MF stored on IPFS.
- *
- * @param bytes - raw .3mf ZIP bytes
+ * Decomposes a raw .3mf package into a composite 3MF stored on IPFS.
  */
 export async function decompose(
   bytes: Uint8Array,

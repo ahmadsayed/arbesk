@@ -8,9 +8,8 @@ import "./ArbeskAssetBase.sol";
 
 /**
  * @title ArbeskAsset
- * @dev Paid-tier contract: PayGo + NFT + Merkle-root editor architecture.
- *      Inherits base NFT/Merkle logic from ArbeskAssetBase.
- *      Adds the USDC payment path for 3D asset generation.
+ * @dev Paid-tier contract that adds a USDC payment path for 3D asset
+ *      generation.
  *
  *      MAX_EDITORS_PER_TOKEN = 5000 (safety net — full list on IPFS).
  */

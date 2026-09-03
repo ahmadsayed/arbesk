@@ -1,7 +1,8 @@
 /**
  * Browser IpfsReadPort/IpfsWritePort — thin wrappers over the existing
- * gateway/session modules. Lives outside asset-core by design: this file
- * IS the environment-specific implementation.
+ * gateway/session modules.
+ * @remarks Lives outside asset-core by design — this file is the
+ *   environment-specific implementation.
  */
 import type { IpfsReadPort, IpfsWritePort } from "@arbesk/asset-core/types.js";
 import {

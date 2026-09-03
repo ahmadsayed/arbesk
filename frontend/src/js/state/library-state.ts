@@ -2,9 +2,7 @@ import { createStore } from "@arbesk/asset-core/state/create-store.js";
 import { EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 /**
- * A collection card in the library grid. Built by
- * ui/library-controller.js (buildCollectionEntries / optimistic path) and
- * ui/library-create.js (pending mint cards).
+ * A collection card in the library grid.
  */
 export interface LibraryCollectionItem {
   /** card id, `collection-<tokenId>` */
@@ -23,8 +21,7 @@ export interface LibraryCollectionItem {
 }
 
 /**
- * An asset card inside an open collection. Built by
- * ui/library-controller.js (loadCurrentAssets).
+ * An asset card inside an open collection.
  */
 export interface LibraryAssetItem {
   /** card id, `asset-<tokenId>-<assetId>` */

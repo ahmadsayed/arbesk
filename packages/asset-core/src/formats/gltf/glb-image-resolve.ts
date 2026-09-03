@@ -1,6 +1,6 @@
 /**
- * Shared GLB image-byte resolution — one implementation for the GLB parser
- * (main thread) and the glTF Web Worker, parameterized by log prefix.
+ * Shared GLB image-byte resolution.
+ * Used by the GLB parser and the glTF Web Worker.
  */
 
 import { extractDataURI } from "../../utils/uri.ts";
@@ -38,9 +38,10 @@ function resolveFromBufferView(
 }
 
 /**
- * Resolve an image entry's bytes + MIME type from a data-URI or a bufferView
- * (magic-byte sniff when the entry carries no mimeType). Returns null after
- * logging when the image can't be resolved or is empty.
+ * Resolves an image entry's bytes and MIME type from a data-URI or a
+ * bufferView, sniffing magic bytes when no mimeType is present.
+ * @remarks Returns null (after logging) when the image can't be resolved or
+ *   is empty.
  */
 export function resolveGlbImageBytes(
   composite: any,

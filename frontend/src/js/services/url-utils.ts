@@ -6,7 +6,6 @@
 
 /**
  * Update the browser URL to point to a token ID.
- * Removes ?manifest param, sets ?asset=<tokenId>, optionally preserves ?assetId.
  */
 export function updateUrlAsset(tokenId: string | number, assetId: string | null = null): void {
   const url = new URL(window.location.href);
@@ -22,7 +21,6 @@ export function updateUrlAsset(tokenId: string | number, assetId: string | null 
 
 /**
  * Update the browser URL to point to a manifest CID.
- * Sets ?manifest=<cid>, optionally preserves ?asset if tokenId provided.
  */
 export function updateUrlManifest(cid: string, tokenId: string | number | null = null): void {
   const url = new URL(window.location.href);

@@ -3,14 +3,9 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Deploy ArbeskAssetFree (free tier) to the selected network.
- *
- * Network gating:
- *   hardhat / localhost → deploy ArbeskAssetFree + ArbeskAsset (paid) + MockUSDC
- *   baseSepolia        → deploy ArbeskAssetFree only (no paid, no USDC)
- *   any other          → error
- *
- * ArbeskAssetFree() - no constructor args
+ * Deploys ArbeskAssetFree (free tier) to the selected network.
+ * @remarks hardhat / localhost also deploys ArbeskAsset (paid) + MockUSDC;
+ *   baseSepolia deploys ArbeskAssetFree only; any other network errors.
  */
 
 async function main() {
