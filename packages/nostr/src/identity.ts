@@ -22,3 +22,26 @@ export async function buildBinding(signer: WalletSignPort): Promise<Binding> {
   });
   return { address, pubkey: derivePubkey(signature), signature };
 }
+
+/** Verifies a binding's self-consistency and wallet signature. */
+export async function verifyBinding(binding: Binding): Promise<boolean> {
+  if (
+    !binding ||
+    typeof binding.address !== "string" ||
+    typeof binding.pubkey !== "string" ||
+    typeof binding.signature !== "string"
+  ) return false;
+  let recovered: string;
+  try {
+    recovered = await recoverMessageAddress({
+      message: IDENTITY_MESSAGE,
+      signature: binding.signature as `0x${string}`,
+    });
+  } catch {
+    return false;
+  }
+  return (
+    recovered.toLowerCase() === binding.address.toLowerCase() &&
+    derivePubkey(binding.signature) === binding.pubkey
+  );
+}
