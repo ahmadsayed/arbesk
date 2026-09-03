@@ -25,6 +25,8 @@ export default {
     // and tests source (no build step needed).
     "^@arbesk/asset-core$": "<rootDir>/packages/asset-core/src/index.ts",
     "^@arbesk/asset-core/(.+)\\.js$": "<rootDir>/packages/asset-core/src/$1.ts",
+    "^@arbesk/nostr$": "<rootDir>/packages/nostr/src/index.ts",
+    "^@arbesk/nostr/(.+)\\.js$": "<rootDir>/packages/nostr/src/$1.ts",
     "^@arbesk/wallet$": "<rootDir>/packages/wallet/src/index.ts",
     "^@arbesk/wallet/(.+)\\.js$": "<rootDir>/packages/wallet/src/$1.ts",
     "^@arbesk/authz$": "<rootDir>/packages/authz/src/index.ts",

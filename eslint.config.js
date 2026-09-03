@@ -132,6 +132,33 @@ export default [
   },
 
   {
+    name: "arbesk/nostr",
+    files: ["packages/nostr/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [
+          {
+            group: [
+              "**/frontend/**",
+              "**/src/api/**",
+              "**/constants/**",
+            ],
+            message: "nostr must stay environment-agnostic — consume host capabilities via injected ports, never by reaching into the frontend/backend trees.",
+          },
+        ],
+      }],
+      "no-restricted-globals": ["error",
+        { name: "window", message: "nostr is environment-agnostic; inject via ports." },
+        { name: "document", message: "nostr is environment-agnostic; inject via ports." },
+        { name: "navigator", message: "nostr is environment-agnostic; inject via ports." },
+        { name: "localStorage", message: "nostr is environment-agnostic; inject via ports." },
+        { name: "Web3", message: "use injected signer ports instead of the Web3 CDN global." },
+        { name: "BABYLON", message: "nostr must not touch the 3D engine." },
+      ],
+    },
+  },
+
+  {
     name: "arbesk/typescript-declarations",
     files: ["**/*.d.ts"],
     rules: {

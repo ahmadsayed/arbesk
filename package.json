@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build:packages": "npm run build --workspace @arbesk/asset-core && npm run build --workspace @arbesk/wallet && npm run build --workspace @arbesk/authz && npm run build --workspace @arbesk/ai-asset-gen",
+    "build:packages": "npm run build --workspace @arbesk/asset-core && npm run build --workspace @arbesk/nostr && npm run build --workspace @arbesk/wallet && npm run build --workspace @arbesk/authz && npm run build --workspace @arbesk/ai-asset-gen",
     "prestart": "npm run build:packages",
     "pretypecheck": "npm run build:packages",
     "pretypecheck:frontend": "npm run build:packages",
