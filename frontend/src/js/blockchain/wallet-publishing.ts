@@ -138,7 +138,10 @@ async function updateAssetURI(
   if (!c) return null;
 
   const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof, assetScope });
-  if (relayed.handled) return relayed.txHash;
+  if (relayed.handled) {
+    _notifyUriChanged(tokenId, newTokenURI, relayed.txHash);
+    return relayed.txHash;
+  }
 
   try {
     const receipt = await sendContractCall({
@@ -148,6 +151,7 @@ async function updateAssetURI(
       args: [BigInt(tokenId), newTokenURI, assetScope, proof],
       pendingPayload: { tokenId, tokenURI: newTokenURI },
     });
+    _notifyUriChanged(tokenId, newTokenURI, receipt.transactionHash);
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateAssetURI failed:", error);
@@ -167,6 +171,15 @@ async function updateAssetURI(
 
     throw new Error(decodedMsg);
   }
+}
+
+function _notifyUriChanged(tokenId: number | string, newTokenURI: string, txHash: string | null) {
+  emit(EVENTS.ASSET_URI_CHANGED, {
+    chainId: walletState.get().chainId,
+    tokenId: String(tokenId),
+    newAssetURI: newTokenURI,
+    txHash,
+  });
 }
 
 // ── Merkle Editor Management ──
