@@ -79,6 +79,7 @@
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.18.1",
     "eslint": "^10.6.0",
+    "eslint-plugin-jsdoc": "^64.3.4",
     "globals": "^17.7.0",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",

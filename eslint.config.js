@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import jsdoc from "eslint-plugin-jsdoc";
 
 const baseRules = {
   ...js.configs.recommended.rules,
@@ -165,6 +166,26 @@ export default [
         ...globals.commonjs,
         ...globals.node,
       },
+    },
+  },
+
+  {
+    name: "arbesk/jsdoc",
+    files: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"],
+    plugins: { jsdoc },
+    rules: {
+      // Comment convention (see docs): summary + @remarks (why) + @throws (contract),
+      // no invented tags, no type-duplicating @param/@returns. Warn-only so it
+      // documents drift without failing the build yet.
+      "jsdoc/check-tag-names": ["warn", { definedTags: ["remarks", "internal", "jest-environment", "jest-globals"] }],
+      "jsdoc/check-param-names": ["warn", { disableMissingParamChecks: true }],
+      "jsdoc/check-syntax": "warn",
+      "jsdoc/no-undefined-types": "off",
+      "jsdoc/require-description": "off",
+      "jsdoc/require-param": "off",
+      "jsdoc/require-returns": "off",
+      "jsdoc/require-param-type": "off",
+      "jsdoc/require-returns-type": "off",
     },
   },
 
