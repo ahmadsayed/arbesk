@@ -24,7 +24,7 @@ import {
 } from "./transforms.ts";
 import { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
 import { applyColor, applyScale } from "./time-travel.ts";
-import { clearScene, disposeNodeContent } from "./cleanup.ts";
+import { clearScene, disposeNodeContent, disposeNodeSubtree } from "./cleanup.ts";
 import { createAnchorNode } from "./anchor-node.ts";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
@@ -284,6 +284,7 @@ async function loadTokenChildNode(
       resolvedCid: resolution.manifestCid,
       loaded: true,
       nodeId: node.node_id,
+      depth,
     };
 
     if (!state.nodeAnchors.has(node.node_id)) {
@@ -762,3 +763,14 @@ export {
   replaceRootModelSource,
   createRootDraftSource,
 };
+
+/** Tears down and re-resolves a single child_ref node in place. */
+export async function reloadChildRefNode(nodeId: string): Promise<void> {
+  const node = getManifestNodes(getCurrentManifest()).find((n: any) => n?.node_id === nodeId && n?.child_ref);
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!node || !anchor) return;
+  const parent = anchor.parent;
+  const depth = (anchor.metadata as any)?.depth ?? 0;
+  disposeNodeSubtree(nodeId);
+  await loadTokenChildNode(node, parent as BABYLON.TransformNode, depth, new Set<string>());
+}

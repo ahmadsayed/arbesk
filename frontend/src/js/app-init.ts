@@ -43,6 +43,8 @@ import { rewriteShortcutTitles } from "./utils/platform.ts";
 import "./ui/keyboard-help.ts";
 import "./engine/undo-controller.ts";
 import "./engine/child-remove.ts";
+import { startLiveUpdates } from "./services/live-updates.ts";
+import { initChildReload } from "./engine/child-reload.ts";
 
 // ── Library ──
 import { initLibraryGrid } from "./ui/library-grid.ts";
@@ -178,6 +180,12 @@ on(EVENTS.USER_AUTHENTICATED, (e) => {
 on(EVENTS.USER_AUTH_REQUIRED, (e) => {
   updateHeaderWalletButtonFromState(e?.address, false);
 });
+
+// ─── Live scene updates: subscribe to token URI updates and reload ───
+// matching child_ref nodes in place. Module scripts are deferred, so the DOM
+// is ready here (equivalent to DOMContentLoaded).
+startLiveUpdates();
+initChildReload();
 
 // ─── Router: activate the initial view from the URL ───
 initRouter();
