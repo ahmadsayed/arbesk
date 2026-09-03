@@ -59,10 +59,11 @@ test.describe("parametric versioning + time-travel", () => {
     // finally regardless of success, so neither proves the version re-rendered.
     // scene:ready only fires when every node loads (scene-graph emits it after
     // the node loop), so it is the signal that the version actually rendered.
-    // Subscribing to the in-memory bus singleton from page context works
-    // because the dynamic import resolves to the already-loaded module.
-    await page.evaluate(async () => {
-      const { on, EVENTS } = await import("/js/vendor/asset-core/events/bus.js");
+    // The bus is exposed on window.__arbeskBus by app-entry.ts (the esbuild
+    // bundle inlines asset-core, so the old /js/vendor/asset-core/events/bus.js
+    // path no longer resolves).
+    await page.evaluate(() => {
+      const { on, EVENTS } = window.__arbeskBus;
       window.__sceneReadyCids = [];
       on(EVENTS.SCENE_READY, ({ manifestCid }) =>
         window.__sceneReadyCids.push(manifestCid),

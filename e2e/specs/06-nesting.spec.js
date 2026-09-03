@@ -88,10 +88,12 @@ test.describe("nesting / linked child assets", () => {
     expect(refNode.history).toBeUndefined();
 
     // ── 7. Dive into the child asset ──────────────────────────────────
-    // Subscribe to the mitt nesting bus so we can assert the
-    // depth-change events.
-    await page.evaluate(async () => {
-      const { on, EVENTS } = await import("/js/vendor/asset-core/events/bus.js");
+    // Subscribe to the mitt nesting bus so we can assert the depth-change
+    // events. The bus is exposed on window.__arbeskBus by app-entry.ts (the
+    // esbuild bundle inlines asset-core, so the old
+    // /js/vendor/asset-core/events/bus.js path no longer resolves).
+    await page.evaluate(() => {
+      const { on, EVENTS } = window.__arbeskBus;
       window.__nesting = [];
       on(EVENTS.NESTING_DID_DIVE, ({ depth }) =>
         window.__nesting.push(["dive", depth]),

@@ -25,3 +25,11 @@ import "./ui/collaborators.ts";
 import "./ui/wallet-popover.ts";
 import "./ui/comments-panel.ts";
 import "./app-init.ts";
+
+import { on, off, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+
+// Expose the process-wide event bus for page-context tests. The esbuild bundle
+// inlines asset-core into app.js, so the old `/js/vendor/asset-core/events/bus.js`
+// dynamic-import path no longer resolves; E2E specs subscribe to the same
+// in-memory singleton through this hook instead.
+(window as any).__arbeskBus = { on, off, emit, EVENTS };
