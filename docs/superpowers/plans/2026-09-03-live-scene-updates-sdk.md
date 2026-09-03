@@ -302,7 +302,7 @@ describe("identity build", () => {
   it("derives the secret key as keccak256 of the signature", async () => {
     const account = privateKeyToAccount(generatePrivateKey());
     const sig = await account.signMessage({ message: IDENTITY_MESSAGE });
-    expect(deriveSecretKey(sig)).toBe(keccak256(sig));
+    expect(deriveSecretKey(sig)).toBe(keccak256(sig).slice(2));
     expect(derivePubkey(sig)).toBe(getPublicKey(deriveSecretKey(sig)));
   });
 
@@ -332,7 +332,7 @@ import { IDENTITY_MESSAGE } from "./kinds.ts";
 
 /** The Nostr secret key is the keccak256 of the wallet's binding signature. */
 export function deriveSecretKey(signature: string): string {
-  return keccak256(signature as `0x${string}`);
+  return keccak256(signature as `0x${string}`).slice(2);
 }
 
 /** The Nostr pubkey derived from the wallet's binding signature. */
