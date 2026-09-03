@@ -493,12 +493,11 @@ async function startFreshGeneration(
   body: TripoGenerationInput,
 ): Promise<Response> {
   const { prompt, textureQuality, imageData, imageMime, images } = body;
-  // Truncate user-authored prompt text in logs — prompts may contain PII.
-  const promptLabel = prompt
-    ? `"${prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt}"`
-    : images ? "(multiview)" : "(image)";
+  // Do not log user-authored prompt text — it may contain PII. Log only the
+  // non-sensitive input mode (text / image / multiview).
+  const inputKind = images ? "multiview" : imageData ? "image" : "text";
   console.log(
-    `[GEN] using Tripo3D adapter for ${promptLabel} image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
+    `[GEN] using Tripo3D adapter input=${inputKind}${images ? ` views=${images.length}` : ""}`,
   );
   const tripoTaskId = images
     ? await provider.multiviewToModel({
@@ -827,16 +826,13 @@ export default function generateAssetNode(
     validateBody(generateAssetSchema),
     async (req: Request, res: Response) => {
       try {
-        const { prompt, nodeId, provider, providerKey, imageData } = req.body;
+        const { prompt, nodeId, provider, providerKey } = req.body;
 
         const { effectiveProvider, useMockAdapter } = resolveProvider(provider);
 
-        // Truncate user-authored prompt text in logs — prompts may contain PII.
-        const promptLabel = prompt
-          ? (prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt)
-          : (imageData ? "(image)" : "");
+        // Do not log user-authored prompt text — it may contain PII.
         console.log(
-          `[GEN] prompt="${promptLabel}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
+          `[GEN] nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
         );
 
         if (rejectMissingProviderKey(res, effectiveProvider, providerKey)) {
