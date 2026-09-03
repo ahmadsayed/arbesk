@@ -22,6 +22,8 @@ export const EVENTS = {
   ASSET_PUBLISHED:            "asset:published",
   ASSET_PUBLISH_PENDING:      "asset:publishPending",
   ASSET_STATE_CHANGED:        "asset:stateChanged",
+  ASSET_URI_CHANGED:          "asset:uriChanged",
+  ASSET_URI_UPDATED:          "asset:uriUpdated",
   COMMENT_THREAD_CHANGE:      "commentThread:change",
   COMMENT_THREAD_STATUS:      "commentThread:status",
   COLLECTION_OPENED:          "collection:opened",
