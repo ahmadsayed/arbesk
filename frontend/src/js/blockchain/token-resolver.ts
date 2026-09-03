@@ -112,6 +112,26 @@ function setCachedResolution(childRef: CacheKeyRef, manifestCid: string) {
   });
 }
 
+/** Drops a cached resolution so the next read re-resolves on-chain. */
+export function invalidateResolution(
+  chainId: number,
+  contractAddress: string,
+  tokenId: string
+): void {
+  const key = buildCacheKey({ chainId, contractAddress, tokenId });
+  resolutionCache.delete(key);
+}
+
+/** Test-only seam: writes a cache entry directly (jest reaches the internal map). */
+export function _setCachedForTest(
+  chainId: number,
+  contractAddress: string,
+  tokenId: string,
+  cid: string
+): void {
+  setCachedResolution({ chainId, contractAddress, tokenId }, cid);
+}
+
 // Minimal ERC-721 ABI for tokenURI
 const minERC721ABI = [
   {
