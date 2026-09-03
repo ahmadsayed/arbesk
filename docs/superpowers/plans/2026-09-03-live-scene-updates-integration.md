@@ -511,18 +511,12 @@ git commit -m "feat(live): subscribe, verify, and emit update feed"
 **Interfaces:**
 - Produces: `reloadChildRefsForToken(chainId, tokenId): void`. Scene-loader exports `reloadChildRefNode(nodeId): Promise<void>`.
 
-- [ ] **Step 1: Record depth on the child anchor**
+- [ ] **Step 1: Record depth on the OUTER anchor in `loadNode`**
 
-In `scene-loader.ts` `loadTokenChildNode` (the `childAnchor.metadata = {...}` block ~line 282), add `depth`:
+In `scene-loader.ts` `loadNode`'s `child_ref` branch (the `anchor.metadata = { nodeId, childRef }` line), add `depth` so the reload can read it from the anchor that actually survives in `state.nodeAnchors`:
 
 ```ts
-    childAnchor.metadata = {
-      childRef,
-      resolvedCid: resolution.manifestCid,
-      loaded: true,
-      nodeId: node.node_id,
-      depth,
-    };
+    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref, depth: depth || 0 };
 ```
 
 - [ ] **Step 2: Export a reload helper from `scene-loader.ts`**
@@ -538,11 +532,11 @@ export async function reloadChildRefNode(nodeId: string): Promise<void> {
   const parent = anchor.parent;
   const depth = (anchor.metadata as any)?.depth ?? 0;
   disposeNodeSubtree(nodeId);
-  await loadTokenChildNode(node, parent as BABYLON.TransformNode, depth, new Set<string>());
+  await loadNode(node, parent as BABYLON.TransformNode, depth, new Set<string>());
 }
 ```
 
-(Import `getCurrentManifest` from `@arbesk/asset-core/domain/asset.js`, `getManifestNodes` from `./transforms.ts`, and `disposeNodeSubtree` from `./cleanup.ts`. `loadTokenChildNode`, `state`, and `BABYLON` are already in scope in `scene-loader.ts`.)
+(Re-run `loadNode` — NOT `loadTokenChildNode` — so the outer anchor's `transform_matrix` is re-applied and the node is re-registered in `state.nodeAnchors`. Import `getCurrentManifest` from `@arbesk/asset-core/domain/asset.js`, `getManifestNodes` from `./transforms.ts`, and `disposeNodeSubtree` from `./cleanup.ts`. `loadNode`, `state`, and `BABYLON` are already in scope.)
 
 - [ ] **Step 3: Write `frontend/src/js/engine/child-reload.ts`**
 
