@@ -493,8 +493,12 @@ async function startFreshGeneration(
   body: TripoGenerationInput,
 ): Promise<Response> {
   const { prompt, textureQuality, imageData, imageMime, images } = body;
+  // Truncate user-authored prompt text in logs — prompts may contain PII.
+  const promptLabel = prompt
+    ? `"${prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt}"`
+    : images ? "(multiview)" : "(image)";
   console.log(
-    `[GEN] using Tripo3D adapter for "${prompt || (images ? "(multiview)" : "(image)")}" image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
+    `[GEN] using Tripo3D adapter for ${promptLabel} image=${Boolean(imageData)}${images ? ` views=${images.length}` : ""}`,
   );
   const tripoTaskId = images
     ? await provider.multiviewToModel({
@@ -827,8 +831,12 @@ export default function generateAssetNode(
 
         const { effectiveProvider, useMockAdapter } = resolveProvider(provider);
 
+        // Truncate user-authored prompt text in logs — prompts may contain PII.
+        const promptLabel = prompt
+          ? (prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt)
+          : (imageData ? "(image)" : "");
         console.log(
-          `[GEN] prompt="${prompt || (imageData ? "(image)" : "")}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
+          `[GEN] prompt="${promptLabel}" nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
         );
 
         if (rejectMissingProviderKey(res, effectiveProvider, providerKey)) {
