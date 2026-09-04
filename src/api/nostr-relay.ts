@@ -5,7 +5,7 @@
  */
 
 import { WebSocket } from "ws";
-import { Relay } from "nostr-tools";
+import { finalizeEvent, Relay, utils } from "nostr-tools";
 import type { NostrEvent } from "nostr-tools";
 import { AbstractSimplePool } from "nostr-tools/abstract-pool";
 
@@ -14,6 +14,12 @@ export const KIND_CHAT = 1;
 
 /** Tag name used to scope events to a canonical asset id (`#asset`). */
 export const TAG_ASSET = "asset";
+
+/** Nostr kind for asset-update notifications (never reuse kind 1 = chat). */
+export const KIND_ASSET_UPDATE = 20001;
+
+/** Tag name for the token-scoped key "<chainId>:<contract>:<tokenId>". */
+export const TAG_TOKEN = "token";
 
 /**
  * @remarks The trusted private relay already validates signatures before
@@ -45,6 +51,26 @@ export function createPool(): AbstractSimplePool {
     enableReconnect: false,
     maxWaitForConnection: 3000,
   });
+}
+
+/**
+ * Builds a signed KIND_ASSET_UPDATE event for a token whose on-chain URI just
+ * changed. Signed with the given service key so the browser can trust it.
+ */
+export function buildAssetUpdateEvent(
+  privkeyHex: string,
+  payload: { chainId: number; contractAddress: string; tokenId: string; newAssetURI: string },
+): NostrEvent {
+  const tokenTag = `${payload.chainId}:${payload.contractAddress.toLowerCase()}:${payload.tokenId}`;
+  return finalizeEvent(
+    {
+      kind: KIND_ASSET_UPDATE,
+      created_at: Math.floor(Date.now() / 1000),
+      content: JSON.stringify(payload),
+      tags: [[TAG_TOKEN, tokenTag]],
+    },
+    utils.hexToBytes(privkeyHex),
+  );
 }
 
 /**

@@ -19,6 +19,7 @@ import { walletRelaySchema } from "../schemas.ts";
 import { walletRelayRateLimit } from "../rate-limiter.ts";
 import { getCdpClient, findEndUserByAddress } from "../cdp.ts";
 import { createCdpServerSigner } from "../cdp-signer.ts";
+import { buildAssetUpdateEvent, createRelay } from "../nostr-relay.ts";
 
 // sessions.ts / authz.ts / config.ts are lazy-loaded inside the handler — they
 // sit in a dense static-import graph (identity → config → viem/web3) that breaks
@@ -118,6 +119,35 @@ async function resolveRelayUserId(
   return { userId: u.userId ?? null, address: canonical };
 }
 
+/**
+ * Publishes a live-update Nostr event for a token whose URI just changed via
+ * the wallet relay (CLI/MCP/CDP path). Fire-and-forget: never block the save.
+ */
+async function publishLiveUpdate(
+  chainId: number,
+  contractAddress: string,
+  tokenId: string,
+  newAssetURI: string,
+): Promise<void> {
+  try {
+    const { NOSTR_SERVICE_PRIVATE_KEY, NOSTR_RELAY_URL } = await import("../../config.ts");
+    if (!NOSTR_SERVICE_PRIVATE_KEY || !NOSTR_RELAY_URL) return;
+    const event = buildAssetUpdateEvent(NOSTR_SERVICE_PRIVATE_KEY, {
+      chainId,
+      contractAddress,
+      tokenId,
+      newAssetURI,
+    });
+    const relay = createRelay(NOSTR_RELAY_URL);
+    await relay.connect();
+    await relay.publish(event);
+    relay.close();
+    console.log(`[RELAY] live update published | token=${tokenId} chain=${chainId}`);
+  } catch (err) {
+    console.warn(`[RELAY] live update publish failed | token=${tokenId}:`, (err as Error).message);
+  }
+}
+
 export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
   const getCdp = deps.getCdpClientFn ?? getCdpClient;
   const router = Router();
@@ -185,6 +215,9 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
       const result = await executeRelayOp(contract, op, args);
       if (result.error) {
         return sendError(res, result.error.status, result.error.code, result.error.message);
+      }
+      if (op === "updateUri" && typeof params.newUri === "string") {
+        publishLiveUpdate(cid, contractAddr, String(tokenId), params.newUri).catch(() => {});
       }
       res.status(200).json({ receipt: result.receipt });
     } catch (err) {

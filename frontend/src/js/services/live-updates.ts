@@ -6,7 +6,7 @@ import { KIND_ASSET_UPDATE, KIND_BINDING, TAG_TOKEN, TAG_ADDRESS, tokenTag } fro
 import { getNostrFacade, getOrCreateBinding, getTokenOwner } from "./nostr-browser.ts";
 import { getContractAddress } from "../blockchain/network-config.ts";
 import { getManifestNodes } from "../engine/transforms.ts";
-import { NOSTR_RELAY_URL } from "./nostr-config.ts";
+import { NOSTR_RELAY_URL, SERVICE_PUBKEY } from "./nostr-config.ts";
 import { invalidateResolution } from "../blockchain/token-resolver.ts";
 
 const pool = new SimplePool();
@@ -68,12 +68,16 @@ export function startLiveUpdates(): void {
         // Only react to tokens this scene references.
         const tokens = collectTokens();
         if (!tokens.some((t) => tokenTag(t.chainId, t.contractAddress, t.tokenId) === eventTag)) return;
-        const owner = await getTokenOwner(payload.chainId, payload.tokenId);
-        if (!owner) return;
-        const binding = await resolveBindingFor(owner);
-        if (!binding) return;
-        const ok = await getNostrFacade().verifyAssetUpdate(event, binding, payload);
-        if (!ok) return;
+        // Two trusted publishers: the backend service key (CLI/MCP relay path)
+        // and the token owner's bound key (browser non-custodial path).
+        if (event.pubkey !== SERVICE_PUBKEY) {
+          const owner = await getTokenOwner(payload.chainId, payload.tokenId);
+          if (!owner) return;
+          const binding = await resolveBindingFor(owner);
+          if (!binding) return;
+          const ok = await getNostrFacade().verifyAssetUpdate(event, binding, payload);
+          if (!ok) return;
+        }
         invalidateResolution(payload.chainId, getContractAddress(payload.chainId)!, payload.tokenId);
         emit(EVENTS.ASSET_URI_UPDATED, { ...payload, source: "remote" });
       } catch { /* ignore malformed */ }
