@@ -10,15 +10,8 @@ export interface RelayPort {
   publish(event: NostrEvent): Promise<void>;
 }
 
-/** Answers "is `address` the owner or an editor of `tokenId` on `chainId`?". */
-export interface ChainReadPort {
-  isTokenAuthor(chainId: number, tokenId: string, address: string): Promise<boolean>;
-}
-
-/** A wallet↔Nostr identity binding. */
+/** The wallet-signature key material used to sign update events. */
 export interface Binding {
-  address: string;
-  pubkey: string;
   signature: string;
 }
 
@@ -32,6 +25,5 @@ export interface AssetUpdatePayload {
 
 export interface NostrConfig {
   signer: WalletSignPort;
-  chain: ChainReadPort;
   relay: RelayPort;
 }

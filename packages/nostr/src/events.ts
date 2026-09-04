@@ -1,4 +1,4 @@
-import { finalizeEvent, verifyEvent } from "nostr-tools";
+import { finalizeEvent } from "nostr-tools";
 import { hexToBytes } from "viem";
 import type { NostrEvent } from "nostr-tools";
 import type { AssetUpdatePayload, Binding } from "./types.ts";
@@ -32,29 +32,4 @@ export function signAssetUpdate(
     },
     hexToBytes(`0x${deriveSecretKey(binding.signature)}`)
   );
-}
-
-/**
- * Verifies an event's Schnorr signature.
- *
- * nostr-tools memoizes its verdict on a symbol-keyed `verifiedSymbol`
- * property that `finalizeEvent` stamps onto the event it returns. A tampered
- * event built via object spread carries that cached flag over, so
- * `verifyEvent` would short-circuit and wrongly accept it. Rebuilding a
- * plain object from the wire fields drops the memo and forces a real check.
- */
-export function verifyEventSignature(event: NostrEvent): boolean {
-  try {
-    return verifyEvent({
-      id: event.id,
-      sig: event.sig,
-      pubkey: event.pubkey,
-      created_at: event.created_at,
-      kind: event.kind,
-      tags: event.tags,
-      content: event.content,
-    });
-  } catch {
-    return false;
-  }
 }

@@ -1,7 +1,7 @@
 import { SimplePool } from "nostr-tools";
 import type { NostrEvent } from "nostr-tools";
 import { createNostrFacade } from "@arbesk/nostr";
-import type { Binding, NostrFacade, WalletSignPort, ChainReadPort, RelayPort } from "@arbesk/nostr";
+import type { Binding, NostrFacade, WalletSignPort, RelayPort } from "@arbesk/nostr";
 import { getSigner } from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { NOSTR_RELAY_URL } from "./nostr-config.ts";
@@ -16,10 +16,6 @@ const signerPort: WalletSignPort = {
   },
 };
 
-// The live-update flow no longer verifies the signer (the chain is the source
-// of truth), so the chain port is a no-op stub kept only to satisfy the facade.
-const chainPort: ChainReadPort = { isTokenAuthor: async () => false };
-
 const relayPort: RelayPort = {
   publish: async (event: NostrEvent) => {
     await Promise.all(pool.publish([NOSTR_RELAY_URL], event));
@@ -27,7 +23,7 @@ const relayPort: RelayPort = {
 };
 
 export function getNostrFacade(): NostrFacade {
-  return createNostrFacade({ signer: signerPort, chain: chainPort, relay: relayPort });
+  return createNostrFacade({ signer: signerPort, relay: relayPort });
 }
 
 function bindingKey(address: string): string {

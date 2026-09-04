@@ -3,16 +3,18 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createNostrFacade } from "@arbesk/nostr";
 
 describe("facade", () => {
-  it("round-trips identity and verification", async () => {
+  it("creates a signer, signs, and publishes an update", async () => {
     const account = privateKeyToAccount(generatePrivateKey());
+    let published = false;
     const facade = createNostrFacade({
       signer: { signMessage: (m) => account.signMessage({ message: m }) },
-      relay: { publish: async () => {} },
-      chain: { isTokenAuthor: async () => true },
+      relay: { publish: async () => { published = true; } },
     });
     const binding = await facade.createIdentity();
-    await expect(facade.verifyBinding(binding)).resolves.toBe(true);
+    expect(binding.signature).toMatch(/^0x/);
     const event = facade.signAssetUpdate(binding, { chainId: 1, tokenId: "1", newAssetURI: "a" }, "0x" + "11".repeat(20));
-    await expect(facade.verifyAssetUpdate(event, binding, { chainId: 1, tokenId: "1", newAssetURI: "a" })).resolves.toBe(true);
+    expect(event.kind).toBe(20001);
+    await facade.publishAssetUpdate(binding, { chainId: 1, tokenId: "1", newAssetURI: "a" }, "0x" + "11".repeat(20));
+    expect(published).toBe(true);
   });
 });
