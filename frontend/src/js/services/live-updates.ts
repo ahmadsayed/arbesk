@@ -37,6 +37,9 @@ async function onLocalUriChanged(payload: any) {
   await getNostrFacade().publishAssetUpdate(binding, {
     chainId: payload.chainId, tokenId: payload.tokenId, newAssetURI: payload.newAssetURI,
   }, contract!);
+  // Invalidate the resolution cache so the in-place reload re-fetches the new
+  // CID instead of a stale 30s-cached value.
+  invalidateResolution(payload.chainId, contract!, payload.tokenId);
   emit(EVENTS.ASSET_URI_UPDATED, { ...payload, source: "local" });
 }
 
