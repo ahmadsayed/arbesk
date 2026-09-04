@@ -340,6 +340,5 @@ whatever your host offers (Web Workers, threads, actors).
 ## See also
 
 - `packages/asset-core/README.md` — package overview
-- `docs/superpowers/specs/2026-08-23-asset-core-externalization-design.md` — design decisions (why TS, why ports, why no WASM yet)
 - `docs/ARCHITECTURE.md §4` — manifest/collection data model
 - `docs/API_SPEC.md` — the HTTP API, if you don't need to embed the engine

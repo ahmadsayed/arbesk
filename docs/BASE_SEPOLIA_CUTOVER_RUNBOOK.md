@@ -1,7 +1,7 @@
 # Base Sepolia Contract v2 Cutover — Runbook
 
 Ready-to-execute sequence for the live cutover (the "Stage B" of the contract-v2
-migration plan). Everything here was rehearsed on Hardhat local (`docs/superpowers/plans/2026-08-31-contract-v2-migration.md`).
+migration). Everything here was rehearsed on Hardhat local.
 
 **Do not run until:** deployer `PRIVATE_KEY` is confirmed funded, and CDP Portal
 paymaster sponsorship policy is understood (see §7).
@@ -122,4 +122,4 @@ live (never destroyed).
 
 Governance (`#57`) — Safe 2-of-3 + `TimelockController` deploy and `transferOwnership`
 on the new proxy — should be sequenced **before or immediately after** this cutover,
-since `_authorizeUpgrade` is `onlyOwner`. See `docs/superpowers/plans/2026-08-31-contract-v2-migration.md` §Phase 1.
+since `_authorizeUpgrade` is `onlyOwner`.
