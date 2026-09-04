@@ -2,11 +2,11 @@ import { SimplePool } from "nostr-tools";
 import type { NostrEvent } from "nostr-tools";
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
-import { KIND_ASSET_UPDATE, KIND_BINDING, TAG_TOKEN, TAG_ADDRESS, tokenTag } from "@arbesk/nostr";
-import { getNostrFacade, getOrCreateBinding, getTokenOwner } from "./nostr-browser.ts";
+import { KIND_ASSET_UPDATE, TAG_TOKEN, tokenTag } from "@arbesk/nostr";
+import { getNostrFacade, getOrCreateBinding } from "./nostr-browser.ts";
 import { getContractAddress } from "../blockchain/network-config.ts";
 import { getManifestNodes } from "../engine/transforms.ts";
-import { NOSTR_RELAY_URL, SERVICE_PUBKEY } from "./nostr-config.ts";
+import { NOSTR_RELAY_URL } from "./nostr-config.ts";
 import { invalidateResolution } from "../blockchain/token-resolver.ts";
 
 const pool = new SimplePool();
@@ -16,7 +16,7 @@ let relaySub: { close: () => void } | null = null;
 const seen = new Set<string>();
 
 export function collectTokens(): { chainId: number; contractAddress: string; tokenId: string }[] {
-  // child_ref nodes carry collection.chainId/contractAddress/tokenId (new) or flat chainId/contractAddress/tokenId (legacy).
+  // child_ref nodes carry collection.chainId/contractAddress/tokenId (new) or flat (legacy).
   const nodes = getManifestNodes(getCurrentManifest());
   const set = new Map<string, { chainId: number; contractAddress: string; tokenId: string }>();
   for (const n of nodes) {
@@ -30,26 +30,20 @@ export function collectTokens(): { chainId: number; contractAddress: string; tok
   return [...set.values()];
 }
 
+// On a local publish, reload the local scene immediately, then best-effort
+// broadcast "asset updated" so other viewers re-fetch too.
 async function onLocalUriChanged(payload: any) {
-  const binding = await getOrCreateBinding();
-  if (!binding) return;
   const contract = getContractAddress(payload.chainId);
-  await getNostrFacade().publishAssetUpdate(binding, {
-    chainId: payload.chainId, tokenId: payload.tokenId, newAssetURI: payload.newAssetURI,
-  }, contract!);
-  // Invalidate the resolution cache so the in-place reload re-fetches the new
-  // CID instead of a stale 30s-cached value.
   invalidateResolution(payload.chainId, contract!, payload.tokenId);
   emit(EVENTS.ASSET_URI_UPDATED, { ...payload, source: "local" });
-}
-
-async function resolveBindingFor(address: string): Promise<any | null> {
-  const events = await pool.querySync([NOSTR_RELAY_URL], {
-    kinds: [KIND_BINDING], "#address": [address.toLowerCase()],
-  });
-  if (!events.length) return null;
-  const ev = events[events.length - 1];
-  try { return JSON.parse(ev.content); } catch { return null; }
+  try {
+    const binding = await getOrCreateBinding();
+    if (binding) {
+      await getNostrFacade().publishAssetUpdate(binding, {
+        chainId: payload.chainId, tokenId: payload.tokenId, newAssetURI: payload.newAssetURI,
+      }, contract!);
+    }
+  } catch { /* broadcast is best-effort */ }
 }
 
 export function startLiveUpdates(): void {
@@ -65,19 +59,10 @@ export function startLiveUpdates(): void {
       try {
         const payload = JSON.parse(event.content);
         const eventTag = event.tags.find((t) => t[0] === TAG_TOKEN)?.[1] || "";
-        // Only react to tokens this scene references.
+        // The notice is just "asset updated"; the signer is irrelevant — the
+        // chain is the source of truth, so re-fetch the asset and reload.
         const tokens = collectTokens();
         if (!tokens.some((t) => tokenTag(t.chainId, t.contractAddress, t.tokenId) === eventTag)) return;
-        // Two trusted publishers: the backend service key (CLI/MCP relay path)
-        // and the token owner's bound key (browser non-custodial path).
-        if (event.pubkey !== SERVICE_PUBKEY) {
-          const owner = await getTokenOwner(payload.chainId, payload.tokenId);
-          if (!owner) return;
-          const binding = await resolveBindingFor(owner);
-          if (!binding) return;
-          const ok = await getNostrFacade().verifyAssetUpdate(event, binding, payload);
-          if (!ok) return;
-        }
         invalidateResolution(payload.chainId, getContractAddress(payload.chainId)!, payload.tokenId);
         emit(EVENTS.ASSET_URI_UPDATED, { ...payload, source: "remote" });
       } catch { /* ignore malformed */ }
