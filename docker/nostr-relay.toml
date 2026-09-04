@@ -38,5 +38,4 @@ payment_required = false
 restricted_writes = false
 
 [authorization]
-# Open relay for local development. Restrict pubkeys here if you need ACLs.
-pubkey_whitelist = []
+# Open relay for local development — no pubkey_whitelist, so any pubkey may publish.
