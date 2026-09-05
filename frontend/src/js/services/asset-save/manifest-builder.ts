@@ -22,7 +22,6 @@ import {
   clearPendingPostProcessorEdits,
   getPendingTransformEdits,
   clearPendingTransformEdits,
-  clearPendingChildRefs,
   getPendingChildRefRemovals,
   clearPendingChildRefRemovals,
   getPendingSourceOverrides,
@@ -377,6 +376,20 @@ function applySourceOverrides(manifest: any, pendingOverrides: Map<string, any>)
 }
 
 /**
+ * Removes exactly the refs this save baked. A drop that lands while a slow
+ * save (Pinata) is still in flight pushes onto the live array AFTER the
+ * snapshot — a wholesale clear would silently discard that link.
+ */
+function clearBakedChildRefs(baked: any[]) {
+  if (!baked?.length) return;
+  const ids = new Set(baked.map((n) => n?.node_id));
+  const pending = getPendingChildRefs();
+  for (let i = pending.length - 1; i >= 0; i--) {
+    if (ids.has(pending[i]?.node_id)) pending.splice(i, 1);
+  }
+}
+
+/**
  * Bakes pending linked-child refs and drops unlinked child assets.
  * @remarks Must run after the prevManifest snapshot so a link/remove-child
  *   save on an unchanged draft is still detected and written.
@@ -636,7 +649,10 @@ async function loadOrBuildBaseManifest(assetName: string) {
   // yet and would be silently lost. Wait for any in-flight drops first.
   await waitForPendingLinkedDrops();
   await waitForPendingFileDrops();
-  const pendingRefs = getPendingChildRefs();
+  // Snapshot (not the live array): a drop that starts while this save is
+  // still writing pushes onto the live array and must stay pending — the
+  // trailing clear must only remove refs THIS save baked.
+  const pendingRefs = [...getPendingChildRefs()];
   const pendingPP = getPendingPostProcessorEdits();
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
@@ -797,6 +813,7 @@ export async function prepareManifestForWrite(assetName: string) {
     manifest,
     prevCid: latestCid,
     prevManifest: prevManifest || baseManifest,
+    pendingRefs,
   };
 }
 
@@ -851,7 +868,7 @@ export async function saveAssetDraftCore(
     // Pending edits are already reflected in the prepared manifest (otherwise
     // it would differ from the previous one). Clear them so the UI doesn't
     // keep trying to re-apply a settled state.
-    clearPendingChildRefs();
+    clearBakedChildRefs(prepared.pendingRefs);
     clearPendingChildRefRemovals();
     clearPendingPostProcessorEdits();
     clearPendingTransformEdits();
@@ -898,7 +915,7 @@ export async function saveAssetDraftCore(
 
   recordSavedVersion(cid, prepared.manifest);
 
-  clearPendingChildRefs();
+  clearBakedChildRefs(prepared.pendingRefs);
   clearPendingChildRefRemovals();
   clearPendingPostProcessorEdits();
   clearPendingTransformEdits();

@@ -81,11 +81,24 @@ interface CacheKeyRef {
 }
 
 /**
+ * BigInt-safe token id normalization so a cache entry written from a manifest
+ * child_ref (decimal) and an invalidation from a publish event (hex) meet on
+ * the same key.
+ */
+function normalizeTokenId(id: any): string {
+  try {
+    return BigInt(id).toString();
+  } catch {
+    return String(id);
+  }
+}
+
+/**
  * Build a deterministic cache key for a child reference.
  */
 function buildCacheKey(childRef: CacheKeyRef) {
   return `${childRef.chainId}:${childRef.contractAddress.toLowerCase()}:${
-    childRef.tokenId
+    normalizeTokenId(childRef.tokenId)
   }`;
 }
 
@@ -156,7 +169,7 @@ const minERC721ABI = [
  * Reads a token's tokenURI from an ERC-721 contract via a per-chain cached
  * viem public client.
  */
-async function readTokenURI(
+export async function readTokenURI(
   chainId: number | null,
   contractAddress: string,
   tokenId: string

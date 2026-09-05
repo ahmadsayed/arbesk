@@ -12,6 +12,7 @@ import {
   renameAsset,
   getAssetState,
 } from "@arbesk/asset-core/domain/asset.js";
+import { adoptOpenedCollection } from "@arbesk/asset-core/domain/collection.js";
 
 const MAX_DEPTH = 5;
 
@@ -90,13 +91,14 @@ async function onDiveRequested(e: any): Promise<void> {
     }
 
     // Save current state on the stack
-    const { activeAssetManifestCid, activeAssetName, activeAssetTokenId } =
+    const { activeAssetManifestCid, activeAssetName, activeAssetTokenId, activeAssetId } =
       getAssetState();
     navStack.push({
       cid: activeAssetManifestCid,
       name: activeAssetName || "Asset",
       assetName: activeAssetName,
       tokenId: activeAssetTokenId,
+      assetId: activeAssetId,
     });
 
     // Load child asset
@@ -104,7 +106,19 @@ async function onDiveRequested(e: any): Promise<void> {
     // Extract tokenId from either old ({tokenId}) or new ({collection: {tokenId}}) format
     const refTokenId = childRef.tokenId || childRef.collection?.tokenId || null;
 
-    adoptOpenedAsset(manifest.cid, { tokenId: refTokenId });
+    adoptOpenedAsset(manifest.cid, {
+      tokenId: refTokenId,
+      // The resolved manifest knows its own assetID — without it a republish
+      // after diving writes the child's new version under the PARENT's
+      // assetID, and child_ref viewers keep resolving the old content.
+      assetId: manifest.asset_id ?? null,
+    });
+    // The child's collection becomes the publish context — otherwise Publish
+    // writes the edited child into the parent's (or Default) collection and
+    // the child's own token never changes, so live-ref viewers never reload.
+    if (refTokenId) {
+      adoptOpenedCollection(String(refTokenId), { clearSelectedCollection: true });
+    }
     renameAsset(manifest.name || "Child Asset");
     uiState.set({ nestingDepth: ++currentDepth });
 
@@ -134,7 +148,10 @@ async function ascendOneLevel(): Promise<void> {
 
   try {
     clearScene();
-    adoptOpenedAsset(prev.cid, { tokenId: prev.tokenId });
+    adoptOpenedAsset(prev.cid, { tokenId: prev.tokenId, assetId: prev.assetId ?? null });
+    if (prev.tokenId) {
+      adoptOpenedCollection(String(prev.tokenId), { clearSelectedCollection: true });
+    }
     renameAsset(prev.assetName);
 
     await loadAssetManifest(prev.cid);

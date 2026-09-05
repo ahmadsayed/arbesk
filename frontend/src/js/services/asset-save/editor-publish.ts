@@ -100,15 +100,18 @@ export async function verifyCanEdit(tokenId: string | number, walletAddr: string
 
 /**
  * Republishes a collection manifest CID for an existing token.
+ * @param assetId - the collection entry that changed (for asset-precise
+ *   live-update notices); the token itself identifies the collection.
  * @returns the transaction hash
  */
 export async function republishCollection(
   tokenId: string | number,
   collectionCid: string,
-  walletAddr: string
+  walletAddr: string,
+  assetId?: string
 ) {
   const proofResult = await requireEditorProof(tokenId, walletAddr);
-  const txHash = await wallet.updateAssetURI(tokenId, collectionCid, proofResult.proof);
+  const txHash = await wallet.updateAssetURI(tokenId, collectionCid, proofResult.proof, undefined, assetId);
   if (!txHash) throw new Error("Republish transaction failed");
   return txHash;
 }

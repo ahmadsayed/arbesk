@@ -132,14 +132,15 @@ async function updateAssetURI(
   tokenId: number | string,
   newTokenURI: string,
   proof: string[],
-  assetScope: string = ZERO_HASH
+  assetScope: string = ZERO_HASH,
+  assetId: string | null = null
 ) {
   const c = _readyContract();
   if (!c) return null;
 
-  const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof, assetScope });
+  const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof, assetScope, assetId });
   if (relayed.handled) {
-    _notifyUriChanged(tokenId, newTokenURI, relayed.txHash);
+    _notifyUriChanged(tokenId, newTokenURI, relayed.txHash, assetId);
     return relayed.txHash;
   }
 
@@ -151,7 +152,7 @@ async function updateAssetURI(
       args: [BigInt(tokenId), newTokenURI, assetScope, proof],
       pendingPayload: { tokenId, tokenURI: newTokenURI },
     });
-    _notifyUriChanged(tokenId, newTokenURI, receipt.transactionHash);
+    _notifyUriChanged(tokenId, newTokenURI, receipt.transactionHash, assetId);
     return receipt.transactionHash;
   } catch (error) {
     console.error("updateAssetURI failed:", error);
@@ -173,10 +174,12 @@ async function updateAssetURI(
   }
 }
 
-function _notifyUriChanged(tokenId: number | string, newTokenURI: string, txHash: string | null) {
+function _notifyUriChanged(tokenId: number | string, newTokenURI: string, txHash: string | null, assetId: string | null = null) {
   emit(EVENTS.ASSET_URI_CHANGED, {
     chainId: walletState.get().chainId,
+    contractAddress: walletState.get().contractAddress,
     tokenId: String(tokenId),
+    assetId: assetId ?? null,
     newAssetURI: newTokenURI,
     txHash,
   });

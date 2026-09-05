@@ -5,9 +5,18 @@ import type { AssetUpdatePayload, Binding } from "./types.ts";
 import { KIND_ASSET_UPDATE, TAG_TOKEN } from "./kinds.ts";
 import { deriveSecretKey } from "./identity.ts";
 
-/** Canonical token-scoped tag "<chainId>:<contract>:<tokenId>". */
+/** BigInt-safe token id normalization so "0x2a" and "42" produce one tag. */
+function normalizeTokenId(id: string): string {
+  try {
+    return BigInt(id).toString();
+  } catch {
+    return String(id);
+  }
+}
+
+/** Canonical token-scoped tag "<chainId>:<contract>:<tokenId>" (tokenId decimal). */
 export function tokenTag(chainId: number, contractAddress: string, tokenId: string): string {
-  return `${chainId}:${contractAddress.toLowerCase()}:${tokenId}`;
+  return `${chainId}:${contractAddress.toLowerCase()}:${normalizeTokenId(tokenId)}`;
 }
 
 /** Signs a KIND_ASSET_UPDATE event with the key derived from the binding. */

@@ -62,6 +62,7 @@ export interface PublishCollectionDeps {
   getTokenURI: Function;
   getCollectionManifest: Function;
   writeJSONToIPFS: Function;
+  /** (tokenId, collectionCid, walletAddr, assetID?) — assetID identifies the changed entry. */
   republishCollection: Function;
   publishNewToken: Function;
   onAdoptIdentity?: (ctx: {
@@ -78,6 +79,41 @@ export interface PublishCollectionResult {
 }
 
 /**
+ * Resolves which collection token this publish targets: the selected/active
+ * one when it still resolves on-chain, otherwise the wallet's default
+ * collection (only when the wallet actually owns it).
+ */
+async function resolveTargetCollection(
+  walletAddr: string,
+  deps: PublishCollectionDeps
+): Promise<{ tokenId: string | null; manifest: Record<string, any> | null }> {
+  const preferredCollectionId =
+    getSelectedCollectionId() || getActiveCollectionTokenId();
+
+  if (preferredCollectionId) {
+    try {
+      const manifest = await deps.getCollectionManifest(preferredCollectionId);
+      if (manifest) return { tokenId: preferredCollectionId, manifest };
+    } catch {
+      // tokenURI reverted or IPFS fetch failed; treat as new collection
+    }
+  }
+
+  const defaultTokenId = deriveDefaultCollectionId(walletAddr);
+  const [ownerResult, manifestResult] = await Promise.allSettled([
+    deps.getOwnerOf(defaultTokenId),
+    deps.getCollectionManifest(defaultTokenId),
+  ]);
+  if (ownerResult.status === "fulfilled" && ownerResult.value) {
+    return {
+      tokenId: defaultTokenId,
+      manifest: manifestResult.status === "fulfilled" ? manifestResult.value : null,
+    };
+  }
+  return { tokenId: null, manifest: null };
+}
+
+/**
  * Builds the next collection manifest for the asset, writes it to IPFS, and
  * anchors it on-chain.
  * @remarks This is the canonical publish path.
@@ -88,33 +124,9 @@ export async function publishCollection(
   walletAddr: string,
   deps: PublishCollectionDeps
 ): Promise<PublishCollectionResult> {
-  const preferredCollectionId =
-    getSelectedCollectionId() || getActiveCollectionTokenId();
-
-  let existingCollectionTokenId: string | null = null;
-  let collectionManifest: Record<string, any> | null = null;
-
-  if (preferredCollectionId) {
-    try {
-      collectionManifest = await deps.getCollectionManifest(preferredCollectionId);
-      if (collectionManifest) existingCollectionTokenId = preferredCollectionId;
-    } catch {
-      // tokenURI reverted or IPFS fetch failed; treat as new collection
-    }
-  }
-
-  if (!existingCollectionTokenId) {
-    const defaultTokenId = deriveDefaultCollectionId(walletAddr);
-    const [ownerResult, manifestResult] = await Promise.allSettled([
-      deps.getOwnerOf(defaultTokenId),
-      deps.getCollectionManifest(defaultTokenId),
-    ]);
-    if (ownerResult.status === "fulfilled" && ownerResult.value) {
-      existingCollectionTokenId = defaultTokenId;
-      collectionManifest =
-        manifestResult.status === "fulfilled" ? manifestResult.value : null;
-    }
-  }
+  const target = await resolveTargetCollection(walletAddr, deps);
+  const existingCollectionTokenId = target.tokenId;
+  const collectionManifest = target.manifest;
 
   const mergedCollection: Record<string, any> = mergeAssetIntoCollection(
     collectionManifest,
@@ -139,7 +151,10 @@ export async function publishCollection(
     await deps.republishCollection(
       existingCollectionTokenId,
       collectionCid,
-      walletAddr
+      walletAddr,
+      // The token is the collection; the assetID says WHICH entry changed so
+      // live-update viewers can reload precisely that asset.
+      assetID
     );
     tokenId = String(existingCollectionTokenId);
     isNew = false;

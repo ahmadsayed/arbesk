@@ -2,26 +2,18 @@
  * @jest-environment jsdom
  *
  * Live-updates token-collection guard: the relay event's #token tag is
- * "<chainId>:<contract>:<tokenId>" (see @arbesk/nostr tokenTag, lower-cased
- * contract), so collectTokens must carry contractAddress and key on tokenTag
- * for the onevent match to ever succeed.
+ * "<chainId>:<contract>:<tokenId>" (see @arbesk/nostr tokenTag: lower-cased
+ * contract, canonical decimal token id), so collectTokens must carry
+ * contractAddress and key on tokenTag for the onevent match to ever succeed.
+ * Tokens are collected from the scene's child_ref anchors so nested
+ * (grandchild) refs — invisible in the root manifest — still match.
  */
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { tokenTag } from "@arbesk/nostr";
 
-const getCurrentManifest = jest.fn();
-const getManifestNodes = jest.fn();
-
 async function loadCollectTokens() {
   jest.resetModules();
 
-  await jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
-    getCurrentManifest,
-  }));
-  await jest.unstable_mockModule(
-    "../../frontend/src/js/engine/transforms.js",
-    () => ({ getManifestNodes })
-  );
   await jest.unstable_mockModule(
     "../../frontend/src/js/services/nostr-browser.js",
     () => ({
@@ -36,71 +28,79 @@ async function loadCollectTokens() {
   );
   await jest.unstable_mockModule(
     "../../frontend/src/js/blockchain/token-resolver.js",
-    () => ({ invalidateResolution: jest.fn() })
+    () => ({
+      invalidateResolution: jest.fn(),
+      readTokenURI: jest.fn(),
+      normalizeTokenURI: (u) => u,
+    })
   );
 
   const mod = await import("../../frontend/src/js/services/live-updates.js");
-  return mod.collectTokens;
-}
-
-function setNodes(nodes) {
-  getCurrentManifest.mockReturnValue({ scene: { nodes } });
-  getManifestNodes.mockImplementation((m) => m?.scene?.nodes || []);
+  // Import state AFTER the reset so the test and live-updates share one
+  // module-registry instance of the nodeAnchors map.
+  const stateMod = await import("../../frontend/src/js/engine/state.js");
+  stateMod.state.nodeAnchors.clear();
+  return { collectTokens: mod.collectTokens, state: stateMod.state };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
+function anchorWith(childRef) {
+  return { metadata: { childRef } };
+}
+
 describe("collectTokens", () => {
-  test("carries contractAddress and keys on the publisher tokenTag", async () => {
-    const collectTokens = await loadCollectTokens();
-    setNodes([
-      {
-        node_id: "child1",
-        child_ref: {
-          collection: { chainId: 11155111, contractAddress: "0xABC", tokenId: "42" },
-          assetID: "bafy-child-1",
-        },
-      },
-    ]);
+  test("collects from child_ref anchors and keys on the publisher tokenTag", async () => {
+    const { collectTokens, state } = await loadCollectTokens();
+    state.nodeAnchors.set(
+      "child1",
+      anchorWith({
+        collection: { chainId: 11155111, contractAddress: "0xABC", tokenId: "42" },
+        assetID: "bafy-child-1",
+      })
+    );
 
     const tokens = collectTokens();
 
     expect(tokens).toEqual([
       { chainId: 11155111, contractAddress: "0xABC", tokenId: "42" },
     ]);
-    expect(
-      tokenTag(tokens[0].chainId, tokens[0].contractAddress, tokens[0].tokenId)
-    ).toBe("11155111:0xabc:42");
-    // Matches the publisher's #token tag format exactly.
+    // Matches the publisher's #token tag whether it stamped hex or decimal.
     expect(tokenTag(11155111, "0xABC", "42")).toBe("11155111:0xabc:42");
+    expect(tokenTag(11155111, "0xABC", "0x2a")).toBe("11155111:0xabc:42");
   });
 
-  test("dedups on tokenTag and reads legacy flat contractAddress", async () => {
-    const collectTokens = await loadCollectTokens();
-    setNodes([
-      {
-        node_id: "child1",
-        child_ref: {
-          collection: { chainId: 31337, contractAddress: "0x1", tokenId: "7" },
-          assetID: "bafy-child-1",
-        },
-      },
-      // Same token referenced twice under different assetIDs — deduped.
-      {
-        node_id: "child2",
-        child_ref: {
-          collection: { chainId: 31337, contractAddress: "0x1", tokenId: "7" },
-          assetID: "bafy-child-2",
-        },
-      },
-      // Legacy flat child_ref (no collection envelope).
-      {
-        node_id: "legacy",
-        child_ref: { chainId: 31337, contractAddress: "0x2", tokenId: "9" },
-      },
-    ]);
+  test("includes nested (grandchild) refs, dedups on tokenTag, reads legacy flat refs", async () => {
+    const { collectTokens, state } = await loadCollectTokens();
+    state.nodeAnchors.set(
+      "child1",
+      anchorWith({
+        collection: { chainId: 31337, contractAddress: "0x1", tokenId: "7" },
+        assetID: "bafy-child-1",
+      })
+    );
+    // Same token referenced again at a deeper level — deduped.
+    state.nodeAnchors.set(
+      "grandchild1",
+      anchorWith({
+        collection: { chainId: 31337, contractAddress: "0x1", tokenId: "7" },
+        assetID: "bafy-grandchild-1",
+      })
+    );
+    // Legacy flat child_ref (no collection envelope).
+    state.nodeAnchors.set(
+      "legacy",
+      anchorWith({ chainId: 31337, contractAddress: "0x2", tokenId: "9" })
+    );
+    // Same-collection "self" ref — skipped (no token to match on-chain).
+    state.nodeAnchors.set(
+      "selfRef",
+      anchorWith({ collection: "self", assetID: "bafy-self" })
+    );
+    // Plain mesh node — no childRef.
+    state.nodeAnchors.set("plain", { metadata: { nodeId: "plain" } });
 
     const tokens = collectTokens();
 

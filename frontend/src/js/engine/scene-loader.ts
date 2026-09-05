@@ -332,8 +332,10 @@ async function loadNode(
 
   if (node.child_ref) {
     // Tag the outer anchor with the child_ref so the inspector / dive button
-    // can resolve it directly from the manifest node_id.
-    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref, depth: depth || 0 };
+    // can resolve it directly from the manifest node_id. transformMatrix lets
+    // reloadChildRefNode rebuild nested nodes that live outside the root
+    // manifest (a grandchild ref only exists in the child's manifest).
+    anchor.metadata = { nodeId: node.node_id, childRef: node.child_ref, depth: depth || 0, transformMatrix: node.transform_matrix };
     meshes = await loadTokenChildNode(
       node,
       anchor,
@@ -766,11 +768,23 @@ export {
 
 /** Tears down and re-resolves a single child_ref node in place. */
 export async function reloadChildRefNode(nodeId: string): Promise<void> {
-  const node = getManifestNodes(getCurrentManifest()).find((n: any) => n?.node_id === nodeId && n?.child_ref);
   const anchor = state.nodeAnchors.get(nodeId);
-  if (!node || !anchor) return;
+  const meta = (anchor?.metadata as any) || {};
+  // Root-manifest node is authoritative (its transform may have been edited);
+  // nested refs (a child_ref inside a referenced child's manifest) exist only
+  // as anchor metadata, so rebuild a loadable node from it.
+  const manifestNode = getManifestNodes(getCurrentManifest()).find(
+    (n: any) => n?.node_id === nodeId && n?.child_ref
+  );
+  const childRef = manifestNode?.child_ref ?? meta.childRef;
+  if (!anchor || !childRef) return;
+  const node = manifestNode ?? {
+    node_id: nodeId,
+    child_ref: childRef,
+    transform_matrix: meta.transformMatrix,
+  };
   const parent = anchor.parent;
-  const depth = (anchor.metadata as any)?.depth ?? 0;
+  const depth = meta.depth ?? 0;
   disposeNodeSubtree(nodeId);
   await loadNode(node, parent as BABYLON.TransformNode, depth, new Set<string>());
 }

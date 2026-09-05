@@ -19,4 +19,15 @@ describe("invalidateResolution", () => {
 
     expect(_getCachedForTest(chainId, contractAddress, tokenId)).toBeNull();
   });
+
+  it("invalidates across token id formats (cache stored decimal, event hex)", () => {
+    const chainId = 31415822;
+    const contractAddress = "0xabc";
+
+    _setCachedForTest(chainId, contractAddress, "42", "bafy-old");
+    invalidateResolution(chainId, contractAddress, "0x2a");
+
+    expect(_getCachedForTest(chainId, contractAddress, "42")).toBeNull();
+    expect(_getCachedForTest(chainId, contractAddress, "0x2a")).toBeNull();
+  });
 });

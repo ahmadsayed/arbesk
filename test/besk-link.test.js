@@ -83,7 +83,7 @@ describe("besk linkChildAsset", () => {
     });
     expect(node.transform_matrix).toEqual(IDENTITY);
     expect(written[1].assets.asset_p).toBe("bafyWritten1");
-    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "1", { newUri: "bafyWritten2", proof: [] });
+    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "1", { newUri: "bafyWritten2", proof: [], assetId: "asset_p" });
   });
 
   test("fork appends a node with a frozen source CID instead of child_ref", async () => {

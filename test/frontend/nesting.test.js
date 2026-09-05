@@ -154,3 +154,61 @@ test("dive falls back to 'Child Asset' when the child manifest has no name", asy
   expect(renameAssetSpy).toHaveBeenCalledWith("Child Asset");
   expect(assetStore.get().activeAssetName).toBe("Child Asset");
 });
+
+test("dive adopts the child's collection as the publish context, ascend restores it", async () => {
+  const { ascendOneLevel } = await loadModule();
+
+  assetStore.set({
+    activeAssetManifestCid: "bafyParent",
+    activeAssetName: "Parent World",
+    activeAssetTokenId: "9",
+    activeCollectionTokenId: "9",
+    selectedCollectionId: "999",
+  });
+
+  emit(EVENTS.NESTING_DIVE_REQUESTED, {
+    childRef: {
+      collection: { chainId: 31415822, contractAddress: "0xABC", tokenId: "5" },
+      assetID: "a1",
+    },
+  });
+  await waitFor(() => loadAssetManifestMock.mock.calls.length > 0);
+
+  // Publish after the dive must target the child's collection (token 5),
+  // not the parent's (9) or a stale selected collection (999).
+  let s = assetStore.get();
+  expect(s.activeCollectionTokenId).toBe("5");
+  expect(s.selectedCollectionId).toBeNull();
+
+  await ascendOneLevel();
+  s = assetStore.get();
+  expect(s.activeCollectionTokenId).toBe("9");
+  expect(s.selectedCollectionId).toBeNull();
+});
+
+test("dive adopts the child's assetId so republish targets the child's own asset", async () => {
+  const { ascendOneLevel } = await loadModule();
+  _childManifest = { name: "Child Hub", asset_id: "asset_child_1" };
+
+  assetStore.set({
+    activeAssetManifestCid: "bafyParent",
+    activeAssetName: "Parent World",
+    activeAssetTokenId: "9",
+    activeAssetId: "asset_parent_1",
+  });
+
+  emit(EVENTS.NESTING_DIVE_REQUESTED, {
+    childRef: {
+      collection: { chainId: 31415822, contractAddress: "0xABC", tokenId: "5" },
+      assetID: "asset_child_1",
+    },
+  });
+  await waitFor(() => loadAssetManifestMock.mock.calls.length > 0);
+
+  // Without the child's assetId, a republish after diving writes the child
+  // version under the parent's assetID and child_ref viewers never update.
+  expect(assetStore.get().activeAssetId).toBe("asset_child_1");
+
+  await ascendOneLevel();
+  expect(assetStore.get().activeAssetId).toBe("asset_parent_1");
+});

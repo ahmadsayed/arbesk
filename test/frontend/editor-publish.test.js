@@ -193,6 +193,21 @@ describe("republishCollection", () => {
     expect(tx).toBe("0xTx");
   });
 
+  test("forwards the changed assetID to updateAssetURI", async () => {
+    _editorList = [{ address: OWNER, role: 2 }];
+    _ownerOfResult = OWNER;
+    const { republishCollection } = await loadModule();
+    await republishCollection(TOKEN_ID, "bafyCollection", OWNER, "asset_1");
+    const wallet = await import("../../frontend/src/js/blockchain/wallet.js");
+    expect(wallet.updateAssetURI).toHaveBeenCalledWith(
+      TOKEN_ID,
+      "bafyCollection",
+      expect.anything(),
+      undefined,
+      "asset_1"
+    );
+  });
+
   test("republishes for owner via single-editor fallback", async () => {
     _editorList = [];
     _ownerOfResult = OWNER;

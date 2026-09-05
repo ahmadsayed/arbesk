@@ -128,6 +128,7 @@ async function publishLiveUpdate(
   contractAddress: string,
   tokenId: string,
   newAssetURI: string,
+  assetId: string | null = null,
 ): Promise<void> {
   try {
     const { NOSTR_SERVICE_PRIVATE_KEY, NOSTR_RELAY_URL } = await import("../../config.ts");
@@ -137,6 +138,7 @@ async function publishLiveUpdate(
       contractAddress,
       tokenId,
       newAssetURI,
+      assetId,
     });
     const relay = createRelay(NOSTR_RELAY_URL);
     await relay.connect();
@@ -217,7 +219,7 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
         return sendError(res, result.error.status, result.error.code, result.error.message);
       }
       if (op === "updateUri" && typeof params.newUri === "string") {
-        publishLiveUpdate(cid, contractAddr, String(tokenId), params.newUri).catch(() => {});
+        publishLiveUpdate(cid, contractAddr, String(tokenId), params.newUri, params.assetId ?? null).catch(() => {});
       }
       res.status(200).json({ receipt: result.receipt });
     } catch (err) {

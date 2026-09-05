@@ -136,7 +136,8 @@ test("publishCollection republishes an existing collection", async () => {
   expect(deps.republishCollection).toHaveBeenCalledWith(
     "7",
     "bafyNewCollection",
-    "0xOwner"
+    "0xOwner",
+    "asset_1"
   );
   expect(deps.publishNewToken).not.toHaveBeenCalled();
   expect(getActiveCollectionTokenId()).toBe("7");

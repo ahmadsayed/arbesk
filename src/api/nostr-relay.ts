@@ -21,6 +21,15 @@ export const KIND_ASSET_UPDATE = 20001;
 /** Tag name for the token-scoped key "<chainId>:<contract>:<tokenId>". */
 export const TAG_TOKEN = "token";
 
+/** BigInt-safe token id normalization so "0x2a" and "42" produce one tag. */
+function normalizeTokenId(id: string): string {
+  try {
+    return BigInt(id).toString();
+  } catch {
+    return String(id);
+  }
+}
+
 /**
  * @remarks The trusted private relay already validates signatures before
  *   storage, so re-verifying on the backend proxy path is redundant (and
@@ -59,14 +68,14 @@ export function createPool(): AbstractSimplePool {
  */
 export function buildAssetUpdateEvent(
   privkeyHex: string,
-  payload: { chainId: number; contractAddress: string; tokenId: string; newAssetURI: string },
+  payload: { chainId: number; contractAddress: string; tokenId: string; newAssetURI: string; assetId?: string | null },
 ): NostrEvent {
-  const tokenTag = `${payload.chainId}:${payload.contractAddress.toLowerCase()}:${payload.tokenId}`;
+  const tokenTag = `${payload.chainId}:${payload.contractAddress.toLowerCase()}:${normalizeTokenId(payload.tokenId)}`;
   return finalizeEvent(
     {
       kind: KIND_ASSET_UPDATE,
       created_at: Math.floor(Date.now() / 1000),
-      content: JSON.stringify(payload),
+      content: JSON.stringify({ ...payload, assetId: payload.assetId ?? null }),
       tags: [[TAG_TOKEN, tokenTag]],
     },
     utils.hexToBytes(privkeyHex),

@@ -21,9 +21,9 @@ const NETWORK_CONFIGS: Record<number, NetworkConfig> = {
   [CHAIN_IDS.HARDHAT_LOCAL]: {
     name: "Hardhat Local",
     chainId: CHAIN_IDS.HARDHAT_LOCAL,
-    contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-    paidContractAddress: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-    usdcToken: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    contractAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    paidContractAddress: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+    usdcToken: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
     rpcUrl: "http://127.0.0.1:8545",
     blockExplorer: null,
   },

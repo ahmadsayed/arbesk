@@ -70,7 +70,7 @@ describe("besk sendAssetToCollection", () => {
     expect(written[0].version).toBe(2);
     expect(written[0].prev_asset_manifest_cid).toBe("bafyTargetCollection");
     expect(written[0].assets).toEqual({ existing: "cidX", asset_1: "bafyAssetA" });
-    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "42", { newUri: "bafyWritten1", proof: [] });
+    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "42", { newUri: "bafyWritten1", proof: [], assetId: "asset_1" });
   });
 
   test("live-ref writes a wrapper manifest with a child_ref back to the source asset", async () => {
@@ -100,7 +100,7 @@ describe("besk sendAssetToCollection", () => {
     expect(ref.assetID).toBe("asset_1");
     expect(wrapper.scene.nodes[0].transform_matrix).toHaveLength(16);
     expect(written[1].assets[result.targetAssetId]).toBe("bafyWritten1");
-    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "42", { newUri: "bafyWritten2", proof: [] });
+    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "42", { newUri: "bafyWritten2", proof: [], assetId: expect.any(String) });
   });
 
   test("rejects sending a collection to itself", async () => {

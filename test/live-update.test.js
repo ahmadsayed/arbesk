@@ -21,7 +21,29 @@ describe("buildAssetUpdateEvent", () => {
       contractAddress: "0xABC",
       tokenId: "42",
       newAssetURI: "bafy-new",
+      assetId: null,
     });
     expect(verifyEvent(event)).toBe(true);
+  });
+
+  it("carries the changed assetId in the event content", () => {
+    const event = buildAssetUpdateEvent(TEST_PRIVKEY, {
+      chainId: 31415822,
+      contractAddress: "0xABC",
+      tokenId: "42",
+      newAssetURI: "bafy-new",
+      assetId: "asset_7",
+    });
+    expect(JSON.parse(event.content).assetId).toBe("asset_7");
+  });
+
+  it("canonicalizes a hex token id in the #token tag", () => {
+    const event = buildAssetUpdateEvent(TEST_PRIVKEY, {
+      chainId: 31415822,
+      contractAddress: "0xABC",
+      tokenId: "0x2a",
+      newAssetURI: "bafy-new",
+    });
+    expect(event.tags).toContainEqual([TAG_TOKEN, "31415822:0xabc:42"]);
   });
 });

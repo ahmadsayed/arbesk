@@ -45,6 +45,6 @@ describe("besk updateCollection", () => {
     expect(written[0].version).toBe(3);
     expect(written[0].prev_asset_manifest_cid).toBe("bafyCurrentCollection");
     expect(written[0].assets).toEqual({ a: "cidA" });
-    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "42", { newUri: "bafyNewCollection", proof: [] });
+    expect(relayMock).toHaveBeenCalledWith(SESSION, "updateUri", "42", { newUri: "bafyNewCollection", proof: [], assetId: "b" }); // deletion detected
   });
 });

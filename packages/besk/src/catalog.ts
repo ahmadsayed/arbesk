@@ -170,7 +170,16 @@ export async function updateCollection(
     const next = applyCollectionMutation(manifest, cid, mutate);
     const newCid = await writeManifest(next);
     debug("collection manifest:", cid, "→", newCid);
-    await relay(session, "updateUri", tokenId, { newUri: newCid, proof: [] });
+    // The token identifies the collection; the changed assetID tells
+    // live-update viewers exactly which entry to reload.
+    const before = manifest?.assets || {};
+    const after = next?.assets || {};
+    const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+      .filter((k) => before[k] !== after[k]);
+    const assetId = changed.length === 1 ? changed[0] : null;
+    const relayParams: Record<string, any> = { newUri: newCid, proof: [] };
+    if (assetId) relayParams.assetId = assetId;
+    await relay(session, "updateUri", tokenId, relayParams);
     clearCatalogCache();
     return newCid;
   });

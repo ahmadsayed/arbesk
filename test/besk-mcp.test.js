@@ -257,7 +257,7 @@ describe("besk mcp asset writes", () => {
     expect(r).toMatchObject({ renamed: "earth" });
     expect(written[0].name).toBe("earth");
     expect(relayMock).toHaveBeenCalledWith(
-      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [] },
+      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [], assetId: "asset_world" },
     );
   });
 
@@ -265,7 +265,7 @@ describe("besk mcp asset writes", () => {
     await callTool("delete_asset", { name: "world" });
     expect(written[0].assets).toEqual({});
     expect(relayMock).toHaveBeenCalledWith(
-      currentSession, "updateUri", "1", { newUri: "bafyWritten1", proof: [] },
+      currentSession, "updateUri", "1", { newUri: "bafyWritten1", proof: [], assetId: "asset_world" },
     );
   });
 
@@ -282,7 +282,7 @@ describe("besk mcp asset writes", () => {
     expect(r).toMatchObject({ saved: "widget" });
     expect(relayMock).toHaveBeenCalledWith(
       currentSession, "updateUri", "1",
-      { newUri: expect.stringMatching(/^bafyWritten/), proof: [] },
+      { newUri: expect.stringMatching(/^bafyWritten/), proof: [], assetId: expect.any(String) },
     );
   });
 
@@ -298,7 +298,7 @@ describe("besk mcp metadata writes", () => {
     expect(written[0].metadata.annotations).toEqual({ role: "hero" });
     expect(written[0].prev_asset_manifest_cid).toBe("bafyWorld");
     expect(relayMock).toHaveBeenCalledWith(
-      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [] },
+      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [], assetId: "asset_world" },
     );
   });
 
@@ -307,7 +307,7 @@ describe("besk mcp metadata writes", () => {
     expect(r).toMatchObject({ unset: ["role"], cid: "bafyWritten1" });
     expect(written[0].prev_asset_manifest_cid).toBe("bafyWorld");
     expect(relayMock).toHaveBeenCalledWith(
-      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [] },
+      currentSession, "updateUri", "1", { newUri: "bafyWritten2", proof: [], assetId: "asset_world" },
     );
   });
 
@@ -345,7 +345,7 @@ describe("besk mcp linking", () => {
     expect(r).toMatchObject({ mode: "fork" });
     expect(written[0].assets.asset_world).toBe("bafyWorld");
     expect(relayMock).toHaveBeenCalledWith(
-      currentSession, "updateUri", "2", { newUri: "bafyWritten1", proof: [] },
+      currentSession, "updateUri", "2", { newUri: "bafyWritten1", proof: [], assetId: "asset_world" },
     );
   });
 
@@ -394,7 +394,7 @@ describe("besk mcp generation", () => {
     expect(typeof body.nodeId).toBe("string");
     expect(relayMock).toHaveBeenCalledWith(
       currentSession, "updateUri", "1",
-      { newUri: expect.stringMatching(/^bafyWritten/), proof: [] },
+      { newUri: expect.stringMatching(/^bafyWritten/), proof: [], assetId: expect.any(String) },
     );
   });
 
