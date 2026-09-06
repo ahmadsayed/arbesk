@@ -54,6 +54,7 @@
         "supertest": "^6.3.1",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.67.0",
+        "v8-to-istanbul": "^9.3.0",
         "web3-utils": "^4.3.3",
       },
     },
