@@ -19,6 +19,7 @@ module.exports = function renderSCSS() {
   const results = sass.renderSync({
     file: stylesFile,
     includePaths: [srcScssDir],
+    outputStyle: "compressed",
   });
 
   fs.mkdirSync(path.dirname(destPath), { recursive: true });

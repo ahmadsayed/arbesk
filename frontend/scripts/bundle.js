@@ -1,12 +1,17 @@
 'use strict';
 /**
- * esbuild bundler for the browser frontend.
+ * Bun.build bundler for the browser frontend (ported from esbuild).
  *
  * Produces a single app.js plus two standalone vendor bundles (viem and
  * @coinbase/cdp-core) that are resolved through the page import map. This
  * keeps the request count low (no code-splitting fragmentation) while still
  * isolating cdp-core, whose internal circular dependencies only bundle
  * correctly as a self-contained entry.
+ *
+ * Production tuning: NODE_ENV is defined as "production" (dead-code
+ * elimination of dev branches in dependencies) and debugger statements are
+ * dropped. console calls are kept — the frontend's console logging is
+ * intentional diagnostics.
  *
  * Outputs:
  *   dist/js/app.js                    - main bundle (single file)
@@ -17,10 +22,14 @@
  *   dist/js/app/initial-view.js       - classic head script
  */
 const path = require('path');
-const esbuild = require('esbuild');
+
+/** Bun runtime global — this script runs under `bun`; the local binding keeps
+ *  eslint/tsc happy without pulling @types/bun into the program. */
+const Bun = /** @type {any} */ (globalThis).Bun;
 
 const srcRoot = path.resolve(__dirname, '../src/js');
 const distRoot = path.resolve(__dirname, '../dist/js');
+const entriesDir = path.resolve(__dirname, 'entries');
 
 // @gltf-transform/core ships node_modules index.modern.js, which references
 // the Node 'Buffer' global (184 uses). Resolve it to the vendored esm.sh
@@ -39,6 +48,7 @@ const NODE_BUILTINS = new Set(['worker_threads', 'os', 'child_process']);
 
 const nodeBuiltinsStub = {
   name: 'node-builtins-stub',
+  /** @param {any} build */
   setup(build) {
     build.onResolve({ filter: /^(node:)?[a-z_]+$/ }, (args) => {
       const name = args.path.replace(/^node:/, '');
@@ -53,82 +63,95 @@ const nodeBuiltinsStub = {
   },
 };
 
+// esbuild `alias` equivalent: redirect bare specifiers to concrete paths.
+const aliasPlugin = (aliases) => ({
+  name: 'alias',
+  /** @param {any} build */
+  setup(build) {
+    for (const [from, to] of Object.entries(aliases)) {
+      build.onResolve({ filter: new RegExp(`^${from.replace(/[/.@]/g, '\\$&')}$`) }, () => ({
+        path: to,
+      }));
+    }
+  },
+});
+
+const GLTF_ALIAS = { '@gltf-transform/core': GLTF_TRANSFORM_VENDOR };
+const ZUSTAND_ALIAS = { zustand: require.resolve('zustand/vanilla') };
+
 const common = {
-  platform: 'browser',
-  target: ['es2022'],
+  target: 'browser',
   minify: true,
-  treeShaking: true,
-  sourcemap: false,
+  sourcemap: 'none',
+  define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+  drop: ['debugger'],
   plugins: [nodeBuiltinsStub],
-  logLevel: 'info',
 };
+
+async function run(config, label) {
+  const result = await Bun.build(config);
+  if (!result.success) {
+    for (const log of result.logs) console.error(log);
+    throw new Error(`bundle failed: ${label}`);
+  }
+  const out = result.outputs[0];
+  console.log(`[BUNDLE] ${label} → ${out.path} (${(out.size / 1024).toFixed(0)} KB)`);
+}
 
 async function build() {
   // 1. Shared vendor bundles (resolved by the page import map). viem is used
   //    by both the app and cdp-core, so bundling it once keeps a single copy.
-  await esbuild.build({
+  await run({
     ...common,
-    stdin: {
-      contents: 'export * from "viem"; export * from "viem/utils";',
-      resolveDir: srcRoot,
-      sourcefile: 'viem-entry.js',
-    },
-    bundle: true,
-    outfile: path.join(distRoot, 'vendor/viem.js'),
+    entrypoints: [path.join(entriesDir, 'viem.js')],
+    outdir: path.join(distRoot, 'vendor'),
+    naming: 'viem.js',
     format: 'esm',
-  });
+  }, 'vendor/viem.js');
 
-  await esbuild.build({
+  await run({
     ...common,
-    alias: { zustand: 'zustand/vanilla' },
-    stdin: {
-      contents: 'export * from "@coinbase/cdp-core";',
-      resolveDir: srcRoot,
-      sourcefile: 'cdp-core-entry.js',
-    },
-    bundle: true,
-    external: ['viem', 'viem/utils'],
-    outfile: path.join(distRoot, 'vendor/cdp-core.js'),
+    entrypoints: [path.join(entriesDir, 'cdp-core.js')],
+    outdir: path.join(distRoot, 'vendor'),
+    naming: 'cdp-core.js',
     format: 'esm',
-  });
+    external: ['viem', 'viem/utils'],
+    plugins: [nodeBuiltinsStub, aliasPlugin(ZUSTAND_ALIAS)],
+  }, 'vendor/cdp-core.js');
 
   // 2. Main app bundle — single file (no code-splitting). cdp-core and viem
   //    are external and resolve through the page import map.
-  await esbuild.build({
+  await run({
     ...common,
-    alias: {
-      '@gltf-transform/core': GLTF_TRANSFORM_VENDOR,
-      zustand: 'zustand/vanilla',
-    },
-    entryPoints: [path.join(srcRoot, 'app-entry.ts')],
-    bundle: true,
-    external: ['@coinbase/cdp-core', 'viem', 'viem/utils'],
-    outfile: path.join(distRoot, 'app.js'),
+    entrypoints: [path.join(srcRoot, 'app-entry.ts')],
+    outdir: distRoot,
+    naming: 'app.js',
     format: 'esm',
-  });
+    external: ['@coinbase/cdp-core', 'viem', 'viem/utils'],
+    plugins: [nodeBuiltinsStub, aliasPlugin({ ...GLTF_ALIAS, ...ZUSTAND_ALIAS })],
+  }, 'app.js');
 
   // 3. Self-contained glTF worker (module workers get no import map).
-  await esbuild.build({
+  await run({
     ...common,
-    alias: { '@gltf-transform/core': GLTF_TRANSFORM_VENDOR },
-    entryPoints: [path.join(srcRoot, 'workers/gltf-worker.ts')],
-    bundle: true,
-    outfile: path.join(distRoot, 'workers/gltf-worker.js'),
+    entrypoints: [path.join(srcRoot, 'workers/gltf-worker.ts')],
+    outdir: path.join(distRoot, 'workers'),
+    naming: 'gltf-worker.js',
     format: 'esm',
-  });
+    plugins: [nodeBuiltinsStub, aliasPlugin(GLTF_ALIAS)],
+  }, 'workers/gltf-worker.js');
 
   // 4. Classic (non-module) synchronous head scripts.
   for (const rel of ['engine/theme-init', 'app/initial-view']) {
-    await esbuild.build({
-      platform: 'browser',
-      target: ['es2022'],
-      minify: true,
-      sourcemap: false,
-      entryPoints: [path.join(srcRoot, rel + '.ts')],
-      bundle: false,
-      outfile: path.join(distRoot, rel + '.js'),
+    await run({
+      entrypoints: [path.join(srcRoot, rel + '.ts')],
+      outdir: path.join(distRoot, rel, '..'),
+      naming: path.basename(rel) + '.js',
       format: 'iife',
-    });
+      target: 'browser',
+      minify: true,
+      sourcemap: 'none',
+    }, rel + '.js');
   }
 }
 

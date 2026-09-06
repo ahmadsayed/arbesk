@@ -1,5 +1,6 @@
 import express from "express";
 import type { Response } from "express";
+import fs from "fs";
 import path from "path";
 import http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
@@ -141,29 +142,61 @@ app.use(
   }),
 );
 
+// Workers, their pool, and the vendored libraries they import must never be
+// cached. A stale module that predates a method registration (e.g. "ping")
+// causes the pool to fall back to the main thread and makes save/publish very
+// slow.
+function setStaticCacheHeaders(res: Response, filePath: string): void {
+  if (
+    filePath.includes("/workers/") ||
+    filePath.endsWith("gltf-worker-pool.js") ||
+    filePath.includes("/vendor/workerpool") ||
+    filePath.includes("/vendor/gltf-transform-core") ||
+    filePath.includes("/vendor/node-buffer-polyfill")
+  ) {
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate",
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
+}
+
+/* ─── Pre-compressed brotli assets ───
+ * frontend/scripts/compress.js emits .br siblings at build time. Express has
+ * no built-in precompressed-static support (and express-static-gzip style
+ * packages duplicate our cache rules), so serve .br here before the static
+ * middleware; clients without brotli fall through to on-the-fly gzip.
+ */
+const PRECOMPRESSED_TYPES: Record<string, string> = {
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".json": "application/json",
+};
+
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (!(req.headers["accept-encoding"] ?? "").includes("br")) return next();
+  const rel = path.normalize(req.path).replace(/^[/\\]+/, "");
+  if (rel.startsWith("..")) return next();
+  const contentType = PRECOMPRESSED_TYPES[path.extname(rel)];
+  if (!contentType) return next();
+  const brFile = path.join(staticRoot, rel + ".br");
+  if (!fs.existsSync(brFile)) return next();
+  res.setHeader("Content-Encoding", "br");
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Vary", "Accept-Encoding");
+  setStaticCacheHeaders(res, rel);
+  res.sendFile(brFile);
+});
+
 app.use(
   express.static(staticRoot, {
     setHeaders: (res: Response, filePath: string) => {
-      // Workers and their pool must never be cached: a stale worker script
-      // that predates a method registration (e.g. "ping") causes the pool to
-      // fall back to the main thread and makes save/publish very slow.
-      // Workers, their pool, and the vendored libraries they import must never
-      // be cached. A stale module that predates a method registration (e.g.
-      // "ping") causes the pool to fall back to the main thread.
-      if (
-        filePath.includes("/workers/") ||
-        filePath.endsWith("gltf-worker-pool.js") ||
-        filePath.includes("/vendor/workerpool") ||
-        filePath.includes("/vendor/gltf-transform-core") ||
-        filePath.includes("/vendor/node-buffer-polyfill")
-      ) {
-        res.setHeader(
-          "Cache-Control",
-          "no-store, no-cache, must-revalidate, proxy-revalidate",
-        );
-        res.setHeader("Pragma", "no-cache");
-        res.setHeader("Expires", "0");
-      }
+      setStaticCacheHeaders(res, filePath);
     },
   }),
 );
