@@ -12,7 +12,11 @@ export function initChildReload(): void {
     for (const { nodeId, anchor } of matches) {
       if (coveredByMatchedAncestor(anchor, matchedIds)) continue;
       console.log(`[LIVE] reloading child node ${nodeId} (token ${payload.tokenId}, ${payload.source})`);
-      reloadChildRefNode(nodeId).catch(() => {});
+      reloadChildRefNode(nodeId).catch((err) => {
+        // Never leave a silent no-reload: a failed reload is why live-update
+        // consumers (and E2E) otherwise hang with no signal.
+        console.warn("[LIVE] child reload failed:", err);
+      });
     }
   });
 }

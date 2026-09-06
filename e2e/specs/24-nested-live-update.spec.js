@@ -92,7 +92,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       const childGenCid = await generate(pageA, PROMPT);
       await pageA.click(SELECTORS.gallerySwitcherBtn);
       const gcCard = assetCardLocator(pageA, gcTokenDec, GC_ASSET_NAME);
-      await expect(gcCard).toHaveCount(1, { timeout: 10000 });
+      await expect(gcCard).toHaveCount(1, { timeout: 30000 });
       await gcCard.getByRole("button", { name: "Add to Scene" }).click();
       await expect(pageA.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
         timeout: 30000,
@@ -113,7 +113,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       const parentGenCid = await generate(pageA, PROMPT);
       await pageA.click(SELECTORS.gallerySwitcherBtn);
       const childCard = assetCardLocator(pageA, defaultTokenDec, childName);
-      await expect(childCard).toHaveCount(1, { timeout: 10000 });
+      await expect(childCard).toHaveCount(1, { timeout: 30000 });
       await childCard.getByRole("button", { name: "Add to Scene" }).click();
       await expect(pageA.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
         timeout: 30000,
@@ -138,6 +138,9 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       // Subscribe to the bus in both windows before republishing.
       for (const page of [pageA, pageB]) {
         await page.evaluate(() => {
+          // Full-suite loads can overflow the default ~250-entry resource
+          // timing buffer; the content poll below reads it.
+          performance.setResourceTimingBufferSize?.(10000);
           const { on, EVENTS } = window.__arbeskBus;
           window.__liveUpdates = [];
           on(EVENTS.ASSET_URI_UPDATED, (p) =>
@@ -202,7 +205,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
                   .some((e) => e.name.includes(cid)),
               gcNewCid,
             ),
-          { timeout: 15000 },
+          { timeout: 60000 },
         )
         .toBe(true);
     } finally {

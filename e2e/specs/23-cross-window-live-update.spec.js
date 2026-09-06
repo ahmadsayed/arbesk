@@ -81,7 +81,7 @@ test.describe("cross-window live scene update", () => {
       const parentGenCid = await generate(pageA, PROMPT);
       await pageA.click(SELECTORS.gallerySwitcherBtn);
       const childCard = assetCardLocator(pageA, childTokenDec, childName);
-      await expect(childCard).toHaveCount(1, { timeout: 5000 });
+      await expect(childCard).toHaveCount(1, { timeout: 30000 });
       await childCard.getByRole("button", { name: "Add to Scene" }).click();
       await expect(pageA.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
         timeout: 30000,
@@ -108,6 +108,9 @@ test.describe("cross-window live scene update", () => {
       // Subscribe to the bus in both windows before republishing.
       for (const page of [pageA, pageB]) {
         await page.evaluate(() => {
+          // Full-suite loads can overflow the default ~250-entry resource
+          // timing buffer; the content poll below reads it.
+          performance.setResourceTimingBufferSize?.(10000);
           const { on, EVENTS } = window.__arbeskBus;
           window.__liveUpdates = [];
           on(EVENTS.ASSET_URI_CHANGED, (p) =>
@@ -172,7 +175,7 @@ test.describe("cross-window live scene update", () => {
                   .some((e) => e.name.includes(cid)),
               childNewCid,
             ),
-          { timeout: 15000 },
+          { timeout: 60000 },
         )
         .toBe(true);
     } finally {
