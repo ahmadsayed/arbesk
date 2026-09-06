@@ -424,7 +424,6 @@ describe("Deployment Pipeline Integrity", () => {
       ROOT_DIR,
       "frontend/src/js/workers/gltf-worker.ts",
     );
-    const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
     const BUNDLE_PATH = resolve(ROOT_DIR, "frontend/scripts/bundle.js");
 
     test("vendored gltf-transform-core bundle exists", () => {

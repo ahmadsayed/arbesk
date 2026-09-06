@@ -33,6 +33,10 @@ export default [
       "blockchain/cache/**",
       "blockchain/deployments/**",
       "blockchain/coverage/**",
+      // Mutation-testing Python venv (vendored pip/urllib3 JS is not ours)
+      "blockchain/.venv-mutate/**",
+      // Agent skill scaffolding, not product code
+      ".agents/**",
       "frontend/src/js/vendor/**",
       "frontend/dist/**",
       "mock-gltf-assets/**",
