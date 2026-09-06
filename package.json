@@ -57,7 +57,11 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@arbesk/ai-asset-gen": "*",
     "@arbesk/asset-core": "*",
+    "@arbesk/authz": "*",
+    "@arbesk/nostr": "*",
+    "@arbesk/wallet": "*",
     "@coinbase/cdp-sdk": "^1.53.0",
     "@gltf-transform/core": "catalog:",
     "@openzeppelin/merkle-tree": "catalog:",
