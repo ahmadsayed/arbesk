@@ -31,6 +31,9 @@
     "sass": "1.49.9"
   },
   "trustedDependencies": [
-    "@swc/core"
+    "@swc/core",
+    "bufferutil",
+    "esbuild",
+    "utf-8-validate"
   ]
 }
