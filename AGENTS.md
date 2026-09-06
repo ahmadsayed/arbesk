@@ -6,7 +6,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 
 ## 1. Identity & Key Constraints
 
-**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, Node type-stripping — no emit step; requires Node ≥ 22.18), JS browser frontend, Solidity, Pug/SCSS. See `docs/CURRENT_STATUS.md` for the definitive status.
+**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, run under Bun 1.4 — no emit step; Node ≥ 22.18 still required for jest/Hardhat), JS browser frontend, Solidity, Pug/SCSS. See `docs/CURRENT_STATUS.md` for the definitive status.
 
 - **Chains**: Hardhat local + Base Sepolia. IDs, `DEPLOYMENT_BLOCKS`, `LOG_CHUNK_SIZES` in `constants/chains.js` — no magic numbers.
 - **Wallets**: EOA (MetaMask/Rabby) via SIWE everywhere; CDP email-login smart accounts on **Base Sepolia only** (`smart-wallet-support.ts`).
@@ -27,7 +27,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 ## 3. Repo Layout
 
 - **Backend** `src/api/` (all `.ts`): routes `index.ts` + `routes/` · generation (`assets/generate-node.ts`, `generation-tasks.ts`) · storage `storage/` (kubo/pinata) · auth `authentication.ts`, `sessions.ts`, `identity.ts` · `token-indexer.ts` · `comments-archive.ts` · `chat-proxy.ts` (WS) · `nostr-relay.ts` · `manifest-utils.ts` · `asset-tag.ts` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
-- **SDK packages** `packages/*` (npm workspaces; compiled by tsc to `dist/` ESM + `.d.ts`; consumed by bare specifier) — treated as **black boxes**: import their public API, don't reach into internals. Internals + boundary rules live in each package's own guide:
+- **SDK packages** `packages/*` (bun workspaces; compiled by tsc to `dist/` ESM + `.d.ts`; consumed by bare specifier) — treated as **black boxes**: import their public API, don't reach into internals. Internals + boundary rules live in each package's own guide:
   - `@arbesk/asset-core` (`packages/asset-core/`) — asset engine: manifests, glTF/3MF compose/decompose, domain state, editor lists. See `packages/asset-core/AGENTS.md` + `docs/ASSET_CORE_SDK.md`.
   - `@arbesk/wallet` (`packages/wallet/`) — wallet/identity/chain: `Signer` port, SIWE, Merkle proofs, contract writes, session store. See `packages/wallet/AGENTS.md`.
   - `@arbesk/authz` (`packages/authz/`) — asset access policy (ownership + Merkle editor proof). See `packages/authz/AGENTS.md`.
@@ -44,12 +44,17 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 ./scripts/start-dev.sh --testnet       # Base Sepolia + Pinata + local Nostr
 docker compose up -d                   # IPFS + Hardhat + Nostr; logs: docker compose logs -f ipfs
 
-# Dependencies
-npm install && (cd frontend && npm install)   # + (cd blockchain && npm install) — IDE intellisense only
+# Dependencies (Bun ≥1.4 is the package manager for root + frontend; Node is
+# still required for jest and the Hardhat Docker flow — see §1)
+bun install && (cd frontend && bun install)   # + (cd blockchain && npm install) — IDE intellisense only
+# Shared deps (viem, zod, fflate, …) are pinned once in the root `catalog`
+# (package.json `workspaces.catalog`) and referenced as "catalog:" — add with
+# `bun add <pkg> --catalog`. Plain `npm install` no longer works at root/frontend
+# (npm does not understand the catalog protocol); blockchain/ keeps npm.
 
 # Frontend / Backend
-npm run build:frontend                 # Pug→HTML, SCSS→CSS, JS copy + swc TS emit (no Webpack/Vite)
-npm start                              # backend :9090;  npm run nodemon = auto-rebuild
+bun run build:frontend                 # Pug→HTML, SCSS→CSS, JS copy + swc TS emit (no Webpack/Vite)
+bun start                              # backend :9090 (runs under Bun);  bun run nodemon = auto-rebuild
 
 # Testing
 npm test                               # Jest unit (excludes Hardhat & E2E)
@@ -79,7 +84,7 @@ npm run test:frontend                  # always verify last
 ## 5. Coding Conventions
 
 - **Out-of-the-box first**: always prefer the library/framework's built-in feature (Babylon, Zod, Alpine, Express…) over hand-rolled code. Hand-roll only when the built-in genuinely cannot do the job — verify that against the library's source/docs first, and leave a comment recording why the custom path is necessary. (Lesson from the ortho-camera saga: custom input/projection code doubles the test surface and hides state the framework can't see.)
-- **JS/TS**: backend `src/` is TypeScript run via Node type-stripping (`node src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; Node does not elide imports), and relative imports inside `src/` carry explicit `.ts` extensions. The **entire frontend `frontend/src/js/` is TypeScript** (only `vendor/` stays plain JS), transpiled per-file by swc into `dist/js` (`frontend/scripts/render-ts.js`, no type-aware emit) — **import specifiers always match the on-disk file** (`.ts` for frontend/backend modules, `.js` only for plain-JS files like `constants/chains.js` and `vendor/`; the emit step rewrites relative `.ts` specifiers to `.js` for the browser, and jest maps `.js`→source via `moduleNameMapper`). SDK packages are consumed by bare specifier as workspace packages (`@arbesk/asset-core`, `@arbesk/wallet`, `@arbesk/authz`; subpaths end in `.js`, e.g. `@arbesk/asset-core/formats/gltf/gltf-core.js`) — treat them as black boxes, see `packages/*/AGENTS.md`. CJS only in `blockchain/scripts/` + `frontend/scripts/` + `e2e/`. CDN globals `BABYLON`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
+- **JS/TS**: backend `src/` is TypeScript run under Bun (`bun src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; neither Bun nor Node elides imports), and relative imports inside `src/` carry explicit `.ts` extensions (Node ≥22.18 type-stripping, jest, and swc all rely on this convention). The **entire frontend `frontend/src/js/` is TypeScript** (only `vendor/` stays plain JS), transpiled per-file by swc into `dist/js` (`frontend/scripts/render-ts.js`, no type-aware emit) — **import specifiers always match the on-disk file** (`.ts` for frontend/backend modules, `.js` only for plain-JS files like `constants/chains.js` and `vendor/`; the emit step rewrites relative `.ts` specifiers to `.js` for the browser, and jest maps `.js`→source via `moduleNameMapper`). SDK packages are consumed by bare specifier as workspace packages (`@arbesk/asset-core`, `@arbesk/wallet`, `@arbesk/authz`; subpaths end in `.js`, e.g. `@arbesk/asset-core/formats/gltf/gltf-core.js`) — treat them as black boxes, see `packages/*/AGENTS.md`. CJS only in `blockchain/scripts/` + `frontend/scripts/` + `e2e/`. CDN globals `BABYLON`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
 - **Type-checking**: `allowJs`/`checkJs`, `strict: true` (`npm run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
 - **LSP tools (cclsp MCP)**: if `mcp__cclsp__*` tools are available (user-level `~/.kimi-code/mcp.json`, TypeScript via `typescript-language-server`), prefer `find_definition`/`find_references` over Grep for symbol navigation and cross-file renames — results are exact, not text matches. The **first LSP call in a session is slow** (tsserver loads the whole project, 1-3 min cold); subsequent calls are fast. Keep using Grep for strings/comments/CSS selectors — LSP only sees code symbols. `rename_symbol` edits files and leaves `.bak` backups — always call with `dry_run: true` first, and prefer plain `Edit` for single-file renames; delete `.bak` files after applying. Verify type-level results with `npm run typecheck`. Note: the global `cclsp` install carries local patches (init-timeout + references retry fix) — reinstalling/upgrading it overwrites them.
 - **Lint**: `npm run lint[:fix]`; part of `test:all`.

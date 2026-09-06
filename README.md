@@ -217,12 +217,12 @@ arbesk/
 
 ## Quick Start
 
-All commands run from the project root.
+All commands run from the project root. **Bun ≥1.4 is the package manager and backend runtime** (root + frontend); Node ≥22.18 is still used under the hood by jest and the Dockerized Hardhat flow, and `blockchain/` keeps its own npm install.
 
 ```bash
 # 1. Install dependencies
-npm install
-cd frontend && npm install && cd ..
+bun install
+cd frontend && bun install && cd ..
 
 # Optional host-side blockchain deps for editor intellisense
 cd blockchain && npm install && cd ..
@@ -231,10 +231,10 @@ cd blockchain && npm install && cd ..
 docker compose up -d
 
 # 3. Build frontend assets into frontend/dist
-npm run build:frontend
+bun run build:frontend
 
-# 4. Start backend on port 9090
-npm start
+# 4. Start backend on port 9090 (runs under Bun)
+bun start
 ```
 
 Or use the one-command dev stack (IPFS + Hardhat + Nostr + backend):
@@ -260,7 +260,7 @@ npm test
 NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
 
 # Frontend build validation
-npm run build:frontend
+bun run build:frontend
 
 # Contract tests inside Dockerized Hardhat
 docker compose run --rm hardhat npx hardhat test

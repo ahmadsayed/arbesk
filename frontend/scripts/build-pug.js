@@ -1,24 +1,24 @@
 'use strict';
-const upath = require('upath');
-const sh = require('shelljs');
+const fs = require('fs');
+const path = require('path');
 const renderPug = require('./render-pug');
 
-const srcPath = upath.resolve(upath.dirname(__filename), '../src');
+const srcPath = path.resolve(__dirname, '../src');
 
-if (!sh.test('-e', srcPath)) {
+if (!fs.existsSync(srcPath)) {
     console.log('### INFO: No src/ found, skipping pug build');
     process.exit(0);
 }
 
-sh.find(srcPath).forEach(_processFile);
+fs.readdirSync(srcPath, { recursive: true }).forEach(_processFile);
 
 function _processFile(filePath) {
     if (
         filePath.match(/\.pug$/)
         && !filePath.match(/include/)
         && !filePath.match(/mixin/)
-        && !filePath.match(/\/pug\/layouts\//)
+        && !filePath.match(/[/\\]pug[/\\]layouts[/\\]/)
     ) {
-        renderPug(filePath);
+        renderPug(path.join(srcPath, filePath));
     }
 }

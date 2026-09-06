@@ -9,24 +9,25 @@
  * rewrites relative `.ts` specifiers to `.js` in the emitted output so the
  * browser resolves the emitted files.
  */
-const upath = require('upath');
-const sh = require('shelljs');
+const path = require('path');
 const fs = require('fs');
 const swc = require('@swc/core');
 
 module.exports = async function renderTs() {
-    const srcRoot = upath.resolve(upath.dirname(__filename), '../src/js');
-    const destRoot = upath.resolve(upath.dirname(__filename), '../dist/js');
+    const srcRoot = path.resolve(__dirname, '../src/js');
+    const destRoot = path.resolve(__dirname, '../dist/js');
 
-    const tsFiles = sh.find(srcRoot).filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'));
+    const tsFiles = fs.readdirSync(srcRoot, { recursive: true })
+        .map((f) => path.join(srcRoot, f))
+        .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'));
     if (tsFiles.length === 0) {
         console.log('### INFO: No .ts files in src/js, skipping TS emit');
         return;
     }
 
     for (const file of tsFiles) {
-        const rel = upath.relative(srcRoot, file);
-        const outFile = upath.join(destRoot, rel).replace(/\.ts$/, '.js');
+        const rel = path.relative(srcRoot, file);
+        const outFile = path.join(destRoot, rel).replace(/\.ts$/, '.js');
         const result = await swc.transformFile(file, {
             jsc: {
                 parser: { syntax: 'typescript' },
@@ -50,14 +51,15 @@ module.exports = async function renderTs() {
                 '$1../vendor/asset-core/$2$3'
             );
         }
-        sh.mkdir('-p', upath.dirname(outFile));
+        fs.mkdirSync(path.dirname(outFile), { recursive: true });
         fs.writeFileSync(outFile, code);
     }
     console.log(`### INFO: Emitted ${tsFiles.length} TS file(s) to dist/js`);
 
     // The verbatim copy step (render-scripts) copies .ts sources into dist;
     // drop them so only emitted .js is served.
-    sh.find(destRoot)
+    fs.readdirSync(destRoot, { recursive: true })
+        .map((f) => path.join(destRoot, f))
         .filter((f) => f.endsWith('.ts'))
-        .forEach((f) => sh.rm('-f', f));
+        .forEach((f) => fs.rmSync(f, { force: true }));
 };

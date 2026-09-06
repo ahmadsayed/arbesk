@@ -4,11 +4,23 @@
   "version": "0.1.0",
   "description": "Arbesk — 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
   "main": "src/index.ts",
-  "workspaces": [
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "viem": "^2.52.2",
+      "@openzeppelin/merkle-tree": "^1.0.8",
+      "@gltf-transform/core": "4.1.2",
+      "fflate": "^0.8.2",
+      "zod": "^3.25.76",
+      "@swc/core": "^1.16.0",
+      "nostr-tools": "^2.23.5",
+      "fast-xml-parser": "^4.5.3"
+    }
+  },
   "scripts": {
-    "build:packages": "npm run build --workspace @arbesk/asset-core && npm run build --workspace @arbesk/nostr && npm run build --workspace @arbesk/wallet && npm run build --workspace @arbesk/authz && npm run build --workspace @arbesk/ai-asset-gen",
+    "build:packages": "bun run --parallel --if-present --filter '@arbesk/asset-core' --filter '@arbesk/nostr' --filter '@arbesk/wallet' --filter '@arbesk/ai-asset-gen' build && bun run --if-present --filter '@arbesk/authz' build",
     "prestart": "npm run build:packages",
     "pretypecheck": "npm run build:packages",
     "pretypecheck:frontend": "npm run build:packages",
@@ -16,13 +28,13 @@
     "test": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
     "test:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat test",
     "build:frontend": "cd frontend && npm run build",
-    "start": "node src/index.ts",
-    "nodemon": "npm run build:frontend && nodemon --ext ts,js,json src/index.ts",
+    "start": "bun src/index.ts",
+    "nodemon": "npm run build:frontend && bun --watch src/index.ts",
     "dev": "./scripts/start-dev.sh",
     "dev:testnet": "./scripts/start-dev.sh --testnet",
     "test:api": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",
     "test:frontend": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/frontend",
-    "bench:asset-core": "node packages/asset-core/src/bench/run.ts",
+    "bench:asset-core": "bun packages/asset-core/src/bench/run.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:all": "npm run lint && npm run typecheck && npm run typecheck:frontend && npm run test:frontend && npm run test:api && npm run test:contracts",
@@ -30,10 +42,10 @@
     "typecheck:frontend": "tsc --noEmit -p frontend/tsconfig.json",
     "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",
     "test:e2e:ui": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js --ui",
-    "test:e2e:coverage": "node scripts/run-e2e-coverage.mjs",
+    "test:e2e:coverage": "bun scripts/run-e2e-coverage.mjs",
     "test:coverage": "npm run test:coverage:js && npm run test:coverage:contracts",
     "test:coverage:js": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest --coverage --coverageDirectory=coverage/js",
-    "test:coverage:all": "npm run test:coverage:js && npm run test:e2e:coverage && node scripts/merge-all-coverage.mjs",
+    "test:coverage:all": "npm run test:coverage:js && npm run test:e2e:coverage && bun scripts/merge-all-coverage.mjs",
     "test:coverage:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat coverage && docker run --rm -v $(pwd)/blockchain/coverage:/cov alpine sh -c 'chown -R $(stat -c \"%u:%g\" /cov) /cov'",
     "worktree:create": "./scripts/create-worktree.sh",
     "prepare": "git config core.hooksPath .githooks || true",
@@ -47,29 +59,28 @@
   "dependencies": {
     "@arbesk/asset-core": "*",
     "@coinbase/cdp-sdk": "^1.53.0",
-    "@gltf-transform/core": "4.1.2",
-    "@openzeppelin/merkle-tree": "^1.0.8",
+    "@gltf-transform/core": "catalog:",
+    "@openzeppelin/merkle-tree": "catalog:",
     "commander": "^15.0.0",
     "compression": "^1.8.1",
-    "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-rate-limit": "^8.5.2",
-    "fflate": "^0.8.2",
+    "fflate": "catalog:",
     "helmet": "^8.2.0",
     "ipfs-http-client": "^60.0.0",
     "morgan": "^1.11.0",
-    "nostr-tools": "^2.23.5",
+    "nostr-tools": "catalog:",
     "pinata": "^2.5.6",
     "siwe": "^3.0.0",
-    "viem": "^2.52.2",
+    "viem": "catalog:",
     "ws": "^8.21.0",
-    "zod": "^3.25.76"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.4.1",
     "@playwright/test": "^1.60.0",
-    "@swc/core": "^1.16.0",
+    "@swc/core": "catalog:",
     "@swc/jest": "^0.2.39",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
@@ -87,7 +98,6 @@
     "jest": "^30.4.1",
     "jest-environment-jsdom": "^30.4.1",
     "node-mocks-http": "^1.17.2",
-    "nodemon": "^3.0.0",
     "playwright": "^1.60.0",
     "supertest": "^6.3.1",
     "typescript": "^5.9.3",
@@ -96,5 +106,10 @@
   },
   "engines": {
     "node": ">=22.18.0"
-  }
+  },
+  "trustedDependencies": [
+    "@swc/core",
+    "protobufjs",
+    "unrs-resolver"
+  ]
 }

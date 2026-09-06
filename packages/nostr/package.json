@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "nostr-tools": "^2.23.5",
-    "viem": "^2.52.2"
+    "viem": "catalog:"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1"

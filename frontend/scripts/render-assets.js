@@ -1,20 +1,20 @@
 'use strict';
-const upath = require('upath');
-const sh = require('shelljs');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = function renderAssets() {
-    const sourcePath = upath.resolve(upath.dirname(__filename), '../public');
-    const destPath = upath.resolve(upath.dirname(__filename), '../dist/.');
+    const sourcePath = path.resolve(__dirname, '../public');
+    const destPath = path.resolve(__dirname, '../dist');
 
-    if (!sh.test('-e', sourcePath)) {
+    if (!fs.existsSync(sourcePath)) {
         console.log('### INFO: No public/ found, skipping assets build');
         return;
     }
 
-    const files = sh.ls(sourcePath);
+    const files = fs.readdirSync(sourcePath);
     if (files.length === 0) {
         console.log('### INFO: public/ is empty, skipping assets copy');
         return;
     }
-    sh.cp('-R', `${sourcePath}/*`, destPath);
+    fs.cpSync(sourcePath, destPath, { recursive: true });
 };

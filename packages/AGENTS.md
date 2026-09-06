@@ -65,12 +65,13 @@ independent of each other and of the frontend/backend trees.
 ## Build & test
 
 ```bash
-npm run build:packages   # tsc → dist/ (ESM + .d.ts) for all four, in dependency order
+bun run build:packages   # tsc → dist/ (ESM + .d.ts); bun runs the four
+                         # independent packages in parallel, then @arbesk/authz
+                         # (it type-checks against @arbesk/wallet's dist)
 npm run typecheck        # after build (resolves @arbesk/* via workspace symlinks)
 npm test                 # jest maps @arbesk/*.js → each package's .ts source (no build step)
 ```
 
 `build:packages` is wired as `prestart`/`pretypecheck`/`pretypecheck:frontend`/
-`prebuild:frontend`, so it runs automatically where needed. Individual packages
-also expose `npm run build --workspace @arbesk/<name>` and
-`npm run typecheck --workspace @arbesk/<name>`.
+`prebuild:frontend`, so it runs automatically where needed. Individual packages also expose `bun run --filter @arbesk/<name> build` and
+`bun run --filter @arbesk/<name> typecheck`.

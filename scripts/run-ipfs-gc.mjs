@@ -7,13 +7,12 @@
  * chains, and unpins any pinned CID that is no longer reachable.
  *
  * Usage:
- *   node scripts/run-ipfs-gc.mjs --dry-run
- *   node scripts/run-ipfs-gc.mjs --live --max-unpin 500
- *   node scripts/run-ipfs-gc.mjs --chain-id 31337 --live
+ *   bun scripts/run-ipfs-gc.mjs --dry-run
+ *   bun scripts/run-ipfs-gc.mjs --live --max-unpin 500
+ *   bun scripts/run-ipfs-gc.mjs --chain-id 31337 --live
  */
 
 import { Command } from "commander";
-import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runIpfsGC } from "../src/api/ipfs-gc.ts";
@@ -23,8 +22,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 // Load environment before importing config/storage modules.
-dotenv.config({ path: path.join(ROOT, ".env") });
-dotenv.config({ path: path.join(ROOT, "blockchain", ".env") });
+try {
+  process.loadEnvFile(path.join(ROOT, ".env"));
+} catch {}
+try {
+  process.loadEnvFile(path.join(ROOT, "blockchain", ".env"));
+} catch {}
 
 const program = new Command()
   .name("run-ipfs-gc.mjs")

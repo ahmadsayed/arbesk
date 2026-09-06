@@ -231,4 +231,4 @@ fi
 
 # ── Start backend ─────────────────────────────────────────────────────────────
 IPFS_BACKEND="$([ "$MODE" = "local" ] && echo kubo || echo pinata)"
-PORT="${BACKEND_PORT}" IPFS_BACKEND="${IPFS_BACKEND}" node src/index.ts
+PORT="${BACKEND_PORT}" IPFS_BACKEND="${IPFS_BACKEND}" bun src/index.ts
