@@ -59,8 +59,9 @@ bun start                              # backend :9090 (runs under Bun);  bun ru
 # Production (Bun runtime)
 bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode)
 bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
-# start-prod.sh refuses MOCK_3D_GENERATION=true and requires CONTRACT_ADDRESS; runtime file
-# reads resolve from the project root (cwd or ARBESK_ROOT) — never from import.meta.url
+# start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config + starts the
+# Nostr relay. MOCK_3D_GENERATION=true is allowed in production (owner decision) but warns.
+# Runtime file reads resolve from the project root (cwd or ARBESK_ROOT) — never from import.meta.url
 # (compiled binaries have a virtual module URL). Add new runtime file reads via PROJECT_ROOT
 # (src/api/project-root.ts).
 
@@ -150,7 +151,7 @@ Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the asset · fractal nest
 
 ## 9. Security
 
-Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on any value transfer · IPFS node loopback-only · Hardhat 8545 dev-only · mock adapters gated strictly on `MOCK_3D_GENERATION`, never in production.
+Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on any value transfer · IPFS node loopback-only · Hardhat 8545 dev-only · mock adapters gated on `MOCK_3D_GENERATION` — permitted in production/testnet deployments (owner decision, 2026-09); start-prod.sh warns but proceeds.
 
 ## 10. Testing
 
