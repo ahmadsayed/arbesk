@@ -14,6 +14,11 @@ script.
     var MAX_TEXT = 2000;
     var queue = [];
     var timer = null;
+    // The bridge route only exists when the backend runs outside production
+    // (src/api/index.ts gates it on NODE_ENV). A 404 means production: disable
+    // permanently so the browser stops logging resource errors per flush.
+    var disabled = false;
+    try { disabled = sessionStorage.getItem('arbesk-devconsole-off') === '1'; } catch (e) {}
 
     function safeString(v) {
       if (v instanceof Error) return v.stack || (v.name + ': ' + v.message);
@@ -26,7 +31,7 @@ script.
     }
 
     function flush() {
-      if (!queue.length) return;
+      if (disabled || !queue.length) return;
       var batch = queue.splice(0, queue.length);
       try {
         fetch(ENDPOINT, {
@@ -34,6 +39,11 @@ script.
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ entries: batch }),
           keepalive: true
+        }).then(function (res) {
+          if (res.status === 404) {
+            disabled = true;
+            try { sessionStorage.setItem('arbesk-devconsole-off', '1'); } catch (e) {}
+          }
         }).catch(function () {});
       } catch (e) {}
     }

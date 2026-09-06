@@ -8,7 +8,7 @@ import { createPublicClient, http } from "viem";
 import type { PublicClient } from "viem";
 import { CHAIN_IDS } from "../constants/chains.js";
 
-const DEFAULT_CHAIN_ID = Number(process.env.DEFAULT_CHAIN_ID || CHAIN_IDS.HARDHAT_LOCAL);
+export const DEFAULT_CHAIN_ID = Number(process.env.DEFAULT_CHAIN_ID || CHAIN_IDS.HARDHAT_LOCAL);
 
 // ─── Per-Network Configuration ───────────────────────────────────────────────
 

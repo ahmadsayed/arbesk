@@ -9,6 +9,7 @@ const {
   CONTRACT_ADDRESS,
   HARDHAT_RPC_URL,
   NETWORK_CONFIGS,
+  DEFAULT_CHAIN_ID,
   getContractAddress,
 } = await import("../config.ts");
 
@@ -48,6 +49,7 @@ export default (deps: ApiDeps) => {
     res.json({
       contractAddress: CONTRACT_ADDRESS,
       networkConfigs: NETWORK_CONFIGS,
+      defaultChainId: DEFAULT_CHAIN_ID,
       ipfsBackend: storage.backend,
       ipfsGatewayUrl: storage.gatewayBase(),
       hardhatRpcUrl: HARDHAT_RPC_URL,

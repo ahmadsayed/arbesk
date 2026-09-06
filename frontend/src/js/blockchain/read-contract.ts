@@ -12,10 +12,20 @@ import { CHAIN_IDS } from "../../../../constants/chains.js";
 import { walletState } from "../state/wallet-state.ts";
 import { getContractAddress } from "./network-config.ts";
 import { getReadClient } from "./viem-clients.ts";
-import { getContractArtifact } from "../services/backend-client.ts";
+import { getContractArtifact, getConfig } from "../services/backend-client.ts";
 
 /** Lazily built read-only contracts, per chain. */
 const _readableContractCache = new Map<number, any>();
+
+/**
+ * Read chain for anonymous sessions: the deployment's default chain as
+ * reported by the backend (`/api/v1/config` → defaultChainId), with Hardhat
+ * local as the last-resort fallback when the config endpoint is unreachable.
+ */
+async function getAnonymousReadChain(): Promise<number> {
+  const config = await getConfig();
+  return Number(config?.defaultChainId) || CHAIN_IDS.HARDHAT_LOCAL;
+}
 
 /**
  * Contract instance for chain READS. Returns the wallet-driven instance when
@@ -24,13 +34,14 @@ const _readableContractCache = new Map<number, any>();
  * unauthenticated artifact endpoint, cached per chain. Returns null when no
  * address or ABI is available.
  * @param chainId - explicit read chain (cross-chain profile views); defaults
- *   to the connected wallet's chain, or Hardhat local when disconnected
+ *   to the connected wallet's chain, or the deployment's default chain when
+ *   disconnected
  */
 export async function getReadableContract(
   chainId?: number
 ): Promise<any | null> {
   const id = Number(
-    chainId ?? walletState.get().chainId ?? CHAIN_IDS.HARDHAT_LOCAL
+    chainId ?? walletState.get().chainId ?? (await getAnonymousReadChain())
   );
   const walletChain = Number(walletState.get().chainId);
   const active = walletState.get().contract;

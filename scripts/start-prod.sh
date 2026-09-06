@@ -66,6 +66,11 @@ if [ "$TESTNET" = "true" ]; then
   [ -f ".env.pinata" ] && { set -a; source .env.pinata; set +a; }
   # --testnet always uses Pinata, regardless of what .env says.
   export IPFS_BACKEND=pinata
+  # --testnet means Base Sepolia (chain 84532, constants/chains.js): without this
+  # the backend defaults to Hardhat local and anonymous chain reads go to a
+  # nonexistent local RPC. API_URL only overrides the Hardhat-local RPC.
+  export DEFAULT_CHAIN_ID="${DEFAULT_CHAIN_ID:-84532}"
+  export API_URL="${API_URL:-https://sepolia.base.org}"
 
   MISSING=0
   [ -z "$PINATA_JWT" ]       && { echo "❌ PINATA_JWT is not set."; MISSING=1; }
