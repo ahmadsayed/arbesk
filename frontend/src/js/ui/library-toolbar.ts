@@ -1,4 +1,4 @@
-import { libraryState } from "../state/library-state.ts";
+import { libraryState, isLibraryVisitor } from "../state/library-state.ts";
 import type { LibraryCollectionItem } from "../state/library-state.ts";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { escapeHtml } from "../utils/html.ts";
@@ -195,6 +195,8 @@ function initLibraryDropZone(): void {
   view.addEventListener("dragenter", (e) => {
     if (!isFileDrag(e)) return;
     e.preventDefault();
+    // Public profiles are read-only — no upload affordance for visitors.
+    if (isLibraryVisitor()) return;
     dragDepth++;
     syncLabel();
     overlay.classList.add("active");
@@ -215,6 +217,7 @@ function initLibraryDropZone(): void {
   view.addEventListener("drop", (e) => {
     if (!isFileDrag(e)) return;
     e.preventDefault();
+    if (isLibraryVisitor()) return;
     dragDepth = 0;
     overlay.classList.remove("active");
     const file = (e.dataTransfer as DataTransfer).files?.[0];

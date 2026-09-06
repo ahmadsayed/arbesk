@@ -78,6 +78,19 @@
   margin-left: auto;
 }
 
+// Public-profile pill shown in place of the owner-only actions when an
+// anonymous visitor browses /library/<base58>.
+.library-visitor-badge {
+  flex: 0 0 auto;
+  padding: var(--size-1) var(--size-3);
+  border-radius: var(--radius-round);
+  border: var(--border-size-1) solid var(--border-hairline);
+  background-color: var(--view-bg);
+  color: var(--window-fg);
+  font-size: var(--font-size-1);
+  opacity: 0.85;
+}
+
 .library-toolbar-actions .btn {
   display: inline-flex;
   align-items: center;

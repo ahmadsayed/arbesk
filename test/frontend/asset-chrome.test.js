@@ -6,7 +6,7 @@
  */
 import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 
-let assetStore, _resetAssets, walletState, emit, EVENTS;
+let assetStore, _resetAssets, walletState, libraryState, emit, EVENTS;
 let renameAsset, resetForNewAsset, closeAsset;
 
 function title() {
@@ -30,6 +30,7 @@ beforeAll(async () => {
   document.body.innerHTML = `
     <span id="assetStatusName">No asset open</span>
     <span id="assetStatusMeta">Create or open an asset</span>
+    <button id="newAssetBtn"></button>
     <button id="saveAssetBtn" hidden></button>
     <button id="saveAssetBtnText"></button>
     <button id="publishAssetBtn" hidden></button>
@@ -41,6 +42,9 @@ beforeAll(async () => {
   ({ walletState } = await import(
     "../../frontend/src/js/state/wallet-state.js"
   ));
+  ({ libraryState } = await import(
+    "../../frontend/src/js/state/library-state.js"
+  ));
   ({ emit, EVENTS } = await import("@arbesk/asset-core/events/bus.js"));
   ({ renameAsset, resetForNewAsset, closeAsset } = await import(
     "@arbesk/asset-core/domain/asset.js"
@@ -51,6 +55,7 @@ beforeAll(async () => {
 beforeEach(() => {
   _resetAssets();
   walletState.set({ walletAddress: null });
+  libraryState.set({ subjectAddress: null, subjectChainId: null });
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
 });
 
@@ -106,4 +111,22 @@ test("wallet disconnect hides save/publish but keeps download", () => {
   expect(hidden("saveAssetBtn")).toBe(true);
   expect(hidden("publishAssetBtn")).toBe(true);
   expect(hidden("downloadAssetBtn")).toBe(false);
+});
+
+test("New is hidden without a wallet, shown for a connected owner", () => {
+  expect(hidden("newAssetBtn")).toBe(true);
+  walletState.set({ walletAddress: "0xabc" });
+  emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
+  expect(hidden("newAssetBtn")).toBe(false);
+});
+
+test("New is hidden in visitor mode even with a wallet connected", () => {
+  walletState.set({ walletAddress: "0xabc" });
+  libraryState.set({ subjectAddress: "0xdef" });
+  emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
+  expect(hidden("newAssetBtn")).toBe(true);
+  // Subject == wallet is owner mode: New comes back.
+  libraryState.set({ subjectAddress: "0xABC" });
+  emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
+  expect(hidden("newAssetBtn")).toBe(false);
 });

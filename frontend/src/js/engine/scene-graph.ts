@@ -6,6 +6,8 @@
 
 import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
+import { libraryState } from "../state/library-state.ts";
+import { getReadableContract } from "../blockchain/read-contract.ts";
 import { state } from "./state.ts";
 import { getCssVar, hexToColor4 } from "./theme.ts";
 import { clearScene } from "./cleanup.ts";
@@ -704,8 +706,10 @@ export function resumeRenderLoop() {
 
 /**
  * Loads the asset/manifest the current URL points at (?asset / ?manifest).
+ * @remarks Anonymous deep links (public profiles) have no wallet contract, so
+ *   the tokenURI read falls back to a read-only contract.
  */
-export function loadFromParams() {
+export async function loadFromParams() {
   const urlParams = new URLSearchParams(window.location.search);
   const manifestCid = urlParams.get("manifest");
   const assetTokenId = urlParams.get("asset");
@@ -715,21 +719,31 @@ export function loadFromParams() {
   // pushState handoff (Library → Studio) it does not re-read, so we pass it.
   const assetId = urlParams.get("assetId");
 
-  const { contract } = walletState.get();
-  if (assetTokenId && contract) {
-    contract.read
-      .tokenURI([BigInt(assetTokenId)])
-      .then((cid: string|null) => {
-        if (cid) {
-          adoptOpenedAsset(cid, { tokenId: String(assetTokenId) });
-          adoptOpenedCollection(String(assetTokenId), { clearSelectedCollection: true });
-          emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, {
-            tokenId: assetTokenId,
-            assetId: assetId || null,
-          });
-        }
-      })
-      .catch(() => {});
+  if (assetTokenId) {
+    // A profile subject's tokens may live on a different chain than the
+    // viewer's wallet — read on the resolved subject chain when one is active.
+    const subj = libraryState.get();
+    const readChainId =
+      subj.subjectAddress && subj.subjectChainId
+        ? subj.subjectChainId
+        : undefined;
+    const contract = readChainId
+      ? await getReadableContract(readChainId)
+      : walletState.get().contract || (await getReadableContract());
+    if (!contract) return;
+    try {
+      const cid: string | null = await contract.read.tokenURI([
+        BigInt(assetTokenId),
+      ]);
+      if (cid) {
+        adoptOpenedAsset(cid, { tokenId: String(assetTokenId) });
+        adoptOpenedCollection(String(assetTokenId), { clearSelectedCollection: true });
+        emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, {
+          tokenId: assetTokenId,
+          assetId: assetId || null,
+        });
+      }
+    } catch {}
   } else if (manifestCid) {
     adoptOpenedAsset(manifestCid);
     loadAssetManifest(manifestCid);

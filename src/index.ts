@@ -166,9 +166,10 @@ app.use("/api", api({ storage, core }));
 // ─── SPA fallback ───
 // Studio and Library are served from a single document (app.html) with a
 // client-side router. Serve that shell for the clean-URL routes so deep links
-// and history.pushState() paths resolve. Kept narrow (explicit paths only) so
-// static assets and /api are untouched. Query strings pass through untouched.
-app.get(["/studio", "/library"], (_req, res) => {
+// and history.pushState() paths resolve — including public profile paths
+// (/library/<base58>, /studio/<base58>). Kept narrow so static assets and
+// /api are untouched. Query strings pass through untouched.
+app.get(/^\/(studio|library)(\/.*)?$/, (_req, res) => {
   res.sendFile(path.join(__dirname, "/../frontend/dist/app.html"));
 });
 

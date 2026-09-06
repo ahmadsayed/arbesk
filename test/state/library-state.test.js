@@ -17,6 +17,8 @@ describe("libraryState.get()", () => {
       sortBy: "name",
       searchQuery: "",
       isLoading: false,
+      subjectAddress: null,
+      subjectChainId: null,
     });
   });
 });

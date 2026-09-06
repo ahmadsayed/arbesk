@@ -7,6 +7,26 @@ import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 
 let _tokenURIs = {};
 let _manifests = {};
+let _wallet = { walletAddress: "0xOwner", chainId: 31415822 };
+let _ownedByChain = {};
+let _sharedTokens = [];
+let _libraryStateRef = null;
+
+function makeFakeContract() {
+  return {
+    address: "0xContract0000000000000000000000000000000001",
+    abi: [],
+    read: {
+      tokenURI: (args) => {
+        const uri = _tokenURIs[String(args[0])];
+        return uri instanceof Error
+          ? Promise.reject(uri)
+          : Promise.resolve(uri || "");
+      },
+      listTokens: () => Promise.resolve([]),
+    },
+  };
+}
 
 const closeAssetSpy = jest.fn(() => {
   assetStore.set({
@@ -22,6 +42,9 @@ const closeAssetSpy = jest.fn(() => {
 beforeEach(() => {
   resetAssetState();
   closeAssetSpy.mockClear();
+  _wallet = { walletAddress: "0xOwner", chainId: 31415822 };
+  _ownedByChain = {};
+  _sharedTokens = [];
   _tokenURIs = {
     1: "bafyCollection1",
     2: "bafyCollection2",
@@ -42,7 +65,10 @@ beforeEach(() => {
     bafyC: { type: "asset", name: "Asset C" },
   };
 
-  document.body.innerHTML = `<div id="assetLibraryBody"></div>`;
+  document.body.innerHTML = `
+    <div id="assetLibraryBody"></div>
+    <span id="galleryVisitorBadge" hidden></span>
+  `;
 });
 
 async function loadModule() {
@@ -51,24 +77,35 @@ async function loadModule() {
     () => ({
       walletState: {
         get: jest.fn(() => ({
-          walletAddress: "0xOwner",
-          chainId: 31415822,
-          contract: {
-            address: "0xContract0000000000000000000000000000000001",
-            abi: [],
-            read: {
-              tokenURI: (args) => {
-                const uri = _tokenURIs[String(args[0])];
-                return uri instanceof Error
-                  ? Promise.reject(uri)
-                  : Promise.resolve(uri || "");
-              },
-              listTokens: () => Promise.resolve([]),
-            },
-          },
+          walletAddress: _wallet.walletAddress,
+          chainId: _wallet.chainId,
+          contract: makeFakeContract(),
         })),
         _resetForTesting: jest.fn(),
       },
+    })
+  );
+
+  // The read-only contract fallback: serves the same fake contract regardless
+  // of chain (tokenURI is driven by _tokenURIs).
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/blockchain/read-contract.js",
+    () => ({
+      __esModule: true,
+      getReadableContract: jest.fn(async () => makeFakeContract()),
+    })
+  );
+
+  // The indexer/shared-token backend boundary.
+  await jest.unstable_mockModule(
+    "../../frontend/src/js/services/api.js",
+    () => ({
+      __esModule: true,
+      getOwnedTokens: jest.fn(async (_address, chainId) => {
+        return _ownedByChain[chainId] ?? [];
+      }),
+      getSharedTokens: jest.fn(async () => _sharedTokens),
+      unpinAssetCids: jest.fn(async () => {}),
     })
   );
 
@@ -119,8 +156,9 @@ async function loadModule() {
     })
   );
 
+  const stateMod = await import("../../frontend/src/js/state/library-state.js");
   const mod = await import("../../frontend/src/js/ui/asset-library.js");
-  return mod;
+  return { ...mod, libraryState: stateMod.libraryState };
 }
 
 describe("renderAssetLibrary", () => {
@@ -281,5 +319,121 @@ describe("trimTokenId", () => {
 
   test("exactly 9 chars triggers trimming", () => {
     expect(trimTokenId("123456789")).toBe("#1234…6789");
+  });
+});
+
+describe("Gallery panel visitor mode (public profile in the studio sidebar)", () => {
+  const SUBJECT = "0xccc626354a2ea985d4abdc1173597a46afc63595";
+  const BASE_SEPOLIA = 84532;
+
+  async function loadVisitorModule({
+    walletAddress = null,
+    subject = SUBJECT,
+    subjectChainId = BASE_SEPOLIA,
+    owned = ["1", "2"],
+  } = {}) {
+    _wallet = { walletAddress, chainId: walletAddress ? BASE_SEPOLIA : null };
+    _ownedByChain = { [BASE_SEPOLIA]: owned };
+    const mod = await loadModule();
+    mod.libraryState.set({ subjectAddress: subject, subjectChainId });
+    return mod;
+  }
+
+  beforeEach(() => {
+    // loadModule is module-cached; reset any subject leaked by a prior test.
+    if (_libraryStateRef) {
+      _libraryStateRef.set({ subjectAddress: null, subjectChainId: null });
+    }
+  });
+
+  test("anonymous + subject: loads the subject's assets, no sign-in prompt, read-only chrome", async () => {
+    const { initAssetLibrary, refreshAssetLibrary, libraryState } =
+      await loadVisitorModule();
+    _libraryStateRef = libraryState;
+    initAssetLibrary();
+
+    await refreshAssetLibrary();
+
+    const names = [...document.querySelectorAll(".asset-card-name")].map(
+      (el) => el.textContent
+    );
+    expect(names).toEqual(
+      expect.arrayContaining(["Asset A", "Asset B", "Asset C"])
+    );
+    // The sign-in empty state is gone…
+    expect(document.getElementById("galleryConnectBtn")).toBeNull();
+    // …replaced by the visitor badge.
+    const badge = document.getElementById("galleryVisitorBadge");
+    expect(badge.hidden).toBe(false);
+    expect(badge.textContent).toBe("Read-only · public profile");
+    // Read-only chrome: no delete, no Add to Scene, no drag.
+    expect(document.querySelector(".asset-card-delete")).toBeNull();
+    const actionTexts = [
+      ...document.querySelectorAll(".asset-card-actions button"),
+    ].map((b) => b.textContent);
+    expect(actionTexts.some((t) => t.includes("Add to Scene"))).toBe(false);
+    expect(actionTexts.some((t) => t.includes("Download"))).toBe(true);
+    expect(document.querySelector(".asset-card").draggable).toBe(false);
+    // Section is labeled for a profile, not "My Assets".
+    expect(
+      document.querySelector(".asset-library-section-title").textContent
+    ).toBe("Public Assets");
+  });
+
+  test("subject with no assets shows the public empty state", async () => {
+    const { initAssetLibrary, refreshAssetLibrary, libraryState } =
+      await loadVisitorModule({ owned: [] });
+    _libraryStateRef = libraryState;
+    initAssetLibrary();
+
+    await refreshAssetLibrary();
+
+    expect(document.querySelector(".asset-card")).toBeNull();
+    expect(document.querySelector(".empty-state-title").textContent).toBe(
+      "No public assets yet"
+    );
+    expect(document.getElementById("galleryConnectBtn")).toBeNull();
+  });
+
+  test("no subject + anonymous: sign-in prompt stays untouched", async () => {
+    const { initAssetLibrary, refreshAssetLibrary, libraryState } =
+      await loadVisitorModule({ subject: null, subjectChainId: null });
+    _libraryStateRef = libraryState;
+    initAssetLibrary();
+    document.getElementById("assetLibraryBody").innerHTML =
+      '<div class="empty-state"><button id="galleryConnectBtn">Login / Signup</button></div>';
+
+    await refreshAssetLibrary();
+
+    expect(document.getElementById("galleryConnectBtn")).not.toBeNull();
+    expect(document.getElementById("galleryVisitorBadge").hidden).toBe(true);
+  });
+
+  test("subject == wallet: owner mode unchanged (full chrome, no badge)", async () => {
+    const { initAssetLibrary, refreshAssetLibrary, libraryState } =
+      await loadVisitorModule({ walletAddress: SUBJECT });
+    _libraryStateRef = libraryState;
+    initAssetLibrary();
+
+    await refreshAssetLibrary();
+
+    const names = [...document.querySelectorAll(".asset-card-name")].map(
+      (el) => el.textContent
+    );
+    expect(names).toEqual(
+      expect.arrayContaining(["Asset A", "Asset B", "Asset C"])
+    );
+    expect(
+      document.querySelector(".asset-card-delete").hidden
+    ).toBe(false);
+    const actionTexts = [
+      ...document.querySelectorAll(".asset-card-actions button"),
+    ].map((b) => b.textContent);
+    expect(actionTexts.some((t) => t.includes("Add to Scene"))).toBe(true);
+    expect(document.querySelector(".asset-card").draggable).toBe(true);
+    expect(document.getElementById("galleryVisitorBadge").hidden).toBe(true);
+    expect(
+      document.querySelector(".asset-library-section-title").textContent
+    ).toBe("My Assets");
   });
 });

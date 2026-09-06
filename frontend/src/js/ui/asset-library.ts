@@ -12,6 +12,8 @@ import {
 } from "../engine/scene-graph.ts";
 import { ensureBabylon } from "../engine/babylon-loader.ts";
 import { getActiveContract, getReadClient } from "../blockchain/wallet.ts";
+import { getReadableContract } from "../blockchain/read-contract.ts";
+import { getContractAddress } from "../blockchain/network-config.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { deleteAssetFromCollection } from "../services/asset-delete.ts";
 import { trimTokenId } from "../utils/library-items.ts";
@@ -20,11 +22,13 @@ import {
   loadThumbnailInto,
 } from "../utils/thumbnail.ts";
 import { showToast } from "./toasts.ts";
+
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.ts";
 import { switchView, getActiveView } from "./sidebar.ts";
 import { CHAIN_IDS, DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../../../constants/chains.js";
 import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
+import { libraryState, isLibraryVisitor } from "../state/library-state.ts";
 import {
   adoptOpenedAsset,
   closeAsset,
@@ -80,6 +84,21 @@ let assetLibraryBody: HTMLElement | null = null;
 let libraryRenderInFlight = false;
 let libraryRenderPending = false;
 let _libraryDirty = false;
+
+// Re-export so existing call sites (library-controller, library-details) keep
+// their import paths; the implementation lives in blockchain/read-contract.ts
+// so engine/ modules can use it without importing ui/.
+export { getReadableContract } from "../blockchain/read-contract.ts";
+
+/**
+ * The chain profile reads should use when a public-profile subject is active
+ * (visitor, or owner viewing their own profile URL); undefined → the
+ * connected wallet's chain, exactly as before.
+ */
+function subjectReadChainId(): number | undefined {
+  const s = libraryState.get();
+  return s.subjectAddress && s.subjectChainId ? s.subjectChainId : undefined;
+}
 
 /**
  * Reconstruct the list of tokens currently owned by an address by scanning
@@ -156,25 +175,26 @@ async function fetchTransferEvents(
   address: string,
   direction: "to" | "from",
   startBlock: number,
-  latest: number
+  latest: number,
+  chainId?: number
 ): Promise<any[]> {
   const allEvents: any[] = [];
   try {
-    const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
-    const chunkSize = LOG_CHUNK_SIZES[chainId] ?? DEFAULT_EVENT_CHUNK_SIZE;
+    const id = Number(chainId ?? walletState.get().chainId ?? CHAIN_IDS.HARDHAT_LOCAL);
+    const chunkSize = LOG_CHUNK_SIZES[id] ?? DEFAULT_EVENT_CHUNK_SIZE;
     const fromBlock = Math.max(
-      startBlock ?? DEPLOYMENT_BLOCKS[chainId] ?? 0,
+      startBlock ?? DEPLOYMENT_BLOCKS[id] ?? 0,
       0
     );
 
     console.log(
       `[ASSET-LIBRARY] scanning Transfer ${direction} events ` +
-        `from block ${fromBlock} to ${latest} (chain ${chainId}, chunk ${chunkSize})`
+        `from block ${fromBlock} to ${latest} (chain ${id}, chunk ${chunkSize})`
     );
 
     for (let from = fromBlock; from <= latest; from += chunkSize) {
       const to = Math.min(from + chunkSize - 1, latest);
-      const chunk = await getReadClient(chainId).getLogs({
+      const chunk = await getReadClient(id).getLogs({
         address: contract.address as `0x${string}`,
         event: TRANSFER_EVENT_ABI_ITEM,
         args:
@@ -200,27 +220,28 @@ async function fetchTransferEvents(
 export async function fetchOwnedTokenIds(
   contract: any,
   address: string,
-  forceIndexer: boolean = false
+  forceIndexer: boolean = false,
+  chainId?: number
 ): Promise<string[]> {
   const lowerAddress = address.toLowerCase();
-  const chainId = Number(walletState.get().chainId || CHAIN_IDS.HARDHAT_LOCAL);
+  const id = Number(chainId ?? walletState.get().chainId ?? CHAIN_IDS.HARDHAT_LOCAL);
 
   // Only use the backend indexer for chains that have a configured deployment
   // block. For local/dev chains without one, fall back to an on-chain scan.
-  const deploymentBlock = DEPLOYMENT_BLOCKS[chainId] ?? 0;
+  const deploymentBlock = DEPLOYMENT_BLOCKS[id] ?? 0;
   if (deploymentBlock > 0) {
-    const indexerResult = await getOwnedTokens(address, chainId, forceIndexer);
+    const indexerResult = await getOwnedTokens(address, id, forceIndexer);
     if (indexerResult) {
       console.log(
         `[ASSET-LIBRARY] indexer returned ${indexerResult.length} token(s) ` +
-          `for ${address} on chain ${chainId}` +
+          `for ${address} on chain ${id}` +
           (forceIndexer ? " (forced)" : "")
       );
       return indexerResult;
     }
   }
 
-  const cache = _readOwnedTokensCache(chainId, address);
+  const cache = _readOwnedTokensCache(id, address);
   const ownership = new Map<string, string>();
   let startBlock = deploymentBlock;
 
@@ -231,10 +252,10 @@ export async function fetchOwnedTokenIds(
     }
   }
 
-  const latest = Number(await getReadClient(chainId).getBlockNumber());
+  const latest = Number(await getReadClient(id).getBlockNumber());
   const [transfersTo, transfersFrom] = await Promise.all([
-    fetchTransferEvents(contract, address, "to", startBlock, latest),
-    fetchTransferEvents(contract, address, "from", startBlock, latest),
+    fetchTransferEvents(contract, address, "to", startBlock, latest, id),
+    fetchTransferEvents(contract, address, "from", startBlock, latest, id),
   ]);
 
   // Apply events in block order so the latest transfer for each tokenId wins.
@@ -257,15 +278,53 @@ export async function fetchOwnedTokenIds(
     .filter(([, currentOwner]) => currentOwner === lowerAddress)
     .map(([tokenId]) => tokenId);
 
-  _writeOwnedTokensCache(chainId, address, maxBlock, owned);
+  _writeOwnedTokensCache(id, address, maxBlock, owned);
   return owned;
+}
+
+/**
+ * Shared-with-me tokens from the indexer, with the local/dev `listTokens`
+ * contract fallback.
+ */
+async function fetchSharedTokenIds(
+  contract: any,
+  address: string,
+  owned: string[],
+  chainId: number | undefined,
+  forceIndexer: boolean
+): Promise<string[]> {
+  let shared: string[] | null = await getSharedTokens(
+    address,
+    (chainId ?? walletState.get().chainId) as any,
+    forceIndexer
+  );
+  if (!Array.isArray(shared)) shared = [];
+
+  // Fallback for local/dev contracts that expose listTokens(address).
+  const hasListTokens = Array.isArray(contract.abi)
+    ? contract.abi.some((i: any) => i.type === "function" && i.name === "listTokens")
+    : false;
+  if (shared.length === 0 && hasListTokens) {
+    const memberTokens = (await getReadClient(chainId).readContract({
+      address: contract.address as `0x${string}`,
+      abi: contract.abi,
+      functionName: "listTokens",
+      args: [address],
+    })) as readonly bigint[];
+    for (const tokenId of memberTokens) {
+      const id = String(tokenId);
+      if (!owned.includes(id)) shared.push(id);
+    }
+  }
+  return shared;
 }
 
 async function fetchAssetLibrary(
   address: string,
-  forceIndexer: boolean = false
+  forceIndexer: boolean = false,
+  { includeShared = true, chainId = undefined }: { includeShared?: boolean; chainId?: number } = {}
 ): Promise<{ owned: string[]; shared: string[] }> {
-  const contract = getActiveContract();
+  const contract = await getReadableContract(chainId);
   if (!contract || !address) {
     console.warn(
       "[ASSET-LIBRARY] No contract available. " +
@@ -274,37 +333,16 @@ async function fetchAssetLibrary(
     return { owned: [], shared: [] };
   }
 
-  let owned: string[] = [];
-  let shared: string[] | null = [];
-
   try {
-    [owned, shared] = await Promise.all([
-      fetchOwnedTokenIds(contract, address, forceIndexer),
-      getSharedTokens(address, walletState.get().chainId as any, forceIndexer),
-    ]);
-    if (!Array.isArray(shared)) shared = [];
-
-    // Fallback for local/dev contracts that expose listTokens(address).
-    const hasListTokens = Array.isArray(contract.abi)
-      ? contract.abi.some((i: any) => i.type === "function" && i.name === "listTokens")
-      : false;
-    if (shared.length === 0 && hasListTokens) {
-      const memberTokens = (await getReadClient().readContract({
-        address: contract.address as `0x${string}`,
-        abi: contract.abi,
-        functionName: "listTokens",
-        args: [address],
-      })) as readonly bigint[];
-      for (const tokenId of memberTokens) {
-        const id = String(tokenId);
-        if (!owned.includes(id)) shared.push(id);
-      }
-    }
+    const owned = await fetchOwnedTokenIds(contract, address, forceIndexer, chainId);
+    const shared = includeShared
+      ? await fetchSharedTokenIds(contract, address, owned, chainId, forceIndexer)
+      : [];
+    return { owned, shared };
   } catch (err) {
     console.error("Asset library fetch failed:", err);
+    return { owned: [], shared: [] };
   }
-
-  return { owned, shared: shared ?? [] };
 }
 
 /**
@@ -314,9 +352,10 @@ async function fetchAssetLibrary(
  *   `{ type: "inaccessible" }` markers.
  */
 export async function expandTokenToAssets(
-  tokenId: string | number
+  tokenId: string | number,
+  chainId?: number
 ): Promise<any[]> {
-  const contract = getActiveContract();
+  const contract = await getReadableContract(chainId);
   if (!contract) return [];
 
   try {
@@ -384,7 +423,8 @@ export async function expandTokenToAssets(
 
 /** @param entry - gallery entry from expandTokenToAssets */
 async function openAssetEntry(entry: any): Promise<void> {
-  const contract = getActiveContract();
+  const readChainId = subjectReadChainId();
+  const contract = await getReadableContract(readChainId);
   if (!contract) {
     console.warn("[LIBRARY] No contract available to open asset");
     return;
@@ -403,8 +443,10 @@ async function openAssetEntry(entry: any): Promise<void> {
       const { assetEntries } = await loadCollectionManifest(
         entry.collectionCid,
         {
-          chainId: walletState.get().chainId,
-          contractAddress: walletState.get().contractAddress,
+          chainId: readChainId ?? walletState.get().chainId,
+          contractAddress: readChainId
+            ? getContractAddress(readChainId)
+            : walletState.get().contractAddress,
           tokenId: entry.tokenId,
         } as any
       );
@@ -464,7 +506,8 @@ export async function openAssetByTokenId(
   tokenId: string | number,
   assetId: string | null = null
 ): Promise<void> {
-  const contract = getActiveContract();
+  const readChainId = subjectReadChainId();
+  const contract = await getReadableContract(readChainId);
   if (!contract) {
     console.warn("[LIBRARY] No contract available to open asset");
     return;
@@ -497,8 +540,10 @@ export async function openAssetByTokenId(
         "../engine/scene-graph.ts"
       );
       const { assetEntries } = await loadCollectionManifest(cid, {
-        chainId: walletState.get().chainId,
-        contractAddress: walletState.get().contractAddress,
+        chainId: readChainId ?? walletState.get().chainId,
+        contractAddress: readChainId
+          ? getContractAddress(readChainId)
+          : walletState.get().contractAddress,
         tokenId,
       } as any);
       emit(EVENTS.COLLECTION_OPENED, { tokenId, assetEntries });
@@ -602,7 +647,11 @@ function normalizeTokenId(id: any): string {
   }
 }
 
-async function renderAssetLibrary(owned: string[], shared: string[]): Promise<void> {
+async function renderAssetLibrary(
+  owned: string[],
+  shared: string[],
+  { visitor = false }: { visitor?: boolean } = {}
+): Promise<void> {
   if (!assetLibraryBody) return;
   assetLibraryBody.innerHTML = "";
 
@@ -615,10 +664,14 @@ async function renderAssetLibrary(owned: string[], shared: string[]): Promise<vo
     ? shared.filter((id) => normalizeTokenId(id) === activeTokenId)
     : shared;
 
+  // A profile subject's tokens may live on another chain — expand on the
+  // resolved subject chain.
+  const expandChainId = subjectReadChainId();
+
   const [ownedNested, sharedNested] = await Promise.all([
     Promise.all(
       ownedIds.map(async (tokenId) => {
-        const entries = await expandTokenToAssets(tokenId);
+        const entries = await expandTokenToAssets(tokenId, expandChainId);
         entries.forEach((e) => {
           e.role = "owner";
         });
@@ -627,7 +680,7 @@ async function renderAssetLibrary(owned: string[], shared: string[]): Promise<vo
     ),
     Promise.all(
       sharedIds.map(async (tokenId) => {
-        const entries = await expandTokenToAssets(tokenId);
+        const entries = await expandTokenToAssets(tokenId, expandChainId);
         entries.forEach((e) => {
           e.role = "editor";
         });
@@ -638,10 +691,12 @@ async function renderAssetLibrary(owned: string[], shared: string[]): Promise<vo
   const ownedEntries = ownedNested.flat();
   const sharedEntries = sharedNested.flat();
 
-  assetLibraryBody.appendChild(createSection("My Assets", ownedEntries));
+  assetLibraryBody.appendChild(
+    createSection(visitor ? "Public Assets" : "My Assets", ownedEntries, visitor)
+  );
   if (sharedEntries.length > 0) {
     assetLibraryBody.appendChild(
-      createSection("Shared Assets", sharedEntries)
+      createSection("Shared Assets", sharedEntries, visitor)
     );
   }
 }
@@ -672,7 +727,7 @@ function createEmptyState(title: string, sub: string): HTMLDivElement {
   return wrap;
 }
 
-function createSection(title: string, entries: any[]): HTMLDivElement {
+function createSection(title: string, entries: any[], visitor: boolean = false): HTMLDivElement {
   const section = document.createElement("div");
   section.className = "asset-library-section";
 
@@ -682,8 +737,12 @@ function createSection(title: string, entries: any[]): HTMLDivElement {
   section.appendChild(heading);
 
   if (entries.length === 0) {
-    const empty =
-      title === "My Assets"
+    const empty = visitor
+      ? createEmptyState(
+          "No public assets yet",
+          "This profile hasn't published any assets yet."
+        )
+      : title === "My Assets"
         ? createEmptyState(
             "No assets yet",
             "Create your first asset to see it here."
@@ -702,7 +761,7 @@ function createSection(title: string, entries: any[]): HTMLDivElement {
     list.appendChild(
       entry.type === "inaccessible"
         ? createInaccessibleCard(entry)
-        : createAssetCard(entry)
+        : createAssetCard(entry, visitor)
     );
   }
   section.appendChild(list);
@@ -772,70 +831,8 @@ function createInaccessibleCard(entry: any): HTMLDivElement {
   return item;
 }
 
-/** @param entry - gallery entry */
-function createAssetCard(entry: any): HTMLDivElement {
-  const item = document.createElement("div");
-  item.className = `asset-card ${
-    entry.role === "editor" ? "asset-card--editor" : ""
-  }`.trim();
-  item.dataset.tokenId = entry.tokenId;
-  if (entry.assetId) item.dataset.assetId = entry.assetId;
-  item.dataset.manifestCid = entry.manifestCid;
-  if (entry.collectionCid) item.dataset.collectionCid = entry.collectionCid;
-  item.draggable = true;
-  item.tabIndex = 0;
-  item.setAttribute("role", "button");
-  item.setAttribute("aria-label", `Open asset ${entry.name}`);
-
-  item.addEventListener("dragstart", (event) => {
-    const payload = buildLinkedAssetPayload(entry);
-    const dt = event.dataTransfer;
-    if (!dt) return;
-    dt.effectAllowed = "copy";
-    dt.setData(
-      "application/x-arbesk-linked-asset",
-      JSON.stringify(payload)
-    );
-    dt.setData("text/plain", `${entry.name} Token #${entry.tokenId}`);
-  });
-
-  const thumbnailEl = document.createElement("div");
-  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
-  thumbnailEl.textContent = "✦";
-
-  // Reload overlay that appears when metadata fails to load
-  const reloadBtn = document.createElement("button");
-  reloadBtn.className = "asset-card-reload";
-  reloadBtn.type = "button";
-  reloadBtn.title = "Retry loading asset metadata";
-  reloadBtn.setAttribute("aria-label", "Retry loading asset metadata");
-  reloadBtn.hidden = true;
-  reloadBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
-  </svg>`;
-  thumbnailEl.appendChild(reloadBtn);
-
-  const nameEl = document.createElement("div");
-  nameEl.className = "asset-card-name";
-  nameEl.textContent = entry.name || `Loading… #${entry.tokenId}`;
-
-  const badge = document.createElement("span");
-  badge.className = `asset-card-badge ${
-    entry.role === "owner" ? "badge-owner" : "badge-editor"
-  }`;
-  badge.textContent = entry.role === "owner" ? "Owner" : "Editor";
-
-  // Click or keyboard activate anywhere on the card (except action buttons) to open.
-  item.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".asset-card-actions button")) return;
-    openAssetEntry(entry);
-  });
-  item.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    openAssetEntry(entry);
-  });
-
+/** @param entry - gallery entry; visitor mode renders read-only chrome */
+function buildAddToSceneButton(entry: any): HTMLButtonElement {
   const addBtn = document.createElement("button");
   addBtn.className = "btn btn-outline btn-sm";
   addBtn.textContent = "Add to Scene";
@@ -844,7 +841,10 @@ function createAssetCard(entry: any): HTMLDivElement {
     e.stopPropagation();
     emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry));
   });
+  return addBtn;
+}
 
+function buildDownloadButton(entry: any): HTMLButtonElement {
   const downloadBtn = document.createElement("button");
   downloadBtn.className = "btn btn-outline btn-sm";
   downloadBtn.title = "Download the model file (GLB/glTF)";
@@ -881,7 +881,10 @@ function createAssetCard(entry: any): HTMLDivElement {
       downloadBtn.disabled = false;
     }
   });
+  return downloadBtn;
+}
 
+function buildDeleteButton(entry: any): HTMLButtonElement {
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "btn btn-outline btn-danger btn-sm asset-card-delete";
   deleteBtn.title = "Remove this asset from its collection";
@@ -892,29 +895,145 @@ function createAssetCard(entry: any): HTMLDivElement {
     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
   </svg><span>Delete</span>`;
   deleteBtn.addEventListener("click", (e) => onDeleteAsset(e, entry));
+  return deleteBtn;
+}
 
+function wireCardDrag(item: HTMLDivElement, entry: any): void {
+  item.addEventListener("dragstart", (event) => {
+    const payload = buildLinkedAssetPayload(entry);
+    const dt = event.dataTransfer;
+    if (!dt) return;
+    dt.effectAllowed = "copy";
+    dt.setData(
+      "application/x-arbesk-linked-asset",
+      JSON.stringify(payload)
+    );
+    dt.setData("text/plain", `${entry.name} Token #${entry.tokenId}`);
+  });
+}
+
+function buildCardThumbnail(): {
+  thumbnailEl: HTMLDivElement;
+  reloadBtn: HTMLButtonElement;
+} {
+  const thumbnailEl = document.createElement("div");
+  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
+  thumbnailEl.textContent = "✦";
+
+  // Reload overlay that appears when metadata fails to load
+  const reloadBtn = document.createElement("button");
+  reloadBtn.className = "asset-card-reload";
+  reloadBtn.type = "button";
+  reloadBtn.title = "Retry loading asset metadata";
+  reloadBtn.setAttribute("aria-label", "Retry loading asset metadata");
+  reloadBtn.hidden = true;
+  reloadBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
+  </svg>`;
+  thumbnailEl.appendChild(reloadBtn);
+  return { thumbnailEl, reloadBtn };
+}
+
+function buildCardBadge(role?: string): HTMLSpanElement {
+  const badge = document.createElement("span");
+  badge.className = `asset-card-badge ${
+    role === "owner" ? "badge-owner" : "badge-editor"
+  }`;
+  badge.textContent = role === "owner" ? "Owner" : "Editor";
+  return badge;
+}
+
+// Click or keyboard activate anywhere on the card (except action buttons).
+function wireCardActivation(item: HTMLDivElement, entry: any): void {
+  item.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".asset-card-actions button")) return;
+    openAssetEntry(entry);
+  });
+  item.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    openAssetEntry(entry);
+  });
+}
+
+function wireCardThumbnailLoading(
+  entry: any,
+  thumbnailEl: HTMLDivElement,
+  reloadBtn: HTMLButtonElement
+): void {
+  const runLoad = () =>
+    renderAssetThumbnail(entry.thumbnail, thumbnailEl, entry.name);
+  reloadBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    runLoad();
+  });
+  runLoad();
+}
+
+/**
+ * Assemble the card's meta row + action buttons.
+ * @remarks Read-only profile panel: open (card click) and Download stay;
+ *   scene-edit, delete, and the role badge are owner-only (every card in a
+ *   public profile belongs to the subject, so the badge is meaningless).
+ */
+function buildCardFooter(
+  entry: any,
+  visitor: boolean
+): {
+  meta: HTMLDivElement;
+  actions: HTMLDivElement;
+  deleteBtn: HTMLButtonElement | null;
+} {
   const meta = document.createElement("div");
   meta.className = "asset-card-meta";
-  meta.appendChild(badge);
+  if (!visitor) meta.appendChild(buildCardBadge(entry.role));
 
   const actions = document.createElement("div");
   actions.className = "asset-card-actions";
-  actions.appendChild(addBtn);
-  actions.appendChild(downloadBtn);
-  actions.appendChild(deleteBtn);
+  let deleteBtn: HTMLButtonElement | null = null;
+  if (!visitor) actions.appendChild(buildAddToSceneButton(entry));
+  actions.appendChild(buildDownloadButton(entry));
+  if (!visitor) {
+    deleteBtn = buildDeleteButton(entry);
+    actions.appendChild(deleteBtn);
+  }
+  return { meta, actions, deleteBtn };
+}
+
+function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
+  const item = document.createElement("div");
+  item.className = `asset-card ${
+    entry.role === "editor" ? "asset-card--editor" : ""
+  }`.trim();
+  item.dataset.tokenId = entry.tokenId;
+  if (entry.assetId) item.dataset.assetId = entry.assetId;
+  item.dataset.manifestCid = entry.manifestCid;
+  if (entry.collectionCid) item.dataset.collectionCid = entry.collectionCid;
+  // Dragging an asset into the scene is an edit affordance — owners only.
+  item.draggable = !visitor;
+  item.tabIndex = 0;
+  item.setAttribute("role", "button");
+  item.setAttribute("aria-label", `Open asset ${entry.name}`);
+
+  if (!visitor) wireCardDrag(item, entry);
+
+  const { thumbnailEl, reloadBtn } = buildCardThumbnail();
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "asset-card-name";
+  nameEl.textContent = entry.name || `Loading… #${entry.tokenId}`;
+
+  wireCardActivation(item, entry);
+
+  const { meta, actions, deleteBtn } = buildCardFooter(entry, visitor);
 
   item.appendChild(thumbnailEl);
   item.appendChild(nameEl);
   item.appendChild(meta);
   item.appendChild(actions);
 
-  const runLoad = () => renderAssetThumbnail(entry.thumbnail, thumbnailEl, entry.name);
-  reloadBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    runLoad();
-  });
-  runLoad();
-  resolveDeleteVisibility(deleteBtn, entry.role);
+  wireCardThumbnailLoading(entry, thumbnailEl, reloadBtn);
+  if (deleteBtn) resolveDeleteVisibility(deleteBtn, entry.role);
   return item;
 }
 
@@ -965,9 +1084,32 @@ async function renderAssetThumbnail(
   if (img) thumbnailEl.classList.remove("asset-card-thumbnail-empty");
 }
 
+/**
+ * Show/hide the "Read-only · public profile" pill in the Gallery header.
+ * @remarks The badge mirrors the library-view toolbar badge; visitors get
+ *   read-only cards, so this is the only panel-level identity signal.
+ */
+function updateGalleryVisitorChrome(): void {
+  const badge = document.getElementById("galleryVisitorBadge");
+  if (!badge) return;
+  const subject = libraryState.get().subjectAddress;
+  const visitor = isLibraryVisitor();
+  badge.hidden = !visitor;
+  if (visitor && subject) {
+    badge.textContent = "Read-only · public profile";
+  }
+}
+
 async function refreshAssetLibrary(): Promise<void> {
   const { walletAddress } = walletState.get();
-  if (!walletAddress || !assetLibraryBody) return;
+  // A profile subject's assets load read-only, even without a wallet.
+  const subject = libraryState.get().subjectAddress;
+  const address = subject ?? walletAddress;
+  if (!address || !assetLibraryBody) return;
+  const visitor = isLibraryVisitor();
+  const chainId = subject ? subjectReadChainId() : undefined;
+
+  updateGalleryVisitorChrome();
 
   if (libraryRenderInFlight) {
     libraryRenderPending = true;
@@ -978,8 +1120,11 @@ async function refreshAssetLibrary(): Promise<void> {
   try {
     do {
       libraryRenderPending = false;
-      const { owned, shared } = await fetchAssetLibrary(walletAddress);
-      await renderAssetLibrary(owned, shared);
+      const { owned, shared } = await fetchAssetLibrary(address, false, {
+        includeShared: !visitor,
+        chainId,
+      });
+      await renderAssetLibrary(owned, shared, { visitor });
     } while (libraryRenderPending);
   } finally {
     libraryRenderInFlight = false;
@@ -1185,6 +1330,11 @@ on(EVENTS.ASSET_STATE_CHANGED, (state) => {
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
   _lastRenderedCollectionTokenId = null;
+  // A profile subject keeps the Gallery panel alive read-only after disconnect.
+  if (libraryState.get().subjectAddress) {
+    void refreshAssetLibrary();
+    return;
+  }
   if (assetLibraryBody) {
     assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }

@@ -8,10 +8,12 @@
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { subscribeAsset, getAssetState } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
+import { isLibraryVisitor } from "../state/library-state.ts";
 import { getPendingChildRefs, getPendingSourceOverrides } from "../engine/cleanup.ts";
 
 const titleEl = document.getElementById("assetStatusName");
 const metaEl = document.getElementById("assetStatusMeta");
+const newBtn = document.getElementById("newAssetBtn");
 const saveBtn = document.getElementById("saveAssetBtn");
 const publishBtn = document.getElementById("publishAssetBtn");
 const downloadBtn = document.getElementById("downloadAssetBtn");
@@ -40,6 +42,8 @@ function renderChrome(): void {
     else metaEl.textContent = s.activeAssetTokenId ? "Published" : "Draft Scene";
   }
 
+  // New starts an editable draft — meaningless for anonymous/visitor views.
+  if (newBtn) newBtn.hidden = !hasWallet || isLibraryVisitor();
   if (saveBtn) saveBtn.hidden = !(hasAsset && hasWallet);
   if (publishBtn) publishBtn.hidden = !(hasAsset && hasWallet);
   // Downloads are read-only — no wallet/session required.
@@ -51,3 +55,5 @@ on(EVENTS.WALLET_CONNECTED, renderChrome);
 on(EVENTS.WALLET_DISCONNECTED, renderChrome);
 on(EVENTS.WALLET_STATE_CHANGED, renderChrome);
 on(EVENTS.SCENE_EMPTY, renderChrome);
+// Visitor mode flips with the profile subject, not the wallet.
+on(EVENTS.LIBRARY_STATE_CHANGED, renderChrome);

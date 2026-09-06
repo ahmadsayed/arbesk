@@ -54,6 +54,7 @@ export const SELECTORS = {
   assetNameDisplay: "#assetNameDisplay",
   gallerySwitcherBtn: '[data-view="library"]',
   assetLibraryBody: "#assetLibraryBody",
+  galleryVisitorBadge: "#galleryVisitorBadge",
   assetCard: ".asset-card",
   assetCardName: ".asset-card-name",
   // Outliner (scene graph tree)
@@ -140,6 +141,7 @@ export const SELECTORS = {
   libraryDetailsTitle: "#libraryDetailsTitle",
   libraryDetailsMetadata: "#libraryDetailsMetadata",
   libraryDetailsEditMetadataBtn: "#libraryDetailsEditMetadataBtn",
+  libraryVisitorBadge: "#libraryVisitorBadge",
   contextMenu: ".context-menu",
   contextMenuItem: ".context-menu-item",
 };

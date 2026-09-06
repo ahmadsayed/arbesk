@@ -4,16 +4,21 @@
  */
 
 import { walletState } from "../state/wallet-state.ts";
-import { libraryState } from "../state/library-state.ts";
+import { libraryState, isLibraryVisitor } from "../state/library-state.ts";
 import type {
   LibraryAssetItem,
   LibraryCollectionItem,
 } from "../state/library-state.ts";
-import { getActiveContract } from "../blockchain/wallet.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { deriveDefaultCollectionId } from "@arbesk/asset-core/utils/collections.js";
 import { extractThumbnailCid } from "../utils/thumbnail.ts";
-import { fetchAssetLibrary, expandTokenToAssets } from "./asset-library.ts";
+import { CHAIN_IDS, DEPLOYMENT_BLOCKS } from "../../../../constants/chains.js";
+import { getNetworkSelectKey } from "../blockchain/network-config.ts";
+import {
+  fetchAssetLibrary,
+  expandTokenToAssets,
+  getReadableContract,
+} from "./asset-library.ts";
 
 // Optimistic collections created within this window are kept even if ownerOf
 // temporarily fails or the indexer has not caught up yet (e.g. smart-wallet
@@ -24,17 +29,135 @@ function ts(): string {
   return new Date().toLocaleTimeString();
 }
 
+/**
+ * Real (production/testnet) networks: chains with a configured deployment
+ * block. Hardhat local is dev-only and never first-class.
+ */
+function realNetworks(): number[] {
+  return Object.entries(DEPLOYMENT_BLOCKS)
+    .filter(([, block]) => Number(block) > 0)
+    .map(([id]) => Number(id));
+}
+
+/**
+ * Candidate chains for a profile subject's tokens, in probe order: the real
+ * networks (indexer-backed), then the connected wallet's chain if not already
+ * covered, then Hardhat local last (dev-only).
+ */
+function subjectChainCandidates(): number[] {
+  const candidates = realNetworks();
+  const walletChain = Number(walletState.get().chainId);
+  if (
+    Number.isFinite(walletChain) &&
+    walletChain > 0 &&
+    !candidates.includes(walletChain)
+  ) {
+    candidates.push(walletChain);
+  }
+  if (!candidates.includes(CHAIN_IDS.HARDHAT_LOCAL)) {
+    candidates.push(CHAIN_IDS.HARDHAT_LOCAL);
+  }
+  return candidates;
+}
+
+/**
+ * Resolve the chain a profile subject's tokens live on by probing each
+ * candidate with an owned-token lookup (per-chain RPC failures fall through
+ * to the next candidate). When no candidate has tokens, returns the first
+ * REAL network so an empty profile renders against the production network —
+ * falling back to Hardhat local only when no real network is configured at
+ * all (pure local dev backend).
+ */
+export async function resolveSubjectChain(address: string): Promise<number> {
+  const candidates = subjectChainCandidates();
+  for (const chainId of candidates) {
+    try {
+      const { owned } = await fetchAssetLibrary(address, false, {
+        includeShared: false,
+        chainId,
+      });
+      if (owned.length > 0) {
+        console.log(`[LIBRARY] profile subject ${address} resolved to chain ${chainId}`);
+        return chainId;
+      }
+    } catch (err) {
+      console.warn(
+        `[LIBRARY] subject chain probe failed on chain ${chainId}:`,
+        (err as Error).message
+      );
+    }
+  }
+  return realNetworks()[0] ?? CHAIN_IDS.HARDHAT_LOCAL;
+}
+
+/**
+ * Sync the header network selector's DISPLAY to a chain (read-only — never
+ * switches the wallet's network). Used so a resolved profile chain is
+ * honestly reflected while browsing it.
+ */
+function syncNetworkSelectorDisplay(chainId: number | null | undefined): void {
+  if (!chainId) return;
+  const netSel = document.getElementById(
+    "headerbarNetworkSelect"
+  ) as HTMLSelectElement | null;
+  if (!netSel) return;
+  const key = getNetworkSelectKey(chainId);
+  if (key) netSel.value = key;
+}
+
 export function applyWalletGate(connected: boolean): void {
   const gate = document.getElementById("libraryGate");
   const main = document.getElementById("libraryMain");
-  if (!gate || !main) return;
-  gate.classList.toggle("hidden", connected);
-  main.classList.toggle("hidden", !connected);
+  const subject = libraryState.get().subjectAddress;
+  // Anonymous visitors with a profile subject skip the sign-in gate.
+  const showGate = !connected && !subject;
+  if (gate && main) {
+    gate.classList.toggle("hidden", !showGate);
+    main.classList.toggle("hidden", showGate);
+  }
 
+  const visitor = isLibraryVisitor();
   const createBtn = document.getElementById("libraryCreateCollectionBtn");
   const uploadBtn = document.getElementById("libraryUploadBtn");
-  if (createBtn) createBtn.hidden = !connected;
-  if (uploadBtn) uploadBtn.hidden = !connected;
+  if (createBtn) createBtn.hidden = !connected || visitor;
+  if (uploadBtn) uploadBtn.hidden = !connected || visitor;
+
+  const badge = document.getElementById("libraryVisitorBadge");
+  if (badge) {
+    badge.hidden = !visitor;
+    if (visitor && subject) {
+      badge.textContent = "Read-only · public library";
+    }
+  }
+}
+
+/**
+ * Point the library at a public profile (`/library/<base58>`), or back at the
+ * connected wallet with null. Resets the open collection, selection and
+ * loaded assets when the subject actually changes, then re-applies the
+ * gate/chrome.
+ * @returns true when the subject changed
+ */
+export function setLibrarySubject(address: string | null): boolean {
+  const prev = libraryState.get().subjectAddress;
+  const changed =
+    (prev || "").toLowerCase() !== (address || "").toLowerCase();
+  if (changed) {
+    libraryState.set({
+      subjectAddress: address,
+      subjectChainId: null,
+      collections: [],
+      currentCollectionTokenId: null,
+      selectedIds: [],
+      assets: [],
+    });
+    // Leaving a profile restores the wallet chain in the selector display.
+    if (!address) {
+      syncNetworkSelectorDisplay(Number(walletState.get().chainId) || null);
+    }
+  }
+  applyWalletGate(Boolean(walletState.get().walletAddress));
+  return changed;
 }
 
 function isNonexistentTokenError(err: any): boolean {
@@ -55,10 +178,11 @@ interface CollectionMetadata {
 }
 
 async function fetchCollectionMetadata(
-  tokenId: string
+  tokenId: string,
+  chainId?: number
 ): Promise<CollectionMetadata | null> {
   const start = performance.now();
-  const c = getActiveContract();
+  const c = await getReadableContract(chainId);
   if (!c) return null;
   try {
     const uriStart = performance.now();
@@ -96,8 +220,8 @@ async function fetchCollectionMetadata(
   }
 }
 
-async function isTokenOwnedBy(tokenId: string, address: string): Promise<boolean> {
-  const c = getActiveContract();
+async function isTokenOwnedBy(tokenId: string, address: string, chainId?: number): Promise<boolean> {
+  const c = await getReadableContract(chainId);
   if (!c || !address) return false;
   try {
     const owner = await c.read.ownerOf([BigInt(tokenId)]);
@@ -110,10 +234,11 @@ async function isTokenOwnedBy(tokenId: string, address: string): Promise<boolean
 async function buildCollectionEntries(
   tokenIds: string[],
   role: string,
-  walletAddr: string
+  walletAddr: string,
+  chainId?: number
 ): Promise<LibraryCollectionItem[]> {
   const entries = await Promise.all(
-    tokenIds.map((tokenId) => fetchCollectionMetadata(tokenId))
+    tokenIds.map((tokenId) => fetchCollectionMetadata(tokenId, chainId))
   );
   const defaultIdHex = deriveDefaultCollectionId(walletAddr);
   // tokenIds come from the contract as decimal strings; soliditySha3 returns hex.
@@ -142,6 +267,11 @@ export async function loadCurrentAssets(): Promise<void> {
     libraryState.set({ assets: [] });
     return;
   }
+  // Profile libraries read on the subject's resolved chain.
+  const readChainId =
+    state.subjectAddress && state.subjectChainId
+      ? state.subjectChainId
+      : undefined;
 
   const isStale = () =>
     String(libraryState.get().currentCollectionTokenId) !== String(tokenId);
@@ -152,7 +282,7 @@ export async function loadCurrentAssets(): Promise<void> {
       (c) => String(c.tokenId) === String(tokenId)
     );
     const role = collection?.role || "owner";
-    const entries = (await expandTokenToAssets(tokenId)).filter(
+    const entries = (await expandTokenToAssets(tokenId, readChainId)).filter(
       (e) => e.type !== "inaccessible"
     );
 
@@ -178,6 +308,33 @@ export async function loadCurrentAssets(): Promise<void> {
 
 let _refreshInFlight: Promise<void> | null = null;
 
+/**
+ * Commits a freshly fetched collection list to state, then reloads the open
+ * collection's assets (or clears them when the collection vanished).
+ */
+async function commitCollections(
+  collections: LibraryCollectionItem[],
+  currentTokenId: string | number | null,
+  start: number
+): Promise<void> {
+  const stillExists = collections.some(
+    (c) => String(c.tokenId) === String(currentTokenId)
+  );
+  libraryState.set({
+    collections,
+    currentCollectionTokenId: stillExists ? currentTokenId : null,
+    selectedIds: [],
+    isLoading: false,
+  });
+  if (currentTokenId) {
+    await loadCurrentAssets();
+  }
+  console.log(
+    `[${ts()}] [LIBRARY] refreshLibraryData done in ` +
+      `${Math.round(performance.now() - start)}ms`
+  );
+}
+
 export async function refreshLibraryData(forceIndexer: boolean = false): Promise<void> {
   if (_refreshInFlight) {
     return _refreshInFlight;
@@ -186,12 +343,33 @@ export async function refreshLibraryData(forceIndexer: boolean = false): Promise
   const run = async (): Promise<void> => {
   const start = performance.now();
   const { walletAddress } = walletState.get();
-  if (!walletAddress) return;
+  const subjectAddress = libraryState.get().subjectAddress;
+  // Public profiles load the subject's library; owner mode loads the wallet's.
+  const effectiveAddress = subjectAddress ?? walletAddress;
+  if (!effectiveAddress) return;
+  const visitor = isLibraryVisitor();
+
+  // A profile URL must find the subject's tokens regardless of the VIEWER's
+  // chain (or absence of a wallet): probe candidate chains and read on the
+  // one that has tokens. Non-profile loads keep the wallet chain.
+  let readChainId: number | undefined;
+  if (subjectAddress) {
+    const resolved = await resolveSubjectChain(subjectAddress);
+    libraryState.set({ subjectChainId: resolved });
+    readChainId = resolved;
+    syncNetworkSelectorDisplay(resolved);
+  }
 
   libraryState.set({ isLoading: true });
   try {
     const fetchStart = performance.now();
-    const { owned, shared } = await fetchAssetLibrary(walletAddress, forceIndexer);
+    // Visitors see the profile's own collections only — shared-with-them
+    // tokens are the subject's private collaboration context, not profile data.
+    const { owned, shared } = await fetchAssetLibrary(
+      effectiveAddress,
+      forceIndexer,
+      { includeShared: !visitor, chainId: readChainId }
+    );
     console.log(
       `[${ts()}] [LIBRARY] fetchAssetLibrary returned ${owned.length} owned in ` +
         `${Math.round(performance.now() - fetchStart)}ms`
@@ -199,6 +377,23 @@ export async function refreshLibraryData(forceIndexer: boolean = false): Promise
 
     const currentState = libraryState.get();
     const currentTokenId = currentState.currentCollectionTokenId;
+
+    if (visitor) {
+      const metaStart = performance.now();
+      const collections = await buildCollectionEntries(
+        owned,
+        "owner",
+        effectiveAddress,
+        readChainId
+      );
+      console.log(
+        `[${ts()}] [LIBRARY] buildCollectionEntries done in ` +
+          `${Math.round(performance.now() - metaStart)}ms (visitor)`
+      );
+      await commitCollections(collections, currentTokenId, start);
+      return;
+    }
+
     const now = Date.now();
 
     // Reuse optimistic collection metadata for freshly created collections.
@@ -239,8 +434,8 @@ export async function refreshLibraryData(forceIndexer: boolean = false): Promise
 
     const metaStart = performance.now();
     const [fetchedOwnedEntries, sharedEntries] = await Promise.all([
-      buildCollectionEntries(ownedToFetch, "owner", walletAddress),
-      buildCollectionEntries(shared, "editor", walletAddress),
+      buildCollectionEntries(ownedToFetch, "owner", effectiveAddress, readChainId),
+      buildCollectionEntries(shared, "editor", effectiveAddress, readChainId),
     ]);
     const ownedEntries = [...ownedFromOptimistic, ...fetchedOwnedEntries];
     console.log(
@@ -270,7 +465,8 @@ export async function refreshLibraryData(forceIndexer: boolean = false): Promise
           const ownStart = performance.now();
           const stillOwned = await isTokenOwnedBy(
             current.tokenId,
-            walletAddress
+            effectiveAddress,
+            readChainId
           );
           console.log(
             `[${ts()}] [LIBRARY] ownerOf ${current.tokenId} → ${stillOwned} ` +
@@ -291,26 +487,7 @@ export async function refreshLibraryData(forceIndexer: boolean = false): Promise
       )
     ).filter((c) => c !== null);
     const collections = [...fetchedCollections, ...keptMissing];
-
-    const stillExists = collections.some(
-      (c) => String(c.tokenId) === String(currentTokenId)
-    );
-
-    libraryState.set({
-      collections,
-      currentCollectionTokenId: stillExists ? currentTokenId : null,
-      selectedIds: [],
-      isLoading: false,
-    });
-
-    if (currentTokenId) {
-      await loadCurrentAssets();
-    }
-
-    console.log(
-      `[${ts()}] [LIBRARY] refreshLibraryData done in ` +
-        `${Math.round(performance.now() - start)}ms`
-    );
+    await commitCollections(collections, currentTokenId, start);
   } catch (err) {
     console.error("[LIBRARY] Failed to refresh library data", err);
     libraryState.set({ isLoading: false });

@@ -1,5 +1,6 @@
 import { createStore } from "@arbesk/asset-core/state/create-store.js";
 import { EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { walletState } from "./wallet-state.ts";
 
 /**
  * A collection card in the library grid.
@@ -49,6 +50,10 @@ interface LibraryState {
   sortBy: string;
   searchQuery: string;
   isLoading: boolean;
+  /** Wallet whose public library is shown (`/library/<base58>`), or null. */
+  subjectAddress: string | null;
+  /** Chain the subject's tokens live on (probed); null until resolved. */
+  subjectChainId: number | null;
 }
 
 const _defaults: LibraryState = {
@@ -60,7 +65,22 @@ const _defaults: LibraryState = {
   sortBy: "name",
   searchQuery: "",
   isLoading: false,
+  subjectAddress: null,
+  subjectChainId: null,
 };
 
 const { store: libraryState, _resetForTesting } = createStore(_defaults, EVENTS.LIBRARY_STATE_CHANGED);
+
+/**
+ * True when the library shows a public profile that is NOT the connected
+ * wallet (read-only visitor mode). Computed, never stored: a subject equal to
+ * the connected wallet is owner mode.
+ */
+export function isLibraryVisitor(): boolean {
+  const subject = libraryState.get().subjectAddress;
+  if (!subject) return false;
+  const wallet = walletState.get().walletAddress || "";
+  return subject.toLowerCase() !== wallet.toLowerCase();
+}
+
 export { libraryState, _resetForTesting };

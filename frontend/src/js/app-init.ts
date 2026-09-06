@@ -58,7 +58,7 @@ import {
 } from "./ui/library-controller.ts";
 
 // ── Router ──
-import { initRouter } from "./app/router.ts";
+import { initRouter, scopeUrlToSubject } from "./app/router.ts";
 
 // ─── Asset-core composition root ───
 // Install the process-wide runtime before any domain/gltf module is used.
@@ -159,6 +159,12 @@ on(EVENTS.WALLET_CONNECTED, async (e) => {
     if (key) netSel.value = key;
   }
 
+  // Bare /library or /studio becomes the wallet's public profile URL. URLs
+  // that already carry a subject (own profile, or a deliberate visitor view
+  // of someone else's) are left alone. walletAddress is the token-owning
+  // address — for CDP already the smart account.
+  scopeUrlToSubject(walletState.get().walletAddress || "");
+
   applyWalletGate(true);
   await refreshLibraryData();
 });
@@ -166,6 +172,9 @@ on(EVENTS.WALLET_CONNECTED, async (e) => {
 on(EVENTS.WALLET_DISCONNECTED, () => {
   updateHeaderWalletButton(null, false, null, null);
   applyWalletGate(false);
+  // A profile subject keeps the library in visitor mode after disconnect:
+  // the gate stays hidden and the subject's collections stay loaded.
+  if (libraryState.get().subjectAddress) return;
   libraryState.set({
     collections: [],
     assets: [],

@@ -1,4 +1,4 @@
-import { libraryState } from "../state/library-state.ts";
+import { libraryState, isLibraryVisitor } from "../state/library-state.ts";
 import type {
   LibraryAssetItem,
   LibraryCollectionItem,
@@ -63,6 +63,18 @@ function singleItemMenuItems(ids: string[]): ContextMenuItem[] {
   if (isCollection(id)) {
     const collection = getItem(id);
     if (!collection) return [];
+    // Visitors get a read-only menu — no rename/metadata/collaborator/burn.
+    if (isLibraryVisitor()) {
+      return [
+        { label: "Open", action: () => openCollection(id) },
+        {
+          label: "Open in Studio",
+          action: async () => {
+            openInStudio(collection.tokenId);
+          },
+        },
+      ];
+    }
     return [
       { label: "Open", action: () => openCollection(id) },
       {
@@ -87,6 +99,11 @@ function singleItemMenuItems(ids: string[]): ContextMenuItem[] {
       },
     ];
   }
+  if (isLibraryVisitor()) {
+    return [
+      { label: "Open in Studio", action: () => openSelectedAssetInStudio([id]) },
+    ];
+  }
   return [
     { label: "Open in Studio", action: () => openSelectedAssetInStudio([id]) },
     { label: "Send to Collection…", action: () => requestSendToCollection(id) },
@@ -100,6 +117,11 @@ function singleItemMenuItems(ids: string[]): ContextMenuItem[] {
 }
 
 function multiSelectionMenuItems(ids: string[]): ContextMenuItem[] {
+  if (isLibraryVisitor()) {
+    return [
+      { label: "Open first in Studio", action: () => openSelectedAssetInStudio(ids) },
+    ];
+  }
   return [
     { label: "Open first in Studio", action: () => openSelectedAssetInStudio(ids) },
     { label: "Delete", action: () => requestDeleteSelected(ids), danger: true },
@@ -107,6 +129,9 @@ function multiSelectionMenuItems(ids: string[]): ContextMenuItem[] {
 }
 
 function emptySpaceMenuItems(): ContextMenuItem[] {
+  if (isLibraryVisitor()) {
+    return [{ label: "Refresh", action: () => refreshLibrary() }];
+  }
   const inCollection = libraryState.get().currentCollectionTokenId !== null;
   const items = [
     { label: "Upload File…", action: () => requestUploadFile() },

@@ -29,6 +29,7 @@ async function loadModule() {
     () => ({
       expandTokenToAssets: jest.fn((...args) => _expandTokenToAssets(...args)),
       fetchAssetLibrary: jest.fn().mockResolvedValue({ owned: [], shared: [] }),
+      getReadableContract: jest.fn().mockResolvedValue(null),
       refreshAssetLibrary: jest.fn(),
     })
   );

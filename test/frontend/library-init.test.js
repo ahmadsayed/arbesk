@@ -44,12 +44,16 @@ describe("app-init.ts (Library wiring)", () => {
 describe("library-controller.ts", () => {
   const src = () => readSource("ui/library-controller.ts");
 
-  test("gates #libraryMain behind #libraryGate by toggling the hidden class", () => {
+  test("gates #libraryMain behind #libraryGate, skipping the gate for profile subjects", () => {
+    // Public profiles (/library/<base58>) bypass the sign-in gate even when
+    // no wallet is connected: the gate only shows when disconnected AND no
+    // subject is set.
+    expect(src()).toMatch(/!connected && !subject/);
     expect(src()).toMatch(
-      /gate\.classList\.toggle\(\s*["']hidden["']\s*,\s*connected\s*\)/,
+      /gate\.classList\.toggle\(\s*["']hidden["']\s*,\s*!showGate\s*\)/,
     );
     expect(src()).toMatch(
-      /main\.classList\.toggle\(\s*["']hidden["']\s*,\s*!connected\s*\)/,
+      /main\.classList\.toggle\(\s*["']hidden["']\s*,\s*showGate\s*\)/,
     );
   });
 });

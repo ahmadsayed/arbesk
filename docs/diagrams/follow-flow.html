@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arbesk Follow/Unfollow Flow — Interactive Diagram</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #5b8cff;
+    --accent-2: #39c6a5;
+    --warn: #e0a34a;
+    --local: #8a6ff0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all .15s;
+  }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+
+  .stage {
+    width: 100%;
+    max-width: 1060px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  /* ── actor lanes ─────────────────────────────── */
+  .lanes { display: grid; grid-template-columns: repeat(6, 1fr); position: relative; }
+  .actor {
+    padding: 14px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    transition: background .25s;
+  }
+  .actor .icon { font-size: 24px; line-height: 1; }
+  .actor .name { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+  .actor .role { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .actor.active { background: rgba(91,140,255,.14); }
+  .actor.active .name { color: var(--accent); }
+  .lifelines { display: grid; grid-template-columns: repeat(6, 1fr); position: absolute; top: 0; bottom: 0; width: 100%; pointer-events: none; }
+  .lifelines div { border-left: 1px dashed transparent; }
+
+  /* ── message rows ────────────────────────────── */
+  .messages { padding: 8px 0 16px; position: relative; }
+  .msg {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    align-items: center;
+    min-height: 46px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity .3s, transform .3s;
+    position: relative;
+  }
+  .msg.visible { opacity: 1; transform: none; }
+  .msg.current .label { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .msg .line { position: relative; height: 2px; background: var(--accent); grid-column: var(--span); align-self: center; opacity: .9; }
+  .msg .line.local { background: var(--local); height: 0; border-top: 2px dashed var(--local); }
+  .msg .arrow { position: absolute; right: -1px; top: -4px; width: 0; height: 0;
+    border-left: 9px solid var(--accent); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+  .msg .arrow.left { right: auto; left: -1px; border-left: none; border-right: 9px solid var(--accent); }
+  .msg .label {
+    grid-column: var(--span);
+    justify-self: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+    text-align: center;
+    max-width: 92%;
+    z-index: 1;
+    margin-top: -26px;
+    line-height: 1.35;
+  }
+  .msg .label code { color: var(--accent-2); font-size: 11px; }
+  .packet {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 8px var(--accent-2);
+    top: -4px;
+    animation: travel 1s ease-in-out;
+    z-index: 2;
+  }
+  @keyframes travel { from { left: 0; opacity: 1; } to { left: calc(100% - 10px); opacity: 1; } }
+  .packet.reverse { animation-name: travel-r; }
+  @keyframes travel-r { from { right: 0; } to { right: calc(100% - 10px); } }
+
+  /* ── explanation + controls ──────────────────── */
+  .explain {
+    border-top: 1px solid var(--border);
+    background: var(--panel-2);
+    padding: 16px 20px;
+    min-height: 96px;
+  }
+  .explain h2 { font-size: 14.5px; margin: 0 0 6px; color: var(--accent); }
+  .explain p { font-size: 13px; color: var(--text); margin: 0; line-height: 1.55; }
+  .explain .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+    padding: 2px 7px; border-radius: 4px; margin-right: 6px; vertical-align: 1px; }
+  .tag.local { background: rgba(138,111,240,.2); color: var(--local); }
+  .tag.net { background: rgba(91,140,255,.18); color: var(--accent); }
+  .tag.store { background: rgba(57,198,165,.15); color: var(--accent-2); }
+
+  .controls { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 18px; }
+  .btn {
+    padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); cursor: pointer; font-size: 13.5px;
+    transition: all .15s;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .counter { color: var(--muted); font-size: 13px; min-width: 90px; text-align: center; }
+
+  .legend { display: flex; gap: 18px; margin-top: 18px; font-size: 12px; color: var(--muted); flex-wrap: wrap; justify-content: center; }
+  .legend span::before { content: "●"; margin-right: 6px; }
+  .legend .l-local::before { color: var(--local); }
+  .legend .l-net::before { color: var(--accent); }
+  .legend .l-store::before { color: var(--accent-2); }
+</style>
+</head>
+<body>
+
+<h1>Alice follows Bob — then unfollows</h1>
+<div class="subtitle">IPFS follow-list JSON + Nostr replaceable pointer + backend follow-indexer (GC omitted on purpose)</div>
+
+<div class="tabs">
+  <button class="tab active" id="tabFollow">① Alice follows Bob</button>
+  <button class="tab" id="tabUnfollow">② Alice unfollows Bob</button>
+</div>
+
+<div class="stage">
+  <div class="lanes" id="lanes"></div>
+  <div class="messages" id="messages"></div>
+  <div class="explain">
+    <h2 id="exTitle"></h2>
+    <p id="exBody"></p>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="btnReset">⟲ Reset</button>
+  <button class="btn" id="btnPrev">← Prev</button>
+  <span class="counter" id="counter"></span>
+  <button class="btn primary" id="btnNext">Next →</button>
+  <button class="btn" id="btnPlay">▶ Play</button>
+</div>
+
+<div class="legend">
+  <span class="l-local">local step (no network — inside the browser/backend)</span>
+  <span class="l-net">network message</span>
+  <span class="l-store">stored / persisted state change</span>
+</div>
+
+<script>
+const ACTORS = [
+  { icon: "🧑‍🎨", name: "Alice's Browser", role: "wallet + Nostr key (derived)" },
+  { icon: "🛡️", name: "Backend API", role: "session auth · upload-url · WS proxy" },
+  { icon: "📡", name: "Nostr Relay", role: "signed event store (SQLite)" },
+  { icon: "🗄️", name: "IPFS", role: "content-addressed JSON (pinned)" },
+  { icon: "🔎", name: "Follow Indexer", role: "verify · maps · pin lifecycle" },
+  { icon: "🖼️", name: "Gallery", role: "plain REST consumer" },
+];
+// lane indexes: 0 browser, 1 backend, 2 relay, 3 ipfs, 4 indexer, 5 gallery
+
+const FOLLOW_STEPS = [
+  {
+    from: 0, to: 0, kind: "local", label: "Follow click → sign <code>arbesk-nostr-identity-v1</code>",
+    title: "Alice clicks “Follow Bob” — identity is recomputed locally",
+    body: "Her wallet signs the fixed text; keccak256(signature) reproduces her Nostr secret key. Nothing leaves the browser — the key is derived on demand, never stored, never sent.",
+    tag: "local", active: [0],
+  },
+  {
+    from: 0, to: 0, kind: "local", label: "Build <code>follow_list</code> JSON",
+    title: "Build the follow-list document",
+    body: "<code>{ type:\"follow_list\", owner:0xAlice, follows:[0xBob], endorsement:SIG, timestamp }</code> — the endorsement is a separate wallet signature proving “0xAlice = this Nostr pubkey”. Bob is listed by plain wallet address; no pubkey mapping needed.",
+    tag: "local", active: [0],
+  },
+  {
+    from: 0, to: 1, kind: "net", label: "POST /ipfs/upload-url <i>(session)</i>",
+    title: "Upload the JSON to IPFS via the backend",
+    body: "Session-authenticated request — the existing upload route. The backend pins the JSON and returns <code>CID₁</code>. The document is now immutable and content-addressed.",
+    tag: "net", active: [0, 1],
+  },
+  {
+    from: 1, to: 3, kind: "net", label: "pin JSON → <code>CID₁</code>", reply: true,
+    title: "JSON pinned on IPFS",
+    body: "IPFS stores the follow list; anyone with <code>CID₁</code> can fetch the exact same bytes. Content-addressing means the CID itself guarantees the content can't be swapped.",
+    tag: "store", active: [1, 3],
+  },
+  {
+    from: 0, to: 1, kind: "net", label: "WS: kind-30002 event <code>{d:\"arbesk-follows\", content:CID₁}</code>",
+    title: "Publish the Nostr pointer event (via the backend proxy)",
+    body: "Alice's browser signs a replaceable event whose whole content is <code>CID₁</code>, and sends it through the backend WS proxy — same pattern as comments: session check + rate limit before relaying.",
+    tag: "net", active: [0, 1],
+  },
+  {
+    from: 1, to: 2, kind: "net", label: "EVENT → relay verifies schnorr sig, stores",
+    title: "Relay stores the pointer — replacing any previous one",
+    body: "The relay verifies the event signature and persists it. Kind 30002 is parameterized-replaceable: per (pubkey, d-tag) only the NEWEST event survives. Alice now has exactly one live pointer: “my follow list = CID₁”.",
+    tag: "store", active: [1, 2],
+  },
+  {
+    from: 4, to: 2, kind: "net", label: "subscription: new kind-30002 event", reply: true,
+    title: "The follow-indexer notices the event",
+    body: "The indexer keeps an open subscription for these events (like the token indexer polls the chain). The relay pushes Alice's new event to it.",
+    tag: "net", active: [2, 4],
+  },
+  {
+    from: 4, to: 3, kind: "net", label: "fetch <code>CID₁</code>",
+    title: "Indexer fetches and verifies the follow list",
+    body: "Three checks: ① event schnorr sig is valid, ② <code>ecrecover(endorsement)</code> == <code>owner</code> in the JSON, ③ the event's author pubkey matches the endorsed Nostr key. Forgery would require Alice's wallet.",
+    tag: "net", active: [3, 4],
+  },
+  {
+    from: 4, to: 4, kind: "local", label: "maps: Alice→[Bob], Bob→[Alice] · pin <code>CID₁</code> · save state",
+    title: "Index updated, pin lifecycle owned by the indexer",
+    body: "The indexer updates its two maps (following / followers), ensures <code>CID₁</code> is pinned, records it as Alice's CURRENT CID in <code>.data/follow-indexer.json</code>, and persists. If Alice had a previous CID, it would now be unpinned.",
+    tag: "store", active: [4],
+  },
+  {
+    from: 5, to: 1, kind: "net", label: "GET /social/following?address=0xAlice → [0xBob]",
+    title: "The Gallery reads plain REST — no Nostr, no IPFS knowledge",
+    body: "Combined with the token indexer, “collections of people Alice follows” = following-list → owned tokens → manifests → cards. The UI never touches relays or CIDs.",
+    tag: "net", active: [5, 1],
+  },
+];
+
+const UNFOLLOW_STEPS = [
+  {
+    from: 0, to: 0, kind: "local", label: "Unfollow click → rebuild JSON with <code>follows: []</code>",
+    title: "Alice clicks “Unfollow Bob”",
+    body: "The browser rebuilds the full list minus Bob (here: empty). Same rule as always: the document is the COMPLETE list, never a delta. New content → new CID.",
+    tag: "local", active: [0],
+  },
+  {
+    from: 0, to: 1, kind: "net", label: "POST /ipfs/upload-url → <code>CID₂</code>",
+    title: "Upload the updated list",
+    body: "Same session-authenticated upload as before. <code>CID₂</code> ≠ <code>CID₁</code> because the content changed — that's content addressing doing its job.",
+    tag: "net", active: [0, 1, 3],
+  },
+  {
+    from: 0, to: 1, kind: "net", label: "WS: new kind-30002 event <code>{content:CID₂}</code>",
+    title: "Publish the new pointer",
+    body: "A fresh event, newer timestamp, same d-tag. The endorsement covers the same Nostr identity — Alice doesn't re-prove who she is beyond the event signature + JSON endorsement.",
+    tag: "net", active: [0, 1],
+  },
+  {
+    from: 1, to: 2, kind: "net", label: "relay REPLACES old event (CID₁ event discarded)",
+    title: "Replaceable semantics: the old pointer is gone",
+    body: "The relay keeps only the newest event per (Alice, \"arbesk-follows\"). There is no delete operation — publishing a newer list IS the unfollow. Anyone querying the relay now sees only <code>CID₂</code>.",
+    tag: "store", active: [1, 2],
+  },
+  {
+    from: 4, to: 2, kind: "net", label: "subscription: new event → fetch <code>CID₂</code>", reply: true,
+    title: "Indexer digests the update",
+    body: "Same verification pipeline as the follow: event sig, endorsement recovery, author match — then it reads the empty follows list.",
+    tag: "net", active: [2, 4, 3],
+  },
+  {
+    from: 4, to: 4, kind: "local", label: "maps: Alice→[], Bob→[] · pin <code>CID₂</code> · UNPIN <code>CID₁</code> · save",
+    title: "The old follow list is unpinned",
+    body: "The indexer updates both maps, pins <code>CID₂</code>, and unpins the superseded <code>CID₁</code> — the indexer owns the pin lifecycle, so a crashed browser can't leak pins. (GC, skipped here, would eventually reclaim <code>CID₁</code> anyway since only CURRENT CIDs are protected roots.)",
+    tag: "store", active: [4, 3],
+  },
+  {
+    from: 5, to: 1, kind: "net", label: "GET /social/following?address=0xAlice → []",
+    title: "Gallery sees the unfollow",
+    body: "Next read returns an empty list — Bob's collections stop appearing in Alice's “Following” view. The relay's stored events are enough to rebuild the entire index from scratch if the backend ever loses state.",
+    tag: "net", active: [5, 1],
+  },
+];
+
+const lanesEl = document.getElementById("lanes");
+const messagesEl = document.getElementById("messages");
+const exTitle = document.getElementById("exTitle");
+const exBody = document.getElementById("exBody");
+const counter = document.getElementById("counter");
+const btnPrev = document.getElementById("btnPrev");
+const btnNext = document.getElementById("btnNext");
+const btnPlay = document.getElementById("btnPlay");
+const tabFollow = document.getElementById("tabFollow");
+const tabUnfollow = document.getElementById("tabUnfollow");
+
+let steps = FOLLOW_STEPS;
+let shown = 0;      // number of steps revealed
+let playing = false;
+let playTimer = null;
+
+function spanFor(step) {
+  const a = Math.min(step.from, step.to) + 1;
+  const b = Math.max(step.from, step.to) + 1;
+  return `${a} / ${b + 1}`;
+}
+
+function buildLanes() {
+  lanesEl.innerHTML = ACTORS.map((a, i) => `
+    <div class="actor" data-i="${i}">
+      <div class="icon">${a.icon}</div>
+      <div class="name">${a.name}</div>
+      <div class="role">${a.role}</div>
+    </div>`).join("");
+}
+
+function buildMessages() {
+  messagesEl.innerHTML = "";
+  steps.forEach((s, idx) => {
+    const row = document.createElement("div");
+    row.className = "msg";
+    const reverse = s.to < s.from;
+    const local = s.from === s.to;
+    row.innerHTML = `
+      <div class="line ${local ? "local" : ""}" style="grid-column:${spanFor(s)}">
+        ${local ? "" : `<div class="arrow ${reverse ? "left" : ""}"></div>`}
+        <div class="packet ${reverse ? "reverse" : ""}" style="display:none"></div>
+      </div>
+      <div class="label" style="grid-column:${spanFor(s)}">${s.label}</div>`;
+    messagesEl.appendChild(row);
+  });
+}
+
+function render() {
+  const rows = [...messagesEl.children];
+  rows.forEach((row, i) => {
+    row.classList.toggle("visible", i < shown);
+    row.classList.toggle("current", i === shown - 1);
+    const packet = row.querySelector(".packet");
+    if (packet) packet.style.display = "none";
+  });
+  document.querySelectorAll(".actor").forEach(el => el.classList.remove("active"));
+
+  if (shown > 0) {
+    const s = steps[shown - 1];
+    const row = rows[shown - 1];
+    const packet = row.querySelector(".packet");
+    if (packet && s.from !== s.to) {
+      packet.style.display = "block";
+      packet.style.animation = "none";
+      void packet.offsetWidth;       // restart animation
+      packet.style.animation = "";
+    }
+    (s.active || [s.from, s.to]).forEach(i =>
+      document.querySelector(`.actor[data-i="${i}"]`)?.classList.add("active"));
+    const tagLabel = s.tag === "local" ? "LOCAL" : s.tag === "store" ? "STORED" : "NETWORK";
+    exTitle.innerHTML = `<span class="tag ${s.tag}">${tagLabel}</span> Step ${shown}/${steps.length} — ${s.title}`;
+    exBody.innerHTML = s.body;
+  } else {
+    exTitle.textContent = "Press Next → to walk through the flow";
+    exBody.textContent = "Each step reveals one message in the sequence. Use the tabs above to switch between the follow and unfollow phases.";
+  }
+
+  counter.textContent = `${shown} / ${steps.length}`;
+  btnPrev.disabled = shown === 0;
+  btnNext.disabled = shown === steps.length;
+}
+
+function stopPlay() {
+  playing = false;
+  clearInterval(playTimer);
+  btnPlay.textContent = "▶ Play";
+}
+
+function next() { if (shown < steps.length) { shown++; render(); } else stopPlay(); }
+function prev() { stopPlay(); if (shown > 0) { shown--; render(); } }
+function reset() { stopPlay(); shown = 0; render(); }
+
+function switchPhase(which) {
+  stopPlay();
+  steps = which === "follow" ? FOLLOW_STEPS : UNFOLLOW_STEPS;
+  tabFollow.classList.toggle("active", which === "follow");
+  tabUnfollow.classList.toggle("active", which === "unfollow");
+  shown = 0;
+  buildMessages();
+  render();
+}
+
+btnNext.onclick = next;
+btnPrev.onclick = prev;
+btnReset.onclick = reset;
+tabFollow.onclick = () => switchPhase("follow");
+tabUnfollow.onclick = () => switchPhase("unfollow");
+btnPlay.onclick = () => {
+  if (playing) { stopPlay(); return; }
+  if (shown === steps.length) shown = 0;
+  playing = true;
+  btnPlay.textContent = "⏸ Pause";
+  next();
+  playTimer = setInterval(next, 2600);
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  if (e.key === "ArrowLeft") prev();
+});
+
+buildLanes();
+buildMessages();
+render();
+</script>
+</body>
+</html>

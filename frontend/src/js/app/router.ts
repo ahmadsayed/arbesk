@@ -18,8 +18,16 @@ import {
   resumeRenderLoop,
 } from "../engine/scene-graph.ts";
 import { ensureBabylon } from "../engine/babylon-loader.ts";
-import { refreshLibraryData } from "../ui/library-controller.ts";
+import {
+  refreshLibraryData,
+  resolveSubjectChain,
+  setLibrarySubject,
+} from "../ui/library-controller.ts";
+import { refreshAssetLibrary } from "../ui/asset-library.ts";
 import { walletState } from "../state/wallet-state.ts";
+import { libraryState } from "../state/library-state.ts";
+import { parseAppPath } from "./route-parse.ts";
+import { addressToBase58 } from "../utils/base58.ts";
 
 type View = "studio" | "library";
 
@@ -30,10 +38,81 @@ let _currentView: View | null = null;
  * (plus the deep-link forms "/studio?asset=…") resolve to the editor.
  */
 export function pathToView(pathname: string): View {
-  return pathname.startsWith("/library") ? "library" : "studio";
+  return parseAppPath(pathname).view;
+}
+
+/**
+ * The profile subject for URL scoping, in priority order: the profile being
+ * viewed (opening an asset from someone's public library keeps THEIR id in
+ * the URL), then the connected wallet, then nobody (anonymous — bare paths).
+ */
+function currentUrlSubject(): string {
+  return (
+    libraryState.get().subjectAddress ||
+    walletState.get().walletAddress ||
+    ""
+  );
+}
+
+/**
+ * Scope a bare view path (/studio, /library) to a profile subject, preserving
+ * the query string: `/studio?asset=…` → `/studio/<base58>?asset=…`. Returns
+ * the input unchanged when the path already carries a subject segment, is not
+ * a bare view path, or no subject is available/encodable.
+ * @param path - path or URL to scope (query string preserved, hash dropped,
+ *   matching navigate()'s existing behavior)
+ * @param subjectAddress - explicit subject (login redirect); defaults to the
+ *   current profile/wallet subject
+ */
+export function withSubject(path: string, subjectAddress?: string): string {
+  const url = new URL(path, location.origin);
+  const segments = url.pathname.split("/").filter(Boolean);
+  const root = segments[0];
+  if (segments.length !== 1 || (root !== "studio" && root !== "library")) {
+    return path;
+  }
+  const subject = subjectAddress ?? currentUrlSubject();
+  if (!subject) return path;
+  let id: string;
+  try {
+    id = addressToBase58(subject);
+  } catch {
+    return path;
+  }
+  return `/${root}/${id}${url.search}`;
+}
+
+/**
+ * Rewrite a bare view URL (/library, /studio) to the connected wallet's
+ * public profile URL (/library/<base58>, /studio/<base58>), preserving the
+ * query string. No-op when the path already carries a subject (the user's own
+ * profile, a deliberate visitor view of someone else's profile, or an invalid
+ * segment) or is not a bare view path. Uses replaceState so the Back button
+ * never hits a redirect loop. Runs on WALLET_CONNECTED, which also fires for
+ * auto-restored sessions.
+ */
+export function scopeUrlToSubject(address: string): void {
+  if (!address) return;
+  const current = `${location.pathname}${location.search}`;
+  const scoped = withSubject(current, address);
+  if (scoped === current) return;
+  history.replaceState({ view: pathToView(location.pathname) }, "", scoped);
 }
 
 async function activateStudio(): Promise<void> {
+  // Public profile subject in the URL (/studio/<base58>): adopt it as the
+  // library subject and resolve its chain BEFORE any tokenURI reads, so cold
+  // cross-chain Studio links work and the sidebar Gallery panel can load the
+  // subject's assets (read-only) even without a wallet.
+  const { subjectAddress } = parseAppPath(location.pathname);
+  if (subjectAddress) {
+    setLibrarySubject(subjectAddress);
+    if (!libraryState.get().subjectChainId) {
+      const resolved = await resolveSubjectChain(subjectAddress);
+      libraryState.set({ subjectChainId: resolved });
+    }
+    void refreshAssetLibrary();
+  }
   // Babylon is fetched lazily (see babylon-loader.js) so Library boots and
   // the sign-in modal never wait for a 3D engine they don't use. First
   // Studio entry pays the CDN cost once; later entries are instant.
@@ -50,13 +129,19 @@ async function activateStudio(): Promise<void> {
   // tab-switch back to Studio keeps the in-memory scene intact.
   const params = new URLSearchParams(location.search);
   if (params.get("asset") || params.get("manifest")) {
-    loadFromParams();
+    await loadFromParams();
   }
 }
 
-function activateLibrary(): void {
+function activateLibrary(viewChanged: boolean): void {
   pauseRenderLoop();
-  if (walletState.get().walletAddress) {
+  // The subject always derives from the CURRENT location.pathname (history
+  // has already been updated by the time this runs), so popstate and
+  // in-library navigations to another profile stay in sync.
+  const { subjectAddress } = parseAppPath(location.pathname);
+  const subjectChanged = setLibrarySubject(subjectAddress);
+  if (!viewChanged && !subjectChanged) return;
+  if (walletState.get().walletAddress || subjectAddress) {
     refreshLibraryData();
   }
 }
@@ -69,7 +154,7 @@ export function setView(
   { updateHistory = false, href = null }: { updateHistory?: boolean; href?: string | null } = {}
 ): void {
   if (view !== "studio" && view !== "library") view = "studio";
-  if (view === _currentView) return;
+  const viewChanged = view !== _currentView;
   _currentView = view;
 
   document.getElementById("studioView")?.classList.toggle("hidden", view !== "studio");
@@ -88,16 +173,23 @@ export function setView(
     history.pushState({ view }, "", href);
   }
 
-  if (view === "studio") activateStudio();
-  else activateLibrary();
+  // Studio keeps its lifecycle cheap on repeat activations; Library must
+  // re-run even for the same view because the profile subject may have
+  // changed (/library → /library/<base58>) without a view switch.
+  if (view === "studio") {
+    if (viewChanged) activateStudio();
+  } else {
+    activateLibrary(viewChanged);
+  }
 }
 
 /**
  * Programmatic navigation (e.g. the Library → Studio "open asset" handoff).
+ * Bare view paths gain the current profile subject's base58 id.
  * @param path e.g. "/studio?asset=123&assetId=root"
  */
 export function navigate(path: string): void {
-  const url = new URL(path, location.origin);
+  const url = new URL(withSubject(path), location.origin);
   setView(pathToView(url.pathname), {
     updateHistory: true,
     href: url.pathname + url.search,
@@ -129,8 +221,10 @@ export function initRouter(): void {
     const href = link.getAttribute("href");
     if (!href) return;
     e.preventDefault();
-    const view = pathToView(new URL(href, location.origin).pathname);
-    setView(view, { updateHistory: true, href });
+    // Header Library/Studio tabs carry the profile subject too.
+    const scopedHref = withSubject(href);
+    const view = pathToView(new URL(scopedHref, location.origin).pathname);
+    setView(view, { updateHistory: true, href: scopedHref });
   });
 
   window.addEventListener("popstate", () => {

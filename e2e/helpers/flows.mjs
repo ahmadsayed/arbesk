@@ -405,7 +405,8 @@ export async function openLibraryCollection(page, name) {
 /**
  * Double-click the first matching asset card and wait for the SPA router to
  * activate the Studio view. openInStudio uses history.pushState (no full
- * reload), so we match the clean-URL route rather than a .html page.
+ * reload), so we match the clean-URL route rather than a .html page. The
+ * /studio path may carry a base58 profile segment (/studio/<id>?asset=…).
  *
  * @param {Page} page
  * @param {string} name
@@ -414,7 +415,7 @@ export async function openLibraryAssetInStudio(page, name) {
   const card = libraryAssetLocator(page, name).first();
   await expect(card).toBeVisible();
   await card.dblclick();
-  await page.waitForURL(/\/studio\?asset=/, { timeout: 10000 });
+  await page.waitForURL(/\/studio(\/[^/?]+)?\?asset=/, { timeout: 10000 });
 }
 
 /**

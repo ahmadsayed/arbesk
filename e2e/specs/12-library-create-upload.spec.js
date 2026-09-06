@@ -83,7 +83,7 @@ test.describe.serial("Library create collection and upload", () => {
 
     // The upload should be openable in Studio.
     await assetCard.dblclick();
-    await page.waitForURL(/\/studio\?asset=/, { timeout: 10000 });
+    await page.waitForURL(/\/studio(\/[^/?]+)?\?asset=/, { timeout: 10000 });
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_ASSET_NAME,
@@ -117,7 +117,7 @@ test.describe.serial("Library create collection and upload", () => {
       UPLOADED_3MF_ASSET_NAME,
     ).first();
     await assetCard.dblclick();
-    await page.waitForURL(/\/studio\?asset=/, { timeout: 10000 });
+    await page.waitForURL(/\/studio(\/[^/?]+)?\?asset=/, { timeout: 10000 });
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_3MF_ASSET_NAME,

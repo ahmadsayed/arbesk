@@ -6,12 +6,13 @@
  *   race-guarded by a request counter.
  */
 
-import { libraryState } from "../state/library-state.ts";
+import { libraryState, isLibraryVisitor } from "../state/library-state.ts";
 import type { LibraryItem } from "../state/library-state.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { loadThumbnailInto, extractThumbnailCid } from "../utils/thumbnail.ts";
+import { truncateAddress } from "../utils/format.ts";
 import { loadEditorList } from "@arbesk/asset-core/domain/editors.js";
 import { getActiveContract } from "../blockchain/wallet.ts";
 import { ensureBabylon } from "../engine/babylon-loader.ts";
@@ -56,11 +57,6 @@ function disposePreview(): void {
   if (handle) void handle.dispose();
 }
 
-function truncateAddress(addr: string): string {
-  if (!addr || addr.length <= 10) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
 /**
  * Returns the display string for a token owner: the CDP email for the
  * connected smart account, otherwise the truncated address.
@@ -99,7 +95,18 @@ async function resolveOwner(tokenId: string): Promise<string | null> {
   const key = String(tokenId);
   const cached = _ownerCache.get(key);
   if (cached !== undefined) return cached;
-  const c = getActiveContract();
+  let c = getActiveContract();
+  if (!c) {
+    // Anonymous visitor (public profile): fall back to a read-only contract.
+    // Lazy import keeps the heavy asset-library graph out of this module's
+    // load path (and out of its unit tests).
+    try {
+      const { getReadableContract } = await import("./asset-library.ts");
+      c = await getReadableContract();
+    } catch {
+      c = null;
+    }
+  }
   if (!c) return null;
   try {
     const owner = await c.read.ownerOf([BigInt(key)]);
@@ -402,7 +409,7 @@ function renderMetadata(manifest: any, isCollection: boolean): void {
         : keys.map((k) => k + ": " + JSON.stringify(annotations[k])).join(" · ");
   }
   const editBtn = el("libraryDetailsEditMetadataBtn");
-  if (editBtn) editBtn.hidden = !isCollection;
+  if (editBtn) editBtn.hidden = !isCollection || isLibraryVisitor();
 }
 
 function renderCollectionDetails(

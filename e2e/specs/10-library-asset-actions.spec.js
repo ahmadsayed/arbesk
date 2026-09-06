@@ -98,7 +98,7 @@ test.describe.serial("Library asset actions", () => {
       .locator(`${SELECTORS.contextMenuItem}:text-is("Open in Studio")`)
       .click();
 
-    await page.waitForURL(/\/studio\?asset=.*&assetId=/, {
+    await page.waitForURL(/\/studio(\/[^/?]+)?\?asset=.*&assetId=/, {
       timeout: 10000,
     });
     await ensureStudioConnected(page);
