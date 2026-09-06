@@ -44,6 +44,18 @@ if [ "${PRINT_PROJECT:-}" = "true" ]; then
   exit 0
 fi
 
+# ─── Bun on PATH ─────────────────────────────────────────────────────────────
+# The Bun installer adds ~/.bun/bin to ~/.bash_profile, but non-login shells
+# (cron, some terminals, IDEs) never source it. Fall back to the default
+# install location so the script works everywhere.
+if ! command -v bun >/dev/null 2>&1; then
+  export PATH="$HOME/.bun/bin:$PATH"
+fi
+if ! command -v bun >/dev/null 2>&1; then
+  echo "❌ bun not found. Install Bun ≥1.4: curl -fsSL https://bun.sh/install | bash"
+  exit 1
+fi
+
 # ─── Load .env (source of truth for both modes) ───────────────────────────────
 if [ -f ".env" ]; then
   set -a; source .env; set +a
