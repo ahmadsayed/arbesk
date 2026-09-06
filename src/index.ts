@@ -3,25 +3,23 @@ import type { Response } from "express";
 import path from "path";
 import http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
-import url from "url";
 import morgan from "morgan";
 import type { TokenIndexer } from "morgan";
 import helmet from "helmet";
 import compression from "compression";
-
-const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
+import { PROJECT_ROOT } from "./api/project-root.ts";
 
 // Load .env files BEFORE any module that reads process.env (config.ts).
 // process.loadEnvFile is the Node 20.12+ built-in (also supported by Bun);
 // missing files are fine — Bun also auto-loads the root .env, which is
 // idempotent with the explicit load here.
 try {
-  process.loadEnvFile(path.resolve(__dirnameRoot, "../.env"));
+  process.loadEnvFile(path.resolve(PROJECT_ROOT, ".env"));
 } catch {
   // missing .env is fine — Bun also auto-loads the root .env
 }
 try {
-  process.loadEnvFile(path.resolve(__dirnameRoot, "../blockchain/.env"));
+  process.loadEnvFile(path.resolve(PROJECT_ROOT, "blockchain/.env"));
 } catch {
   // blockchain/.env is optional outside the contracts workflow
 }
@@ -42,7 +40,7 @@ const core = createBackendCore(storage);
 export const app = express();
 const port = process.env.PORT || 9090;
 export const server = http.createServer(app);
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const staticRoot = path.resolve(PROJECT_ROOT, "frontend/dist");
 
 /* ─── Verbose request logger ─── */
 app.use(
@@ -144,7 +142,7 @@ app.use(
 );
 
 app.use(
-  express.static(__dirname + "/../frontend/dist", {
+  express.static(staticRoot, {
     setHeaders: (res: Response, filePath: string) => {
       // Workers and their pool must never be cached: a stale worker script
       // that predates a method registration (e.g. "ping") causes the pool to
@@ -180,7 +178,7 @@ app.use("/api", api({ storage, core }));
 // (/library/<base58>, /studio/<base58>). Kept narrow so static assets and
 // /api are untouched. Query strings pass through untouched.
 app.get(/^\/(studio|library)(\/.*)?$/, (_req, res) => {
-  res.sendFile(path.join(__dirname, "/../frontend/dist/app.html"));
+  res.sendFile(path.join(staticRoot, "app.html"));
 });
 
 // Attach WebSocket chat proxy to the same HTTP server

@@ -7,7 +7,6 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
-import url from "url";
 import type { Request, Response } from "express";
 import type { CdpClient } from "@coinbase/cdp-sdk";
 import type { Authz } from "@arbesk/authz";
@@ -20,6 +19,7 @@ import { walletRelayRateLimit } from "../rate-limiter.ts";
 import { getCdpClient, findEndUserByAddress } from "../cdp.ts";
 import { createCdpServerSigner } from "../cdp-signer.ts";
 import { buildAssetUpdateEvent, createRelay } from "../nostr-relay.ts";
+import { PROJECT_ROOT } from "../project-root.ts";
 
 // sessions.ts / authz.ts / config.ts are lazy-loaded inside the handler — they
 // sit in a dense static-import graph (identity → config → viem/web3) that breaks
@@ -27,10 +27,9 @@ import { buildAssetUpdateEvent, createRelay } from "../nostr-relay.ts";
 
 const Router = express.Router;
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const ABI_PATH = path.resolve(
-  __dirname,
-  "../../../blockchain/artifacts/contracts/ArbeskAssetFree.sol/ArbeskAssetFree.json",
+  PROJECT_ROOT,
+  "blockchain/artifacts/contracts/ArbeskAssetFree.sol/ArbeskAssetFree.json",
 );
 const CONTRACT_ABI: Abi = JSON.parse(fs.readFileSync(ABI_PATH, "utf8")).abi;
 

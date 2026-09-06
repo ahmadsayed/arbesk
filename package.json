@@ -30,6 +30,8 @@
     "build:frontend": "cd frontend && npm run build",
     "start": "bun src/index.ts",
     "nodemon": "npm run build:frontend && bun --watch src/index.ts",
+    "build:server": "bun scripts/build-server.mjs",
+    "start:prod": "./scripts/start-prod.sh",
     "dev": "./scripts/start-dev.sh",
     "dev:testnet": "./scripts/start-dev.sh --testnet",
     "test:api": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest test/api.test.js --runInBand --silent",

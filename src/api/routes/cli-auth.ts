@@ -6,12 +6,14 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
-import url from "url";
 import type { Request, Response } from "express";
+import { PROJECT_ROOT } from "../project-root.ts";
 
 const Router = express.Router;
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const HTML = fs.readFileSync(path.resolve(__dirname, "../cli-auth.html"), "utf8");
+const HTML = fs.readFileSync(
+  path.resolve(PROJECT_ROOT, "src/api/cli-auth.html"),
+  "utf8",
+);
 
 export default function cliAuthRoutes() {
   const router = Router();

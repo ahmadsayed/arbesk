@@ -7,13 +7,11 @@
 
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { getPublicClient, getContractAddress } from "../config.ts";
+import { PROJECT_ROOT } from "./project-root.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 import { walkManifestChain } from "./manifest-chain-walker.ts";
 import type { Abi, PublicClient } from "viem";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ZERO_ADDRESS: `0x${string}` =
   "0x0000000000000000000000000000000000000000";
@@ -34,8 +32,8 @@ const TRANSFER_EVENT_ABI_ITEM = {
 
 function loadAbi(name: string): any[] {
   const abiPath = path.resolve(
-    __dirname,
-    `../../blockchain/artifacts/contracts/${name}.sol/${name}.json`,
+    PROJECT_ROOT,
+    `blockchain/artifacts/contracts/${name}.sol/${name}.json`,
   );
   if (!fs.existsSync(abiPath)) {
     throw new Error(`ABI not found: ${abiPath}`);

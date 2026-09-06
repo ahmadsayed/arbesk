@@ -56,6 +56,14 @@ bun install && (cd frontend && bun install)   # + (cd blockchain && npm install)
 bun run build:frontend                 # Pug→HTML, SCSS→CSS, JS copy + swc TS emit (no Webpack/Vite)
 bun start                              # backend :9090 (runs under Bun);  bun run nodemon = auto-rebuild
 
+# Production (Bun runtime)
+bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode)
+bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
+# start-prod.sh refuses MOCK_3D_GENERATION=true and requires CONTRACT_ADDRESS; runtime file
+# reads resolve from the project root (cwd or ARBESK_ROOT) — never from import.meta.url
+# (compiled binaries have a virtual module URL). Add new runtime file reads via PROJECT_ROOT
+# (src/api/project-root.ts).
+
 # Testing
 npm test                               # Jest unit (excludes Hardhat & E2E)
 npm run test:all                       # lint → typecheck → frontend → api → contracts

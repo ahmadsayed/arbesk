@@ -1,14 +1,13 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import type { PublicClient } from "viem";
 import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
 import { getPublicClient, getContractAddress, NETWORK_CONFIGS } from "../config.ts";
 import { maybeDecompress } from "./ipfs-utils.ts";
+import { PROJECT_ROOT } from "./project-root.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, "../../.data");
+const DATA_DIR = path.resolve(PROJECT_ROOT, ".data");
 
 function ts(): string {
   return new Date().toLocaleTimeString();
