@@ -120,7 +120,7 @@ EOF
 
   # ── Sync deployed addresses to all config files ───────────────────────────
   echo "📜 Syncing deployed addresses..."
-  node scripts/sync-deployed-addresses.mjs
+  bun scripts/sync-deployed-addresses.mjs
   # Re-source .env so banner + backend see the fresh addresses.
   set -a; source .env; set +a
   echo ""
@@ -180,16 +180,19 @@ for dir in . frontend blockchain; do
   label="${dir#.}"; label="${label#/}"; [ -z "$label" ] && label="root"
   if [ -d "${dir}/node_modules" ]; then
     echo "✅ ${label} node_modules found"
-  else
-    echo "📦 Installing ${label} dependencies..."
+  elif [ "$dir" = "blockchain" ]; then
+    echo "📦 Installing ${label} dependencies (npm — Hardhat toolchain)..."
     (cd "${dir}" && npm install)
+  else
+    echo "📦 Installing ${label} dependencies (bun)..."
+    (cd "${dir}" && bun install)
   fi
 done
 echo ""
 
 # ── Build frontend ────────────────────────────────────────────────────────────
 echo "🔨 Building frontend..."
-(cd frontend && npm run build)
+(cd frontend && bun run build)
 echo ""
 
 # ── Ready banner ──────────────────────────────────────────────────────────────
