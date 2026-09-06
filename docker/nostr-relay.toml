@@ -1,5 +1,7 @@
 # Local development Nostr relay configuration (nostr-rs-relay)
-# Bound to loopback via docker-compose port mapping: 127.0.0.1:7777
+# Published via docker-compose port mapping (NOSTR_HOST_PORT, default 7777);
+# intentionally reachable on all interfaces for the live-update feature
+# (commit f886214) — set NOSTR_HOST_PORT=127.0.0.1:7777 to re-bind to loopback.
 
 [info]
 relay_url = "ws://127.0.0.1:7777"

@@ -37,7 +37,7 @@ beforeEach(() => {
 
 test("indexes editor-shared tokens from EditorSetChanged events", async () => {
   const { getIndexer } = await loadModule();
-  const indexer = getIndexer(TEST_CHAIN, { cat: _cat });
+  const indexer = getIndexer(TEST_CHAIN, { catBytes: _cat });
   indexer._saveState = () => {};
 
   const owner = "0x0000000000000000000000000000000000000AAA".toLowerCase();
@@ -78,7 +78,7 @@ test("indexes editor-shared tokens from EditorSetChanged events", async () => {
 
 test("removes shared token when it is burned (transferred to zero)", async () => {
   const { getIndexer } = await loadModule();
-  const indexer = getIndexer(TEST_CHAIN, { cat: _cat });
+  const indexer = getIndexer(TEST_CHAIN, { catBytes: _cat });
   indexer._saveState = () => {};
 
   const editor = "0x0000000000000000000000000000000000000BBB".toLowerCase();

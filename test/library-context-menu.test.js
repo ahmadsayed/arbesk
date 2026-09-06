@@ -78,7 +78,7 @@ describe("openContextMenu / closeContextMenu", () => {
     ]);
   });
 
-  test("a single selected collection shows Open, Open in Studio, Rename, Manage Collaborators, Burn Collection", () => {
+  test("a single selected collection shows Open, Open in Studio, Rename, Edit metadata, Manage Collaborators, Burn Collection", () => {
     openContextMenu(0, 0, ["collection-1"]);
     const labels = [...document.querySelectorAll(".context-menu-item")].map(
       (el) => el.textContent.trim(),
@@ -87,6 +87,7 @@ describe("openContextMenu / closeContextMenu", () => {
       "Open",
       "Open in Studio",
       "Rename",
+      "Edit metadata…",
       "Manage Collaborators",
       "Burn Collection",
     ]);
