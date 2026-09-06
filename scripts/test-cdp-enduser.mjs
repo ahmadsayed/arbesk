@@ -9,7 +9,9 @@
  *   node scripts/test-cdp-enduser.mjs alice@x.com     # look up one email
  *   node scripts/test-cdp-enduser.mjs alice@x.com --create  # pre-generate if missing
  */
-import "dotenv/config";
+try {
+  process.loadEnvFile();
+} catch {}
 import { CdpClient } from "@coinbase/cdp-sdk";
 
 const email = process.argv[2]?.toLowerCase();

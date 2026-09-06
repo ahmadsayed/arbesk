@@ -28,8 +28,9 @@
     "postcss": "8.4.12",
     "prettier": "2.6.0",
     "pug": "3.0.2",
-    "sass": "1.49.9",
-    "shelljs": "0.8.5",
-    "upath": "2.0.1"
-  }
+    "sass": "1.49.9"
+  },
+  "trustedDependencies": [
+    "@swc/core"
+  ]
 }

@@ -4,7 +4,6 @@ import path from "path";
 import http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
 import url from "url";
-import * as dotenv from "dotenv";
 import morgan from "morgan";
 import type { TokenIndexer } from "morgan";
 import helmet from "helmet";
@@ -12,9 +11,20 @@ import compression from "compression";
 
 const __dirnameRoot = path.dirname(url.fileURLToPath(import.meta.url));
 
-// Load .env files BEFORE any module that reads process.env (config.ts)
-dotenv.config({ path: path.resolve(__dirnameRoot, "../.env") });
-dotenv.config({ path: path.resolve(__dirnameRoot, "../blockchain/.env") });
+// Load .env files BEFORE any module that reads process.env (config.ts).
+// process.loadEnvFile is the Node 20.12+ built-in (also supported by Bun);
+// missing files are fine — Bun also auto-loads the root .env, which is
+// idempotent with the explicit load here.
+try {
+  process.loadEnvFile(path.resolve(__dirnameRoot, "../.env"));
+} catch {
+  // missing .env is fine — Bun also auto-loads the root .env
+}
+try {
+  process.loadEnvFile(path.resolve(__dirnameRoot, "../blockchain/.env"));
+} catch {
+  // blockchain/.env is optional outside the contracts workflow
+}
 
 // Now safe to import - config.ts reads from process.env which is populated
 const { default: api } = await import("./api/index.ts");
