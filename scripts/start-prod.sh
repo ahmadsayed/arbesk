@@ -120,7 +120,8 @@ if [ "$SKIP_BUILD" = "false" ]; then
   bun run build:packages
 
   echo "🔨 Building frontend..."
-  (cd frontend && bun run build)
+  # Strips the dev-only browser console bridge from the HTML (head.pug).
+  (cd frontend && ARBESK_PRODUCTION_BUILD=1 bun run build)
 
   echo "📦 Compiling backend binary (bytecode, minified, NODE_ENV=production)..."
   bun run build:server

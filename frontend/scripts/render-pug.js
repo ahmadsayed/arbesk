@@ -12,7 +12,10 @@ module.exports = function renderPug(filePath) {
     const html = pug.renderFile(filePath, {
         doctype: 'html',
         filename: filePath,
-        basedir: srcPath
+        basedir: srcPath,
+        // Production builds (start-prod.sh sets ARBESK_PRODUCTION_BUILD=1) strip
+        // the dev-only browser console bridge from head.pug entirely.
+        devConsole: process.env.ARBESK_PRODUCTION_BUILD !== '1'
     });
 
     fs.mkdirSync(path.dirname(destPath), { recursive: true });

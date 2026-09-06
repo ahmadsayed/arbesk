@@ -5,80 +5,83 @@ meta(name="viewport", content="width=device-width, initial-scale=1")
 link(rel="icon", type="image/webp", href="/logo.webp")
 link(rel="apple-touch-icon", href="/apple-touch-icon.webp")
 link(rel="stylesheet", href="/css/styles.css")
-//- Browser console bridge (dev): forward console.* / window errors to
-//- POST /api/v1/dev/console, which the backend echoes to stdout as [BROWSER].
-script.
-  (function () {
-    var ENDPOINT = '/api/v1/dev/console';
-    var MAX_QUEUE = 500;
-    var MAX_TEXT = 2000;
-    var queue = [];
-    var timer = null;
-    // The bridge route only exists when the backend runs outside production
-    // (src/api/index.ts gates it on NODE_ENV). A 404 means production: disable
-    // permanently so the browser stops logging resource errors per flush.
-    var disabled = false;
-    try { disabled = sessionStorage.getItem('arbesk-devconsole-off') === '1'; } catch (e) {}
+//- Browser console bridge (dev only — stripped from production builds when
+//- render-pug runs with ARBESK_PRODUCTION_BUILD=1): forward console.* /
+//- window errors to POST /api/v1/dev/console, which the backend echoes to
+//- stdout as [BROWSER]. The backend route only exists outside production.
+if devConsole
+  script.
+    (function () {
+      var ENDPOINT = '/api/v1/dev/console';
+      var MAX_QUEUE = 500;
+      var MAX_TEXT = 2000;
+      var queue = [];
+      var timer = null;
+      // The bridge route only exists when the backend runs outside production
+      // (src/api/index.ts gates it on NODE_ENV). A 404 means production: disable
+      // permanently so the browser stops logging resource errors per flush.
+      var disabled = false;
+      try { disabled = sessionStorage.getItem('arbesk-devconsole-off') === '1'; } catch (e) {}
 
-    function safeString(v) {
-      if (v instanceof Error) return v.stack || (v.name + ': ' + v.message);
-      if (typeof v === 'string') return v;
-      if (typeof v === 'undefined') return 'undefined';
-      if (typeof v === 'function') return '[Function ' + (v.name || 'anonymous') + ']';
-      if (typeof v === 'symbol') return v.toString();
-      if (typeof v === 'bigint') return v.toString() + 'n';
-      try { return JSON.stringify(v); } catch (e) { return String(v); }
-    }
+      function safeString(v) {
+        if (v instanceof Error) return v.stack || (v.name + ': ' + v.message);
+        if (typeof v === 'string') return v;
+        if (typeof v === 'undefined') return 'undefined';
+        if (typeof v === 'function') return '[Function ' + (v.name || 'anonymous') + ']';
+        if (typeof v === 'symbol') return v.toString();
+        if (typeof v === 'bigint') return v.toString() + 'n';
+        try { return JSON.stringify(v); } catch (e) { return String(v); }
+      }
 
-    function flush() {
-      if (disabled || !queue.length) return;
-      var batch = queue.splice(0, queue.length);
-      try {
-        fetch(ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entries: batch }),
-          keepalive: true
-        }).then(function (res) {
-          if (res.status === 404) {
-            disabled = true;
-            try { sessionStorage.setItem('arbesk-devconsole-off', '1'); } catch (e) {}
-          }
-        }).catch(function () {});
-      } catch (e) {}
-    }
+      function flush() {
+        if (disabled || !queue.length) return;
+        var batch = queue.splice(0, queue.length);
+        try {
+          fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entries: batch }),
+            keepalive: true
+          }).then(function (res) {
+            if (res.status === 404) {
+              disabled = true;
+              try { sessionStorage.setItem('arbesk-devconsole-off', '1'); } catch (e) {}
+            }
+          }).catch(function () {});
+        } catch (e) {}
+      }
 
-    function send(level, text) {
-      if (typeof text !== 'string') text = String(text);
-      text = text.slice(0, MAX_TEXT);
-      if (queue.length >= MAX_QUEUE) queue.shift();
-      queue.push({ level: level, text: text, ts: Date.now() });
-      if (timer) return;
-      timer = setTimeout(function () { timer = null; flush(); }, 250);
-    }
+      function send(level, text) {
+        if (typeof text !== 'string') text = String(text);
+        text = text.slice(0, MAX_TEXT);
+        if (queue.length >= MAX_QUEUE) queue.shift();
+        queue.push({ level: level, text: text, ts: Date.now() });
+        if (timer) return;
+        timer = setTimeout(function () { timer = null; flush(); }, 250);
+      }
 
-    var levels = ['log', 'info', 'warn', 'error', 'debug'];
-    for (var i = 0; i < levels.length; i++) {
-      (function (level) {
-        var orig = console[level] ? console[level].bind(console) : null;
-        console[level] = function () {
-          if (orig) { try { orig.apply(null, arguments); } catch (e) {} }
-          var parts = [];
-          for (var j = 0; j < arguments.length; j++) parts.push(safeString(arguments[j]));
-          send(level, parts.join(' '));
-        };
-      })(levels[i]);
-    }
+      var levels = ['log', 'info', 'warn', 'error', 'debug'];
+      for (var i = 0; i < levels.length; i++) {
+        (function (level) {
+          var orig = console[level] ? console[level].bind(console) : null;
+          console[level] = function () {
+            if (orig) { try { orig.apply(null, arguments); } catch (e) {} }
+            var parts = [];
+            for (var j = 0; j < arguments.length; j++) parts.push(safeString(arguments[j]));
+            send(level, parts.join(' '));
+          };
+        })(levels[i]);
+      }
 
-    window.addEventListener('error', function (ev) {
-      var loc = ev.filename ? (' @ ' + ev.filename + ':' + ev.lineno + ':' + ev.colno) : '';
-      send('error', (ev.message || 'window error') + loc);
-    });
-    window.addEventListener('unhandledrejection', function (ev) {
-      send('error', 'unhandledrejection: ' + safeString(ev.reason));
-    });
-    window.addEventListener('pagehide', flush);
-  })();
+      window.addEventListener('error', function (ev) {
+        var loc = ev.filename ? (' @ ' + ev.filename + ':' + ev.lineno + ':' + ev.colno) : '';
+        send('error', (ev.message || 'window error') + loc);
+      });
+      window.addEventListener('unhandledrejection', function (ev) {
+        send('error', 'unhandledrejection: ' + safeString(ev.reason));
+      });
+      window.addEventListener('pagehide', flush);
+    })();
 script(src="/js/engine/theme-init.js")
 script(src="/js/app/initial-view.js")
 //- All classic CDN scripts are deferred: our own code is type="module"
