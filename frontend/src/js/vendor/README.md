@@ -42,7 +42,7 @@ Workers cannot use import maps and need a relative ESM path.
 
 ```bash
 cd frontend
-npm install workerpool@<version>
+bun add workerpool@<version>
 cp node_modules/workerpool/dist/workerpool.js src/js/vendor/workerpool-<version>.js
 ```
 

@@ -117,7 +117,7 @@ Parametric edits, manifest saves, manifest chain reads, ABI reads, and token man
 
 ### `GET /api/v1/config`
 
-Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, WalletConnect project ID, and the CDP Project ID used by the browser to initialise email-login wallets.
+Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, WalletConnect project ID, the CDP Project ID used by the browser to initialise email-login wallets, and `defaultChainId` — the deployment's default chain (`DEFAULT_CHAIN_ID` env, falls back to Hardhat local), which anonymous chain reads use.
 
 **Response**
 
@@ -145,7 +145,8 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
   "hardhatRpcUrl": "http://127.0.0.1:8545",
   "mockGeneration": true,
   "walletConnectProjectId": null,
-  "cdpProjectId": null
+  "cdpProjectId": null,
+  "defaultChainId": 31415822
 }
 ```
 

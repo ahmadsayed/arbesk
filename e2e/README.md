@@ -25,7 +25,7 @@ The global setup (`e2e/global-setup.mjs`) orchestrates the test infrastructure d
 
 The global teardown (`e2e/global-teardown.mjs`) stops all backends and brings every worker's Docker stack down.
 
-No manual `node src/index.ts` is required.
+No manual `bun src/index.ts` is required.
 
 ### Parallel workers
 
@@ -303,6 +303,114 @@ Validates the 3MF format path end to end:
 
 **Why it matters:** The only E2E coverage of the 3MF format path end to end — mock keyword routing, decompose-on-save into composite 3MF, and the composite → compose → render round-trip after a chain reload. A regression in the 3mf handler, the composer/decomposer, or the mock routing shows up here first.
 
+### 17. Undo/redo (`e2e/specs/17-undo-redo.spec.js`)
+
+Validates the undo/redo stack for parametric edits:
+
+1. Generates `cowboy` and selects the node in the **Outliner** to open the inspector.
+2. Expands the collapsed **Scale** section and asserts undo/redo start disabled.
+3. Commits a scale edit through the inspector field — undo enables.
+4. Blurs the field (the shortcut is intentionally blocked while a text input is focused) and presses `Ctrl+Z` — the original scale is restored and redo enables.
+5. Clicks the toolbar **Redo** button — the edit is re-applied.
+
+**Why it matters:** This is the only E2E coverage of the undo/redo history: the inspector field commit path, the keyboard shortcut (and its text-input guard), and the toolbar button state machine. Changes to the history store, inspector scale section, or shortcut handling can break it.
+
+### 18. Chat provenance (`e2e/specs/18-chat-provenance.spec.js`)
+
+Validates that AI prompts are recorded as version-scoped provenance in the manifest chain:
+
+1. Generates two assets, each auto-saved by **Show in Studio** (the "Saved" pill is the durable signal the auto-save and URL flip completed).
+2. Asserts each saved version's `metadata.chat` records exactly the prompt accepted since the previous save, with `provider: "mock"`, `task: "model"`, and a numeric timestamp.
+3. Asserts the chain-root generation manifest carries **no** chat records — provenance is anchored by saves.
+4. Asserts the chat history renders live after each save (header + prompts + divider) and again after a cold reload, where boot's `loadFromParams()` walks the chain to reconstruct the conversation.
+
+**Why it matters:** `metadata.chat` is the on-IPFS record of the AI conversation that produced an asset. Changes to the auto-save path, the provenance writer, or the chain-walk history renderer can break it.
+
+### 19. Animation preview (`e2e/specs/19-animation-preview.spec.js`)
+
+Validates the inspector **Animations** section for models that embed glTF animations:
+
+1. Uploads an animated GLB fixture (`e2e/fixtures/animated-triangle.glb`) into a new library collection and opens it in Studio.
+2. Selects the node in the **Outliner** and asserts the **Animations** section is visible.
+3. Asserts the clip dropdown lists `["None", "spin"]`, selecting the clip updates the value, and selecting **None** resets it.
+
+**Why it matters:** The only E2E coverage of the animations inspector (playback wiring itself is unit-tested in `test/frontend/animation-preview.test.js`). Changes to animation detection on load, the inspector section, or the dropdown wiring can break it.
+
+### 20. New asset name (`e2e/specs/20-new-asset-name.spec.js`)
+
+Validates that the **+ New** flow shows the typed name in the header:
+
+1. Clicks **+ New**, types `My Test Asset` in the dialog, and confirms.
+2. Asserts the header asset name shows `My Test Asset`.
+
+**Why it matters:** Regression coverage for a real bug — `startNewAsset` emitted `SCENE_EMPTY` after writing the title, and the `SCENE_EMPTY` listener reset the header to "No asset open". Changes to the new-asset flow or the scene-empty event wiring can reintroduce it.
+
+### 21. Computed asset metadata (`e2e/specs/21-metadata-computed.spec.js`)
+
+Validates that saving bakes deterministic computed facts into the manifest:
+
+1. Generates `cowboy` and clicks **Show in Studio** (auto-saves the draft and bakes metadata).
+2. Asserts the saved manifest carries `metadata.computed` with `format: "gltf"` for the glTF root.
+3. Reloads the page and asserts boot re-reads `?manifest=` with the same CID — the metadata survives a cold reopen.
+
+**Why it matters:** `metadata.computed` gives consumers (like the public profile and tooling) deterministic facts about an asset without parsing its payloads. Changes to the metadata baking on save or the boot reload path can break it.
+
+### 22. Live scene update (`e2e/specs/22-live-scene-update.spec.js`)
+
+Validates that republishing a live-referenced child reloads it inside an open parent scene:
+
+1. Publishes a child, then builds a parent with a **live reference** to it and saves.
+2. Subscribes to the live-update bus events (`ASSET_URI_CHANGED`, `ASSET_URI_UPDATED`).
+3. Dives into the child, edits a node colour, and republishes (same token, new version).
+4. Asserts the live-update path fires: the local publish event, then the reload trigger.
+
+**Why it matters:** Live references are supposed to track future edits — this spec pins the same-window reload trigger. Changes to the publish event emission, the live-update bus, or the dive-republish path can break it.
+
+### 23. Cross-window live update (`e2e/specs/23-cross-window-live-update.spec.js`)
+
+Validates live updates across two browser windows via the Nostr relay (kind 20001):
+
+1. Window A publishes a child, then a parent with a live-ref to it.
+2. Window B opens the parent via the Library and renders the `child_ref` node.
+3. Window A dives into the child, edits, and republishes.
+4. Asserts the relay saw the kind-20001 notice (publish-side), window B fired the reload trigger for the child's token (subscribe-side), and B re-fetched the child's **new** manifest CID (content). The test subscribes to the relay from the test process so a failure splits cleanly into publish-side vs subscribe-side.
+
+**Why it matters:** This is the only multi-window coverage of the relay-based live-update flow, and it pins the dive-republish assetID (a republish written under the parent's assetID leaves the `child_ref` pointing at the old CID). Changes to the relay notice publishing, the subscription handler, or the token-id normalization can break it. Uses a raised per-test timeout (`test.setTimeout`) like specs 13/14/24.
+
+### 24. Nested live update (`e2e/specs/24-nested-live-update.spec.js`)
+
+Validates cross-window live updates through three levels of nesting:
+
+1. Publishes a grandchild GC into its **own** named collection (distinct token), then builds child C with a live-ref to GC, then parent P with a live-ref to C.
+2. Window B opens P from the Library and loads the nested GC node (signaled by B fetching GC's manifest over IPFS).
+3. Window A opens GC from its own collection (publish targets the active collection — diving keeps Default active), edits, and republishes.
+4. Asserts the relay notice carries GC's token as a canonical decimal tag, window B fires the reload trigger for GC's token with `source: "remote"`, and B re-resolves GC's new manifest CID.
+
+**Why it matters:** Only the nested anchor in the open scene can match GC's update notice — this spec pins deep-nesting live resolution and the active-collection publish targeting rule. Changes to nested node resolution, relay tag formatting, or the publish collection selection can break it. Uses a raised per-test timeout (`test.setTimeout`) like specs 13/14/23.
+
+### 25. Public profile (`e2e/specs/25-public-profile.spec.js`)
+
+Validates anonymous, read-only access to a wallet's public profile (the profile id is the base58 encoding of the EVM address; the subject's default collection is seeded in `beforeAll`):
+
+1. An anonymous visitor browses `/library/<base58>` with no sign-in gate — the subject's collections render, create/upload buttons are hidden, and a visitor badge identifies the profile.
+2. Bare `/library` without a wallet still shows the sign-in gate.
+3. Connecting a wallet rewrites a bare `/library` URL (via `replaceState`) to the wallet's public profile URL, with owner chrome instead of visitor chrome.
+4. Opening an asset from the library scopes the Studio URL to `/studio/<base58>?asset=…&assetId=…`.
+5. An anonymous page (no injected wallet, no session) opens a published asset in Studio read-only — the tokenURI read and manifest load work without a wallet, and save/publish stay hidden.
+6. The anonymous studio profile loads the sidebar gallery (visitor badge, no sign-in prompt, no **New** button), and clicking a card opens the asset in the viewport.
+
+**Why it matters:** Public profiles are the platform's anonymous sharing surface. Changes to the profile URL routing, visitor-mode chrome, the read-only save/publish gating, or the base58 id format can break it.
+
+### Chat version restore (`e2e/specs/chat-version-restore.spec.js`)
+
+Validates that a version-card bubble's **Show in Studio** button stays a live restore path:
+
+1. Generates two assets; each **Show in Studio** auto-saves a draft and annotates its bubble with a "Saved" pill (the mock provider hides the Tripo3D-only refine indicator).
+2. Re-clicks the first bubble's **Show in Studio** — the Studio restores that older version (the URL flips to a different manifest) and the send tail runs again, while auto-save stays idempotent on the bubble (still 2 saved pills).
+3. Asserts chain continuity: the restore auto-save chains onto the **pre-restore tip**, not a fork at the restored older version (`prev_asset_manifest_cid` of the new tip is the second save's CID).
+
+**Why it matters:** Chat bubbles are the user's time-travel surface for generation versions. A restore that forks the chain or fails to re-run the send tail silently corrupts version history. Changes to `chat-preview.ts`, the bubble send handler, or the auto-save chaining can break it.
+
 ### 99. Viewport resize regression (`e2e/specs/99-resize-regression.spec.js`)
 
 Guards the Babylon engine resize pattern: the viewport must never stretch during window resize or sidebar collapse/expand. The engine resizes inside `runRenderLoop` immediately before `scene.render()` (see `frontend/src/js/engine/scene-graph.ts`).
@@ -418,7 +526,7 @@ Use this when a spec fails and you need to inspect the browser state, DOM, netwo
 - **Network:** Hardhat Local (`chainId: 31415822`).
 - **Wallet:** Hardhat dev account `#0` (`0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`).
 - **3D generation:** Mock adapter (`MOCK_3D_GENERATION=true`).
-- **Timeouts:** 10 s per test, 5 s per expect assertion (publish waits 30 s for the transaction).
+- **Timeouts:** 90 s per test, 15 s per expect assertion (publish waits 30 s for the transaction). The multi-wallet / live-update specs raise their per-test timeout via `test.setTimeout`: 150 s (13), 180 s (14), 240 s (23), 360 s (24).
 
 ---
 

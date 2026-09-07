@@ -13,10 +13,10 @@ Express API or reimplementing the manifest/glTF formats.
 If you only need to call Arbesk over HTTP, you want `docs/API_SPEC.md`
 instead. This guide is for embedding the engine itself.
 
-## 1. How consumption works (npm workspace package)
+## 1. How consumption works (Bun workspace package)
 
-`@arbesk/asset-core` lives at `packages/asset-core/` as an npm **workspace**
-package (root `"workspaces": ["packages/*"]`) and is compiled by `tsc` to
+`@arbesk/asset-core` lives at `packages/asset-core/` as a Bun **workspace**
+package (root `package.json` `workspaces.packages`) and is compiled by `tsc` to
 `dist/` (ESM + `.d.ts`). Consumers import it by bare specifier, with
 `.js`-suffixed subpaths for advanced callers:
 
@@ -178,7 +178,7 @@ All methods are on the object returned by `createArbeskCore`.
 | `download` | `(ref: string \| manifest, opts?) → Promise<Blob>` | CID or an already-fetched manifest → composed GLB `Blob`. Uses the executor (worker pool in the browser). |
 | `compose` | `(manifest, opts?) → Promise<Blob>` | Explicit compose of a manifest you already hold. |
 | `decompose` | `(input, opts?) → Promise<{ composite, compositeCid? }>` | Explicit decompose of glTF JSON, GLB, 3MF, or example bytes — format detected by the dispatcher. |
-| `getManifest` | `(cid) → Promise<manifest>` | Auto-gunzip JSON read via `ipfsRead`. |
+| `getManifest` | `(cid) → Promise<manifest>` | Auto-decompressing JSON read (brotli `ARB\x01` frame → gzip → raw) via `ipfsRead`. |
 | `getVersionHistory` | `(cid, maxDepth = 50) → Promise<ManifestChainEntry[]>` | Walks the `prev_manifest_cid` chain: `{ cid, version, name, nodeCount }[]`. |
 | `validateManifest` | `(manifest) → { valid: true, data } \| { valid: false, errors }` | zod-backed; the same schema the backend routes enforce. Unknown keys are stripped in `data`. |
 | `addEditor` | `(asset: { tokenId } \| { tag }, identity) → Promise<void>` | `identity` = `0x…` address (passthrough) or email (requires `chain.resolveEmail`). |

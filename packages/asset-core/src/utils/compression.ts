@@ -28,10 +28,10 @@ let brotliInstance: Promise<BrotliWasmType> | null = null;
 
 /**
  * Lazily instantiate the brotli-wasm module (one WASM compile per process).
- * @remarks Runtime split: plain Node (jest, the E2E/dev backend running
- *   `node src/index.ts`) uses the package's synchronous CJS build via
- *   createRequire — its ESM web build fetches the .wasm over file://, which
- *   Node's fetch rejects. Bun (dev backend, compiled binary — the latter via
+ * @remarks Runtime split: plain Node (jest) uses the package's synchronous
+ *   CJS build via createRequire — its ESM web build fetches the .wasm over
+ *   file://, which Node's fetch rejects. Bun (dev backend, compiled binary —
+ *   the latter via
  *   the embedding shim in scripts/build-server.mjs) and the browser bundles
  *   use the ESM entry, whose default export is a promise of the API.
  */

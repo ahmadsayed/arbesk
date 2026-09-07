@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 const Router = express.Router;
 
 // Dynamic import to ensure process.env is populated before config.ts reads it.
-// api/index.ts is loaded via dynamic import() from index.ts after dotenv runs.
+// api/index.ts is loaded via dynamic import() from index.ts after process.loadEnvFile runs.
 const {
   CONTRACT_ADDRESS,
   HARDHAT_RPC_URL,

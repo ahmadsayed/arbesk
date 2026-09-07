@@ -3,7 +3,7 @@
 > **Generated:** 2026-08-23
 > **Source of truth:** The codebase (backend, frontend, contracts, tests, build scripts). Architecture docs and API specs are reference only.
 > **Contract:** `ArbeskAssetFree` is the default/free tier; `ArbeskAsset` is the paid tier (not `ArbeskWorld` — that name only exists in older docs).
-> **Frontend build:** Custom Node.js scripts (no bundler).
+> **Frontend build:** Custom scripts for Pug/SCSS/assets; JS bundled by Bun.build (`frontend/scripts/bundle.js`), brotli-precompressed dist. Prod backend compiles to a single-file Bun binary (`scripts/build-server.mjs`).
 > **Network targets:** Hardhat local for development; Base Sepolia Testnet (chain ID 84532) for EOA wallets and CDP email-login smart accounts.
 
 ---
@@ -23,13 +23,14 @@
 | Collection Manifests | ✅ Complete | Collection merge in `services/asset-save/manifest-builder.ts`, collection expansion in `asset-library.ts`, collection loading in `scene-graph.ts` |
 | Asset-Level Nostr Comments | ✅ Complete | `services/comment-thread.ts`, `ui/comments-panel.ts`, `src/api/chat-proxy.ts`, `src/api/comments-archive.ts`, E2E specs 14 + 15 |
 | Unified Studio + Library SPA | ✅ Complete | `app.pug`, `app/router.ts`, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, `services/library-ops.ts`, E2E specs 09–12 |
+| Public Profile URLs (anonymous library/studio viewing) | ✅ Complete | `app/route-parse.ts` (`/library/<base58>`, `/studio/<base58>`), `utils/base58.ts`, `blockchain/read-contract.ts` (anonymous reads follow `defaultChainId` from `/api/v1/config`), read-only visitor mode in `library-controller.ts`, E2E spec 25 |
 | CDP Email Login (OTP + ERC-4337 smart accounts) | ✅ Complete | `wallet-cdp.ts`, SIWE with `eoaAddress` fallback in the `@arbesk/wallet` SIWE verifier, ERC-4337 smart accounts on Base Sepolia, gas sponsored by CDP Paymaster |
 | Base Sepolia Testnet Support | ✅ Complete | `constants/chains.js`, `network-config.ts`, deployed `ArbeskAssetFree` on Base Sepolia |
 | Token Indexer (chunked backfill) | ✅ Complete | `src/api/token-indexer.ts`, `src/api/routes/indexer.ts`, per-chain `LOG_CHUNK_SIZES` |
 | Optimistic Collection Create UI | ✅ Complete | `ui/library-create.ts`, `minting` status + spinner badge, flips to `besked` directly, auto-rollback on cancel |
 | Chat Provenance | ✅ Complete | AI prompts recorded per manifest version in `metadata.chat` (save-anchored, version-scoped) via `services/asset-save/manifest-builder.ts`; read-only prompt history in the Create panel; dormant `node.history` spec removed |
 | Tripo3D v3 Generation Integration | ✅ Complete | `@arbesk/ai-asset-gen` (v3 REST, BYOK), `src/api/generation-tasks.ts` (wallet-bound task registry), `src/api/assets/generate-node.ts` (sourceAssetCid follow-ups: retexture/retopo/rig/animate), `frontend/src/js/ui/create-panel.ts` (provider select, BYOK dialog, version-card action rows), E2E selectors synced |
-| Asset-Core Externalization (SDK facade + ports) | ✅ Complete | `packages/asset-core/` npm workspace (`@arbesk/asset-core`: facade, runtime ports, manifest schema, domain, gltf pipeline, kernels, bench), browser adapters in `ipfs/`/`blockchain/`/`workers/`, backend `src/api/asset-core-adapters.ts`; see `docs/ASSET_CORE_SDK.md` |
+| Asset-Core Externalization (SDK facade + ports) | ✅ Complete | `packages/asset-core/` Bun workspace (`@arbesk/asset-core`: facade, runtime ports, manifest schema, domain, gltf pipeline, kernels, bench), browser adapters in `ipfs/`/`blockchain/`/`workers/`, backend `src/api/asset-core-adapters.ts`; see `docs/ASSET_CORE_SDK.md` |
 
 ---
 
@@ -80,7 +81,7 @@ src/
 
 | Method | Path | Auth | What it does |
 |--------|------|------|--------------|
-| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag, cdpProjectId |
+| GET | `/config` | None | Returns contract address, network configs, IPFS backend/gateway, mock flag, cdpProjectId, `defaultChainId` (deployment default chain for anonymous reads) |
 | POST | `/sessions` | None | Creates SIWE session (EIP-4361); `eoaAddress` body field enables CDP smart-account fallback |
 | POST | `/paymaster` | None | CDP Paymaster JSON-RPC proxy — forwards sponsorship requests, keeps `CDP_PAYMASTER_URL` secret |
 | POST | `/users/resolve-email` | Session | Resolves an exact full email to the CDP end user's smart account address (minimal `{exists, address?}` response, no listing/autocomplete); used by the Collaborators panel's Add-by-email flow |
@@ -164,7 +165,8 @@ frontend/src/js/
 │   ├── theme.ts / theme-init.ts# CSS → Babylon color mapping
 │   └── viewport-gizmo.ts       # Corner orientation gizmo
 ├── app/
-│   └── router.ts               # Unified SPA view router: Studio ⇄ Library
+│   ├── route-parse.ts          # Pathname parser: /, /studio, /library + public-profile subjects (/studio|/library/<base58>)
+│   └── router.ts               # Unified SPA view router: Studio ⇄ Library, profile-URL scoping
 ├── ui/
 │   ├── create-panel.ts         # Chat-style prompt flow, PayGo, tier/provider dropdowns
 │   ├── asset-save.ts           # Save Draft / Publish UI; delegates building to services/asset-save/
@@ -206,7 +208,7 @@ frontend/src/js/
 │   ├── remote-ipfs.ts          # Gateway reads (cache currently disabled)
 │   ├── write-to-ipfs.ts        # Direct Kubo/Pinata writes + pin
 │   └── asset-core-adapter.ts   # Browser IpfsReadPort/IpfsWritePort over remote-ipfs + write-to-ipfs
-│   (packages/asset-core/src/ moved → packages/asset-core/, the @arbesk/asset-core npm workspace)
+│   (packages/asset-core/src/ moved → packages/asset-core/, the @arbesk/asset-core Bun workspace)
 ├── asset-core-init.ts          # Browser composition root — initAssetCoreBrowser() once at boot
 ├── blockchain/
 │   ├── wallet.ts               # Backward-compat barrel; re-exports the split wallet modules
@@ -225,6 +227,7 @@ frontend/src/js/
 │   ├── network-config.ts       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
 │   ├── error-decoder.ts        # Revert reason decoding
 │   ├── explorer.ts             # Block explorer links
+│   ├── read-contract.ts        # Anonymous/read-only chain reads (viem) on the deployment default chain
 │   └── asset-core-adapter.ts   # Browser HashPort/StoragePort/ChainPort
 ├── workers/
 │   ├── gltf-worker.ts          # Web Worker: compose/decompose/bake ops + batched multi-part IPFS uploads
@@ -333,7 +336,7 @@ frontend/src/js/
 | Jest frontend (`test:frontend`) | 102 suites / 1109 tests | ✅ All passing (verified 2026-08-23, worktree) |
 | Jest API (`test:api`) | 104 tests | ✅ All passing (verified 2026-08-23, worktree) |
 | Hardhat contracts (`test:contracts`) | 49 tests | ✅ All passing (verified 2026-08-23, worktree) |
-| E2E Playwright (chromium) | 44 tests | ✅ Passing (verified 2026-08-23, worktree local stack) |
+| E2E Playwright (chromium) | 55 tests (27 specs) | ✅ Passing (count updated 2026-09-07) |
 | Merged coverage (Jest + E2E) | 122 files | 74.23% statements, 74.06% branches, 69.38% functions |
 
 **New test files since 2026-06-28:**
@@ -415,7 +418,7 @@ frontend/src/js/
 |---------|-----|---------------|-------|
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` | No DHT, loopback-only |
 | Hardhat local EVM | — | `127.0.0.1:8545` | Docker container |
-| Local Nostr relay | — | `ws://127.0.0.1:7777` | Dev-only |
+| Local Nostr relay | — | `ws://127.0.0.1:7777` | Binds all interfaces by default (`NOSTR_HOST_PORT=127.0.0.1:7777` re-binds to loopback); also started/probed by `start-prod.sh --testnet` |
 | Base Sepolia Testnet | — | `https://sepolia.base.org` (backend direct); `https://base-sepolia-rpc.publicnode.com` (CDP smart-wallet browser passthrough) | EOA + CDP email-login smart accounts |
 
 ### Environment Files
@@ -424,6 +427,10 @@ frontend/src/js/
 |------|--------|
 | Root `.env` | ✅ Exists |
 | `blockchain/.env` | ✅ Exists |
+| Root `.env.production` | Optional production override layer (sourced by `scripts/start-prod.sh` after `.env`) |
+| Root `.env.pinata` | Testnet Pinata credentials (sourced by `start-prod.sh --testnet` and `start-dev.sh --testnet`) |
 | `frontend/.env` | ❌ Not present (optional, not currently used) |
 
 Optional root `.env` kill-switch: `INDEXER_DISABLE_TESTNET=1` skips starting the Base Sepolia token indexer (see `.env.example`).
+
+`DEFAULT_CHAIN_ID` (root `.env`) sets the deployment default chain that anonymous chain reads follow (see `frontend/src/js/blockchain/read-contract.ts`); it falls back to Hardhat local, and `start-prod.sh --testnet` exports `84532`.

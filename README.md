@@ -196,11 +196,11 @@ arbesk/
 
 | Layer | Technology |
 |---|---|
-| Backend | Node.js + Express ES modules |
+| Backend | Bun 1.4 runtime + Express (TypeScript, no emit step) |
 | Frontend templates | Pug |
 | Styling | Custom SCSS design system (no Bootstrap) |
 | 3D renderer | Babylon.js |
-| Frontend JS | TypeScript ES modules (swc per-file emit, no bundler) |
+| Frontend JS | TypeScript, bundled by Bun.build (`frontend/scripts/bundle.js`) |
 | Web3 | Web3.js + custom wallet picker (EIP-6963 + WalletConnect v2) + CDP embedded wallets |
 | Blockchain | EVM-compatible / local Hardhat / Base Sepolia Testnet |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
@@ -210,7 +210,7 @@ arbesk/
 | Comments | Local Nostr relay (dev) via WebSocket chat proxy |
 | Runtime cache | Browser memory cache + IndexedDB |
 | Testing | Jest + Supertest, Hardhat contract tests, Playwright E2E |
-| Build | Custom Node.js frontend scripts |
+| Build | Custom scripts (Pug/SCSS/assets) + Bun.build JS bundles; prod backend compiled with `bun build --compile` |
 | Agent setup | `AGENTS.md` |
 
 ---

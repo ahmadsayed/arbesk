@@ -1045,6 +1045,11 @@
             "type": "boolean",
             "description": "Whether mock 3D generation is enabled",
             "example": true
+          },
+          "defaultChainId": {
+            "type": "integer",
+            "description": "Deployment default chain ID (DEFAULT_CHAIN_ID env, falls back to Hardhat local). Anonymous chain reads use this chain.",
+            "example": 84532
           }
         }
       },

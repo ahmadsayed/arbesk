@@ -32,7 +32,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
   - `@arbesk/wallet` (`packages/wallet/`) — wallet/identity/chain: `Signer` port, SIWE, Merkle proofs, contract writes, session store. See `packages/wallet/AGENTS.md`.
   - `@arbesk/authz` (`packages/authz/`) — asset access policy (ownership + Merkle editor proof). See `packages/authz/AGENTS.md`.
   - `@arbesk/ai-asset-gen` (`packages/ai-asset-gen/`) — 3D-model generation (mock + Tripo3D), capability-gated facade. Backend-only. See `packages/ai-asset-gen/AGENTS.md`.
-- **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, wallet-provider, token-resolver, `asset-core-adapter.ts` browser Hash/Storage/Chain ports) · `ipfs/` · `asset-core-init.ts` (frontend composition root — `initAssetCoreBrowser()`) · `workers/` (gltf worker pool, `worker-executor.ts` browser ExecutorPort — module workers get **no import map**, so `gltf-worker.ts` may only import asset-core subpaths that stay bundle-safe: nothing that transitively pulls `@gltf-transform/core`/`fflate`; e.g. use `apply-node-colors.js`, not `source-color-editor.js`. The one intentional bare specifier is `brotli-wasm`, bundled as its web build with the WASM staged next to the worker by `frontend/scripts/bundle.js`) · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, backend-client, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · templates `frontend/src/pug/` · styles `frontend/src/scss/`
+- **Frontend** `frontend/src/js/`: 3D `engine/` · wallet `blockchain/` (wallet-core, wallet-cdp, smart-wallet-support, network-config, wallet-provider, token-resolver, `asset-core-adapter.ts` browser Hash/Storage/Chain ports) · `ipfs/` · `asset-core-init.ts` (frontend composition root — `initAssetCoreBrowser()`) · `workers/` (gltf worker pool, `worker-executor.ts` browser ExecutorPort — module workers get **no import map**, so `gltf-worker.ts` may only import asset-core subpaths that stay bundle-safe: nothing that transitively pulls `@gltf-transform/core`/`fflate`; e.g. use `apply-node-colors.js`, not `source-color-editor.js`. The one intentional bare specifier is `brotli-wasm`, bundled as its web build with the WASM staged next to `app.js` and the worker by `frontend/scripts/bundle.js`) · `ui/` (asset-library, comments/collaborators/create panels, chat-messages, wallet-modal, header-wallet-button) · `services/` (api, backend-client, team, chat-preview, library-ops, asset-delete, asset-save/) · `state/` · templates `frontend/src/pug/` · styles `frontend/src/scss/`
 - **Contracts** `blockchain/contracts/` · **Tests** `test/`, `blockchain/test/`, `e2e/`
 
 ## 4. Commands
@@ -59,8 +59,12 @@ bun start                              # backend :9090 (runs under Bun);  bun ru
 # Production (Bun runtime)
 bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode)
 bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
-# start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config + starts the
-# Nostr relay. MOCK_3D_GENERATION=true is allowed in production (owner decision) but warns.
+# start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config, sources .env.pinata,
+# forces IPFS_BACKEND=pinata + DEFAULT_CHAIN_ID=84532 + API_URL=https://sepolia.base.org, and
+# starts/probes the Nostr relay. Env layering: .env → .env.production (optional overrides) →
+# .env.pinata (testnet). --skip-build reuses existing dist. MOCK_3D_GENERATION=true is allowed in
+# production (owner decision) but warns. build:server also stubs the SDK's unused @x402/* optional
+# peers (scripts/x402-stub.mjs).
 # Runtime file reads resolve from the project root (cwd or ARBESK_ROOT) — never from import.meta.url
 # (compiled binaries have a virtual module URL). Add new runtime file reads via PROJECT_ROOT
 # (src/api/project-root.ts).
@@ -162,7 +166,7 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E | Playwright | `e2e/specs/*.spec.js` |
 
-~1468 Jest tests / 110 suites; E2E 23 specs / 46 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
+~2000 Jest tests / 195 suites; E2E 27 specs / 55 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
 
 **Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child assets · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `npm test` is **not enough** for these.
 
@@ -174,12 +178,12 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 |---------|-----|---------------|
 | Private IPFS (Kubo) | `127.0.0.1:5001` | `127.0.0.1:8080` (loopback, no DHT) |
 | Hardhat local EVM (Docker) | — | `127.0.0.1:8545` |
-| Local Nostr relay | — | `ws://127.0.0.1:7777` |
+| Local Nostr relay | — | `ws://127.0.0.1:7777` (binds all interfaces by default for cross-window live update; `NOSTR_HOST_PORT=127.0.0.1:7777` re-binds to loopback) |
 | Base Sepolia | — | `https://sepolia.base.org` (backend); `https://base-sepolia-rpc.publicnode.com` (CDP browser passthrough) |
 
 Backend on :9090. Hardhat networks: `hardhat` (local), `baseSepolia` (testnet; ETH gas, CDP smart accounts sponsored via paymaster proxy `src/api/routes/paymaster.ts`).
 
-Env files (gitignored, never commit): `blockchain/.env` (deploy keys/addresses — bootstrap from `.env.example`), root `.env` (backend; `CONTRACT_ADDRESS`/`PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy; CDP keys: `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_API_KEY_ID`/`SECRET`; `INDEXER_DISABLE_TESTNET` kill-switch). Full reference: `docs/CURRENT_STATUS.md §8`. Ops: `scripts/run-ipfs-gc.mjs` (IPFS GC), `scripts/sync-deployed-addresses.mjs`.
+Env files (gitignored, never commit): `blockchain/.env` (deploy keys/addresses — bootstrap from `.env.example`), root `.env` (backend; `CONTRACT_ADDRESS`/`PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy; CDP keys: `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_API_KEY_ID`/`SECRET`; `INDEXER_DISABLE_TESTNET` kill-switch), plus the production layering `.env.production` (optional overrides) and `.env.pinata` (testnet). `DEFAULT_CHAIN_ID` sets the deployment default chain that anonymous chain reads follow (defaults to Hardhat local; `start-prod.sh --testnet` exports 84532). Full reference: `docs/CURRENT_STATUS.md §8`. Ops: `scripts/run-ipfs-gc.mjs` (IPFS GC), `scripts/sync-deployed-addresses.mjs`.
 
 ## 12. Misc
 

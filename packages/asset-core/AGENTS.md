@@ -52,7 +52,8 @@ src/
   storage/               memory, memory-ipfs, ipfs upload-credential strategies
   executor/inline.ts     inline (same-thread) ExecutorPort op table
   kernels/               default base64/hash/glb kernels (pure TS)
-  utils/                 collections, compression, concurrency, cache, encoding, hash, log, uri  bench/run.ts           pipeline benchmark → test-results/asset-core-bench.json
+  utils/                 collections, compression, concurrency, cache, encoding, hash, log, uri
+  bench/run.ts           pipeline benchmark → test-results/asset-core-bench.json
 ```
 
 **Collection-write helpers.** `catalog/` also carries the canonical
@@ -115,9 +116,9 @@ self-describing `ARB\x01` magic (`BROTLI_MAGIC`); `compress: "gzip"` forces the
 legacy fflate gzip, `false` stores raw. Reads (`decompressAuto`) sniff frame →
 gzip magic → raw passthrough, so all historical CIDs stay readable. Tiered
 quality: q11 for JSON/manifests, q5 for binary buffers. Environment notes:
-plain Node (jest, the E2E/dev backend) uses the package's CJS build via
+plain Node (jest) uses the package's CJS build via
 createRequire — its ESM web entry fetches the .wasm over file://, which Node
-rejects; the browser bundles get the web build
+rejects; the dev backend runs under Bun and takes the ESM branch; the browser bundles get the web build
 with the WASM staged next to `app.js`/`gltf-worker.js` by
 `frontend/scripts/bundle.js`; the compiled server binary uses the embedding
 shim in `scripts/build-server.mjs`. The frame constant itself lives in the

@@ -47,8 +47,9 @@ services:
 
   nostr:
     image: scsibug/nostr-rs-relay:latest
-    # Private/local-only relay: exposed on loopback for studio dev use.
-    # No federation or public peering is configured.
+    # Private relay: no federation or public peering is configured.
+    # Binds all interfaces by default so cross-window/live-update clients can
+    # reach it; set NOSTR_HOST_PORT=127.0.0.1:7777 to re-bind to loopback.
     ports:
       - "${NOSTR_HOST_PORT:-7777}:7777" # Nostr relay WebSocket (client-reachable)
     volumes:

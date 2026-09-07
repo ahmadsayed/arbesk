@@ -1,7 +1,8 @@
 # `packages/` — Arbesk SDKs
 
 This directory holds Arbesk's shared, environment-agnostic SDKs, published as
-npm **workspaces** (`"workspaces": ["packages/*"]`) under the `@arbesk/*` scope.
+**Bun workspaces** (root `package.json` `workspaces.packages` + shared `catalog`)
+under the `@arbesk/*` scope.
 Each is one TypeScript codebase compiled by `tsc` to `dist/` (ESM + `.d.ts`),
 consumed by bare specifier in the browser, the Node backend, and tests.
 

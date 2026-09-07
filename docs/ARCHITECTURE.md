@@ -251,10 +251,10 @@ The contract never stores per-address roles. Instead:
 |---|---|---|
 | `ipfs` | Private Kubo node (local dev / E2E) | `127.0.0.1:5001`, `127.0.0.1:8080` |
 | `hardhat` | Local EVM and contract tooling | `127.0.0.1:8545` |
-| `nostr` | Local Nostr relay (dev only) | `127.0.0.1:7777` |
+| `nostr` | Local Nostr relay (dev; also started/used by `start-prod.sh --testnet`) | All interfaces via `NOSTR_HOST_PORT` (default `:7777`); set `NOSTR_HOST_PORT=127.0.0.1:7777` to re-bind to loopback |
 | `baseSepolia` | Public testnet target | Backend RPC `https://sepolia.base.org`; CDP smart-wallet browser passthrough `https://base-sepolia-rpc.publicnode.com` |
 
-The local Kubo container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm. The Nostr relay is likewise local-only: bound to loopback, SQLite-backed, with no federation or public peering.
+The local Kubo container is configured private-first: no public DHT, no bootstrap peers, no public swarm exposure, no relay client, and loopback-only swarm. The Nostr relay is likewise unfederated (SQLite-backed, no public peering); it binds all interfaces by default so cross-window live-update clients can reach it — set `NOSTR_HOST_PORT=127.0.0.1:7777` to re-bind it to loopback.
 
 Public network strategy: **Hardhat local for development, Base Sepolia Testnet for testnet**. Base Sepolia supports both EOA wallets (MetaMask/Rabby) and CDP email-login smart accounts (ERC-4337, gas sponsored by CDP Paymaster).
 
@@ -489,7 +489,7 @@ The collection token's `tokenURI` always points to the latest collection manifes
 
 ### 5.4 Library View (inside the unified SPA)
 
-The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). `frontend/src/js/app/router.ts` swaps visibility between `#studioView` and `#libraryView`; the Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is bootstrapped by `app-init.ts` and rendered by `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, and `library-context-menu.ts`.
+The Library is no longer a separate page — it lives in the same document as Studio (`frontend/dist/app.html`). Routing is pathname-based: `frontend/src/js/app/route-parse.ts` maps `/`, `/studio`, `/library`, and the public-profile forms `/studio/<base58>` / `/library/<base58>` to a view plus an optional profile subject (a base58-encoded wallet address, `frontend/src/js/utils/base58.ts`); `frontend/src/js/app/router.ts` swaps visibility between `#studioView` and `#libraryView`, scopes bare paths to the connected wallet's profile URL on login, and preserves the subject across navigation. The Babylon engine pauses while Library is active and resumes on return. This keeps wallet state, theme, session, and the event bus alive across Studio ⇄ Library navigation. The Library view is bootstrapped by `app-init.ts` and rendered by `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, and `library-context-menu.ts`. Anonymous visitors on a profile URL read chain state through `frontend/src/js/blockchain/read-contract.ts` (read-only viem contract over the unauthenticated `/api/v1/contracts/:name/abi` route, on the deployment default chain from `/api/v1/config → defaultChainId`).
 
 ---
 
@@ -525,12 +525,13 @@ The Library is no longer a separate page — it lives in the same document as St
 
 #### 5.4.2 Authentication gate
 
-The page has two mutually exclusive sections:
+The page has three display states, computed by `applyWalletGate()` in `library-controller.ts` (on `WALLET_STATE_CHANGED` and route subject changes):
 
-- **`#libraryGate`** — shown when no wallet is connected. Displays a wallet icon, "Sign in to continue", and a "Login / Signup" button that opens the wallet modal.
-- **`#libraryMain`** — shown after wallet connect. Contains the toolbar, content area, and status bar.
+- **Sign-in gate** (`#libraryGate`) — shown when no wallet is connected **and** the URL has no profile subject (bare `/library`). Displays a wallet icon, "Sign in to continue", and a "Login / Signup" button that opens the wallet modal.
+- **Owner mode** (`#libraryMain`) — wallet connected and the URL subject is the connected wallet (or none). Full toolbar: New Collection, Upload, context-menu actions.
+- **Visitor mode** (`#libraryMain`, read-only) — the URL subject (`/library/<base58>`) differs from the connected wallet, or no wallet is connected at all. A "Read-only · public library" badge shows; create/upload actions are hidden. Chain reads are anonymous via `blockchain/read-contract.ts`.
 
-The gate is toggled by `applyWalletGate()` in `library-controller.ts` in response to `WALLET_STATE_CHANGED` events.
+`isLibraryVisitor()` in `state/library-state.ts` is true whenever the URL subject ≠ connected wallet.
 
 ---
 
@@ -676,10 +677,10 @@ Dropping a `.glb` / `.gltf` / `.3mf` file onto the Studio viewport reuses the sa
 Double-clicking an asset card (or "Open in Studio" from the context menu) navigates to:
 
 ```
-/studio?asset=<collectionTokenId>&assetId=<assetId>
+/studio/<base58>?asset=<collectionTokenId>&assetId=<assetId>
 ```
 
-Studio loads the collection into the Gallery sidebar and opens the specific asset in the 3D viewport.
+The `<base58>` path segment is the profile subject (base58-encoded wallet address, `utils/base58.ts`); `router.ts` adds it via `withSubject()` so opening an asset from someone else's public library keeps the visitor on that profile. Studio loads the collection into the Gallery sidebar and opens the specific asset in the 3D viewport. Anonymous visitors get a read-only Studio.
 
 ---
 
@@ -700,7 +701,10 @@ Clicking the wallet address button in the headerbar opens a floating popover:
 | File | Role |
 |------|------|
 | `frontend/src/pug/app.pug` | Slim SPA shell that includes `frontend/src/pug/includes/*.pug` partials → compiled to `frontend/dist/app.html` |
-| `frontend/src/js/app/router.ts` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume |
+| `frontend/src/js/app/router.ts` | Client-side view router: toggles `#studioView` / `#libraryView`, drives engine pause/resume, scopes URLs to the profile subject |
+| `frontend/src/js/app/route-parse.ts` | Pathname parser: bare views + `/studio/<base58>` / `/library/<base58>` public-profile subjects |
+| `frontend/src/js/utils/base58.ts` | Base58 (Bitcoin alphabet) encode/decode of profile addresses |
+| `frontend/src/js/blockchain/read-contract.ts` | Anonymous read-only contract reads (viem) on `defaultChainId` |
 | `frontend/src/js/ui/header-wallet-button.ts` | Shared header wallet button; shows email for CDP users and hides the network selector |
 | `frontend/src/js/app-init.ts` | SPA bootstrap incl. Library view wiring: wallet gate, data loading, event wiring |
 | `frontend/src/js/ui/library-controller.ts` | Library view orchestration and Studio handoff |
@@ -863,4 +867,4 @@ Key constraints still in force:
 - IPFS browser reads rely on the browser HTTP cache (immutable CID responses) + request coalescing; the glTF pipeline adds memory + IndexedDB caching (`utils/content-cache.ts`). There is no app-level gateway read cache.
 - CSP is in report-only mode; should be promoted to enforcing after monitoring.
 - Contract addresses are hardcoded in 3 places (`src/config.ts`, `frontend/src/js/blockchain/network-config.ts`, `blockchain/.env`). Chain IDs are consolidated in `constants/chains.js`.
-- Frontend build uses custom Node.js scripts (no bundler — no tree-shaking, HMR, or code splitting).
+- Frontend JS is bundled by Bun.build (`frontend/scripts/bundle.js`: single-file `app.js` + importmap vendor bundles + self-contained worker; `define` sets `NODE_ENV`, `debugger` dropped; dist assets brotli-precompressed). Pug/SCSS/assets still build via custom scripts.

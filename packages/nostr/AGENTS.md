@@ -16,5 +16,5 @@ capabilities arrive via injected ports.
 - Erasable TS only; import type for type-only imports; .ts extensions.
 
 ## Build & test
-npm run build --workspace @arbesk/nostr
+bun run --filter @arbesk/nostr build
 npm test -- packages/nostr

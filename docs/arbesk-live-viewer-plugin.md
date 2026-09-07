@@ -29,7 +29,10 @@ forwarded by these repo files:
 - `frontend/src/pug/includes/head.pug` — the console bridge shim.
 
 For the shim to be active, rebuild the frontend and restart the backend
-(the panel's **Start** does both).
+(the panel's **Start** does both). The bridge is dev-only: production builds
+strip the shim from the HTML (`ARBESK_PRODUCTION_BUILD=1` in
+`frontend/scripts/render-pug.js`) and the backend gates `/api/v1/dev` off under
+`NODE_ENV=production`, so on a prod deployment the App console tab gets nothing.
 
 ## Re-loading the plugin after a DSH restart
 
