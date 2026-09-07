@@ -16,7 +16,6 @@ import {
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
-const ASSET_NAME = uniqueAssetName("Comments Collab Asset");
 const OWNER_COMMENT = "@editor please review the color";
 const EDITOR_COMMENT = "@owner color updated in the latest version";
 
@@ -24,6 +23,13 @@ test.describe("collaborative comments", () => {
   test("owner comments, editor sees it, editor replies, owner sees reply", async ({
     browser,
   }) => {
+    // Two wallet connects + two asset opens + a live relay round-trip exceed
+    // the 90s default under load (same class as 13/23/24).
+    test.setTimeout(180_000);
+    // Computed per attempt, not at module scope: a retry reusing the same name
+    // would collide on the same Nostr asset tag and replay attempt 1's comment
+    // backlog, corrupting the count assertions.
+    const ASSET_NAME = uniqueAssetName("Comments Collab Asset");
     const ownerPage = await browser.newPage();
     try {
       // ── 1. Owner publishes an asset ───────────────────────────────────────
