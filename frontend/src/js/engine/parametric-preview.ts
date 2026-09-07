@@ -300,6 +300,16 @@ function showMultiSelectSummary(count: number) {
 }
 
 /**
+ * Default component to edit: the first real sub-mesh, skipping Babylon's
+ * synthesized "__root__" container mesh — it has no counterpart in the source
+ * glTF, so baking a color edit for it changes nothing (applyNodeColors warns
+ * "not found in source" and the save becomes a no-op).
+ */
+function firstEditableSubMeshName(subMeshes: Array<{ name: string }>): string {
+  return (subMeshes.find((s) => s.name !== "__root__") ?? subMeshes[0]).name;
+}
+
+/**
  * Shows the parametric editor for a regular node.
  */
 async function openInspector(nodeId: string) {
@@ -330,7 +340,7 @@ async function openInspector(nodeId: string) {
   // clicking directly on parts in the 3D viewport.
   const subMeshes = getNodeSubMeshes(nodeId);
   if (subMeshes.length >= 1) {
-    const first = subMeshes[0].name;
+    const first = firstEditableSubMeshName(subMeshes);
     selectComponent(first);
     selectSubMesh(nodeId, first);
   }
