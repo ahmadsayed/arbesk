@@ -38,6 +38,38 @@ const ipfsUtilsFetch = {
   },
 };
 
+// brotli-wasm's ESM entry initializes by fetching its .wasm via a URL computed
+// from import.meta.url — which inside a compiled binary points into the
+// virtual $bunfs and fails. Replace the package with a shim that embeds the
+// WASM (`with { type: "file" }`) and initializes the web glue from its bytes.
+// Resolved from @arbesk/asset-core, the workspace that depends on it (bun's
+// isolated installs don't expose it at the root).
+const path = await import("node:path");
+const { createRequire } = await import("node:module");
+const brotliPkgDir = path.dirname(
+  createRequire(new URL("../packages/asset-core/package.json", import.meta.url)).resolve("brotli-wasm")
+);
+const brotliWasmShim = {
+  name: "brotli-wasm-embedded-shim",
+  /** @param {any} build */
+  setup(build) {
+    build.onResolve({ filter: /^brotli-wasm$/ }, () => ({
+      path: "brotli-wasm-shim",
+      namespace: "brotli-wasm-shim",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "brotli-wasm-shim" }, () => ({
+      contents: `
+        import init, * as api from ${JSON.stringify(path.join(brotliPkgDir, "pkg.web", "brotli_wasm.js"))};
+        import wasmPath from ${JSON.stringify(path.join(brotliPkgDir, "pkg.web", "brotli_wasm_bg.wasm"))} with { type: "file" };
+        const bytes = await Bun.file(wasmPath).arrayBuffer();
+        await init(bytes);
+        export default Promise.resolve(api);
+      `,
+      loader: "js",
+    }));
+  },
+};
+
 const result = await Bun.build({
   entrypoints: ["src/index.ts"],
   compile: { outfile: "dist/arbesk-server" },
@@ -46,7 +78,7 @@ const result = await Bun.build({
   target: "bun",
   minify: true,
   define: { "process.env.NODE_ENV": JSON.stringify("production") },
-  plugins: [x402Stub, ipfsUtilsFetch],
+  plugins: [x402Stub, ipfsUtilsFetch, brotliWasmShim],
 });
 
 if (!result.success) {

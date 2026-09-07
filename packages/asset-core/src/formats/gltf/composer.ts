@@ -7,7 +7,7 @@
  */
 
 import { getRuntime } from "../../runtime-state.ts";
-import { decompress } from "../../utils/compression.ts";
+import { decompressAuto } from "../../utils/compression.ts";
 import { fetchCIDAsBase64 as fetchCIDAsBase64Cached } from "./cache-aware-fetch.ts";
 import { composeGltfJson } from "./gltf-core.ts";
 
@@ -17,7 +17,7 @@ async function fetchCIDAsBase64(cid: string, arbeskMeta: any): Promise<string> {
   return fetchCIDAsBase64Cached(cid, arbeskMeta, {
     fetchRaw: (c) => ipfsRead.getRawBytes(c),
     fetchDecompressed: (c) => ipfsRead.getBytes(c),
-    decompress,
+    decompress: decompressAuto,
     base64Encode: (bytes) => kernels.base64.encode(bytes),
   });
 }

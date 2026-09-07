@@ -6,7 +6,7 @@
  * `instanceof` checks in asset-core/utils/compression.ts.
  */
 import { createMemoryIpfs } from "@arbesk/asset-core/storage/memory-ipfs.js";
-import { isGzipped } from "@arbesk/asset-core/utils/compression.js";
+import { isGzipped, isBrotliFramed } from "@arbesk/asset-core/utils/compression.js";
 
 /** Contract shared by every IpfsReadPort/IpfsWritePort pair. */
 function ipfsContract(name, makePorts) {
@@ -25,19 +25,33 @@ function ipfsContract(name, makePorts) {
       expect(await read.getJSON(cid)).toEqual({ hello: "world" });
     });
 
-    test("default write options compress; getBytes/getJSON gunzip transparently", async () => {
+    test("default write options compress (brotli); getBytes/getJSON decompress transparently", async () => {
       const { read, write } = makePorts();
-      // Default options (compress on): stored bytes must be gzipped, and the
-      // read side must gunzip transparently.
-      const json = { gzip: "round-trip", n: 42 };
+      // Default options (compress on): stored bytes must carry the brotli
+      // frame, and the read side must decompress transparently.
+      const json = { brotli: "round-trip", n: 42 };
       const jsonCid = await write.writeJSON(json);
-      expect(isGzipped(new Uint8Array(await read.getRawBytes(jsonCid)))).toBe(true);
+      expect(isBrotliFramed(new Uint8Array(await read.getRawBytes(jsonCid)))).toBe(true);
       expect(await read.getJSON(jsonCid)).toEqual(json);
 
       const bytesCid = await write.write(new TextEncoder().encode("bytes"));
-      expect(isGzipped(new Uint8Array(await read.getRawBytes(bytesCid)))).toBe(true);
+      expect(isBrotliFramed(new Uint8Array(await read.getRawBytes(bytesCid)))).toBe(true);
       const roundTrip = new TextDecoder().decode(await read.getBytes(bytesCid));
       expect(roundTrip).toBe("bytes");
+    });
+
+    test("compress: 'gzip' forces the legacy codec; reads still decompress", async () => {
+      const { read, write } = makePorts();
+      const json = { gzip: "explicit", n: 7 };
+      const jsonCid = await write.writeJSON(json, null, { compress: "gzip" });
+      expect(isGzipped(new Uint8Array(await read.getRawBytes(jsonCid)))).toBe(true);
+      expect(await read.getJSON(jsonCid)).toEqual(json);
+
+      const bytesCid = await write.write(new TextEncoder().encode("gz bytes"), "x.bin", null, {
+        compress: "gzip",
+      });
+      expect(isGzipped(new Uint8Array(await read.getRawBytes(bytesCid)))).toBe(true);
+      expect(new TextDecoder().decode(await read.getBytes(bytesCid))).toBe("gz bytes");
     });
 
     test("reads unknown CID reject", async () => {

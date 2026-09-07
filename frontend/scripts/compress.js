@@ -11,7 +11,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const distRoot = path.resolve(__dirname, '../dist');
-const COMPRESSIBLE = new Set(['.js', '.css', '.html', '.svg', '.json']);
+const COMPRESSIBLE = new Set(['.js', '.css', '.html', '.svg', '.json', '.wasm']);
 const MIN_SIZE = 1024;
 
 function* walk(dir) {

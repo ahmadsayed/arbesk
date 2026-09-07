@@ -174,9 +174,12 @@ describe("dedup helpers", () => {
         compress: true,
       });
       expect(meta.compressed).toBe(true);
+      // Default codec is brotli: the stored payload carries the ARB\x01 frame.
+      const payload = writeToIPFS.mock.calls[0][0];
+      expect(Array.from(payload.slice(0, 4))).toEqual([0x41, 0x52, 0x42, 0x01]);
       expect(writeToIPFS).toHaveBeenCalledWith(
         expect.any(Uint8Array),
-        "buffer.bin.gz",
+        "buffer.bin.br",
         null,
         { compress: false }
       );

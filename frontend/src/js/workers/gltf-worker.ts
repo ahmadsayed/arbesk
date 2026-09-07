@@ -3,9 +3,10 @@
  * composition, decomposition, GLB parsing/decomposition, and source color
  * baking.
  * @remarks The worker runs without the page's import map, so it only imports
- *   bare-free modules: every @arbesk/asset-core subpath must transitively
- *   avoid bare specifiers (fflate, @gltf-transform/core, …). The build
- *   rewrites the bare @arbesk/asset-core specifiers to relative vendor paths.
+ *   modules the build can bundle self-contained: @arbesk/asset-core subpaths
+ *   must transitively avoid fflate and @gltf-transform/core (aliased to
+ *   vendor/). brotli-wasm is the one intentional bare specifier — bundled as
+ *   the web build, its WASM fetched lazily next to this script.
  */
 
 import { WebIO, GLB_BUFFER } from "../vendor/gltf-transform-core-4.1.2.js";
@@ -51,12 +52,65 @@ function getIO(): any {
 
 /**
  * Detects gzip content by its magic bytes (0x1f 0x8b).
- * @remarks Assets are stored gzipped on IPFS, so the worker must decompress
- *   them (undecompressed bytes make Babylon fail); it can't import fflate
- *   (no page import map) and uses the native DecompressionStream API instead.
+ * @remarks Legacy assets are stored gzipped on IPFS, so the worker must
+ *   decompress them (undecompressed bytes make Babylon fail); it can't import
+ *   fflate (bare-free worker rule) and uses the native DecompressionStream API.
  */
 function isGzipped(bytes: Uint8Array): boolean {
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+// Self-describing frame for brotli payloads — shared, dependency-free module
+// (safe for the worker bundle: no fflate/brotli-wasm imports).
+import {
+  isBrotliFramed,
+  frameBrotliPayload,
+  unframeBrotliPayload,
+} from "@arbesk/asset-core/utils/brotli-frame.js";
+
+interface BrotliApi {
+  compress(data: Uint8Array, options?: { quality?: number }): Uint8Array;
+  decompress(data: Uint8Array): Uint8Array;
+}
+
+let brotliInstance: Promise<BrotliApi> | null = null;
+
+/**
+ * Lazily loads brotli-wasm (the bundle resolves the web build; its init()
+ * fetches brotli_wasm_bg.wasm relative to this worker script's URL).
+ */
+function loadBrotli(): Promise<BrotliApi> {
+  if (!brotliInstance) {
+    brotliInstance = import("brotli-wasm").then(
+      (mod) => ((mod as any).default ?? mod) as BrotliApi | Promise<BrotliApi>
+    ) as Promise<BrotliApi>;
+  }
+  return brotliInstance;
+}
+
+/**
+ * Brotli-compresses bytes with the ARB\x01 frame.
+ */
+async function compressBrotli(
+  bytes: Uint8Array,
+  hint: "json" | "binary" = "binary"
+): Promise<Uint8Array> {
+  const brotli = await loadBrotli();
+  const packed = brotli.compress(bytes, { quality: hint === "json" ? 11 : 5 });
+  return frameBrotliPayload(packed);
+}
+
+/**
+ * Decompresses a stored payload: brotli frame → brotli, gzip magic → gunzip,
+ * anything else passes through unchanged.
+ */
+async function decompressStored(bytes: Uint8Array): Promise<Uint8Array> {
+  if (isBrotliFramed(bytes)) {
+    const brotli = await loadBrotli();
+    return brotli.decompress(unframeBrotliPayload(bytes));
+  }
+  if (isGzipped(bytes)) return gunzip(bytes);
+  return bytes;
 }
 
 async function gunzip(bytes: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
@@ -67,21 +121,6 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
   ).pipeThrough(ds);
   const decompressed = await new Response(readable).arrayBuffer();
   return new Uint8Array(decompressed);
-}
-
-/**
- * Gzip-compresses bytes.
- * @remarks Can't import fflate (no page import map), so it uses the native
- *   CompressionStream. Compression keeps IPFS uploads small; reads sniff the
- *   gzip magic bytes, so the encoding is transparent.
- */
-async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
-  const cs = new CompressionStream("gzip");
-  const readable = (
-    new Response(bytes as BodyInit).body as ReadableStream
-  ).pipeThrough(cs);
-  const compressed = await new Response(readable).arrayBuffer();
-  return new Uint8Array(compressed);
 }
 
 async function fetchRawBytes(
@@ -123,12 +162,11 @@ async function fetchDecompressedBytes(
   cid: string,
   gatewayBase: string
 ): Promise<ArrayBuffer> {
-  let bytes = new Uint8Array(await fetchRawBytes(cid, gatewayBase));
-  if (isGzipped(bytes)) {
-    const before = bytes.length;
-    bytes = await gunzip(bytes);
+  const raw = new Uint8Array(await fetchRawBytes(cid, gatewayBase));
+  const bytes = await decompressStored(raw);
+  if (bytes !== raw) {
     console.log(
-      `[WORKER-IPFS] gunzipped ${cid} ${before} → ${bytes.length} bytes`
+      `[WORKER-IPFS] decompressed ${cid} ${raw.length} → ${bytes.length} bytes`
     );
   }
   return bytes.buffer as ArrayBuffer;
@@ -142,7 +180,7 @@ async function fetchCIDAsBase64(
   return fetchCIDAsBase64Cached(cid, arbeskMeta, {
     fetchRaw: (c: string) => fetchRawBytes(c, gatewayBase),
     fetchDecompressed: (c: string) => fetchDecompressedBytes(c, gatewayBase),
-    decompress: gunzip,
+    decompress: decompressStored,
   });
 }
 
@@ -434,18 +472,18 @@ async function uploadExtractedItems(
 
   if (uploads.length === 0) return;
 
-  // Gzip each component before upload. Keyed by the compressed filename so the
-  // batch response lines map back to the right placeholder.
+  // Brotli-compress each component before upload. Keyed by the compressed
+  // filename so the batch response lines map back to the right placeholder.
   const files = await Promise.all(
     uploads.map(async (u) => ({
-      name: `${u.name}.gz`,
-      data: await gzip(u.bytes),
+      name: `${u.name}.br`,
+      data: await compressBrotli(u.bytes),
     }))
   );
   const cidMap = await uploadBatchToIPFSWithCredential(files, credential);
 
   for (const u of uploads) {
-    const cid = cidMap.get(`${u.name}.gz`);
+    const cid = cidMap.get(`${u.name}.br`);
     if (!cid) {
       throw new Error(`Worker upload missing CID for ${u.name}`);
     }
@@ -518,15 +556,16 @@ async function decomposeAndUploadGlb(payload: any) {
   if (storeComposite) {
     const baseName = sanitizeAsyncName(options.assetName || options.assetId);
     const compositeName = baseName ? `${baseName}_composite.gltf` : "composite.gltf";
-    // Gzip the composite JSON to match the glTF path (which compresses via
-    // writeJSONToIPFS). Reads sniff the gzip magic bytes, so the `.gz` is
+    // Brotli-frame the composite JSON to match the glTF path (which compresses
+    // via writeJSONToIPFS). Reads auto-detect the frame, so the `.br` suffix is
     // transparent to the loader.
-    const compositeBytes = await gzip(
-      new TextEncoder().encode(JSON.stringify(composite))
+    const compositeBytes = await compressBrotli(
+      new TextEncoder().encode(JSON.stringify(composite)),
+      "json"
     );
     compositeCid = await uploadToIPFSWithCredential(
       compositeBytes,
-      `${compositeName}.gz`,
+      `${compositeName}.br`,
       credential
     );
   }

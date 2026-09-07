@@ -52,8 +52,7 @@ src/
   storage/               memory, memory-ipfs, ipfs upload-credential strategies
   executor/inline.ts     inline (same-thread) ExecutorPort op table
   kernels/               default base64/hash/glb kernels (pure TS)
-  utils/                 collections, compression, concurrency, cache, encoding, hash, log, uri
-  bench/run.ts           pipeline benchmark → test-results/asset-core-bench.json
+  utils/                 collections, compression, concurrency, cache, encoding, hash, log, uri  bench/run.ts           pipeline benchmark → test-results/asset-core-bench.json
 ```
 
 **Collection-write helpers.** `catalog/` also carries the canonical
@@ -109,6 +108,22 @@ fallback `"gltf"`) and dispatches to a `FormatCodec` (`formats/codec.ts`).
 **glTF buffer URIs** — `ipfs://bafy…` in storage ↔ base64 data URI at render:
 only the `gltf/` composer/decomposer performs this transform. Don't bypass it
 from callers.
+
+**Storage compression** (`utils/compression.ts`) — writes compress by default
+with **brotli** (via `brotli-wasm`, lazy singleton init) framed with a
+self-describing `ARB\x01` magic (`BROTLI_MAGIC`); `compress: "gzip"` forces the
+legacy fflate gzip, `false` stores raw. Reads (`decompressAuto`) sniff frame →
+gzip magic → raw passthrough, so all historical CIDs stay readable. Tiered
+quality: q11 for JSON/manifests, q5 for binary buffers. Environment notes:
+plain Node (jest, the E2E/dev backend) uses the package's CJS build via
+createRequire — its ESM web entry fetches the .wasm over file://, which Node
+rejects; the browser bundles get the web build
+with the WASM staged next to `app.js`/`gltf-worker.js` by
+`frontend/scripts/bundle.js`; the compiled server binary uses the embedding
+shim in `scripts/build-server.mjs`. The frame constant itself lives in the
+dependency-free `utils/brotli-frame.ts` (no fflate/brotli-wasm imports) so the
+glTF worker and the besk CLI share it without dragging a codec into their
+bundles — never duplicate the magic.
 
 ## Events & state
 

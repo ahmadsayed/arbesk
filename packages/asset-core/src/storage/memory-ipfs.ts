@@ -1,13 +1,14 @@
 import type { IpfsReadPort, IpfsWritePort, WriteJsonOptions } from "../types.ts";
 import type { UploadCredential } from "./ipfs/upload-with-credential.ts";
-import { compress, decompress, isGzipped } from "../utils/compression.ts";
+import { compressAuto, decompressAuto, bytesFromData } from "../utils/compression.ts";
+import type { CompressHint } from "../utils/compression.ts";
 
 let counter = 0;
 
 /**
  * In-memory IPFS double with deterministic fake CIDs.
  * @remarks Honors the compress option so getJSON/getBytes exercise the same
- *   gunzip paths as production.
+ *   brotli/gunzip paths as production.
  */
 export function createMemoryIpfs(): {
   read: IpfsReadPort;
@@ -29,13 +30,11 @@ export function createMemoryIpfs(): {
 
   const read: IpfsReadPort = {
     async getJSON(cid) {
-      const raw = get(cid);
-      const plain = isGzipped(raw) ? decompress(raw) : raw;
+      const plain = await decompressAuto(get(cid));
       return JSON.parse(new TextDecoder().decode(plain));
     },
     async getBytes(cid) {
-      const raw = get(cid);
-      const plain = isGzipped(raw) ? decompress(raw) : raw;
+      const plain = await decompressAuto(get(cid));
       return plain.buffer.slice(plain.byteOffset, plain.byteOffset + plain.byteLength) as ArrayBuffer;
     },
     async getRawBytes(cid) {
@@ -46,16 +45,17 @@ export function createMemoryIpfs(): {
 
   const write: IpfsWritePort = {
     async write(data, _filename = "asset.bin", _credential: UploadCredential | null = null, options = {}) {
-      let bytes =
-        data instanceof Uint8Array ? data :
-        data instanceof ArrayBuffer ? new Uint8Array(data) :
-        typeof data === "string" ? new TextEncoder().encode(data) :
-        new Uint8Array(await (data as Blob).arrayBuffer());
-      if (options.compress !== false) bytes = compress(bytes);
-      return put(bytes);
+      const bytes = await bytesFromData(data);
+      if (options.compress === false) return put(bytes);
+      const codec = options.compress === "gzip" ? "gzip" as const : "brotli" as const;
+      return put(await compressAuto(bytes, { codec }));
     },
-    async writeJSON(json, credential = null, options: WriteJsonOptions = {}) {
-      return this.write(JSON.stringify(json), options.filename ?? "manifest.json", credential, options);
+    async writeJSON(json, _credential = null, options: WriteJsonOptions = {}) {
+      const bytes = new TextEncoder().encode(JSON.stringify(json));
+      if (options.compress === false) return put(bytes);
+      const codec = options.compress === "gzip" ? "gzip" as const : "brotli" as const;
+      const hint: CompressHint = "json";
+      return put(await compressAuto(bytes, { codec, hint }));
     },
   };
 

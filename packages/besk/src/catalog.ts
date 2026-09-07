@@ -75,7 +75,7 @@ export async function getManifest(cid: string) {
   return (await getCore()).getManifest(cid);
 }
 
-/** Write an arbitrary JSON value (object or array) to IPFS, gzip-compressed. */
+/** Write an arbitrary JSON value (object or array) to IPFS, brotli-compressed. */
 export async function writeJSON(json: unknown): Promise<string> {
   await getCore();
   const cid = await _ipfsWrite!.writeJSON(json as Record<string, any>);

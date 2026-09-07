@@ -25,6 +25,24 @@ describe("maybeDecompress", () => {
     const data = Buffer.from('{"plain":true}', "utf-8");
     expect(await maybeDecompress(data)).toBe('{"plain":true}');
   });
+
+  it("decompresses an ARB\\x01-framed brotli Buffer", async () => {
+    // The token indexer hit exactly this: brotli-framed editor lists reached
+    // JSON.parse raw ("Unexpected token 'A'").
+    const original = '{"compressed":true,"codec":"brotli"}';
+    const packed = zlib.brotliCompressSync(Buffer.from(original, "utf-8"));
+    const framed = Buffer.concat([Buffer.from([0x41, 0x52, 0x42, 0x01]), packed]);
+    expect(await maybeDecompress(framed)).toBe(original);
+  });
+
+  it("decompresses an ARB\\x01-framed brotli Uint8Array", async () => {
+    const original = '{"compressed":true,"codec":"brotli-u8"}';
+    const packed = zlib.brotliCompressSync(Buffer.from(original, "utf-8"));
+    const framed = new Uint8Array(4 + packed.length);
+    framed.set([0x41, 0x52, 0x42, 0x01], 0);
+    framed.set(packed, 4);
+    expect(await maybeDecompress(framed)).toBe(original);
+  });
 });
 
 describe("catManifest / catBytes", () => {

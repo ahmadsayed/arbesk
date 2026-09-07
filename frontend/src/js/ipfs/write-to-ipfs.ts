@@ -4,20 +4,15 @@
  */
 
 import { getUploadCredential } from "../services/backend-client.ts";
-import { compress } from "@arbesk/asset-core/utils/compression.js";
+import { compressAuto, bytesFromData } from "@arbesk/asset-core/utils/compression.js";
+import type {
+  CompressionCodec,
+  CompressHint,
+} from "@arbesk/asset-core/utils/compression.js";
+import type { CompressOption } from "@arbesk/asset-core/types.js";
 import { sanitizeFileName } from "@arbesk/asset-core/utils/uri.js";
 import { uploadToIPFSWithCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
-
-async function bytesFromData(
-  data: Uint8Array | ArrayBuffer | Blob | string
-): Promise<Uint8Array> {
-  if (data instanceof Uint8Array) return data;
-  if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  if (data instanceof Blob) return new Uint8Array(await data.arrayBuffer());
-  if (typeof data === "string") return new TextEncoder().encode(data);
-  throw new Error("writeToIPFS: unsupported data type");
-}
 
 // write-to-ipfs.js is imported by both the main thread and the glTF Web Worker.
 // Use a distinct tag in worker context so uploads originating off-thread are
@@ -32,31 +27,35 @@ function ts(): string {
   return new Date().toLocaleTimeString();
 }
 
-function compressedFilename(filename: string): string {
-  if (!filename) return "asset.bin.gz";
-  return filename.endsWith(".gz") ? filename : `${filename}.gz`;
+function compressedFilename(filename: string, codec: CompressionCodec): string {
+  const ext = codec === "gzip" ? ".gz" : ".br";
+  if (!filename) return `asset.bin${ext}`;
+  return filename.endsWith(".gz") || filename.endsWith(".br") ? filename : `${filename}${ext}`;
 }
 
 /**
  * Writes raw binary/string data to IPFS and returns its CID.
  * @remarks Reused credentials must be marked `reusable` by the backend.
+ *   `compress: true` (the default when callers pass the flag) stores a
+ *   brotli-framed payload; `"gzip"` forces the legacy codec.
  */
 export async function writeToIPFS(
   data: Uint8Array | ArrayBuffer | Blob | string,
   filename: string = "asset.bin",
   credential: UploadCredential | null = null,
-  options: { compress?: boolean } = {}
+  options: { compress?: CompressOption; hint?: CompressHint } = {}
 ): Promise<string> {
   const cred = credential || (await getUploadCredential());
 
   let payload: Uint8Array | ArrayBuffer | Blob | string = data;
   let finalFilename = filename;
   if (options.compress) {
+    const codec: CompressionCodec = options.compress === "gzip" ? "gzip" : "brotli";
     const raw = await bytesFromData(data);
-    payload = compress(raw);
-    finalFilename = compressedFilename(filename);
+    payload = await compressAuto(raw, { codec, hint: options.hint });
+    finalFilename = compressedFilename(filename, codec);
     console.log(
-      `[${ts()}] ${TAG} gzip ${raw.length} bytes → ${payload.length} bytes`
+      `[${ts()}] ${TAG} ${codec} ${raw.length} bytes → ${payload.length} bytes`
     );
   }
 
@@ -87,8 +86,8 @@ export async function writeJSONToIPFS(
   json: Record<string, any>,
   credential: UploadCredential | null = null,
   options: {
-    /** Gzip-compress before uploading. */
-    compress?: boolean;
+    /** Compress before uploading (default codec brotli; "gzip" forces legacy). */
+    compress?: CompressOption;
     /** "collection" or anything else; drives default filename. */
     type?: string;
     /** Used to build the default filename. */
@@ -112,5 +111,8 @@ export async function writeJSONToIPFS(
       assetId || json.asset_id || "composite"
     )}_composite.gltf`;
   }
-  return writeToIPFS(JSON.stringify(json), baseName, credential, { compress });
+  return writeToIPFS(JSON.stringify(json), baseName, credential, {
+    compress,
+    hint: "json",
+  });
 }

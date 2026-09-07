@@ -10,7 +10,8 @@ import {
   DEFAULT_HASH_ALGORITHM,
   SUPPORTED_HASH_ALGORITHMS,
 } from "../../utils/hash.ts";
-import { compress } from "../../utils/compression.ts";
+import { compressAuto } from "../../utils/compression.ts";
+import type { CompressOption } from "../../types.ts";
 import { getRuntime } from "../../runtime-state.ts";
 import {
   IPFS_URI_PREFIX,
@@ -91,17 +92,18 @@ export async function uploadWithDedup(
   bytes: Uint8Array,
   filename: string,
   credential: UploadCredential | null = null,
-  options: { compress?: boolean } = {},
+  options: { compress?: CompressOption } = {},
   dedupMap: Map<string, string> | null = null
 ): Promise<DedupUploadResult> {
   const shouldCompress = !!options.compress;
-  const payload = shouldCompress ? compress(bytes) : bytes;
-  const finalFilename = shouldCompress ? `${filename}.gz` : filename;
-  // Hash over the RAW (uncompressed) content, not the stored payload. The
-  // worker path compresses with the native CompressionStream while this
-  // main-thread path uses fflate; the two emit slightly different gzip bytes for
-  // the same input. Keying dedup and the content cache on the raw content lets
-  // their hash maps interoperate (see test/frontend/dedup-hash-parity.test.js).
+  const codec = options.compress === "gzip" ? ("gzip" as const) : ("brotli" as const);
+  const payload = shouldCompress ? await compressAuto(bytes, { codec, hint: "binary" }) : bytes;
+  const finalFilename = shouldCompress ? `${filename}.${codec === "gzip" ? "gz" : "br"}` : filename;
+  // Hash over the RAW (uncompressed) content, not the stored payload.
+  // Different encoders (brotli-wasm levels, native CompressionStream, fflate)
+  // emit different bytes for the same input. Keying dedup and the content
+  // cache on the raw content lets their hash maps interoperate (see
+  // test/frontend/dedup-hash-parity.test.js).
   const hash = hashBytes(bytes);
   const meta = {
     hash,
@@ -115,10 +117,10 @@ export async function uploadWithDedup(
     return { cid, meta, skipped: true };
   }
 
-  // Coalesce concurrent identical uploads. Key on hash + compression so two
+  // Coalesce concurrent identical uploads. Key on hash + codec so two
   // callers that disagree on the stored encoding don't share a result carrying
   // the wrong `compressed` flag.
-  const inflightKey = `${hash}:${shouldCompress ? 1 : 0}`;
+  const inflightKey = `${hash}:${shouldCompress ? codec : 0}`;
   const existing = _inflightUploads.get(inflightKey);
   if (existing) {
     return existing;

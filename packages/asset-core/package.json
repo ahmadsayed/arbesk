@@ -22,6 +22,7 @@
   "dependencies": {
     "@gltf-transform/core": "catalog:",
     "@openzeppelin/merkle-tree": "catalog:",
+    "brotli-wasm": "^3.0.1",
     "fast-xml-parser": "catalog:",
     "fflate": "catalog:",
     "zod": "catalog:"

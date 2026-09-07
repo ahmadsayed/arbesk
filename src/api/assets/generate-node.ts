@@ -2,8 +2,8 @@ import express from "express";
 import type { Request, Response } from "express";
 import { serializeGLB } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import {
-  isGzipped,
-  decompress,
+  isCompressedPayload,
+  decompressAuto,
 } from "@arbesk/asset-core/utils/compression.js";
 import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import {
@@ -306,7 +306,7 @@ async function runMockGeneration(
 
 /**
  * Fetches a source asset from IPFS and returns it as a self-contained GLB.
- * @remarks Decompresses gzipped assets and composes glTF JSON to GLB.
+ * @remarks Decompresses brotli/gzipped assets and composes glTF JSON to GLB.
  * @throws TripoApiError (400) when the source is unavailable, unsupported, or >150 MB.
  * @returns self-contained GLB Buffer
  */
@@ -327,11 +327,12 @@ async function resolveSourceGlb(
     console.log(`[GEN] source GLB empty cid=${cid}`);
     throw new TripoApiError("Source asset unavailable in IPFS", 0, 400);
   }
-  // Decomposed assets are stored gzipped — decompress before any
-  // format detection (gzip magic would otherwise read as "not glTF").
-  if (isGzipped(glb)) {
-    console.log(`[GEN] source asset is gzipped — decompressing cid=${cid}`);
-    glb = Buffer.from(decompress(glb));
+  // Decomposed assets are stored compressed — decompress before any
+  // format detection (the brotli frame or gzip magic would otherwise read
+  // as "not glTF").
+  if (isCompressedPayload(glb)) {
+    console.log(`[GEN] source asset is compressed — decompressing cid=${cid}`);
+    glb = Buffer.from(await decompressAuto(glb));
   }
   // Raw size gate first: an oversized source is too large regardless of
   // format (and composing would only make it bigger).

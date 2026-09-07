@@ -15,10 +15,11 @@ import type {
 } from "@arbesk/asset-core/types.js";
 import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import {
-  compress,
-  decompress,
-  isGzipped,
+  compressAuto,
+  decompressAuto,
+  bytesFromData,
 } from "@arbesk/asset-core/utils/compression.js";
+import type { CompressHint } from "@arbesk/asset-core/utils/compression.js";
 import type { StorageAdapter } from "./storage/index.ts";
 
 /** Buffer/Uint8Array → standalone ArrayBuffer (no shared-pool aliasing). */
@@ -31,19 +32,18 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 /**
  * IpfsReadPort over the backend storage adapter.
- * @remarks getJSON/getBytes auto-gunzip (decomposed components are stored
- *   gzipped); getRawBytes returns the exact stored bytes.
+ * @remarks getJSON/getBytes auto-decompress (decomposed components are stored
+ *   brotli-framed or, historically, gzipped); getRawBytes returns the exact
+ *   stored bytes.
  */
 function createBackendIpfsReadPort(storage: StorageAdapter): IpfsReadPort {
   return {
     async getJSON(cid) {
-      const raw = await storage.catBytes(cid);
-      const bytes = isGzipped(raw) ? decompress(raw) : raw;
+      const bytes = await decompressAuto(await storage.catBytes(cid));
       return JSON.parse(new TextDecoder().decode(bytes));
     },
     async getBytes(cid) {
-      const raw = await storage.catBytes(cid);
-      const bytes = isGzipped(raw) ? decompress(raw) : raw;
+      const bytes = await decompressAuto(await storage.catBytes(cid));
       return toArrayBuffer(bytes);
     },
     async getRawBytes(cid) {
@@ -64,26 +64,23 @@ function createBackendIpfsWritePort(storage: StorageAdapter): IpfsWritePort {
     _credential: UploadCredential | null = null,
     options = {}
   ) => {
-    let bytes =
-      data instanceof Uint8Array
-        ? data
-        : data instanceof ArrayBuffer
-          ? new Uint8Array(data)
-          : typeof data === "string"
-            ? new TextEncoder().encode(data)
-            : new Uint8Array(await (data as Blob).arrayBuffer());
-    if (options.compress) bytes = compress(bytes);
-    return storage.add(bytes, filename);
+    const bytes = await bytesFromData(data);
+    if (!options.compress) return storage.add(bytes, filename);
+    const codec = options.compress === "gzip" ? ("gzip" as const) : ("brotli" as const);
+    return storage.add(await compressAuto(bytes, { codec }), filename);
   };
   return {
     write,
-    writeJSON: (json, credential = null, options = {}) =>
-      write(
-        JSON.stringify(json),
-        options.filename ?? "manifest.json",
-        credential,
-        options
-      ),
+    writeJSON: async (json, credential = null, options = {}) => {
+      const bytes = new TextEncoder().encode(JSON.stringify(json));
+      if (!options.compress) {
+        return write(bytes, options.filename ?? "manifest.json", credential, options);
+      }
+      const codec = options.compress === "gzip" ? ("gzip" as const) : ("brotli" as const);
+      const hint: CompressHint = "json";
+      const packed = await compressAuto(bytes, { codec, hint });
+      return storage.add(packed, options.filename ?? "manifest.json");
+    },
   };
 }
 

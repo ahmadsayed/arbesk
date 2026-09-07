@@ -1,13 +1,22 @@
 /**
  * Environment adapters: the host half of the asset-core ports for the CLI.
  * listTokens → backend indexer; tokenURI → viem readContract; IPFS → gateway
- * (reads, auto-gunzip) and backend-minted upload credentials (writes,
- * gzip-compressed) — kubo-api locally, Pinata presigned-put on testnet.
+ * (reads, auto-decompress brotli/gzip) and backend-minted upload credentials
+ * (writes, brotli-compressed by default) — kubo-api locally, Pinata
+ * presigned-put on testnet.
  */
 import { createPublicClient, http } from "viem";
 import { encodePacked, keccak256 } from "viem/utils";
 import type { PublicClient, Address } from "viem";
 import { gzipSync, gunzipSync } from "zlib";
+import { createRequire } from "node:module";
+import type { CompressOption } from "@arbesk/asset-core/types.js";
+import type { BrotliWasmType } from "brotli-wasm";
+import {
+  isBrotliFramed,
+  frameBrotliPayload,
+  unframeBrotliPayload,
+} from "@arbesk/asset-core/utils/brotli-frame.js";
 import { uploadToIPFSWithCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 import { BACKEND_URL, CHAIN_ID } from "./config.ts";
@@ -78,6 +87,33 @@ function isGzipped(bytes: Uint8Array): boolean {
   return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
 }
 
+// Self-describing frame for brotli payloads comes from the shared,
+// dependency-free asset-core module. The ESM entry of brotli-wasm fetches its
+// .wasm over file:// (unsupported under plain Node), so the CLI loads the
+// synchronous CJS build via require.
+const brotli = createRequire(import.meta.url)("brotli-wasm") as BrotliWasmType;
+
+/** Brotli-compress with the ARB\x01 frame; q11 for JSON, q5 for binary. */
+function compressBrotli(bytes: Uint8Array, hint: "json" | "binary"): Uint8Array {
+  const packed = brotli.compress(bytes, { quality: hint === "json" ? 11 : 5 });
+  return frameBrotliPayload(packed);
+}
+
+/** Decompress a stored payload: brotli frame → brotli, gzip magic → gunzip, else raw. */
+function decompressStored(bytes: Uint8Array): Uint8Array {
+  if (isBrotliFramed(bytes)) return brotli.decompress(unframeBrotliPayload(bytes));
+  if (isGzipped(bytes)) return new Uint8Array(gunzipSync(bytes));
+  return bytes;
+}
+
+/** Compress for storage per the port option: false → raw, "gzip" → legacy, else brotli. */
+function compressForStore(bytes: Uint8Array, compress: CompressOption | undefined, hint: "json" | "binary"):
+  { bytes: Uint8Array; ext: string } {
+  if (compress === false) return { bytes, ext: "" };
+  if (compress === "gzip") return { bytes: new Uint8Array(gzipSync(bytes)), ext: ".gz" };
+  return { bytes: compressBrotli(bytes, hint), ext: ".br" };
+}
+
 export function createIpfsReadPort(gatewayUrl: string) {
   // Gateway URLs differ: local Kubo is "http://127.0.0.1:8080" (append /ipfs/),
   // Pinata is "https://…mypinata.cloud/ipfs/" (already has /ipfs/). Handle both.
@@ -92,24 +128,23 @@ export function createIpfsReadPort(gatewayUrl: string) {
     return trace("ipfs fetch " + cid, async () => {
       const res = await fetch(urlFor(cid));
       const buf = new Uint8Array(await res.arrayBuffer());
-      debug("ipfs http", res.status, buf.length + " bytes", isGzipped(buf) ? "(gzipped)" : "");
+      debug("ipfs http", res.status, buf.length + " bytes",
+        isBrotliFramed(buf) ? "(brotli)" : isGzipped(buf) ? "(gzipped)" : "");
       return buf;
     });
   };
   return {
     getJSON: async (cid: string) => {
-      const buf = await fetchRaw(cid);
-      const plain = isGzipped(buf) ? new Uint8Array(gunzipSync(buf)) : buf;
+      const plain = decompressStored(await fetchRaw(cid));
       return JSON.parse(new TextDecoder().decode(plain));
     },
     getBytes: async (cid: string) => {
-      const buf = await fetchRaw(cid);
-      const plain = isGzipped(buf) ? new Uint8Array(gunzipSync(buf)) : buf;
-      return plain.buffer;
+      const plain = decompressStored(await fetchRaw(cid));
+      return plain.buffer.slice(plain.byteOffset, plain.byteOffset + plain.byteLength) as ArrayBuffer;
     },
     getRawBytes: async (cid: string) => {
       const buf = await fetchRaw(cid);
-      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     },
   };
 }
@@ -152,16 +187,17 @@ export function createIpfsWritePort() {
     return c;
   };
   return {
-    write: async (data: unknown, filename?: string, _credential?: unknown, options?: { compress?: boolean }) => {
-      let bytes = await toBytes(data);
-      if (options?.compress !== false) bytes = new Uint8Array(gzipSync(bytes));
+    write: async (data: unknown, filename?: string, _credential?: unknown, options?: { compress?: CompressOption }) => {
+      const raw = await toBytes(data);
+      const { bytes, ext } = compressForStore(raw, options?.compress, "binary");
       return trace("ipfs write " + (filename ?? "blob") + " (" + bytes.length + " bytes)", async () =>
-        uploadToIPFSWithCredential(bytes, (filename ?? "blob") + ".gz", await credentialFor()));
+        uploadToIPFSWithCredential(bytes, (filename ?? "blob") + ext, await credentialFor()));
     },
-    writeJSON: async (json: Record<string, unknown>) => {
-      const bytes = new Uint8Array(gzipSync(Buffer.from(JSON.stringify(json))));
+    writeJSON: async (json: Record<string, unknown>, _credential?: unknown, options?: { compress?: CompressOption }) => {
+      const raw = new Uint8Array(Buffer.from(JSON.stringify(json)));
+      const { bytes, ext } = compressForStore(raw, options?.compress, "json");
       return trace("ipfs write manifest.json (" + bytes.length + " bytes)", async () =>
-        uploadToIPFSWithCredential(bytes, "manifest.json.gz", await credentialFor()));
+        uploadToIPFSWithCredential(bytes, "manifest.json" + ext, await credentialFor()));
     },
   };
 }

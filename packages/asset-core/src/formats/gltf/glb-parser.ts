@@ -17,6 +17,7 @@ import {
 } from "./dedup.ts";
 import type { DedupMeta } from "./dedup.ts";
 import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
+import type { CompressOption } from "../../types.ts";
 
 // serializeGLB lives in gltf-core.js (shared with the backend, which packs
 // composed composites to GLB for Tripo uploads) — re-exported here so
@@ -95,7 +96,7 @@ async function writeBytes(
   bytes: Uint8Array | string,
   filename: string,
   credential: UploadCredential | null = null,
-  options: { compress?: boolean } = {},
+  options: { compress?: CompressOption } = {},
   dedupMap: Map<string, string> | null = null
 ): Promise<{ cid: string; meta: DedupMeta | null; skipped: boolean }> {
   if (writer) {
@@ -168,7 +169,7 @@ interface DecomposeGLBOptions {
    *   mutates the composite and writes its own final version. */
   storeComposite?: boolean;
   credential?: UploadCredential | null;
-  compress?: boolean;
+  compress?: CompressOption;
   assetName?: string;
   assetId?: string;
   dedupMap?: Map<string, string> | null;
@@ -186,7 +187,7 @@ interface UploadContext {
   writer: GlbWriter | null | undefined;
   baseName: string;
   credential: UploadCredential | null;
-  compress: boolean;
+  compress: CompressOption;
   dedupMap: Map<string, string> | null;
   stats: DecomposeStats;
 }

@@ -7,7 +7,7 @@
  *   the input to choose the codec.
  */
 
-import type { ArbeskCoreConfig } from "./types.ts";
+import type { ArbeskCoreConfig, CompressOption } from "./types.ts";
 import { initRuntime, getRuntime } from "./runtime.ts";
 import type { UploadCredential } from "./storage/ipfs/upload-with-credential.ts";
 import {
@@ -37,7 +37,7 @@ import type { CollectionSummary, AssetSummary } from "./catalog/index.ts";
 export interface UploadOptions {
   onProgress?: (fraction: number) => void;
   credential?: UploadCredential | null;
-  compress?: boolean;
+  compress?: CompressOption;
   assetName?: string;
   assetId?: string;
   dedupMap?: Map<string, string> | null;

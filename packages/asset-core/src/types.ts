@@ -1,17 +1,24 @@
 /** Port + config types for asset-core. No runtime code here. */
 import type { UploadCredential } from "./storage/ipfs/upload-with-credential.ts";
+import type { CompressionCodec } from "./utils/compression.ts";
+
+/**
+ * `compress` option for IPFS writes: `true` compresses with the default codec
+ * (brotli), `"gzip"` / `"brotli"` force a codec, `false` stores raw bytes.
+ */
+export type CompressOption = boolean | CompressionCodec;
 
 export interface IpfsReadPort {
-  /** JSON fetch with auto-gunzip. */
+  /** JSON fetch with auto-decompress (brotli frame / gzip / raw). */
   getJSON(cid: string): Promise<any>;
-  /** Byte fetch with auto-gunzip and optional progress (0..1). */
+  /** Byte fetch with auto-decompress and optional progress (0..1). */
   getBytes(cid: string, onProgress?: (fraction: number) => void): Promise<ArrayBuffer>;
-  /** Byte fetch with NO gunzip. */
+  /** Byte fetch with NO decompression. */
   getRawBytes(cid: string): Promise<ArrayBuffer>;
 }
 
 export interface WriteJsonOptions {
-  compress?: boolean;
+  compress?: CompressOption;
   type?: string;
   assetId?: string;
   filename?: string;
@@ -22,7 +29,7 @@ export interface IpfsWritePort {
     data: Uint8Array | ArrayBuffer | Blob | string,
     filename?: string,
     credential?: UploadCredential | null,
-    options?: { compress?: boolean }
+    options?: { compress?: CompressOption }
   ): Promise<string>;
   writeJSON(
     json: Record<string, any>,

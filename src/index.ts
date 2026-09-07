@@ -175,6 +175,7 @@ const PRECOMPRESSED_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".svg": "image/svg+xml",
   ".json": "application/json",
+  ".wasm": "application/wasm",
 };
 
 app.use((req, res, next) => {

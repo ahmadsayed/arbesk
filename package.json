@@ -2,7 +2,7 @@
   "name": "arbesk",
   "type": "module",
   "version": "0.1.0",
-  "description": "Arbesk — 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
+  "description": "Arbesk \u2014 4D Fractal Version-Controlled 3D Asset Platform. Cloud-native 3D generation meets decentralized scene graphs.",
   "main": "src/index.ts",
   "workspaces": {
     "packages": [
@@ -67,6 +67,7 @@
     "@coinbase/cdp-sdk": "^1.53.0",
     "@gltf-transform/core": "catalog:",
     "@openzeppelin/merkle-tree": "catalog:",
+    "brotli-wasm": "^3.0.1",
     "commander": "^15.0.0",
     "compression": "^1.8.1",
     "express": "^4.18.2",

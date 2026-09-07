@@ -7,7 +7,7 @@
  */
 
 import { getConfig } from "../services/backend-client.ts";
-import { isGzipped, decompress } from "@arbesk/asset-core/utils/compression.js";
+import { isCompressedPayload, decompressAuto } from "@arbesk/asset-core/utils/compression.js";
 import { arrayBufferToBase64 } from "@arbesk/asset-core/utils/encoding.js";
 import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";
 
@@ -92,10 +92,10 @@ async function fetchIpfsBytes(
   onProgress?: (fraction: number) => void
 ): Promise<Uint8Array> {
   const bytes = await fetchIpfsRawBytes(cid, onProgress);
-  if (isGzipped(bytes)) {
-    const decompressed = decompress(bytes);
+  if (isCompressedPayload(bytes)) {
+    const decompressed = await decompressAuto(bytes);
     console.log(
-      `[IPFS] gunzipped ${bytes.byteLength} → ${decompressed.length} bytes`
+      `[IPFS] decompressed ${bytes.byteLength} → ${decompressed.length} bytes`
     );
     return decompressed;
   }

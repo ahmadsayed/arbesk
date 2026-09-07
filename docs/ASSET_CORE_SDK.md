@@ -323,8 +323,11 @@ a chain. Only editor ops need `chain` (reads) and `hash` (Merkle leaves), and
 on-chain submission is always the caller's job.
 
 **Where does compression fit?**
-Writes gzip by default (`compress: true`); reads auto-detect the gzip magic.
-You never handle this yourself.
+Writes compress by default (`compress: true`) with **brotli** — payloads carry a
+self-describing `ARB\x01` frame (brotli streams have no magic bytes); pass
+`compress: "gzip"` for the legacy codec or `compress: false` for raw bytes.
+Reads auto-detect frame → gzip magic → raw passthrough, so every historical CID
+keeps working. You never handle this yourself.
 
 **What CIDs/formats does it produce?**
 Exactly the same manifests, `ipfs://` buffer URIs, and dedup behavior as the

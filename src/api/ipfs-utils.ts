@@ -5,6 +5,10 @@
 
 import zlib from "zlib";
 import type { KuboClient } from "ipfs-http-client";
+import {
+  isBrotliFramed,
+  unframeBrotliPayload,
+} from "@arbesk/asset-core/utils/brotli-frame.js";
 
 function toBuffer(data: unknown): Buffer {
   if (Buffer.isBuffer(data)) return data;
@@ -14,16 +18,17 @@ function toBuffer(data: unknown): Buffer {
   return Buffer.from(data as ArrayBuffer);
 }
 
-/** Decompresses gzipped data if needed, otherwise returns as-is. */
+/** Decompresses brotli-framed or gzipped data if needed, otherwise returns as-is. */
 export async function maybeDecompress(
   data: Buffer | Uint8Array | ArrayBuffer | string,
 ): Promise<string> {
   if (!data) return "";
 
-  // Legacy string path: only reliable for uncompressed strings. Gzipped binary
-  // that has already been UTF-8 decoded to a string cannot be decompressed
-  // because the byte sequence has been replaced/re-encoded. Callers that need
-  // to handle gzipped content should pass raw bytes from catBytes().
+  // Legacy string path: only reliable for uncompressed strings. Compressed
+  // binary that has already been UTF-8 decoded to a string cannot be
+  // decompressed because the byte sequence has been replaced/re-encoded.
+  // Callers that need to handle compressed content should pass raw bytes from
+  // catBytes().
   if (typeof data === "string") {
     if (
       data.length >= 2 &&
@@ -41,6 +46,16 @@ export async function maybeDecompress(
   }
 
   const buffer = toBuffer(data);
+  if (isBrotliFramed(new Uint8Array(buffer))) {
+    try {
+      const decompressed = zlib.brotliDecompressSync(
+        unframeBrotliPayload(new Uint8Array(buffer)),
+      );
+      return Buffer.from(decompressed).toString("utf-8");
+    } catch (e) {
+      console.warn("[DECOMPRESS] failed to brotli-decompress buffer:", (e as Error).message);
+    }
+  }
   if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
     try {
       const decompressed = zlib.gunzipSync(buffer);

@@ -79,6 +79,19 @@ const aliasPlugin = (aliases) => ({
 const GLTF_ALIAS = { '@gltf-transform/core': GLTF_TRANSFORM_VENDOR };
 const ZUSTAND_ALIAS = { zustand: require.resolve('zustand/vanilla') };
 
+// brotli-wasm is a dependency of @arbesk/asset-core (not of the frontend),
+// and bun's isolated installs don't expose it at the root — resolve it from
+// the asset-core workspace. Browser bundles alias the package to its web
+// build, whose init() fetches brotli_wasm_bg.wasm relative to the final
+// bundle URL; build() stages that file next to app.js and the worker.
+const BROTLI_PKG_DIR = path.dirname(
+  require.resolve('brotli-wasm', {
+    paths: [path.resolve(__dirname, '../../packages/asset-core')],
+  })
+);
+const BROTLI_ALIAS = { 'brotli-wasm': path.join(BROTLI_PKG_DIR, 'index.web.js') };
+const BROTLI_WASM_FILE = path.join(BROTLI_PKG_DIR, 'pkg.web', 'brotli_wasm_bg.wasm');
+
 const common = {
   target: 'browser',
   minify: true,
@@ -128,7 +141,7 @@ async function build() {
     naming: 'app.js',
     format: 'esm',
     external: ['@coinbase/cdp-core', 'viem', 'viem/utils'],
-    plugins: [nodeBuiltinsStub, aliasPlugin({ ...GLTF_ALIAS, ...ZUSTAND_ALIAS })],
+    plugins: [nodeBuiltinsStub, aliasPlugin({ ...GLTF_ALIAS, ...ZUSTAND_ALIAS, ...BROTLI_ALIAS })],
   }, 'app.js');
 
   // 3. Self-contained glTF worker (module workers get no import map).
@@ -138,8 +151,16 @@ async function build() {
     outdir: path.join(distRoot, 'workers'),
     naming: 'gltf-worker.js',
     format: 'esm',
-    plugins: [nodeBuiltinsStub, aliasPlugin(GLTF_ALIAS)],
+    plugins: [nodeBuiltinsStub, aliasPlugin({ ...GLTF_ALIAS, ...BROTLI_ALIAS })],
   }, 'workers/gltf-worker.js');
+
+  // 3b. brotli-wasm's web glue fetches its WASM relative to the importing
+  //     bundle's URL — stage it next to app.js and gltf-worker.js.
+  const fs = require('fs');
+  for (const dir of [distRoot, path.join(distRoot, 'workers')]) {
+    fs.copyFileSync(BROTLI_WASM_FILE, path.join(dir, 'brotli_wasm_bg.wasm'));
+  }
+  console.log('[BUNDLE] brotli_wasm_bg.wasm staged next to app.js + worker');
 
   // 4. Classic (non-module) synchronous head scripts.
   for (const rel of ['engine/theme-init', 'app/initial-view']) {

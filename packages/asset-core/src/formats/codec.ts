@@ -7,6 +7,7 @@
  */
 
 import type { UploadCredential } from "../storage/ipfs/upload-with-credential.ts";
+import type { CompressOption } from "../types.ts";
 
 /** Result of decomposing a raw artifact into its content-addressed form. */
 export interface DecomposeResult {
@@ -30,8 +31,8 @@ export interface DecomposeOptions {
   format?: string;
   /** Reusable upload credential (absent → default runtime write path). */
   credential?: UploadCredential | null;
-  /** Gzip-compress components before upload. */
-  compress?: boolean;
+  /** Compress components before upload (default codec brotli; "gzip" forces legacy). */
+  compress?: CompressOption;
   /** Asset name for IPFS filenames. */
   assetName?: string;
   /** Asset ID for IPFS filenames. */
