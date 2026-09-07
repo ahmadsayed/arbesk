@@ -219,6 +219,8 @@ export async function createTask(
     // Scale to estimated real-world meters — without this Tripo models often
     // arrive tiny and the Studio camera has to hunt for them.
     auto_size: true,
+    // Experiment: EXT_meshopt_compression output to measure size/load wins.
+    compress: "geometry",
     ...textureQualityField(options),
   });
   console.log(`[GEN] Tripo task created task_id=${taskId}`);
@@ -325,6 +327,8 @@ export async function createImageTask(
     texture: true,
     pbr: true,
     auto_size: true,
+    // Experiment: EXT_meshopt_compression output to measure size/load wins.
+    compress: "geometry",
     ...textureQualityField(options),
   });
   console.log(`[GEN] Tripo image task created task_id=${taskId}`);
@@ -378,6 +382,8 @@ export async function createMultiviewTask(
     texture: true,
     pbr: true,
     auto_size: true,
+    // Experiment: EXT_meshopt_compression output to measure size/load wins.
+    compress: "geometry",
     ...textureQualityField(options),
   });
   console.log(`[GEN] Tripo multiview task created task_id=${taskId}`);

@@ -34,3 +34,30 @@ test("registers a plugin callback that sets animationStartMode NONE on gltf", ()
   callbacks[0](otherPlugin);
   expect(otherPlugin.animationStartMode).toBe(1);
 });
+
+test("pins the meshopt decoder to the versioned CDN and warms the Default instance", () => {
+  let defaultAccessed = false;
+  global.BABYLON = {
+    SceneLoader: {
+      OnPluginActivatedObservable: { add: () => {} },
+    },
+    GLTF2: { GLTFLoaderAnimationStartMode: { NONE: 0 } },
+    MeshoptCompression: {
+      set Configuration(value) {
+        this._config = value;
+      },
+      get Default() {
+        defaultAccessed = true;
+        return {};
+      },
+    },
+  };
+
+  registerGltfLoaderDefaults();
+  expect(defaultAccessed).toBe(true);
+  expect(global.BABYLON.MeshoptCompression._config).toEqual({
+    decoder: {
+      url: "https://cdn.babylonjs.com/v9.12.0/meshopt_decoder.js",
+    },
+  });
+});

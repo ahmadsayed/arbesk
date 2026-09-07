@@ -45,6 +45,7 @@ describe("tripo3d adapter", () => {
       model: "v3.1-20260211",
       texture: true,
       pbr: true,
+      compress: "geometry",
     });
   });
 
@@ -165,6 +166,7 @@ describe("tripo3d adapter", () => {
       texture: true,
       pbr: true,
       auto_size: true,
+      compress: "geometry",
     });
   });
 
@@ -198,6 +200,7 @@ describe("tripo3d adapter", () => {
       texture: true,
       pbr: true,
       auto_size: true,
+      compress: "geometry",
     });
   });
 
@@ -828,6 +831,38 @@ describe("textureQuality", () => {
   it("createRefineTask passes texture_quality through", async () => {
     await createRefineTask("rusty", "file_glb_1", "key", { textureQuality: "detailed" });
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("detailed");
+  });
+});
+
+describe("compress: geometry scope", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_1" } }),
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("generation payloads request meshopt geometry compression", async () => {
+    await createTask("a knight", key);
+    await createImageTask("ftok_123", key);
+    await createMultiviewTask({ front: "ftok_f", left: "ftok_l" }, key);
+    for (const call of global.fetch.mock.calls) {
+      expect(JSON.parse(call[1].body).compress).toBe("geometry");
+    }
+  });
+
+  it("follow-up payloads (retexture/decimate/rig) never send compress", async () => {
+    await createRefineTask("rusty", "file_glb_1", key);
+    await decimateTask("file_glb_1", key);
+    await rigCheckTask("file_glb_1", key);
+    await rigModelTask("file_glb_1", "biped", key);
+    for (const call of global.fetch.mock.calls) {
+      expect(JSON.parse(call[1].body).compress).toBeUndefined();
+    }
   });
 });
 
