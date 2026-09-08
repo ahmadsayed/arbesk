@@ -1,0 +1,302 @@
+{
+  "repo_notes": [
+    {
+      "content": ""
+    }
+  ],
+  "pages": [
+    {
+      "title": "Arbesk Platform Overview",
+      "purpose": "High-level introduction to Arbesk: its purpose as a cloud-native 4D fractal version-controlled 3D asset platform, key architectural pillars (Babylon.js, IPFS, EVM, Tripo3D), and how the major subsystems relate. Links to child pages for deeper coverage.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Getting Started & Development Setup",
+      "purpose": "How to set up the local development environment: Docker services (IPFS/Kubo, Hardhat, Nostr relay), environment variables, the start-dev.sh launcher, worktree isolation, and the mock 3D generation mode.",
+      "parent": "Arbesk Platform Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Core Concepts & Terminology",
+      "purpose": "Defines the foundational concepts that permeate the entire codebase: Fractal Manifests, CIDs, Collection Manifests, the 4D versioning model, BYOK, and the client-side-first philosophy. Serves as a conceptual primer before diving into subsystems.",
+      "parent": "Arbesk Platform Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Backend API",
+      "purpose": "Overview of the Express backend mounted at /api/v1, its responsibilities as a thin gatekeeper, and the major route groups. Links to child pages for authentication, generation, IPFS, and indexer subsystems.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Authentication & Session Management",
+      "purpose": "SIWE-based authentication flow for EOA and CDP smart accounts, session token lifecycle, the siwe-verify.ts middleware, rate limiting, and authorization guards for protected endpoints.",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "3D Generation Pipeline",
+      "purpose": "The /api/v1/generations endpoints, the Tripo3D adapter, the mock adapter, the task registry state machine, multi-stage animate chain (rig-check → rig → retarget), GLB composition from IPFS, and the BYOK model.",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "IPFS Storage & Manifest Utilities",
+      "purpose": "Backend IPFS storage adapters (Kubo and Pinata), upload credential minting, the Pinata credential pool, manifest validation and chain-walking utilities, IPFS GC reachability analysis, and the unpin/cleanup flow.",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Token Indexer, Paymaster & Auxiliary Routes",
+      "purpose": "The /indexer/owned and /indexer/shared endpoints for chunked on-chain token discovery via eth_getLogs, the ERC-4337 paymaster proxy for gas sponsorship, the Nostr-based comments archive snapshot, and the chat proxy route.",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Frontend Architecture",
+      "purpose": "Overview of the browser-side SPA: the Pug/SCSS shell, the Studio and Library views, the module structure under frontend/src/js/, and how the engine, domain, services, and UI layers interact. Links to child pages.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "3D Engine & Scene Graph",
+      "purpose": "The Babylon.js engine initialization (initEngine), ArcRotateCamera management, orthographic snapping, scene graph node anchors, viewport chrome, selection logic, ChildRef/child anchor traversal, and the render loop lifecycle.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Asset Manifest Domain & State Management",
+      "purpose": "The assetStore reactive state container, the domain/asset.ts facade, save-then-publish pipeline, collection management, identity adoption (CID/TokenID synchronization), the manifest-builder serialization pipeline, and the decomposeManifestNodes flow.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Version History & Time-Travel",
+      "purpose": "The version-history-store singleton, manifest chain walking, the 3D model-clock-gizmo (ring gizmo with drag scrubbing and shader arc), the 2D scene-clock HUD, the version-clock UI component, and the comment thread system.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Transform Gizmos & Undo/Redo",
+      "purpose": "The transform gizmo system (translate/rotate/scale), multi-selection group pivots, the undo-controller stack, registerUndoApplier extensibility, gizmo drag capture, and keyboard shortcut handling.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "AI Generation Chat Interface",
+      "purpose": "The chat-messages.js API (addAssetMessage, addWorkingMessage, addChoiceMessage, addImageMessage), the AI generation pane composer, multiview image support, asset bubble lifecycle (live canvas → snapshot), and the chat-history persistence module.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Asset Library & Collection UI",
+      "purpose": "The Library view (library-view.pug), the asset library grid and toolbar, library context menus, library-details sidebar, the openAssetByTokenId flow, collection selector, and the library-studio roundtrip.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Wallet & Blockchain Integration",
+      "purpose": "The wallet-core.ts Web3 initialization, EOA and CDP smart account flows, SIWE signing, the paymaster gas sponsorship, wallet-payments.ts contract routing (free vs paid tier), the wallet modal/popover UI, and the CDP email OTP login.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "IPFS Client & glTF Pipeline",
+      "purpose": "The frontend IPFS write/upload modules, the glTF decomposer/composer (web-worker backed), GLB parser, the format handler registry (glb-handler, gltf-handler, 3mf-handler), material editor, source-color-editor, and the content cache.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Nesting, Collaboration & Auxiliary UI",
+      "purpose": "Asset nesting (child_ref nodes, dive/ascend navigation, self-add guard, fork vs live-ref), the collaborators panel and Merkle editor proofs, the outliner scene tree, toasts, dialogs, the ledger panel, and the sidebar/settings UI.",
+      "parent": "Frontend Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Smart Contracts",
+      "purpose": "Overview of the two-tier EVM contract system on Base Sepolia / Hardhat local. Links to child pages for contract logic and deployment.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "ArbeskAsset & ArbeskAssetFree Contracts",
+      "purpose": "The ERC-721 contract architecture: ArbeskAssetBase shared logic, the paid-tier USDC PayGo contract, the free-tier daily quota contract, publishAsset/updateAssetURI/burn entrypoints, the Merkle-editor authorization model, and the pause/emergency-stop mechanism.",
+      "parent": "Smart Contracts",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Contract Deployment & Hardhat Configuration",
+      "purpose": "The Hardhat configuration, the deploy.js script, the sync-deployed-addresses.mjs patching flow, deployment artifacts in blockchain/deployments/, and the MockUSDC test token.",
+      "parent": "Smart Contracts",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Testing Strategy",
+      "purpose": "Overview of the multi-layer testing approach: unit/integration tests with Jest, E2E tests with Playwright, and contract tests with Hardhat. Links to child pages for each layer.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Unit & Integration Tests (Jest)",
+      "purpose": "Jest configuration (ESM via @swc/jest, moduleNameMapper), the test directory structure (test/api/, test/frontend/, test/state/), key test patterns for frontend domain logic, API routes, storage adapters, and the mock-gltf-assets fixtures used in tests.",
+      "parent": "Testing Strategy",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "End-to-End Tests (Playwright)",
+      "purpose": "The Playwright E2E framework: global-setup.mjs pipeline (Docker stack init, contract deployment, frontend build, backend spawn), global-teardown.mjs, the studio-selectors.mjs SELECTORS map, the flows.mjs helper library, worktree isolation, and the full spec suite (01–20).",
+      "parent": "Testing Strategy",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Infrastructure & DevOps",
+      "purpose": "Docker Compose services (IPFS/Kubo, Hardhat, Nostr relay), the Dockerfile for IPFS, the start-dev.sh launcher modes (local/testnet/setup-only), worktree creation and isolation, coverage merging, and the scripts/ utilities.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Docker Services & Environment Configuration",
+      "purpose": "The docker-compose.yml service definitions (IPFS private node with no DHT, Hardhat EVM, Nostr relay), the docker/ Dockerfile and entrypoint.sh, the nostr-relay.toml configuration, and the .env.example reference for all environment variables.",
+      "parent": "Infrastructure & DevOps",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Scripts & Worktree Workflow",
+      "purpose": "The scripts/ directory: start-dev.sh modes, create-worktree.sh for parallel feature branches, sync-deployed-addresses.mjs for contract address patching, merge-all-coverage.mjs for unified JS+Solidity coverage, and run-ipfs-gc.mjs for manual GC.",
+      "parent": "Infrastructure & DevOps",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "UI Design System & Styling",
+      "purpose": "Overview of the SCSS architecture: design tokens, component stylesheets, and the HIG (Human Interface Guidelines) documentation. Links to child pages.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Design Tokens & Component Styles",
+      "purpose": "The three-layer token system (_tokens.scss: raw palette → surface variants → theme aliases), the main styles.scss entry point, and the component-level SCSS files for chat, inspector, sidebar, outliner, viewport, library grid, cards, dialogs, and toasts.",
+      "parent": "UI Design System & Styling",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Human Interface Guidelines (HIG)",
+      "purpose": "The docs/hig/ documentation covering layout principles, nesting UI patterns, design token usage, audit checklists, and the GNOME HIG audit findings applied to the Arbesk Studio interface.",
+      "parent": "UI Design System & Styling ",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}
