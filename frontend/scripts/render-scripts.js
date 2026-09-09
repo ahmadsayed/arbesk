@@ -23,7 +23,7 @@ module.exports = function renderScripts() {
         fs.cpSync(assetCoreDist, assetCoreDest, { recursive: true });
         console.log('### INFO: Vendored @arbesk/asset-core into dist/js/vendor/asset-core');
     } else {
-        console.log('### WARN: packages/asset-core/dist missing — run `npm run build:packages` first');
+        console.log('### WARN: packages/asset-core/dist missing — run `bun run build:packages` first');
     }
 
   // Vendor the built @arbesk/wallet workspace package (same pattern as asset-core).
@@ -33,7 +33,7 @@ module.exports = function renderScripts() {
     fs.cpSync(walletDist, walletDest, { recursive: true });
     console.log('### INFO: Vendored @arbesk/wallet into dist/js/vendor/wallet');
   } else {
-    console.log('### WARN: packages/wallet/dist missing — run `npm run build:packages` first');
+    console.log('### WARN: packages/wallet/dist missing — run `bun run build:packages` first');
   }
 
     // Copy shared root-level constants so browser imports like

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: arbesk
+  labels: { app: arbesk }
+spec:
+  selector: { app: arbesk }
+  ports:
+    - port: 80
+      targetPort: 9090

@@ -12,7 +12,7 @@ function cleanTmp() {
 function runE2E(args) {
   return new Promise((resolve) => {
     const child = spawn(
-      "npm",
+      "bun",
       ["run", "test:e2e", "--", ...args],
       {
         stdio: "inherit",

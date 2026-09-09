@@ -94,7 +94,7 @@ CONTRACT_ADDR=$(grep CONTRACT_ADDRESS blockchain/.env | cut -d= -f2)
 sed -i "s/^CONTRACT_ADDRESS=.*/CONTRACT_ADDRESS=${CONTRACT_ADDR}/" .env
 
 # Step 3: Run integrity tests
-npm run test:frontend
+bun run test:frontend
 ```
 
 ---
@@ -123,7 +123,7 @@ When asked to add a function:
    docker compose up -d hardhat
    docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
    # Sync CONTRACT_ADDRESS (blockchain/.env → root .env)
-   npm run test:frontend
+   bun run test:frontend
    ```
 
 6. **Update frontend** if called from browser:
@@ -133,7 +133,7 @@ When asked to add a function:
 7. **Run full test suite:**
    ```bash
    docker compose run --rm hardhat npx hardhat test
-   npm run test:frontend
+   bun run test:frontend
    ```
 
 ---

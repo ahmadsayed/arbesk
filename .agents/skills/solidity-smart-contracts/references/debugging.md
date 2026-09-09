@@ -80,7 +80,7 @@ const paidEvents = events.filter(e => e.name === 'AssetGenerationPaidUSDC');
 | `ERC20: transfer amount exceeds balance` | Wallet holds less USDC than tier cost | Mint MockUSDC (local) or fund the wallet |
 | `DailyGenerationLimitReached` | Free-tier 10/day quota exhausted | Wait for next day (contract `owner()` bypasses quota) |
 | `c.methods.X is not a function` | Stale ABI | Recompile |
-| `Transaction reverted` | Wrong contract address or network | Run `npm run test:frontend` |
+| `Transaction reverted` | Wrong contract address or network | Run `bun run test:frontend` |
 | `WRONG_CONTRACT` from backend | `receipt.to` ≠ `CONTRACT_ADDRESS` | Check root `.env` matches deployed address |
 | `WRONG_CONTRACT` with smart account | MetaMask routed tx through proxy | See Section 9: Smart Account Proxy Validation |
 | Session signing every request | Address case mismatch in localStorage | See Section 10: Session Authentication Pitfalls |
@@ -136,7 +136,7 @@ docker compose run --rm hardhat npx hardhat test
 
 ```bash
 # Full pipeline check (requires Hardhat node running)
-npm run test:frontend
+bun run test:frontend
 ```
 
 This suite (`test/frontend/deployment-integrity.test.js`) validates:

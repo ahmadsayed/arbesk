@@ -25,7 +25,7 @@ import { createArbeskCore } from "@arbesk/asset-core";
 import { composeGltfJson } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 ```
 
-- **Build** — `npm run build:packages` (also wired as `prestart`/`pretypecheck`/
+- **Build** — `bun run build:packages` (also wired as `prestart`/`pretypecheck`/
   `prebuild:frontend`, so it runs automatically where needed).
 - **Node (backend, scripts)** — resolves `@arbesk/asset-core` through the
   workspace symlink to `dist/`.
@@ -127,7 +127,7 @@ const core = createArbeskCore({
 | `hash` | no | none | Merkle leaf hashing in editor commands | `addEditor`/`removeEditor` throw `editor ops require a HashPort` |
 | `storage` | no | in-memory Map | editor-list cache | editor lists simply aren't persisted across runs |
 | `executor` | no | inline (same thread) | `download`/`compose` and async decompose ops | fine for scripts/backend; browsers should inject the worker executor to keep the UI responsive |
-| `kernels` | no | pure-TS implementations | base64, hashing, GLB sniffing on hot paths | nothing — swap only with benchmark evidence (`npm run bench:asset-core`) |
+| `kernels` | no | pure-TS implementations | base64, hashing, GLB sniffing on hot paths | nothing — swap only with benchmark evidence (`bun run bench:asset-core`) |
 
 Interface signatures are the source of truth: `packages/asset-core/src/types.ts`.
 Reference implementations to copy from:
@@ -218,7 +218,7 @@ production runs today. **Do not build a custom kernel on a hunch** — run the
 benchmark and swap only what it indicts:
 
 ```bash
-npm run bench:asset-core   # timing table + test-results/asset-core-bench.json
+bun run bench:asset-core   # timing table + test-results/asset-core-bench.json
 ```
 
 Note: kernels apply to main-thread execution; the Web Worker path does its
@@ -306,9 +306,9 @@ package cannot tell the difference.
 - New capability the package needs from the outside world? Add a port to
   `types.ts`, never an import.
 
-Verify with: `npm run lint && npm run typecheck && npm run typecheck:frontend && npm test`.
+Verify with: `bun run lint && bun run typecheck && bun run typecheck:frontend && bun run test`.
 If your change touches save/publish, manifest schema, or editor flows, also
-run E2E: `npm run test:e2e -- --project=chromium`.
+run E2E: `bun run test:e2e -- --project=chromium`.
 
 ## 8. FAQ
 

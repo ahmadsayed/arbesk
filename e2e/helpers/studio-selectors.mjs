@@ -1,4 +1,5 @@
 export const SELECTORS = {
+  testnetBanner: "#testnetBanner",
   connectWalletBtn: "#connectWalletBtn",
   disconnectWalletBtn: "#disconnectWalletBtn",
   walletOptionsList: "#walletOptionsList",

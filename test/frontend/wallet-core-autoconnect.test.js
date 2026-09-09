@@ -3,7 +3,7 @@
  *
  * These pin the CURRENT behavior of the wallet auto-restore decision tree
  * before any structural refactor: which provider is restored (CDP /
- * WalletConnect / injected-by-rdns / any-injected fallback) and how errors and
+ * injected-by-rdns / any-injected fallback) and how errors and
  * fallthrough are handled. They assert on observable side effects only:
  * setWeb3Provider, walletState.set (the first thing _finishWalletSetup does),
  * localStorage, and the warn/error log seam.
@@ -16,7 +16,6 @@ const LAST_WALLET_KEY = "arbesk-last-wallet";
 const SMART_ADDR = "0xSmartAccount";
 const EOA_ADDR = "0xEoaAccount";
 const EMAIL = "user@example.com";
-const WC_ADDR = "0xWalletConnect";
 const RDNS_ADDR = "0xInjectedRdns";
 const FALLBACK_ADDR = "0xAnyInjected";
 
@@ -26,7 +25,6 @@ const cdp = {
   result: { smartAccountAddress: SMART_ADDR, eoaAddress: EOA_ADDR, email: EMAIL },
   warmupError: null,
 };
-const wc = { provider: null, accounts: [] };
 const discovery = { rdnsWallet: null, accountsError: null };
 const providerRpc = { chainId: "0x14a34" }; // Base Sepolia — supported chain
 
@@ -61,12 +59,6 @@ async function loadWalletCore() {
     startDiscovery: jest.fn(),
     requestWallets: jest.fn(),
     getWalletByRdns: jest.fn(() => discovery.rdnsWallet),
-  }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-connect.ts", () => ({
-    getWalletConnectProvider: jest.fn(async () => wc.provider),
-    disconnectWalletConnect: jest.fn(),
-    onWalletConnectEvent: jest.fn(),
-    offWalletConnectEvent: jest.fn(),
   }));
   await jest.unstable_mockModule("../../frontend/src/js/ui/wallet-modal.ts", () => ({
     showWalletModal: jest.fn(),
@@ -132,8 +124,6 @@ beforeEach(() => {
   cdp.warmup = true;
   cdp.result = { smartAccountAddress: SMART_ADDR, eoaAddress: EOA_ADDR, email: EMAIL };
   cdp.warmupError = null;
-  wc.provider = null;
-  wc.accounts = [];
   discovery.rdnsWallet = null;
   discovery.accountsError = null;
   providerRpc.chainId = "0x14a34";
@@ -185,19 +175,7 @@ describe("autoConnectWallet branch selection", () => {
     expect(setWeb3Provider).not.toHaveBeenCalled();
   });
 
-  test("WalletConnect restore connects when a connected provider has accounts", async () => {
-    localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
-    const provider = { connected: true, accounts: [WC_ADDR] };
-    wc.provider = provider;
-    const { autoConnectWallet } = await loadWalletCore();
-
-    await autoConnectWallet();
-
-    expect(setWeb3Provider).toHaveBeenCalledWith(provider);
-    expect(connectedAddress()).toBe(WC_ADDR);
-  });
-
-  test("WalletConnect with no provider falls through to any injected provider", async () => {
+  test("stale 'walletconnect' key (removed provider) falls through to any injected provider", async () => {
     localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
     window.ethereum = { request: jest.fn(async () => [FALLBACK_ADDR]) };
     const { autoConnectWallet } = await loadWalletCore();

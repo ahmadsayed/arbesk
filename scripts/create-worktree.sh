@@ -104,7 +104,7 @@ done
 # ─── 5. Build frontend and compile contracts (prerequisites for test:frontend) ──
 echo ""
 echo "🔨 Building frontend..."
-(cd "${WORKTREE_PATH}" && npm run build:frontend)
+(cd "${WORKTREE_PATH}" && bun run build:frontend)
 
 COMPOSE_PROJECT="$(cd "${WORKTREE_PATH}" && ./scripts/start-dev.sh --print-project)"
 
@@ -125,7 +125,7 @@ echo "   Backend:     http://127.0.0.1:${BACKEND_PORT}"
 echo ""
 echo "Next steps:"
 echo "   cd ${WORKTREE_DIR}"
-echo "   npm run test:frontend && npm run test:api"
-echo "   COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT} npm run test:contracts"
-echo "   npm run test:e2e -- --project=chromium"
+echo "   bun run test:frontend && bun run test:api"
+echo "   COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT} bun run test:contracts"
+echo "   bun run test:e2e -- --project=chromium"
 echo ""

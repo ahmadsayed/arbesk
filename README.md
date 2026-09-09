@@ -51,7 +51,6 @@ Status legend: **✅** supported today (MCP cells name the tool) · **TODO** —
 |---|---|---|---|---|---|
 | **Auth & wallets** | CDP email login (OTP → smart account) | ✅ | ✅ | — | `login <email>` (browser-assisted; MCP consumes the saved session) |
 | | EOA wallets (MetaMask/Rabby) via SIWE | ✅ | TODO | TODO | No EOA/key-file auth path |
-| | WalletConnect v2 | ✅ | TODO | TODO | |
 | | Network selection (Hardhat local / Base Sepolia) | ✅ | ✅ | ✅ | `ARBESK_CHAIN_ID` env var (no interactive switcher) |
 | | Session persistence | ✅ | ✅ | ✅ | Studio: in-memory + auto-restore; CLI/MCP: shared plaintext JSON file (OS keychain is TODO) |
 | **Collections** | List collections | ✅ | ✅ | ✅ `list_collections` | `collections` |
@@ -201,7 +200,7 @@ arbesk/
 | Styling | Custom SCSS design system (no Bootstrap) |
 | 3D renderer | Babylon.js |
 | Frontend JS | TypeScript, bundled by Bun.build (`frontend/scripts/bundle.js`) |
-| Web3 | Web3.js + custom wallet picker (EIP-6963 + WalletConnect v2) + CDP embedded wallets |
+| Web3 | Web3.js + custom wallet picker (EIP-6963) + CDP embedded wallets |
 | Blockchain | EVM-compatible / local Hardhat / Base Sepolia Testnet |
 | Smart contracts | Solidity 0.8.24 + OpenZeppelin v5 |
 | Blockchain dev | Dockerized Hardhat |
@@ -254,10 +253,10 @@ http://localhost:9090/library     # Collection/asset browser
 
 ```bash
 # All Jest unit tests
-npm test
+bun run test
 
 # Current focused API regression suite
-NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest test/api.test.js --runInBand --silent
+bun run test:api
 
 # Frontend build validation
 bun run build:frontend
@@ -266,7 +265,7 @@ bun run build:frontend
 docker compose run --rm hardhat npx hardhat test
 
 # Playwright E2E critical path (wallet → generate → save → publish → library)
-npm run test:e2e -- --project=chromium
+bun run test:e2e -- --project=chromium
 ```
 
 See `e2e/README.md` for the full E2E contract (23 specs, worktree isolation, selector map).

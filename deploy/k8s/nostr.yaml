@@ -1,0 +1,102 @@
+# Nostr relay (nostr-rs-relay) for the Arbesk k3s deployment.
+# Backend reaches it in-cluster at ws://nostr:7777 (NOSTR_RELAY_URL);
+# browsers via the ingress path wss://promptscad.com/nostr (PUBLIC_NOSTR_URL).
+#
+# Config differs from docker/nostr-relay.toml (local dev) in two ways:
+#  1. remote_ip_header = X-Forwarded-For — behind Traefik every socket peer is
+#     Traefik's IP, which would collapse the per-IP limits onto one address.
+#     Safe here because the relay is ONLY reachable through Traefik in-cluster
+#     (no hostPort / direct exposure), so clients cannot spoof the header.
+#  2. Writes stay open by design: asset comments/update notices are signed by
+#     each user's own wallet-derived key (services/nostr-browser.ts), so a
+#     pubkey whitelist would break the feature. Abuse control is the per-IP
+#     rate limits below plus app-side signature verification.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nostr-config
+  labels: { app: nostr }
+data:
+  config.toml: |
+    [info]
+    relay_url = "wss://promptscad.com/nostr"
+    name = "Arbesk Nostr Relay"
+    description = "Private relay for Arbesk Studio. No federation, no public peering."
+    pubkey = "0000000000000000000000000000000000000000000000000000000000000000"
+    contact = "dev@localhost"
+
+    [diagnostics]
+    tracing = false
+
+    [database]
+    engine = "sqlite"
+    path = "/usr/src/app/db/nostr.db"
+
+    [network]
+    address = "0.0.0.0"
+    port = 7777
+    remote_ip_header = "X-Forwarded-For"
+
+    [limits]
+    messages_per_sec = 10
+    subscriptions_per_min = 20
+    max_subscriptions = 100
+    max_filters = 10
+    max_limit = 5000
+    max_event_tags = 100
+    max_content_length = 8192
+    min_pow = 0
+    auth_required = false
+    payment_required = false
+    restricted_writes = false
+
+    [authorization]
+    # Open writes by design (user-signed events) — see file header comment.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nostr
+  labels: { app: nostr }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: nostr }
+  template:
+    metadata:
+      labels: { app: nostr }
+    spec:
+      containers:
+        - name: nostr-rs-relay
+          # Self-built arm64 image (docker/nostr-relay.Dockerfile): upstream
+          # scsibug image is amd64-only, and third-party arm64 mirrors abort on
+          # the Pi's 16K kernel pages (jemalloc). Built with lg-page=14.
+          image: ahmadsayed/nostr-rs-relay:09092338
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7777
+          volumeMounts:
+            - name: config
+              mountPath: /usr/src/app/config.toml
+              subPath: config.toml
+              readOnly: true
+            - name: data
+              mountPath: /usr/src/app/db
+      volumes:
+        - name: config
+          configMap:
+            name: nostr-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: nostr-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nostr
+  labels: { app: nostr }
+spec:
+  selector: { app: nostr }
+  ports:
+    - port: 7777
+      targetPort: 7777

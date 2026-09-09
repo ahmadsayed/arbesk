@@ -13,7 +13,7 @@ description: Use when implementation is complete, all tests pass, and you need t
 
 ## Step 1: Verify Tests
 
-Run the project's full test suite (`npm test` / `cargo test` / `pytest` / `go test ./...`).
+Run the project's full test suite (`bun run test` / `cargo test` / `pytest` / `go test ./...`).
 
 **If tests fail**, report the failures and stop — the menu comes after a green suite:
 

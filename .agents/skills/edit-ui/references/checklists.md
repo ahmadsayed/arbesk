@@ -37,6 +37,6 @@ if (editable) return;
 3. **Behavior** — Add to a new file in `frontend/src/js/ui/` (panel-style) or `frontend/src/js/engine/` (engine-level). Use ES modules, import from `state.ts` for shared state.
 4. **Events** — If your panel emits selection/state changes, dispatch a custom event on `document`. Don't couple panels directly.
 5. **Keyboard** — If your panel needs a shortcut, pass the 4-question bar in §8 first, then route it through the shared dispatcher (not a new `keydown` listener) with the shared form-field guard.
-6. **Build** — Run `npm run build:frontend`. Check `frontend/dist/studio.html` for the markup and `frontend/dist/css/styles.css` for the styles.
+6. **Build** — Run `bun run build:frontend`. Check `frontend/dist/studio.html` for the markup and `frontend/dist/css/styles.css` for the styles.
 7. **Test** — Open `http://localhost:9090` in the browser. Test with and without a loaded asset. Test the keyboard shortcuts work and don't fire in form fields.
-8. **E2E sync** — if your panel adds/renames a button, `id`, label, or status text that a spec touches (or sits in the wallet/generate/save/publish/gallery/outliner/nesting flow), update `e2e/helpers/studio-selectors.mjs` + the affected spec and run `npx playwright test --config=e2e/playwright.config.js --project=chromium`. See [→ E2E Sync](./e2e-sync.md).
+8. **E2E sync** — if your panel adds/renames a button, `id`, label, or status text that a spec touches (or sits in the wallet/generate/save/publish/gallery/outliner/nesting flow), update `e2e/helpers/studio-selectors.mjs` + the affected spec and run `bunx playwright test --config=e2e/playwright.config.js --project=chromium`. See [→ E2E Sync](./e2e-sync.md).

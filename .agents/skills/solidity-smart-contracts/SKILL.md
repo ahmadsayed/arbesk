@@ -35,7 +35,7 @@ Two contracts share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn);
 1. Lowercase ALL addresses in storage and comparison — case mismatch breaks sessions.
 2. Every state-changing function emits an event — required for smart-account proxy validation.
 3. Validate `log.address`, never `receipt.to` — proxies route through bundlers.
-4. After any `.sol` change: compile → deploy → sync `CONTRACT_ADDRESS` `blockchain/.env` → root `.env` → `npm run test:frontend`. Deploy with `--network localhost`; bare `--network hardhat` targets an ephemeral chain that vanishes.
+4. After any `.sol` change: compile → deploy → sync `CONTRACT_ADDRESS` `blockchain/.env` → root `.env` → `bun run test:frontend`. Deploy with `--network localhost`; bare `--network hardhat` targets an ephemeral chain that vanishes.
 5. OZ v5: override `_update`, not `_beforeTokenTransfer`.
 6. USDC only, 6 decimals — no native-token payment path (`receive()`/`fallback()` revert).
 7. Gas: `immutable` for constructor values, `calldata` params, pack storage slots.

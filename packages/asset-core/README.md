@@ -41,9 +41,9 @@ Frontend apps call `initAssetCoreBrowser()` once at boot
 ## Build
 
 ```bash
-npm run build:packages        # tsc → dist/ (ESM + .d.ts)
-npm run build:frontend        # vendors dist/ into the browser build
-npm run bench:asset-core      # timing table + test-results/asset-core-bench.json
+bun run build:packages        # tsc → dist/ (ESM + .d.ts)
+bun run build:frontend        # vendors dist/ into the browser build
+bun run bench:asset-core      # timing table + test-results/asset-core-bench.json
 ```
 
 ## Ports

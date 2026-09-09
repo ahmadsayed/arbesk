@@ -26,7 +26,7 @@ Update + run the suite before merging any change that touches:
 - **Comments panel**: `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount`.
 - **Library view**: inside the unified SPA (`app.html`), wallet gate, collection grid, toolbar buttons, context menu, breadcrumb. Navigation is handled by `app/router.ts`; Studio and Library share one document.
 
-`npm test` (Jest) is **not** enough for any of the above.
+`bun run test` (Jest) is **not** enough for any of the above.
 
 ## UI area → spec → selectors map
 
@@ -52,9 +52,9 @@ Update + run the suite before merging any change that touches:
 4. **Run it** (the build is automatic in global setup):
 
 ```bash
-npx playwright test --config=e2e/playwright.config.js --project=chromium
+bunx playwright test --config=e2e/playwright.config.js --project=chromium
 # debug a failure visually:
-npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
+bunx playwright test --config=e2e/playwright.config.js --project=chromium --ui
 ```
 
 ## Behaviors that bite when writing/maintaining these specs

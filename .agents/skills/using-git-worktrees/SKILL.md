@@ -104,8 +104,8 @@ cd "$path"
 Auto-detect and run appropriate setup:
 
 ```bash
-# Node.js
-if [ -f package.json ]; then npm install; fi
+# Node.js (this repo: Bun ≥1.4 — plain npm install doesn't understand the catalog protocol)
+if [ -f package.json ]; then bun install; fi
 
 # Rust
 if [ -f Cargo.toml ]; then cargo build; fi
@@ -124,7 +124,7 @@ Run tests to ensure workspace starts clean:
 
 ```bash
 # Use project-appropriate command
-npm test / cargo test / pytest / go test ./...
+bun run test / cargo test / pytest / go test ./...
 ```
 
 **If tests fail:** Report failures, ask whether to proceed or investigate.

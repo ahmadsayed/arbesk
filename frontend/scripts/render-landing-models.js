@@ -8,7 +8,7 @@
  * straight from the canvas. Output lands in frontend/public/landing/ so the
  * normal build copies it into dist/.
  *
- * This is NOT part of `npm run build` — it is slow and needs Chromium. Run it
+ * This is NOT part of `bun run build` — it is slow and needs Chromium. Run it
  * by hand only when the source meshes change:
  *
  *   node frontend/scripts/render-landing-models.js

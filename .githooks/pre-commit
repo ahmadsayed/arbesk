@@ -8,5 +8,5 @@
 # block. This makes the gate a ratchet: the repo can only get cleaner.
 #
 # Bypass for emergencies: git commit --no-verify
-# Run manually:           npm run audit
-exec npx -y fallow@3.20.0 audit --changed-since HEAD
+# Run manually:           bun run audit
+exec bunx fallow@3.20.0 audit --changed-since HEAD

@@ -177,5 +177,5 @@ why:
   .chat-bubble-asset, [data-action], …). See references/e2e-sync.md.
 - Playwright's toContainText / toBeVisible auto-wait, so the async Alpine
   render is fine in E2E — only synchronous unit-test DOM assertions break.
-- Run npm run test:e2e -- --project=chromium after converting any flow that
+- Run bun run test:e2e -- --project=chromium after converting any flow that
   e2e covers (generation, wallet/session, save/publish, collaborators).

@@ -19,6 +19,7 @@ out/
 .env.*.local
 .env.pinata
 .env.production
+.env.k3s
 
 # Logs
 *.log

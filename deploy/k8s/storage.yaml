@@ -1,0 +1,27 @@
+# Storage for the Arbesk k3s deployment.
+# Uses the cluster's default StorageClass (Rancher local-path-provisioner) —
+# k3s's built-in host-disk dynamic provisioner (volumes land in
+# /var/lib/rancher/k3s/storage on the node). Both consumers are single-replica,
+# so ReadWriteOnce is correct. reclaimPolicy is Delete: removing a PVC deletes
+# the data directory.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arbesk-data
+  labels: { app: arbesk }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nostr-data
+  labels: { app: nostr }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi

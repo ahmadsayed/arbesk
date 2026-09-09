@@ -152,12 +152,12 @@ bundles — never duplicate the magic.
 ## Build, test, benchmark
 
 ```bash
-npm run build:packages    # tsc → dist/ (ESM + .d.ts)
-npm run typecheck         # after build (resolves @arbesk/* via workspace)
-npm test                  # jest maps @arbesk/asset-core/*.js → .ts source (no build step)
-npm run bench:asset-core  # pipeline benchmark → test-results/asset-core-bench.json
+bun run build:packages    # tsc → dist/ (ESM + .d.ts)
+bun run typecheck         # after build (resolves @arbesk/* via workspace)
+bun run test              # jest maps @arbesk/asset-core/*.js → .ts source (no build step)
+bun run bench:asset-core  # pipeline benchmark → test-results/asset-core-bench.json
 ```
 
-Verify with `npm run lint && npm run typecheck && npm run typecheck:frontend &&
-npm test`. If a change touches save/publish, manifest schema, or editor flows,
-also run E2E (`npm run test:e2e -- --project=chromium`).
+Verify with `bun run lint && bun run typecheck && bun run typecheck:frontend &&
+bun run test`. If a change touches save/publish, manifest schema, or editor flows,
+also run E2E (`bun run test:e2e -- --project=chromium`).

@@ -11,7 +11,7 @@
 From the repo root:
 
 ```bash
-npx playwright test --config=e2e/playwright.config.js --project=chromium
+bunx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
 
 The global setup (`e2e/global-setup.mjs`) orchestrates the test infrastructure directly:
@@ -34,10 +34,10 @@ low-RAM machines). Opt into parallel isolated stacks with `E2E_WORKERS=N`:
 
 ```bash
 # Default: 1 worker, 1 stack
-npx playwright test --config=e2e/playwright.config.js --project=chromium
+bunx playwright test --config=e2e/playwright.config.js --project=chromium
 
 # Opt into parallel isolated stacks (e.g. 4 workers = 4 full stacks)
-E2E_WORKERS=4 npx playwright test --config=e2e/playwright.config.js --project=chromium
+E2E_WORKERS=4 bunx playwright test --config=e2e/playwright.config.js --project=chromium
 ```
 
 Per-worker port scheme (worker index `i`):
@@ -70,7 +70,7 @@ E2E is worktree-aware. Each checkout gets its own Docker Compose project, its ow
 To create a worktree already seeded with the current working-tree state, environment files, built frontend, and compiled contracts, use the helper script:
 
 ```bash
-npm run worktree:create -- feature-xyz
+bun run worktree:create -- feature-xyz
 ```
 
 Then run tests from `.worktrees/feature-xyz` as usual. The script also forces `IPFS_BACKEND=kubo` in the worktree `.env` because local E2E relies on the Kubo gateway and `Qm...` CIDs.
@@ -103,7 +103,7 @@ Validates the full wallet-discovery and authentication path:
 - Confirms the Studio connects via the Login / Signup picker and authenticates via SIWE.
 - Asserts the **Login / Signup** button opens the wallet picker, selecting the injected wallet connects, and the wallet menu button shows the connected address.
 
-**Why it matters:** Any change to `wallet-discovery.ts`, `wallet-connect.ts`, `siwe.ts`, the headerbar wallet buttons, or the SIWE session flow can break this. If this spec fails, every subsequent spec fails because they all depend on being logged in.
+**Why it matters:** Any change to `wallet-discovery.ts`, `siwe.ts`, the headerbar wallet buttons, or the SIWE session flow can break this. If this spec fails, every subsequent spec fails because they all depend on being logged in.
 
 ### 2. Asset generation (`e2e/specs/02-generate-asset.spec.js`)
 
@@ -425,7 +425,7 @@ Run the E2E suite **before merging** any PR that changes:
 
 - **Studio UI/UX:** headerbar buttons, chat history, prompt input, settings panel, dialogs, wallet controls.
 - **Library page:** the `/library` SPA view, `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, `library-context-menu.ts`, collection/asset rendering, search/sort/view controls.
-- **Wallet integration:** EIP-1193/EIP-6963 discovery, `wallet.ts`, `wallet-connect.ts`, `wallet-discovery.ts`, `siwe.ts`, session auth.
+- **Wallet integration:** EIP-1193/EIP-6963 discovery, `wallet.ts`, `wallet-discovery.ts`, `siwe.ts`, session auth.
 - **Generation flow:** `create-panel.ts`, generation API, transaction validation, mock adapter, provider selection.
 - **Save/publish logic:** `asset-save.ts`, `dialog.ts`, manifest versioning, thumbnail capture.
 - **Smart contracts or ABI:** `ArbeskAssetFree.sol`, `ArbeskAsset.sol`, deployment scripts, contract addresses.
@@ -433,7 +433,7 @@ Run the E2E suite **before merging** any PR that changes:
 - **IPFS integration:** storage format, CID encoding, pin/unpin behavior.
 - **Asset-level comments:** `comments-panel.ts`, `comment-thread.ts`, chat proxy, comments archive.
 
-Running `npm test` (unit/Jest) and `npm run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
+Running `bun run test` (unit/Jest) and `bun run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
 
 ---
 
@@ -512,7 +512,7 @@ If any of these assumptions change, the specs must change with them.
 ## Running in UI mode for debugging
 
 ```bash
-npx playwright test --config=e2e/playwright.config.js --project=chromium --ui
+bunx playwright test --config=e2e/playwright.config.js --project=chromium --ui
 ```
 
 Use this when a spec fails and you need to inspect the browser state, DOM, network requests, or console logs.

@@ -14,17 +14,3 @@ declare module "*/vendor/workerpool-10.0.2.mjs" {
   export default workerpool;
   export * from "workerpool";
 }
-
-/**
- * WalletConnect provider is loaded dynamically from CDN URLs in the browser.
- * The exact URL is pinned at runtime; treat it as an opaque default export.
- */
-declare module "https://esm.sh/*" {
-  const provider: any;
-  export default provider;
-}
-
-declare module "https://cdn.jsdelivr.net/*" {
-  const provider: any;
-  export default provider;
-}

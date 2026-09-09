@@ -5,7 +5,7 @@
  * configuration are consistent for both ArbeskAsset (paid) and
  * ArbeskAssetFree (free tier).
  *
- * Run: npm run test:frontend
+ * Run: bun run test:frontend
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";

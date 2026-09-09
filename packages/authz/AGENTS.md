@@ -62,9 +62,9 @@ that in `src/api/asset-core-adapters.ts` / the authorization route (moved from
 ## Build & test
 
 ```bash
-npm run build:packages   # tsc → dist/ (ESM + .d.ts)
-npm run typecheck        # after build
-npm test                 # jest maps @arbesk/authz/*.js → source
+bun run build:packages   # tsc → dist/ (ESM + .d.ts)
+bun run typecheck        # after build
+bun run test             # jest maps @arbesk/authz/*.js → source
 ```
 
 Roles follow the wallet SDK's Merkle convention: `1` = Viewer, `2` = Editor;

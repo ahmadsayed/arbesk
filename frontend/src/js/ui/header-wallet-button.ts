@@ -13,7 +13,7 @@ import { Alpine, registerAlpineComponent } from "./alpine.ts";
 interface HeaderWalletState {
   /** full wallet address, "" when disconnected */
   address: string;
-  walletSource: "cdp" | "walletconnect" | "injected" | null;
+  walletSource: "cdp" | "injected" | null;
   email: string | null;
   isAuthenticated: boolean;
 }
@@ -116,7 +116,7 @@ export function headerWallet(): HeaderWalletComponent {
 export function updateHeaderWalletButton(
   address: string | null,
   isAuthenticated: boolean,
-  walletSource: "cdp" | "walletconnect" | "injected" | null,
+  walletSource: "cdp" | "injected" | null,
   email: string | null = null
 ): void {
   const s = hwState();

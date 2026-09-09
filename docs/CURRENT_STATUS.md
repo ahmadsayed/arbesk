@@ -103,7 +103,7 @@ src/
 
 **Single session type — SIWE for all wallet kinds:**
 
-- **EOA wallets** (MetaMask/Rabby/WalletConnect): standard EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
+- **EOA wallets** (MetaMask/Rabby): standard EIP-4361, domain-bound, 5-minute message age, nonce replay protection.
 - **CDP email-login smart accounts**: the embedded EOA signer signs the SIWE message; the SIWE `address` field contains the smart account address; `eoaAddress` in the POST body provides the actual signer for fallback verification in the `@arbesk/wallet` SIWE verifier.
 
 Sessions are identified by `Authorization: Session <token>` header. 24-hour TTL. `authentication.ts` validates the SIWE-issued token for all request types.
@@ -189,7 +189,7 @@ frontend/src/js/
 │   └── ...
 ├── blockchain/
 │   ├── wallet.ts               # Backward-compat barrel; re-exports the split wallet modules
-│   ├── wallet-core.ts          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA/WalletConnect), account state; 250ms polling
+│   ├── wallet-core.ts          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA), account state; 250ms polling
 │   ├── wallet-network.ts       # Network switching
 │   ├── wallet-payments.ts      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
 │   ├── wallet-publishing.ts    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
@@ -200,7 +200,6 @@ frontend/src/js/
 │   ├── uri-utils.ts            # Normalize tokenURIs to plain CIDs
 │   ├── siwe.ts                 # EIP-4361 message builder
 │   ├── wallet-discovery.ts     # EIP-6963 multi-wallet
-│   ├── wallet-connect.ts       # WalletConnect v2
 │   ├── network-config.ts       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
 │   ├── error-decoder.ts        # Revert reason decoding
 │   └── explorer.ts             # Block explorer links
@@ -212,7 +211,7 @@ frontend/src/js/
 ├── asset-core-init.ts          # Browser composition root — initAssetCoreBrowser() once at boot
 ├── blockchain/
 │   ├── wallet.ts               # Backward-compat barrel; re-exports the split wallet modules
-│   ├── wallet-core.ts          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA/WalletConnect), account state; 250ms polling
+│   ├── wallet-core.ts          # Web3 init, connect/disconnect, full auto-restore (CDP/EOA), account state; 250ms polling
 │   ├── wallet-network.ts       # Network switching
 │   ├── wallet-payments.ts      # recordGeneration(), payForGenerationWithUSDC(), isFreeTierContract()
 │   ├── wallet-publishing.ts    # publishAsset(), updateAssetURI(), updateEditors(), burn(); smart-account gas optimisation
@@ -223,7 +222,6 @@ frontend/src/js/
 │   ├── uri-utils.ts            # Normalize tokenURIs to plain CIDs
 │   ├── siwe.ts                 # EIP-4361 message builder
 │   ├── wallet-discovery.ts     # EIP-6963 multi-wallet
-│   ├── wallet-connect.ts       # WalletConnect v2
 │   ├── network-config.ts       # Per-network contract/USDC/RPC addresses (Hardhat/Base Sepolia)
 │   ├── error-decoder.ts        # Revert reason decoding
 │   ├── explorer.ts             # Block explorer links
@@ -434,3 +432,14 @@ frontend/src/js/
 Optional root `.env` kill-switch: `INDEXER_DISABLE_TESTNET=1` skips starting the Base Sepolia token indexer (see `.env.example`).
 
 `DEFAULT_CHAIN_ID` (root `.env`) sets the deployment default chain that anonymous chain reads follow (see `frontend/src/js/blockchain/read-contract.ts`); it falls back to Hardhat local, and `start-prod.sh --testnet` exports `84532`.
+
+### k3s production deployment (promptscad.com)
+
+Live since 2026-09-09: `https://promptscad.com` serves Arbesk from the `ender3` k3s cluster (Raspberry Pi, arm64, `ssh adam@192.168.68.60`, `sudo k3s kubectl ...`). TLS terminates at Cloudflare (proxied DNS); the cluster receives plain HTTP on Traefik port 80 with the original Host. Testnet-only: Base Sepolia (84532) with the existing free-tier contract, Pinata for IPFS. The legacy OpenSCAD app was moved off the root path (still on `www.promptscad.com`; its old ingress is backed up at `~/promptscad-legacy-ingress-backup.yaml` on the server).
+
+- **Manifests**: `deploy/k8s/` (README has the full runbook). Two single-replica Deployments: `arbesk` (app, Recreate strategy — in-memory sessions) and `nostr` (relay). PVCs `arbesk-data` (→ `/app/.data`, token-indexer state) and `nostr-data` (→ `/usr/src/app/db`) use the default `local-path` provisioner (host disk under `/var/lib/rancher/k3s/storage`).
+- **Image**: `ahmadsayed/arbesk:<tag>` built by `docker/app.Dockerfile` (multi-stage Bun/Node builder + slim runtime). Build for the Pi: `docker buildx build --platform linux/arm64 -f docker/app.Dockerfile -t ahmadsayed/arbesk:<tag> --push .`
+- **Relay image**: `ahmadsayed/nostr-rs-relay` built by `docker/nostr-relay.Dockerfile` — upstream `scsibug` is amd64-only and third-party arm64 builds abort on the Pi's 16K kernel pages (jemalloc `lg-page=14` rebuild).
+- **Secrets**: `.env.k3s` generated by `node scripts/make-env-k3s.mjs` (extracts from local `.env`/`blockchain/.env`, maps `BASE_CONTRACT_ADDRESS` → `CONTRACT_ADDRESS`), created as secret `arbesk-env` and mounted at `/app/.env`. New env vars: `PUBLIC_NOSTR_URL` (browser relay URL, e.g. `wss://promptscad.com/nostr` — the ingress strips `/nostr` before proxying; the relay only accepts WS on `/`) and `PUBLIC_ORIGIN` (adds the deployment origin to the CSP connect-src).
+- **UI**: a subtle `#testnetBanner` strip shows above the headerbar whenever the backend reports a testnet default chain (`frontend/src/js/ui/testnet-banner.ts`).
+- **External config**: CDP Portal project must allowlist `https://promptscad.com` (done 2026-09-09). WalletConnect was removed from the codebase the same day — login paths are injected wallets (EIP-6963) and CDP email.

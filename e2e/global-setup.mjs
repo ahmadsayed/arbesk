@@ -376,7 +376,7 @@ export default async function globalSetup() {
   log("Syncing network-config.ts with deployed contract addresses...");
   syncNetworkConfigWithDeployedAddresses(ports0.hardhatRpc);
   log("Rebuilding frontend with synced contract addresses...");
-  execSync("npm run build:frontend", {
+  execSync("bun run build:frontend", {
     stdio: "inherit",
     cwd: ROOT,
     timeout: 120000,

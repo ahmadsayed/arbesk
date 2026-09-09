@@ -31,9 +31,9 @@ Follow the steps in order. Do not skip the decision gate (step 4).
 6. **Tests first** (REQUIRED SUB-SKILL: test-driven-development):
    - New CLI behavior → new `test/besk-*.test.js` suite following `test/besk-catalog-write.test.js` (`jest.unstable_mockModule` on `relay.ts`/`adapters.ts`).
    - MCP parity → update `test/besk-mcp.test.js`: add the tool name to `EXPECTED_TOOLS` and at least one `callTool` dispatch test (use `open: false`-style flags so tests never launch browsers or prompt).
-   - If the dedup touched a shared SDK or frontend code → also run/update `npm run test:frontend` (deployment integrity included); E2E (`e2e/`) only if Studio UI behavior changed.
+   - If the dedup touched a shared SDK or frontend code → also run/update `bun run test:frontend` (deployment integrity included); E2E (`e2e/`) only if Studio UI behavior changed.
 7. **Implement.** Keep the CLI module thin; environment-bound pieces (Node fetch, viem reads, session file) go in `adapters.ts`, never domain logic. Then add the matching MCP tool in `mcp.ts` in the same change: snake_case name mirroring the subcommand (`show` → `show_asset`), a JSON-schema `inputSchema`, and a handler that calls the same module and THROWS on error (never prompts, never sets `process.exitCode`). Interactive inputs become explicit args: pickers → required enums, typed confirmations → a `confirm` field, browser opens → an `open` flag defaulting to true. Nothing reachable from `mcp.ts` may print to stdout (stdio is the JSON-RPC channel — log via `debug.ts`, which writes to stderr).
-8. **Run and fix until green:** `npm test`, `npm run typecheck`, `npm run lint` — plus `npm run test:frontend` when step 6 says so. No row is done while anything is red.
+8. **Run and fix until green:** `bun run test`, `bun run typecheck`, `bun run lint` — plus `bun run test:frontend` when step 6 says so. No row is done while anything is red.
 9. **Update the docs, then report:**
    - Flip the README table row from **TODO** to **✅** in BOTH the CLI and MCP columns (command name + tool name, plus any caveat like owner-only or best-effort unpin).
    - Add the command to `cli.ts` `help()` and the README intro command list.
@@ -48,7 +48,7 @@ Follow the steps in order. Do not skip the decision gate (step 4).
 - Adding a CLI subcommand without its MCP tool, or an MCP tool without its subcommand — parity is part of "done"
 - An `mcp.ts` handler that prompts, reads TTY state, sets `process.exitCode`, or prints to stdout
 - Flipping the README row to ✅ before tests pass
-- Changing a shared SDK without running `npm run test:frontend`
+- Changing a shared SDK without running `bun run test:frontend`
 - Implementing a "Not doable" row (those require the 3D viewer — out of CLI scope by definition)
 
 ## Common Mistakes

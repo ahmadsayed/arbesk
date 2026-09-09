@@ -28,11 +28,11 @@ Create a git worktree and run the full test stack without colliding with the mai
 ## Workflow
 
 ```bash
-npm run worktree:create -- feature-xyz   # prints COMPOSE_PROJECT_NAME + backend port
+bun run worktree:create -- feature-xyz   # prints COMPOSE_PROJECT_NAME + backend port
 cd .worktrees/feature-xyz
-npm run test:frontend && npm run test:api
-COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) npm run test:contracts
-npm run test:e2e -- --project=chromium
+bun run test:frontend && bun run test:api
+COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) bun run test:contracts
+bun run test:e2e -- --project=chromium
 ```
 
 ## Troubleshooting

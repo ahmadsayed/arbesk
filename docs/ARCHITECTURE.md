@@ -42,12 +42,12 @@ The system currently combines:
 │  └─ Activity ledger (client-side chain walk)                         │
 │                                                                      │
 │  Frontend services                                                   │
-│  ├─ wallet-core.ts / wallet-connect.ts / wallet-discovery.ts /       │
+│  ├─ wallet-core.ts / wallet-discovery.ts /                           │
 │  │  wallet-payments.ts / wallet-publishing.ts:                        │
-│  │  custom wallet picker (EIP-6963 + WalletConnect v2), network       │
+│  │  custom wallet picker (EIP-6963), network                          │
 │  │  switching, free/paid generation, mint/update/                     │
 │  │  editor/burn calls (re-exported via wallet.ts barrel);             │
-│  │  auto-restore on reload for CDP, EOA, and WalletConnect via silent  │
+│  │  auto-restore on reload for CDP and EOA via silent                 │
 │  │  eth_accounts / session checks — no popup is shown                  │
 │  ├─ remote-ipfs.ts: gateway reads + memory/IndexedDB cache           │
 │  ├─ write-to-ipfs.ts: direct browser→IPFS writes (Kubo/Pinata)       │
@@ -161,10 +161,9 @@ The system currently combines:
 | glTF | `packages/asset-core/src/formats/gltf/material-editor.ts` | Edits PBR material properties on composite glTFs and commits new CIDs |
 | glTF | `packages/asset-core/src/formats/gltf/composer.ts` | Resolves `ipfs://` URIs back to base64 for the renderer (gateway reads) |
 | glTF | `packages/asset-core/src/formats/gltf/merkle-editors.ts` | Merkle tree/proof library for editor authorization |
-| Blockchain | `blockchain/wallet.ts` | Backward-compat barrel re-exporting `wallet-core.ts`, `wallet-connect.ts`, `wallet-network.ts`, `wallet-payments.ts`, `wallet-publishing.ts`, `wallet-guard.ts` |
-| Blockchain | `blockchain/wallet-core.ts` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA/WalletConnect) |
-| Blockchain | `blockchain/wallet-connect.ts` | WalletConnect v2 integration |
-| Blockchain | `blockchain/wallet-discovery.ts` | EIP-6963 injected wallets + WalletConnect v2 discovery |
+| Blockchain | `blockchain/wallet.ts` | Backward-compat barrel re-exporting `wallet-core.ts`, `wallet-network.ts`, `wallet-payments.ts`, `wallet-publishing.ts`, `wallet-guard.ts` |
+| Blockchain | `blockchain/wallet-core.ts` | Web3 init, connect/disconnect, account state; full auto-restore on reload (CDP/EOA) |
+| Blockchain | `blockchain/wallet-discovery.ts` | EIP-6963 injected wallet discovery |
 | Blockchain | `blockchain/wallet-network.ts` | Network switching |
 | Blockchain | `blockchain/wallet-payments.ts` | Free-tier `recordGeneration()`, USDC PayGo `payForGenerationWithUSDC()` |
 | Blockchain | `blockchain/wallet-publishing.ts` | Mint, `updateAssetURI()`, `updateEditors()`, `burn()` |
