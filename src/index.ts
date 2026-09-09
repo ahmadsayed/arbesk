@@ -82,6 +82,7 @@ app.use(compression());
  * console before promoting to enforcing mode.
  */
 const pinataGateway = process.env.PINATA_GATEWAY;
+const publicOrigin = process.env.PUBLIC_ORIGIN; // e.g. https://promptscad.com
 const connectSrc = [
   "'self'",
   "http://127.0.0.1:5001",
@@ -101,6 +102,10 @@ const imgSrc = ["'self'", "blob:", "data:", "http://127.0.0.1:8080"];
 if (pinataGateway) {
   connectSrc.push(`https://${pinataGateway}`);
   imgSrc.push(`https://${pinataGateway}`);
+}
+if (publicOrigin) {
+  // Same-origin API plus the ingress-proxied Nostr relay (wss://<host>/nostr).
+  connectSrc.push(publicOrigin, publicOrigin.replace(/^http/, "ws"));
 }
 
 app.use(

@@ -5,7 +5,7 @@ import baseConfig from "./playwright.config.js";
  * Headed, slow-motion config for manual observation.
  *
  * Usage:
- *   npx playwright test --config=e2e/playwright.headed.config.js --project=chromium e2e/specs/13-editor-collaboration.spec.js
+ *   bunx playwright test --config=e2e/playwright.headed.config.js --project=chromium e2e/specs/13-editor-collaboration.spec.js
  */
 export default defineConfig({
   ...baseConfig,

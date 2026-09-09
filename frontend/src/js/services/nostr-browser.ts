@@ -4,7 +4,7 @@ import { createNostrFacade } from "@arbesk/nostr";
 import type { Binding, NostrFacade, WalletSignPort, RelayPort } from "@arbesk/nostr";
 import { getSigner } from "../blockchain/wallet.ts";
 import { walletState } from "../state/wallet-state.ts";
-import { NOSTR_RELAY_URL } from "./nostr-config.ts";
+import { getNostrRelayUrl } from "./nostr-config.ts";
 
 const pool = new SimplePool();
 
@@ -18,7 +18,7 @@ const signerPort: WalletSignPort = {
 
 const relayPort: RelayPort = {
   publish: async (event: NostrEvent) => {
-    await Promise.all(pool.publish([NOSTR_RELAY_URL], event));
+    await Promise.all(pool.publish([await getNostrRelayUrl()], event));
   },
 };
 

@@ -54,8 +54,8 @@ export default (deps: ApiDeps) => {
       ipfsGatewayUrl: storage.gatewayBase(),
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
-      walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,
       cdpProjectId: process.env.CDP_PROJECT_ID || null,
+      nostrPublicUrl: process.env.PUBLIC_NOSTR_URL || null,
     });
   });
 

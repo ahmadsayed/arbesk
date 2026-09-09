@@ -13,12 +13,6 @@ import {
   requestWallets,
   getWalletByRdns,
 } from "./wallet-discovery.ts";
-import {
-  getWalletConnectProvider,
-  disconnectWalletConnect,
-  onWalletConnectEvent,
-  offWalletConnectEvent,
-} from "./wallet-connect.ts";
 import { showWalletModal } from "../ui/wallet-modal.ts";
 import {
   getContractAddress as getNetworkContractAddress,
@@ -37,8 +31,8 @@ import { web3Provider, setWeb3Provider, NETWORKS } from "./wallet-provider.ts";
 
 // ─── Module-level state ───
 
-/** 'injected' | 'walletconnect' | 'cdp' | null */
-let activeConnectionSource: "injected" | "walletconnect" | "cdp" | null = null;
+/** 'injected' | 'cdp' | null */
+let activeConnectionSource: "injected" | "cdp" | null = null;
 
 /** rdns of the injected wallet (e.g., 'io.metamask') */
 let _activeWalletRdns: string | null = null;
@@ -57,7 +51,7 @@ const HARHAT_CHAIN_ID_DEC = CHAIN_IDS.HARDHAT_LOCAL;
 
 /**
  * Resolves the active wallet's chain id.
- * @remarks CDP smart accounts are pinned to Base Sepolia; EOA/WalletConnect
+ * @remarks CDP smart accounts are pinned to Base Sepolia; EOA wallets
  *   read the chain from the injected EIP-1193 provider.
  */
 async function _getWalletChainId(): Promise<number> {
@@ -78,7 +72,7 @@ async function _getWalletChainId(): Promise<number> {
 function initWallet() {
   startDiscovery();
   log("[WALLET] EIP-6963 discovery started");
-  // Silently restore the previous connection (CDP, EOA, or WalletConnect) via
+  // Silently restore the previous connection (CDP or EOA) via
   // eth_accounts / session checks — no popup is ever shown. First-time visitors
   // have no authorized account, so nothing happens and they still see
   // Login / Signup. This is what keeps an EOA login alive across page
@@ -120,7 +114,7 @@ async function _initContract(knownChainId: number | null = null) {
 
     // CDP smart wallets are pinned to Base Sepolia and the address comes from
     // network config (a deploy-time constant) — skip the bytecode check, which
-    // costs a full public-RPC round trip. EOA/WalletConnect users can be on any
+    // costs a full public-RPC round trip. EOA users can be on any
     // network, so the wrong-network guard still applies to them.
     const skipCodeCheck = activeConnectionSource === "cdp";
     const code = skipCodeCheck
@@ -244,26 +238,6 @@ async function _restoreCdp() {
 }
 
 /**
- * Silently restores a WalletConnect session.
- * @returns `true` when a connected session was restored, `false` otherwise
- *   (so the caller can fall through to other restore strategies).
- */
-async function _restoreWalletConnect(): Promise<boolean> {
-  // Try WalletConnect silent restore
-  const wcProvider = await getWalletConnectProvider();
-  if (wcProvider && wcProvider.connected) {
-    setWeb3Provider(wcProvider);
-    const accounts = wcProvider.accounts || [];
-    if (accounts.length > 0) {
-      activeConnectionSource = "walletconnect";
-      await _finishWalletSetup(accounts[0]);
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
  * Silently restores an injected (EIP-6963) wallet announced under `rdns`.
  * @returns `true` when a silent eth_accounts probe recovered an authorized
  *   account, `false` otherwise (so the caller can fall through).
@@ -328,8 +302,6 @@ async function autoConnectWallet() {
       // injected-wallet probes below.
       await _restoreCdp();
       return;
-    } else if (lastWallet === "walletconnect") {
-      if (await _restoreWalletConnect()) return;
     } else if (lastWallet) {
       if (await _restoreInjectedByRdns(lastWallet)) return;
     }
@@ -367,7 +339,7 @@ async function _finishWalletSetup(
   });
 
   // Build the injected Signer for this connection source. CDP uses the native
-  // signer built during the OTP flow; EOA/WalletConnect wrap the injected provider.
+  // signer built during the OTP flow; EOA wraps the injected provider.
   if (activeConnectionSource === "cdp") {
     const { getCdpSigner, grantDelegation } = await import("./wallet-cdp.ts");
     signer = getCdpSigner();
@@ -385,7 +357,7 @@ async function _finishWalletSetup(
   const _markSetup = (label: string) => console.log(`[LOGIN-TIMING] setup:${label}: ${Math.round(performance.now() - _tSetup)}ms`);
 
   // Prompt network switch if not on a supported chain.
-  // CDP smart wallets are pinned to Base Sepolia, so this only applies to EOA/WC.
+  // CDP smart wallets are pinned to Base Sepolia, so this only applies to EOA.
   if (
     activeConnectionSource !== "cdp" &&
     !SUPPORTED_CHAIN_IDS.includes(chainId)
@@ -457,7 +429,6 @@ async function _finishWalletSetup(
 
 /**
  * Attach accountsChanged / chainChanged listeners to the active provider.
- * Handles both injected wallets and WalletConnect.
  */
 function _attachProviderListeners() {
   if (!web3Provider) return;
@@ -480,19 +451,9 @@ function _attachProviderListeners() {
     window.location.reload();
   };
 
-  if (activeConnectionSource === "walletconnect") {
-    // WalletConnect uses its own event emitter
-    onWalletConnectEvent("accountsChanged", handleAccountsChanged);
-    onWalletConnectEvent("chainChanged", handleChainChanged);
-
-    onWalletConnectEvent("disconnect", () => {
-      disconnectWallet();
-    });
-  } else {
-    // Injected wallet (EIP-1193)
-    web3Provider.on("accountsChanged", handleAccountsChanged);
-    web3Provider.on("chainChanged", handleChainChanged);
-  }
+  // Injected wallet (EIP-1193)
+  web3Provider.on("accountsChanged", handleAccountsChanged);
+  web3Provider.on("chainChanged", handleChainChanged);
 }
 
 // ─── Authentication ───
@@ -546,19 +507,6 @@ async function connectWallet() {
         setCdpEmail(result.email);
       }
       await _finishWalletSetup(cdpWalletAddress, cdpEoaAddress, result.email || null);
-    } else if (source === "walletconnect") {
-      // WalletConnect provider is already connected by this point
-      setWeb3Provider(provider);
-      activeConnectionSource = "walletconnect";
-      _activeWalletRdns = null;
-      localStorage.setItem(LAST_WALLET_KEY, "walletconnect");
-
-      const accounts = provider.accounts || [];
-      if (!accounts || accounts.length === 0) {
-        error("No accounts found from WalletConnect");
-        return;
-      }
-      await _finishWalletSetup(accounts[0]);
     } else {
       // Injected wallet - request accounts to trigger popup
       setWeb3Provider(provider);
@@ -596,7 +544,7 @@ async function connectWallet() {
 }
 
 /**
- * @returns 'injected' | 'walletconnect' | 'cdp' | null
+ * @returns 'injected' | 'cdp' | null
  */
 function getActiveConnectionSource() {
   return activeConnectionSource;
@@ -617,12 +565,7 @@ function getSigner(): Signer | null {
 async function disconnectWallet() {
   // Detach listeners
   if (web3Provider) {
-    if (activeConnectionSource === "walletconnect") {
-      offWalletConnectEvent("accountsChanged", () => {});
-      offWalletConnectEvent("chainChanged", () => {});
-      offWalletConnectEvent("disconnect", () => {});
-      await disconnectWalletConnect();
-    } else if (activeConnectionSource === "cdp") {
+    if (activeConnectionSource === "cdp") {
       // CDP cleanup — sign out from CDP session
       try {
         const { disconnectCdpWallet } = await import("./wallet-cdp.ts");

@@ -59,10 +59,10 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 
 ```bash
 # After any frontend change:
-cd frontend && npm run build
+cd frontend && bun run build
 
 # Or from root:
-npm run build:frontend
+bun run build:frontend
 
 # Output: frontend/dist/
 # Backend serves frontend/dist/ at http://localhost:9090

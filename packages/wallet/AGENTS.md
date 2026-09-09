@@ -82,9 +82,9 @@ src/
 ## Build & test
 
 ```bash
-npm run build:packages      # tsc → dist/ (ESM + .d.ts), all three packages
-npm run typecheck           # after build (resolves @arbesk/* via workspace)
-npm test                    # jest maps @arbesk/wallet/*.js → source via moduleNameMapper
+bun run build:packages      # tsc → dist/ (ESM + .d.ts), all three packages
+bun run typecheck           # after build (resolves @arbesk/* via workspace)
+bun run test                # jest maps @arbesk/wallet/*.js → source via moduleNameMapper
 ```
 
 Consumers import by bare specifier: `import { createWalletFacade } from

@@ -2,7 +2,7 @@
 
 ## What `scripts/create-worktree.sh <name>` does
 
-- Creates `.worktrees/<name>` (also runnable as `npm run worktree:create -- <name>`)
+- Creates `.worktrees/<name>` (also runnable as `bun run worktree:create -- <name>`)
 - Copies modified tracked files + untracked (non-ignored) files
 - Copies root `.env` and `blockchain/.env`
 - Sets `IPFS_BACKEND=kubo` in the worktree `.env`

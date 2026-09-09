@@ -2,7 +2,7 @@
   "name": "arbesk-frontend",
   "version": "0.1.0",
   "scripts": {
-    "build": "npm run clean && npm run build:pug && npm run build:scss && npm run build:bundle && npm run build:assets && npm run build:compress",
+    "build": "bun run clean && bun run build:pug && bun run build:scss && bun run build:bundle && bun run build:assets && bun run build:compress",
     "build:compress": "node scripts/compress.js",
     "build:bundle": "bun scripts/bundle.js",
     "build:assets": "node scripts/build-assets.js",

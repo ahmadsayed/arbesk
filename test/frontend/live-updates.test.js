@@ -24,7 +24,9 @@ async function loadCollectTokens() {
   );
   await jest.unstable_mockModule(
     "../../frontend/src/js/blockchain/network-config.js",
-    () => ({ getContractAddress: jest.fn() })
+    // getRpcUrl is re-exported through viem-clients, pulled in transitively
+    // via nostr-config → backend-client since the relay URL became config-driven.
+    () => ({ getContractAddress: jest.fn(), getRpcUrl: jest.fn() })
   );
   await jest.unstable_mockModule(
     "../../frontend/src/js/blockchain/token-resolver.js",

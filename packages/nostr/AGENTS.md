@@ -17,4 +17,4 @@ capabilities arrive via injected ports.
 
 ## Build & test
 bun run --filter @arbesk/nostr build
-npm test -- packages/nostr
+bun run test -- packages/nostr

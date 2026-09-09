@@ -25,7 +25,7 @@ Common mistakes and anti-patterns to avoid.
 
 8. **SCSS components need `@use` in `styles.scss`.** A new file won't be built unless imported.
 
-9. **The backend serves `frontend/dist/`, not `frontend/src/`.** Always run `npm run build:frontend` before testing in the browser.
+9. **The backend serves `frontend/dist/`, not `frontend/src/`.** Always run `bun run build:frontend` before testing in the browser.
 
 10. **Babylon.js is a CDN global.** Never `import * as BABYLON from "@babylonjs/core"`. The studio HTML loads `https://cdn.babylonjs.com/babylon.js` as a `<script>` tag.
 

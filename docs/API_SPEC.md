@@ -44,7 +44,7 @@ Authorization: Session <opaque-token>
 `POST /api/v1/sessions` accepts a SIWE proof from any wallet type and issues an opaque session token (24-hour TTL). `authentication.ts` validates the issued token.
 
 Session restoration behavior:
-- **CDP email-login smart accounts**, **EOA wallets** (MetaMask/Rabby), and **WalletConnect** sessions are all automatically restored on page reload when their underlying session/provider is still available.
+- **CDP email-login smart accounts** and **EOA wallets** (MetaMask/Rabby) are automatically restored on page reload when their underlying session/provider is still available.
 - If no prior wallet session is found, the user must explicitly click Login/Signup.
 
 ### Creating a session
@@ -117,7 +117,7 @@ Parametric edits, manifest saves, manifest chain reads, ABI reads, and token man
 
 ### `GET /api/v1/config`
 
-Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, WalletConnect project ID, the CDP Project ID used by the browser to initialise email-login wallets, and `defaultChainId` — the deployment's default chain (`DEFAULT_CHAIN_ID` env, falls back to Hardhat local), which anonymous chain reads use.
+Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, the CDP Project ID used by the browser to initialise email-login wallets, and `defaultChainId` — the deployment's default chain (`DEFAULT_CHAIN_ID` env, falls back to Hardhat local), which anonymous chain reads use.
 
 **Response**
 
@@ -144,7 +144,6 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
   "ipfsGatewayUrl": "http://127.0.0.1:8080/ipfs/",
   "hardhatRpcUrl": "http://127.0.0.1:8545",
   "mockGeneration": true,
-  "walletConnectProjectId": null,
   "cdpProjectId": null,
   "defaultChainId": 31415822
 }

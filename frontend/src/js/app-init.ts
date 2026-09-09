@@ -69,7 +69,7 @@ initAssetCoreBrowser();
 // session exists, so the ~800ms token-refresh round trip overlaps with panel
 // setup instead of sitting on the critical path of the silent session restore
 // (autoConnectWallet awaits the same memoized promise). Gated on the
-// last-wallet key so pure EOA/WalletConnect users never pay for it.
+// last-wallet key so pure EOA users never pay for it.
 if (localStorage.getItem("arbesk-last-wallet") === "cdp") {
   import("./blockchain/wallet-cdp.ts").then((m) => m.warmupCdpClient());
 }

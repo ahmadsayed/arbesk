@@ -42,7 +42,7 @@ function shortAddress(address: string): string {
 export function buildUserIdentity(opts: {
   address: string;
   email?: string | null;
-  source: "cdp" | "walletconnect" | "injected" | null;
+  source: "cdp" | "injected" | null;
 }): UserIdentity {
   return {
     id: opts.address.toLowerCase(),

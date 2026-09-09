@@ -24,6 +24,7 @@ import "./ui/nesting.ts";
 import "./ui/collaborators.ts";
 import "./ui/wallet-popover.ts";
 import "./ui/comments-panel.ts";
+import "./ui/testnet-banner.ts";
 import "./app-init.ts";
 
 import { on, off, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";

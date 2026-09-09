@@ -14,7 +14,7 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 3. **Form fields steal keystrokes** — every global `keydown` handler guards `document.activeElement` (input/textarea/select/contentEditable). Prefer ONE shared guard helper + ONE dispatcher/keymap over per-module listeners — ~20 listeners across ~17 modules already exist and drift; don't add more.
 4. **Selection feedback = HighlightLayer** (amber `#D4A017`); camera framing = 300ms animation.
 5. **All viewport chrome gets `metadata.isViewportChrome = true`** so `clearScene()` preserves it.
-6. **Rebuild after every change** — `npm run build:frontend`; backend serves `dist/`, not `src/`.
+6. **Rebuild after every change** — `bun run build:frontend`; backend serves `dist/`, not `src/`.
 7. **Babylon.js is a CDN global** — never `import` it; loaded via `<script>`.
 8. **Pug partials live in `src/pug/includes/`** — `app.pug` is a slim shell that `include`s them (head / header / studio-sidebar / studio-main / bottombar / library-view / wallet-popover / dialog-host); `build-pug.js` skips files with `include`/`mixin`/`layouts` in the path so partials never render standalone. Partials are written at column 0 (Pug re-indents at the include site); `#appDialogHost` must stay a body-level sibling of `#app`. Entry pages remain `app.pug` (unified SPA shell: Studio + Library views) and `index.pug` (landing page).
 9. **New SCSS file needs `@use` in `styles.scss`** or it won't be built.

@@ -2917,5 +2917,21 @@ describe("Arbesk API", () => {
       expect(res.body).toHaveProperty("cdpProjectId");
       expect(res.body).not.toHaveProperty("thirdwebClientId");
     });
+
+    it("reports nostrPublicUrl from PUBLIC_NOSTR_URL (null when unset)", async () => {
+      const prev = process.env.PUBLIC_NOSTR_URL;
+      delete process.env.PUBLIC_NOSTR_URL;
+      try {
+        const res = await request(app).get("/api/v1/config");
+        expect(res.status).toBe(200);
+        expect(res.body.nostrPublicUrl).toBeNull();
+        process.env.PUBLIC_NOSTR_URL = "wss://promptscad.com/nostr";
+        const res2 = await request(app).get("/api/v1/config");
+        expect(res2.body.nostrPublicUrl).toBe("wss://promptscad.com/nostr");
+      } finally {
+        if (prev === undefined) delete process.env.PUBLIC_NOSTR_URL;
+        else process.env.PUBLIC_NOSTR_URL = prev;
+      }
+    });
   });
 });

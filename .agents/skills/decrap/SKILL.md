@@ -15,7 +15,7 @@ CRAP (Change Risk Anti-Patterns) = `CC² × (1 − cov/100)³ + CC`. It flags fu
 
 ### 0. Measure and rank
 ```bash
-npx fallow health
+bunx fallow health
 ```
 Pick the top offender by score. Don't guess what's crappy.
 
@@ -40,10 +40,10 @@ Read the whole function and its callees. List decision points, group them into c
 
 ### 5. Verify at every level
 ```bash
-npx jest <affected-suites> && npm run lint
-npm run typecheck / typecheck:frontend   # whichever covers the change
-npm test                                 # full suite before "done"
-npx fallow health                        # the number must move — no "looks better"
+bunx jest <affected-suites> && bun run lint
+bun run typecheck / typecheck:frontend   # whichever covers the change
+bun run test                             # full suite before "done"
+bunx fallow health                        # the number must move — no "looks better"
 ```
 UI / generation-flow / save-publish changes also need E2E before merge (repo rule, AGENTS.md §10).
 

@@ -18,6 +18,13 @@ html(lang="en")
     script(src="/js/engine/theme-init.js")
     script.
       document.documentElement.classList.add('js-animations');
+    //- Testnet banner (landing page has no app.js bundle; mirrors
+    //- frontend/src/js/ui/testnet-banner.ts — Base Sepolia = 84532)
+    script.
+      fetch('/api/v1/config').then(function (r) { return r.json(); }).then(function (cfg) {
+        var el = document.getElementById('testnetBanner');
+        if (el && Number(cfg && cfg.defaultChainId) === 84532) el.classList.add('visible');
+      }).catch(function () {});
 
     noscript
       style.
@@ -43,6 +50,7 @@ html(lang="en")
 
   body.landing-page
     #app
+      #testnetBanner.testnet-banner(role="status") Testnet — Base Sepolia. Assets created here are not on mainnet.
       header.headerbar
         .headerbar-brand
           a.brand(href="/", aria-label="Arbesk home")

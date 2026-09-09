@@ -9,7 +9,7 @@ interface WalletState {
   /** viem contract instance (untyped) */
   contract: any;
   contractAddress: string | null;
-  walletSource: "cdp" | "walletconnect" | "injected" | null;
+  walletSource: "cdp" | "injected" | null;
   /** CDP email login address (displayed in header) */
   email: string | null;
   /** First-class identity (the "who"), split from the on-chain signer state. */
@@ -22,7 +22,7 @@ const _defaults: WalletState = {
   chainId: null,
   contract: null,
   contractAddress: null,
-  walletSource: null, // 'cdp' | 'walletconnect' | 'injected' | null
+  walletSource: null, // 'cdp' | 'injected' | null
   email: null, // CDP email login address (displayed in header)
   identity: null,
 };

@@ -1,0 +1,66 @@
+# Arbesk app Deployment — single replica BY REQUIREMENT:
+#  - sessions are an in-memory Map (src/api/sessions.ts), so a second replica
+#    or a rolling update with two live pods would split login state;
+#  - the PVCs are ReadWriteOnce (local-path), which forbids multi-pod attach.
+# Recreate strategy avoids the two-pods window during rollouts.
+#
+# Env: the Secret `arbesk-env` holds the entire .env file under the key `.env`
+# (kubectl create secret generic arbesk-env --from-file=.env=.env.k3s) and is
+# mounted at /app/.env, where src/index.ts picks it up via loadEnvFile.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arbesk
+  labels: { app: arbesk }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: arbesk }
+  template:
+    metadata:
+      labels: { app: arbesk }
+    spec:
+      containers:
+        - name: arbesk
+          image: ahmadsayed/arbesk:09091608
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9090
+          env:
+            - name: ARBESK_ROOT
+              value: /app
+            - name: PORT
+              value: "9090"
+            - name: NODE_ENV
+              value: production
+          volumeMounts:
+            - name: env
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+            - name: data
+              mountPath: /app/.data
+          readinessProbe:
+            httpGet:
+              path: /api/v1/config
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/config
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: env
+          secret:
+            secretName: arbesk-env
+            items:
+              - key: .env
+                path: .env
+        - name: data
+          persistentVolumeClaim:
+            claimName: arbesk-data

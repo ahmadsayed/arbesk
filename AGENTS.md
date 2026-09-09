@@ -22,7 +22,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 
 **Client-side first** — logic belongs in the browser; the Express backend is a thin gatekeeper. Add a server route only to: validate signatures/transactions/sessions, enforce global rate limits/replay guards, access browser-invisible secrets, or perform cross-user/admin actions (`docs/ARCHITECTURE.md §1.5`).
 
-**Contracts**: `ArbeskAssetFree` (`CONTRACT_ADDRESS`, **default**, 10 gen/day/wallet) and `ArbeskAsset` (`PAID_CONTRACT_ADDRESS`, USDC PayGo) share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn). Max 5000 editors/token, client-enforced (`merkle-editors.ts`). Generation UI goes through `wallet-payments.ts` → `isFreeTierContract()` — never hard-code the paid path. Contract `owner()` bypasses the free-tier quota; Merkle editor checks still apply (owner ≠ editor). **After any `.sol` change**: compile → deploy → sync root `.env` → `npm run test:frontend` (+ E2E). Stale ABIs cause `c.methods.X is not a function`.
+**Contracts**: `ArbeskAssetFree` (`CONTRACT_ADDRESS`, **default**, 10 gen/day/wallet) and `ArbeskAsset` (`PAID_CONTRACT_ADDRESS`, USDC PayGo) share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn). Max 5000 editors/token, client-enforced (`merkle-editors.ts`). Generation UI goes through `wallet-payments.ts` → `isFreeTierContract()` — never hard-code the paid path. Contract `owner()` bypasses the free-tier quota; Merkle editor checks still apply (owner ≠ editor). **After any `.sol` change**: compile → deploy → sync root `.env` → `bun run test:frontend` (+ E2E). Stale ABIs cause `c.methods.X is not a function`.
 
 ## 3. Repo Layout
 
@@ -59,6 +59,7 @@ bun start                              # backend :9090 (runs under Bun);  bun ru
 # Production (Bun runtime)
 bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode)
 bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
+bun run deploy:k3s                     # one-command deploy to promptscad.com: regen .env.k3s → recreate secret → arm64 build+push → apply manifests (deploy/k8s/README.md)
 # start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config, sources .env.pinata,
 # forces IPFS_BACKEND=pinata + DEFAULT_CHAIN_ID=84532 + API_URL=https://sepolia.base.org, and
 # starts/probes the Nostr relay. Env layering: .env → .env.production (optional overrides) →
@@ -70,26 +71,26 @@ bun run start:prod                     # scripts/start-prod.sh: frozen install �
 # (src/api/project-root.ts).
 
 # Testing
-npm test                               # Jest unit (excludes Hardhat & E2E)
-npm run test:all                       # lint → typecheck → frontend → api → contracts
-npm run test:api                       # test/api.test.js alone
-npm run test:frontend                  # test/frontend/ + deployment integrity
-npm run test:contracts                 # Hardhat tests in Docker
+bun run test                           # Jest unit (excludes Hardhat & E2E)
+bun run test:all                       # lint → typecheck → frontend → api → contracts
+bun run test:api                       # test/api.test.js alone
+bun run test:frontend                  # test/frontend/ + deployment integrity
+bun run test:contracts                 # Hardhat tests in Docker
 (cd blockchain && npm run test:mutation)  # slither-mutate vs blockchain/test/ArbeskAsset.test.js (~15-20 min, no Docker needed)
-npm run bench:asset-core               # asset-core pipeline benchmark → test-results/asset-core-bench.json
-npm run test:e2e -- --project=chromium # Playwright critical path (:ui = visible browser)
-npm run audit                        # fallow quality gate (dead code/complexity/dupes/styling) on the changeset vs HEAD
+bun run bench:asset-core               # asset-core pipeline benchmark → test-results/asset-core-bench.json
+bun run test:e2e -- --project=chromium # Playwright critical path (:ui = visible browser)
+bun run audit                        # fallow quality gate (dead code/complexity/dupes/styling) on the changeset vs HEAD
 
 # Pre-commit gate: .githooks/pre-commit runs `fallow audit --changed-since HEAD`
 # (blocks only findings the changeset introduces — a ratchet, legacy never blocks).
-# Enabled via core.hooksPath set by npm prepare; bypass with --no-verify.
+# Enabled via core.hooksPath set by bun install prepare hook; bypass with --no-verify.
 
 # Contract workflow — MANDATORY after any .sol change
 docker compose run --rm hardhat npx hardhat compile
 docker compose up -d hardhat
 docker compose exec -T hardhat npx hardhat run scripts/deploy.js --network localhost
 grep -E "CONTRACT_ADDRESS|PAID_CONTRACT_ADDRESS|BASE_CONTRACT_ADDRESS" blockchain/.env  # copy to root .env
-npm run test:frontend                  # always verify last
+bun run test:frontend                  # always verify last
 # Always deploy with --network localhost against the running node —
 # --network hardhat deploys to an ephemeral chain that vanishes with the container.
 ```
@@ -98,9 +99,9 @@ npm run test:frontend                  # always verify last
 
 - **Out-of-the-box first**: always prefer the library/framework's built-in feature (Babylon, Zod, Alpine, Express…) over hand-rolled code. Hand-roll only when the built-in genuinely cannot do the job — verify that against the library's source/docs first, and leave a comment recording why the custom path is necessary. (Lesson from the ortho-camera saga: custom input/projection code doubles the test surface and hides state the framework can't see.)
 - **JS/TS**: backend `src/` is TypeScript run under Bun (`bun src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; neither Bun nor Node elides imports), and relative imports inside `src/` carry explicit `.ts` extensions (Node ≥22.18 type-stripping, jest, and swc all rely on this convention). The **entire frontend `frontend/src/js/` is TypeScript** (only `vendor/` stays plain JS), bundled by **Bun.build** (`frontend/scripts/bundle.js`: single-file `app.js` + importmap vendor bundles + self-contained worker; `define` sets `NODE_ENV=production`, `debugger` statements dropped; dist assets are brotli-precompressed by `frontend/scripts/compress.js`) — **import specifiers always match the on-disk file** (`.ts` for frontend/backend modules, `.js` only for plain-JS files like `constants/chains.js` and `vendor/`; the bundler resolves `.ts` specifiers directly, and jest maps `.js`→source via `moduleNameMapper`). SDK packages are consumed by bare specifier as workspace packages (`@arbesk/asset-core`, `@arbesk/wallet`, `@arbesk/authz`; subpaths end in `.js`, e.g. `@arbesk/asset-core/formats/gltf/gltf-core.js`) — treat them as black boxes, see `packages/*/AGENTS.md`. CJS only in `blockchain/scripts/` + `frontend/scripts/` + `e2e/`. CDN globals `BABYLON`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
-- **Type-checking**: `allowJs`/`checkJs`, `strict: true` (`npm run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
-- **LSP tools (cclsp MCP)**: if `mcp__cclsp__*` tools are available (user-level `~/.kimi-code/mcp.json`, TypeScript via `typescript-language-server`), prefer `find_definition`/`find_references` over Grep for symbol navigation and cross-file renames — results are exact, not text matches. The **first LSP call in a session is slow** (tsserver loads the whole project, 1-3 min cold); subsequent calls are fast. Keep using Grep for strings/comments/CSS selectors — LSP only sees code symbols. `rename_symbol` edits files and leaves `.bak` backups — always call with `dry_run: true` first, and prefer plain `Edit` for single-file renames; delete `.bak` files after applying. Verify type-level results with `npm run typecheck`. Note: the global `cclsp` install carries local patches (init-timeout + references retry fix) — reinstalling/upgrading it overwrites them.
-- **Lint**: `npm run lint[:fix]`; part of `test:all`.
+- **Type-checking**: `allowJs`/`checkJs`, `strict: true` (`bun run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
+- **LSP tools (cclsp MCP)**: if `mcp__cclsp__*` tools are available (user-level `~/.kimi-code/mcp.json`, TypeScript via `typescript-language-server`), prefer `find_definition`/`find_references` over Grep for symbol navigation and cross-file renames — results are exact, not text matches. The **first LSP call in a session is slow** (tsserver loads the whole project, 1-3 min cold); subsequent calls are fast. Keep using Grep for strings/comments/CSS selectors — LSP only sees code symbols. `rename_symbol` edits files and leaves `.bak` backups — always call with `dry_run: true` first, and prefer plain `Edit` for single-file renames; delete `.bak` files after applying. Verify type-level results with `bun run typecheck`. Note: the global `cclsp` install carries local patches (init-timeout + references retry fix) — reinstalling/upgrading it overwrites them.
+- **Lint**: `bun run lint[:fix]`; part of `test:all`.
 - **Validation**: Zod (`src/api/schemas.ts`, `validation.ts`) via `validateBody`/`validateQuery`; failures → 400 `VALIDATION_ERROR` with `details.issues`.
 - **Pug CDN tags — NO SRI hashes**: pin exact versions in the URL, omit `integrity`, keep `crossorigin="anonymous"` (CDNs silently rebuild assets → `BABYLON.Engine is not a constructor`). Pins: `frontend/src/pug/app.pug`, `frontend/src/js/engine/babylon-loader.ts` (Babylon lazy-loads on first Studio entry).
 - **Solidity**: `^0.8.20`, OpenZeppelin v5, compiled 0.8.24 (Cancun); `require()` validation, events for state changes, NatSpec; optimize storage reads over writes.
@@ -151,7 +152,7 @@ Full schema: `docs/ARCHITECTURE.md §4`. Golden rules: the asset · fractal nest
 - **Single creation path** — SIWE via `POST /api/v1/sessions`: EOA sends `{ message, signature }`; CDP adds `eoaAddress` (embedded EOA signs; `message.address` is the smart account; fallback verification in the `@arbesk/wallet` SIWE verifier — `packages/wallet/AGENTS.md`).
 - Required for: `POST /generations`, `DELETE /generations/:taskId` (stop an in-flight task — credits lost), `/ipfs/upload-url`, `/ipfs/unpin`, `/assets/snapshot-comments`, `/paymaster`, `/users/resolve-email`; WS chat proxy takes the token in the query string.
 - `/ipfs/unpin` also verifies on-chain ownership (or editor Merkle proof) and CID membership in the token's collection — frontend unpins **before** burning.
-- Auto-restore on page load for CDP, EOA, WalletConnect. Full flow: `docs/API_SPEC.md § Authentication`.
+- Auto-restore on page load for CDP and EOA. Full flow: `docs/API_SPEC.md § Authentication`.
 
 ## 9. Security
 
@@ -166,9 +167,9 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E | Playwright | `e2e/specs/*.spec.js` |
 
-~2000 Jest tests / 195 suites; E2E 27 specs / 55 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `npm run test:e2e:coverage`, `npm run test:coverage:all`.
+~2000 Jest tests / 195 suites; E2E 27 specs / 55 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `bun run test:e2e:coverage`, `bun run test:coverage:all`.
 
-**Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child assets · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `npm test` is **not enough** for these.
+**Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child assets · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `bun run test` is **not enough** for these.
 
 **UI changes must sync E2E**: update `e2e/helpers/studio-selectors.mjs`, spec assertions, and `e2e/helpers/manifest.mjs` as the flow changes (`e2e/README.md`, edit-ui skill's E2E Sync guide).
 
@@ -183,10 +184,12 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 
 Backend on :9090. Hardhat networks: `hardhat` (local), `baseSepolia` (testnet; ETH gas, CDP smart accounts sponsored via paymaster proxy `src/api/routes/paymaster.ts`).
 
+**Production k3s deployment** (live 2026-09-09): `https://promptscad.com` runs on the `ender3` k3s cluster (Pi, arm64; `ssh adam@192.168.68.60`, `sudo k3s kubectl`). Manifests + runbook in `deploy/k8s/`; app image via `docker/app.Dockerfile`, relay image via `docker/nostr-relay.Dockerfile` (16K-page jemalloc rebuild); cluster env generated by `node scripts/make-env-k3s.mjs` → `.env.k3s` → secret `arbesk-env` mounted at `/app/.env`. TLS terminates at Cloudflare; Nostr relay is proxied at `/nostr` (strip-prefix middleware — the relay only accepts WS on `/`). Env vars `PUBLIC_NOSTR_URL` / `PUBLIC_ORIGIN` drive the browser relay URL and CSP. Testnet-only (Base Sepolia + Pinata). Full details: `docs/CURRENT_STATUS.md §8`.
+
 Env files (gitignored, never commit): `blockchain/.env` (deploy keys/addresses — bootstrap from `.env.example`), root `.env` (backend; `CONTRACT_ADDRESS`/`PAID_CONTRACT_ADDRESS` must match `blockchain/.env` post-deploy; CDP keys: `CDP_PROJECT_ID`, `CDP_PAYMASTER_URL`, `CDP_API_KEY_ID`/`SECRET`; `INDEXER_DISABLE_TESTNET` kill-switch), plus the production layering `.env.production` (optional overrides) and `.env.pinata` (testnet). `DEFAULT_CHAIN_ID` sets the deployment default chain that anonymous chain reads follow (defaults to Hardhat local; `start-prod.sh --testnet` exports 84532). Full reference: `docs/CURRENT_STATUS.md §8`. Ops: `scripts/run-ipfs-gc.mjs` (IPFS GC), `scripts/sync-deployed-addresses.mjs`.
 
 ## 12. Misc
 
-- **Worktrees**: `npm run worktree:create -- feature-xyz` seeds `.worktrees/feature-xyz` with env files, built frontend, compiled contracts, own Docker stack + deterministic port (arbesk-worktree skill, `e2e/README.md § Git worktrees`).
+- **Worktrees**: `bun run worktree:create -- feature-xyz` seeds `.worktrees/feature-xyz` with env files, built frontend, compiled contracts, own Docker stack + deterministic port (arbesk-worktree skill, `e2e/README.md § Git worktrees`).
 - **CDP email wallet**: `@coinbase/cdp-core` SDK in `wallet-cdp.ts`, Base Sepolia only (cdp-base-wallet skill).
 - **Repository**: https://github.com/ahmadsayed/arbesk (private — always use the `gh` CLI; public fetches 404).

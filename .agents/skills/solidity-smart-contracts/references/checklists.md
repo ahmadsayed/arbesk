@@ -21,8 +21,8 @@ After any contract change, run through this checklist:
 
 ### Phase 3: Address Alignment
 - [ ] Root `.env` CONTRACT_ADDRESS matches `blockchain/.env`
-- [ ] `npm run test:frontend` passes all tests
-- [ ] Backend starts without errors (`npm start`, then check `[BOOT]` log)
+- [ ] `bun run test:frontend` passes all tests
+- [ ] Backend starts without errors (`bun start`, then check `[BOOT]` log)
 - [ ] `GET /api/v1/config` returns correct `contractAddress`
 - [ ] `GET /api/v1/contracts/ArbeskAsset/abi` returns valid JSON
 

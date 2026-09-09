@@ -69,8 +69,8 @@ independent of each other and of the frontend/backend trees.
 bun run build:packages   # tsc → dist/ (ESM + .d.ts); bun runs the four
                          # independent packages in parallel, then @arbesk/authz
                          # (it type-checks against @arbesk/wallet's dist)
-npm run typecheck        # after build (resolves @arbesk/* via workspace symlinks)
-npm test                 # jest maps @arbesk/*.js → each package's .ts source (no build step)
+bun run typecheck        # after build (resolves @arbesk/* via workspace symlinks)
+bun run test             # jest maps @arbesk/*.js → each package's .ts source (no build step)
 ```
 
 `build:packages` is wired as `prestart`/`pretypecheck`/`pretypecheck:frontend`/

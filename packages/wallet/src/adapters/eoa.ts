@@ -1,6 +1,6 @@
 /**
  * Reference EOA Signer adapter wrapping a raw EIP-1193 provider (injected
- * wallet or WalletConnect).
+ * wallet).
  * @remarks personal_sign carries exactly [message, address] — the web3
  *   empty-password quirk is gone.
  */

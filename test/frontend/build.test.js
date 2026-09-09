@@ -258,22 +258,6 @@ describe("Frontend Build", () => {
     });
   });
 
-  // ── P0: wallet-connect.ts must not static-import from CDN ────────────────
-
-  describe("wallet-connect.ts CDN import safety", () => {
-    const walletConnect = readSource("blockchain/wallet-connect.ts");
-
-    test("does NOT static-import from an external CDN URL", () => {
-      expect(walletConnect).not.toMatch(
-        /import\s*\{[^}]*\}\s*from\s*["']https:\/\//,
-      );
-    });
-
-    test("uses dynamic import() for external CDN modules", () => {
-      expect(walletConnect).toMatch(/await\s+import\s*\(/);
-    });
-  });
-
   // ── P0: studio.html must not rely on inline onclick for module functions ─
 
   describe("studio.html inline event handler safety", () => {

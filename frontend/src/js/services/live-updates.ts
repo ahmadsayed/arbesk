@@ -4,7 +4,7 @@ import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { KIND_ASSET_UPDATE, TAG_TOKEN, tokenTag } from "@arbesk/nostr";
 import { getNostrFacade, getOrCreateBinding } from "./nostr-browser.ts";
 import { getContractAddress } from "../blockchain/network-config.ts";
-import { NOSTR_RELAY_URL } from "./nostr-config.ts";
+import { getNostrRelayUrl } from "./nostr-config.ts";
 import { invalidateResolution, readTokenURI, normalizeTokenURI } from "../blockchain/token-resolver.ts";
 import { collectSceneChildRefs, childRefCollection } from "../engine/child-refs.ts";
 
@@ -83,27 +83,29 @@ export function startLiveUpdates(): void {
   if (started) return;
   started = true;
   on(EVENTS.ASSET_URI_CHANGED, (p) => { onLocalUriChanged(p).catch(() => {}); });
-  pool.subscribeMany([NOSTR_RELAY_URL], {
-    kinds: [KIND_ASSET_UPDATE],
-  }, {
-    onevent: async (event: NostrEvent) => {
-      if (seen.has(event.id)) return;
-      seen.add(event.id);
-      try {
-        const payload = JSON.parse(event.content);
-        const eventTag = event.tags.find((t) => t[0] === TAG_TOKEN)?.[1] || "";
-        // The notice is just "asset updated"; the signer is irrelevant — the
-        // chain is the source of truth, so re-fetch the asset and reload.
-        const tokens = collectTokens();
-        if (!tokens.some((t) => tokenTag(t.chainId, t.contractAddress, t.tokenId) === eventTag)) return;
-        console.log(`[LIVE] update notice received | token=${payload.tokenId} chain=${payload.chainId}`);
-        // The event content carries the publisher's actual contract (the paid
-        // tier is not the network default), so prefer it over the default.
-        const contract = payload.contractAddress || getContractAddress(payload.chainId);
-        await waitForOnChainUri(payload.chainId, contract!, payload.tokenId, payload.newAssetURI);
-        invalidateResolution(payload.chainId, contract!, payload.tokenId);
-        emit(EVENTS.ASSET_URI_UPDATED, { ...payload, source: "remote" });
-      } catch { /* ignore malformed */ }
-    },
+  getNostrRelayUrl().then((relayUrl) => {
+    pool.subscribeMany([relayUrl], {
+      kinds: [KIND_ASSET_UPDATE],
+    }, {
+      onevent: async (event: NostrEvent) => {
+        if (seen.has(event.id)) return;
+        seen.add(event.id);
+        try {
+          const payload = JSON.parse(event.content);
+          const eventTag = event.tags.find((t) => t[0] === TAG_TOKEN)?.[1] || "";
+          // The notice is just "asset updated"; the signer is irrelevant — the
+          // chain is the source of truth, so re-fetch the asset and reload.
+          const tokens = collectTokens();
+          if (!tokens.some((t) => tokenTag(t.chainId, t.contractAddress, t.tokenId) === eventTag)) return;
+          console.log(`[LIVE] update notice received | token=${payload.tokenId} chain=${payload.chainId}`);
+          // The event content carries the publisher's actual contract (the paid
+          // tier is not the network default), so prefer it over the default.
+          const contract = payload.contractAddress || getContractAddress(payload.chainId);
+          await waitForOnChainUri(payload.chainId, contract!, payload.tokenId, payload.newAssetURI);
+          invalidateResolution(payload.chainId, contract!, payload.tokenId);
+          emit(EVENTS.ASSET_URI_UPDATED, { ...payload, source: "remote" });
+        } catch { /* ignore malformed */ }
+      },
+    });
   });
 }

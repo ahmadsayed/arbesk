@@ -47,7 +47,7 @@ ASCII cheat sheet with all constants, commands, and endpoints.
 │                        --network localhost               │
 │  TEST:                docker compose run --rm hardhat   │
 │                        npx hardhat test                  │
-│  INTEGRITY CHECK:     npm run test:frontend             │
+│  INTEGRITY CHECK:     bun run test:frontend             │
 │  ABI SERVE:           GET /api/v1/contracts/            │
 │                        ArbeskAsset/abi                  │
 │  CONFIG ENDPOINT:     GET /api/v1/config                │
