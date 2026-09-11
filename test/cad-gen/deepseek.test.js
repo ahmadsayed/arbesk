@@ -34,6 +34,32 @@ describe("createDeepSeekClient", () => {
     expect(seen.messages[0].content).toBe("hi");
   });
 
+  // Thinking mode is on by default at the provider, at effort "high". Measured
+  // on one prompt: default thinking never returned inside 240s, effort "low"
+  // took 111s, and disabled answered in 2.0s for 479 tokens and was the only
+  // setting that produced the requested fillet. Off is the default here.
+  const payload = async (config) => {
+    let seen;
+    const c = createDeepSeekClient({
+      apiKey: "k", baseUrl: "https://api.deepseek.com",
+      model: "deepseek-flash", ...config,
+      fetchImpl: async (_u, init) => {
+        seen = JSON.parse(init.body);
+        return new Response(JSON.stringify(completion("{}")), { status: 200 });
+      },
+    });
+    await c.complete([{ role: "user", content: "hi" }]);
+    return seen;
+  };
+
+  it("disables thinking by default", async () => {
+    expect((await payload({})).thinking).toEqual({ type: "disabled" });
+  });
+
+  it("enables thinking only when asked", async () => {
+    expect((await payload({ thinking: true })).thinking).toEqual({ type: "enabled" });
+  });
+
   it("maps 401 to PROVIDER_AUTH_FAILED", async () => {
     const c = client(reply({ error: "nope" }, 401));
     await expect(c.complete([])).rejects.toMatchObject({

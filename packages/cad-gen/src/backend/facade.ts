@@ -26,6 +26,8 @@ export interface CadGenConfig {
   apiKey: string;
   baseUrl?: string;
   model?: string;
+  /** Provider thinking mode. Off by default - see buildPayload's measurements. */
+  thinking?: boolean;
   limits?: Partial<CadLimits>;
   fetchImpl?: typeof fetch;
 }
@@ -69,6 +71,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
     apiKey: config.apiKey,
     baseUrl: config.baseUrl ?? "https://api.deepseek.com",
     model: config.model ?? "deepseek-flash",
+    ...(config.thinking ? { thinking: true } : {}),
     ...(config.fetchImpl ? { fetchImpl: config.fetchImpl } : {}),
   });
 

@@ -30,6 +30,28 @@ const generator = (replies, limits = {}) => createCadGenerator({
 });
 
 describe("createCadGenerator", () => {
+  it("disables provider thinking by default and forwards an explicit choice", async () => {
+    const seen = [];
+    const capture = (config) => createCadGenerator({
+      apiKey: "k",
+      ...config,
+      fetchImpl: async (_u, init) => {
+        seen.push(JSON.parse(init.body).thinking);
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: BROKEN_PARSE } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }), { status: 200 });
+      },
+    });
+
+    // A design that cannot be parsed never reaches the kernel, so this stays
+    // fast: every attempt fails at the document gate.
+    await capture({}).generate({ prompt: "x", repairAttempts: 1 }).catch(() => {});
+    await capture({ thinking: true }).generate({ prompt: "x", repairAttempts: 1 }).catch(() => {});
+
+    expect(seen).toEqual([{ type: "disabled" }, { type: "enabled" }]);
+  }, 40000);
+
   it("returns a validated design on the first attempt", async () => {
     const g = generator([VALID]);
     const r = await g.generate({ prompt: "a 10mm cube" });

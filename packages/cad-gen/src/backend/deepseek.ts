@@ -21,6 +21,8 @@ export interface DeepSeekConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  /** Provider thinking mode. Off unless a caller asks for it - see buildPayload. */
+  thinking?: boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }
@@ -73,20 +75,29 @@ function linkAbort(controller: AbortController, signal?: AbortSignal): void {
 
 /**
  * Builds the OpenAI-compatible request body for one turn.
- * @remarks `temperature` is accepted but has NO EFFECT while thinking mode is
- *   on, which is the provider default ("Thinking mode does not support the
- *   temperature, presence_penalty, or frequency_penalty parameters... setting
- *   these parameters will not trigger an error but will also have no effect" -
- *   DeepSeek API docs, Thinking Mode). It is left in place because it becomes
- *   meaningful the moment thinking is disabled with
- *   `thinking: { type: "disabled" }`; do not read it as a determinism guarantee
- *   today, since the provider is currently free to sample.
+ * @remarks Thinking mode is ENABLED by default by the provider, at effort
+ *   "high", and it is disabled here on purpose. Measured on one prompt against
+ *   the live API: the provider default never returned inside 240s;
+ *   `reasoning_effort: "low"` took 111s and still spent 98% of its completion
+ *   tokens on reasoning; disabled answered in 2.0s for 479 tokens, and was the
+ *   only one of the three that actually produced the requested fillet. Latency
+ *   is not the whole cost: at three repair attempts a request that can exceed
+ *   240s per turn cannot be served inside any sane request budget, and it
+ *   outlives the lock TTL derived from a 120s provider timeout. Turning it back
+ *   on restores the provider's "high" effort, so pair that with a larger
+ *   `timeoutMs`.
+ * @remarks `temperature` is ignored WHILE thinking is on: "Thinking mode does
+ *   not support the temperature, presence_penalty, or frequency_penalty
+ *   parameters... setting these parameters will not trigger an error but will
+ *   also have no effect" (DeepSeek API docs, Thinking Mode). In the default
+ *   configuration, where thinking is off, it takes effect.
  */
 function buildPayload(config: DeepSeekConfig, messages: LlmMessage[]): unknown {
   return {
     model: config.model,
     messages: messages.map((m) => ({ role: m.role, content: toWireContent(m.content) })),
     response_format: { type: "json_object" },
+    thinking: { type: config.thinking ? "enabled" : "disabled" },
     temperature: 0.2,
   };
 }
