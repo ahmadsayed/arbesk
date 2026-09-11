@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@arbesk/asset-core": "*",
-    "fflate": "catalog:"
+    "fflate": "catalog:",
+    "manifold-3d": "catalog:"
   },
   "license": "ISC"
 }

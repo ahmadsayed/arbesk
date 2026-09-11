@@ -2,6 +2,11 @@
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
     "src/index.ts",
+    // @arbesk/cad-gen's backend is a second process entry (the validation child
+    // is spawned by path, never imported) plus the package subpath the server
+    // imports. Same reasoning as the gltf worker entry below.
+    "packages/cad-gen/src/backend/child.ts",
+    "packages/cad-gen/src/backend/index.ts",
     "frontend/src/js/app-entry.ts",
     "frontend/src/js/app/initial-view.ts",
     "frontend/src/js/engine/theme-init.ts",
