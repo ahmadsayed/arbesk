@@ -4,6 +4,14 @@ const OPTS = { timeoutMs: 20000, maxTriangles: 200000 };
 const design = (code) => ({ code, parameters: { s: { value: 10, unit: "mm" } }, summary: "" });
 const run = (code) => runValidation(design(code), OPTS);
 
+/** Asserts two bounding boxes agree per axis, in mm. */
+const expectSameBbox = (actual, expected, digits = 1) => {
+  for (const axis of [0, 1, 2]) {
+    expect(actual.min[axis]).toBeCloseTo(expected.min[axis], digits);
+    expect(actual.max[axis]).toBeCloseTo(expected.max[axis], digits);
+  }
+};
+
 describe("prelude geometry", () => {
   it("box has the requested volume", async () => {
     const r = await run("return box(10, 20, 30);");
@@ -51,6 +59,63 @@ describe("prelude geometry", () => {
     const r = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5, { mode: 'minkowski' });");
     expect(r.ok).toBe(true);
     expect(r.stats.filletMode).toBe("minkowski");
+  }, 30000);
+
+  // A fillet rounds the edges that are already there. Plain Minkowski dilation
+  // is a *rounded offset*: it grows the part by r on every face, so a 20 mm box
+  // came back as 23 mm and no longer fits its mating geometry. The opening
+  // (erode by the ball, then dilate by the same ball) keeps the outer
+  // dimensions and rounds the edges instead - the 3D counterpart of the
+  // square(w - 2r, d - 2r) + offset(r, "Round") pattern roundRect already uses.
+  it("filletEdges keeps the outer dimensions and removes material", async () => {
+    const sharp = await run("return box(20, 20, 20);");
+    const filleted = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5, { mode: 'minkowski' });");
+
+    expect(filleted.ok).toBe(true);
+    expectSameBbox(filleted.stats.bboxMm, sharp.stats.bboxMm);
+    expect(filleted.stats.volumeMm3).toBeLessThan(sharp.stats.volumeMm3);
+    expect(filleted.stats.filletMode).toBe("minkowski");
+  }, 30000);
+
+  it("chamferEdges keeps the outer dimensions and removes material", async () => {
+    const sharp = await run("return box(20, 20, 20);");
+    const chamfered = await run("const b = box(20, 20, 20);\nreturn chamferEdges(b, 1);");
+
+    expect(chamfered.ok).toBe(true);
+    expectSameBbox(chamfered.stats.bboxMm, sharp.stats.bboxMm);
+    expect(chamfered.stats.volumeMm3).toBeLessThan(sharp.stats.volumeMm3);
+  }, 30000);
+
+  it("filletEdges rounds a thin plate without growing it", async () => {
+    const plate = await run("return box(20, 20, 1);");
+    const filleted = await run("const p = box(20, 20, 1);\nreturn filletEdges(p, 0.4, { mode: 'minkowski' });");
+
+    expect(filleted.ok).toBe(true);
+    expectSameBbox(filleted.stats.bboxMm, plate.stats.bboxMm);
+    expect(filleted.stats.volumeMm3).toBeLessThan(plate.stats.volumeMm3);
+  }, 30000);
+
+  // Erosion is the half of an opening that can vanish a part: a body thinner
+  // than 2r erodes to nothing. Dilating an empty manifold returns the ball
+  // rather than nothing, so without an explicit refusal an impossible radius
+  // would silently hand back a bare sphere of radius r. The caller has to hear
+  // that r does not fit - and the fillet is applied to *every* convex edge, so
+  // on a 1 mm plate even r = 0.5 (half the thickness) is already too much.
+  it("filletEdges refuses a radius the part cannot take", async () => {
+    const huge = await run("const p = box(20, 20, 1);\nreturn filletEdges(p, 5, { mode: 'minkowski' });");
+    expect(huge.ok).toBe(false);
+    expect(huge.error).toMatch(/filletEdges: radius 5 is too large/);
+
+    const boundary = await run("const p = box(20, 20, 1);\nreturn filletEdges(p, 0.5, { mode: 'minkowski' });");
+    expect(boundary.ok).toBe(false);
+    expect(boundary.error).toMatch(/too large/);
+  }, 30000);
+
+  it("chamferEdges refuses a radius the part cannot take", async () => {
+    const r = await run("const p = box(20, 20, 1);\nreturn chamferEdges(p, 5);");
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/chamferEdges: radius 5 is too large/);
   }, 30000);
 
   it("bbox reports the true extent", async () => {

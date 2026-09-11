@@ -80,6 +80,32 @@ export function buildPrelude(module: ManifoldModule): PreludeHelpers {
     return part.subtract(cutter.translate(centre));
   };
 
+  /**
+   * Rounds the part's convex edges by opening it with a ball of radius r.
+   * @remarks An opening is erode-then-dilate by the *same* ball. Plain
+   *   Minkowski dilation is not a fillet, it is a rounded offset: it grows
+   *   every face by r, so a 20 mm box came back 23 mm across and no longer fit
+   *   its mating geometry. Eroding first keeps the result inside the original
+   *   bounds, so the outer dimensions survive and only the edges change - the
+   *   3D counterpart of the square(w - 2r, d - 2r) + offset(r) pattern
+   *   `roundRect` already uses. A part thinner than 2r erodes to nothing and
+   *   stays empty; that is reported as an empty solid, never silently replaced
+   *   by a dilation.
+   */
+  const openByBall = (part: any, r: number, label: string): any => {
+    const ball = Manifold.sphere(r, 32);
+    const eroded = part.minkowskiDifference(ball);
+    // Dilating an *empty* manifold returns the other operand rather than
+    // nothing, so without this check an over-large radius would hand the model
+    // a bare ball of radius r instead of the part it started from. Refuse the
+    // request instead: the caller must hear that r does not fit, and the
+    // repair loop turns the throw into a fixable script error.
+    if (eroded.isEmpty()) {
+      throw new Error(label + ": radius " + r + " is too large for this part");
+    }
+    return eroded.minkowskiSum(ball);
+  };
+
   const roundRect = (w: number, d: number, r: number): any => {
     const radius = Math.max(0, Math.min(r, Math.min(w, d) / 2));
     if (radius === 0) return CrossSection.square([w, d], true);
@@ -137,10 +163,13 @@ export function buildPrelude(module: ManifoldModule): PreludeHelpers {
     },
 
     /**
-     * Rounds edges. "minkowski" is geometrically correct but grows the triangle
-     * count fast; "smooth" is tangent-based and cosmetic.
+     * Rounds the part's existing edges with radius r, leaving its outer
+     * dimensions alone. "minkowski" cuts real geometry (an opening, so the
+     * result stays inside the original bounds); "smooth" is tangent-based and
+     * cosmetic.
      * @remarks The mode actually used is reported on stats.filletMode so
-     *   fidelity is never silently overstated (spec section 4).
+     *   fidelity is never silently overstated (spec section 4). "smooth" is
+     *   *not* dimension-preserving - it moves the surface outward as well.
      */
     filletEdges: (part: any, r: number, opts: any = {}) => {
       const mode = opts.mode ?? "auto";
@@ -150,13 +179,21 @@ export function buildPrelude(module: ManifoldModule): PreludeHelpers {
         return part.smoothOut(60, 1).refineToLength(r / 2);
       }
       lastFilletMode = "minkowski";
-      return part.minkowskiSum(Manifold.sphere(r, 32));
+      return openByBall(part, r, "filletEdges");
     },
 
+    /**
+     * Breaks the part's existing edges with radius r, leaving its outer
+     * dimensions alone.
+     * @remarks Manifold is a mesh kernel with no exact chamfer primitive, so
+     *   this uses the same ball opening as filletEdges; the difference between
+     *   a round and a flat break is not something this kernel can express
+     *   exactly. Both are reported as "minkowski".
+     */
     chamferEdges: (part: any, r: number) => {
       if (!(r > 0)) return part;
       lastFilletMode = "minkowski";
-      return part.minkowskiSum(Manifold.cylinder(r * 2, r * 2, 0, 32, true));
+      return openByBall(part, r, "chamferEdges");
     },
 
     bbox: (part: any) => {
