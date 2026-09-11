@@ -13,3 +13,5 @@ export type {
 export {
   parseDesign, validateParameterOverrides, referencedIdentifiers,
 } from "./core/document.ts";
+export { guardScript } from "./core/guard.ts";
+export type { GuardResult } from "./core/guard.ts";
