@@ -798,6 +798,20 @@ describe("guardScript — structure", () => {
   it("allows locally declared functions", () => {
     expect(check("function helper(w) { return box(w, w, w); }\nreturn helper(5);").ok).toBe(true);
   });
+
+  it("allows if/for control flow without mistaking keywords for helpers", () => {
+    const code = [
+      "let out = box(P.w, P.d, P.h);",
+      "if (P.count > 1) {",
+      "  for (let i = 0; i < P.count; i++) {",
+      "    out = out.subtract(hole(out, { diameter: 3, axis: 'z', at: [i * 10, 0] }));",
+      "  }",
+      "}",
+      "return out;",
+    ].join("\n");
+    const r = check(code);
+    expect(r.ok).toBe(true);
+  });
 });
 ```
 
@@ -849,6 +863,19 @@ const DENIED: { pattern: RegExp; label: string }[] = [
   { pattern: /\bfor\s*\(\s*;\s*;\s*\)/, label: "unbounded loop" },
 ];
 
+/**
+ * JS syntax keywords that are followed by a parenthesised expression.
+ * @remarks Without this, the lexical scan below reports `if` and `for` as
+ *   unknown helpers and rejects perfectly valid scripts - verified with the
+ *   controller before Task 4 shipped.
+ */
+const KEYWORDS = new Set([
+  "if", "else", "for", "while", "do", "switch", "case", "default", "try",
+  "catch", "finally", "throw", "return", "typeof", "instanceof", "new",
+  "delete", "void", "in", "of", "function", "await", "yield", "class",
+  "super", "this", "with",
+]);
+
 /** Globals the kernel host legitimately provides. */
 const ALLOWED_GLOBALS = new Set([
   "Math", "Number", "Array", "Object", "String", "Boolean", "JSON",
@@ -878,12 +905,13 @@ export function guardScript(code: string, preludeNames: Iterable<string>): Guard
 
   const allowed = new Set<string>([...preludeNames, ...ALLOWED_GLOBALS, "PARAMETERS", "P", "M"]);
   for (const name of referencedIdentifiers(code)) {
+    if (KEYWORDS.has(name)) continue;
     if (allowed.has(name)) continue;
     // Locally declared functions and variables are the script's own business.
-    const declared = new RegExp("\b(?:const|let|var|function)\s+" + name + "\b").test(code);
+    const declared = new RegExp("\\b(?:const|let|var|function)\\s+" + name + "\\b").test(code);
     if (declared) continue;
     // Method calls (xs.map(...)) are not bare prelude calls.
-    const bare = new RegExp("(?:^|[^\\w.$])" + name + "\s*\(").test(code);
+    const bare = new RegExp("(?:^|[^\\w.$])" + name + "\\s*\\(").test(code);
     if (!bare) continue;
     return { ok: false, reason: "UNKNOWN_HELPER", detail: name };
   }
@@ -994,8 +1022,18 @@ export interface PreludeHelpers {
  * @remarks Implemented in Task 6. This task fixes only the names, so the kernel
  *   and the guard agree on the surface before the bodies exist.
  */
-export function buildPrelude(_module: ManifoldModule): PreludeHelpers {
-  throw new Error("buildPrelude not implemented");
+export function buildPrelude(module: ManifoldModule): PreludeHelpers {
+  // Task 6 replaces this body wholesale. It returns one throwing placeholder
+  // PER NAME rather than throwing here, because createCadKernel().run() calls
+  // buildPrelude() BEFORE evaluating the script: an immediate throw would stop
+  // a runaway script from ever looping, making the timeout test unpassable.
+  const placeholders: Record<string, unknown> = {};
+  for (const name of PRELUDE_NAMES) {
+    placeholders[name] = () => {
+      throw new Error("buildPrelude not implemented: " + name);
+    };
+  }
+  return placeholders as PreludeHelpers;
 }
 ```
 
@@ -1078,7 +1116,10 @@ export function createCadKernel(module: ManifoldModule): CadKernel {
           triangles: result.numTri(),
           vertices: result.numVert(),
           volumeMm3: result.volume(),
-          bboxMm: { min: [...box.min], max: [...box.max] },
+          bboxMm: {
+            min: [...box.min] as [number, number, number],
+            max: [...box.max] as [number, number, number],
+          },
           ...(helpers.lastFilletMode ? { filletMode: helpers.lastFilletMode } : {}),
         },
       };
@@ -1385,7 +1426,8 @@ describe("prelude geometry", () => {
 
 Run: `bun run test -- test/cad-gen/prelude.test.js`
 
-Expected: FAIL — every case returns `{ok:false}` with `buildPrelude not implemented`.
+Expected: FAIL — every case returns `{ok:false}` carrying `buildPrelude not implemented: <name>`
+(the stub throws per calling name, not at construction; see Task 5 step 3).
 
 - [ ] **Step 3: Implement the helpers**
 
