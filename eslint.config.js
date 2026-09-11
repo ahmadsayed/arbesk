@@ -136,6 +136,33 @@ export default [
   },
 
   {
+    // Import boundary for the WHOLE package, including the browser entry
+    // `src/index.ts` and `src/errors.ts`: no file in this package may reach
+    // into the frontend tree, the app backend tree or app constants — the
+    // browser bundles the root entry, so a backend re-export there would drag
+    // Node-only code (child_process, the DeepSeek client) into the frontend bundle.
+    // Deliberately BEFORE arbesk/cad-gen-core and arbesk/cad-gen-backend: those
+    // blocks replace this rule with their own fuller pattern lists for their own
+    // trees (flat config — the last matching block for a rule wins).
+    name: "arbesk/cad-gen-boundary",
+    files: ["packages/cad-gen/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [
+          {
+            group: [
+              "**/frontend/**",
+              "**/src/api/**",
+              "**/constants/**",
+            ],
+            message: "cad-gen is environment-agnostic — consume host capabilities via injected ports, never by reaching into the frontend/backend trees.",
+          },
+        ],
+      }],
+    },
+  },
+
+  {
     name: "arbesk/cad-gen-core",
     files: ["packages/cad-gen/src/core/**/*.ts"],
     rules: {
