@@ -28,6 +28,11 @@
 
 Gates every later task. If steps 4, 6 or 8 fail, **STOP** and re-plan: the spec's fallback (section 11) is static-only validation.
 
+> **Gate-cleanliness note.** The probe snippets above must also satisfy the repo's own gates,
+> which the Global Constraints require before every commit: `tsc --noEmit` rejects the untyped
+> `file` parameter in `locateFile` (TS7006 under `checkJs`), and `eslint`'s `no-empty` rejects the
+> bare `while (true) {}` spin loop. JSDoc-type the parameter and put a comment inside the loop block.
+>
 > **Post-spike corrections (applied after Task 1 ran).** The kernel PASSED in every runtime, and the
 > spike proved three defects in this plan's own snippets, all since fixed: the loader needs
 > `module.setup()` before `Manifold.cube` exists; the wasm directory must be resolved from
@@ -331,7 +336,18 @@ export { CONTRACT_VERSION, PRELUDE_VERSION } from "./core/contract.ts";
 export { CadError, CadDesignError, CadGuardError, CadKernelError } from "./errors.ts";
 ```
 
-- [ ] **Step 6: Wire the build, jest and lint**
+- [ ] **Step 6: Wire the build, jest, lint and the two registration lists**
+
+Two further registration sites exist beyond the three named below, and a new workspace package is
+only fully wired when all five are done:
+
+- `.fallowrc.json` — add `"@arbesk/cad-gen"` to the `publicPackages` array (it lists the other four
+  `@arbesk/*` packages).
+- root `package.json` `dependencies` — add `"@arbesk/cad-gen": "*"` alongside the other
+  `@arbesk/*` entries. Without it the package is unresolvable by bare specifier **outside jest**, so
+  Task 12's route import would pass its own tests and fail at runtime.
+
+Then the three sites below.
 
 In root `package.json`, add `--filter '@arbesk/cad-gen'` to the `build:packages` **first** group (the independent packages), not the `authz` group.
 
@@ -349,7 +365,36 @@ In `eslint.config.js`, add two blocks after the `arbesk/asset-core` block. The f
 { name: "Buffer", message: "cad-gen core is environment-agnostic; use Uint8Array/TextEncoder." },
 ```
 
-The second restricts the backend tree:
+The core block's `files` glob covers **only** `core/**`, which leaves `src/index.ts` — the
+browser entry the Global Constraints name — unenforced. Add a third block that applies the same
+import restrictions across the whole package:
+
+```js
+{
+  name: "arbesk/cad-gen-boundary",
+  files: ["packages/cad-gen/src/**/*.ts"],
+  rules: {
+    "no-restricted-imports": ["error", {
+      patterns: [{
+        group: ["**/frontend/**", "**/src/api/**", "**/constants/**"],
+        message: "cad-gen must stay free of the frontend and backend trees — reach the host through injected ports.",
+      }],
+    }],
+  },
+},
+```
+
+Place it **before** the `arbesk/cad-gen-core` block: flat config resolves a rule to the LAST matching
+block, so the core block's fuller rule set still wins for `core/**`, and the backend block still
+wins for `backend/**`. Do NOT widen the core block's own glob — that would apply its
+`no-restricted-globals` (`process`, `Buffer`) to `backend/**`, which legitimately needs
+`process.argv` and `process.stdout` in the validation child.
+
+Prove the boundary fires rather than merely passing: temporarily add `import fs from "node:fs";`
+to `src/index.ts`, confirm `bun run lint` reports `no-restricted-imports` naming that file, then
+revert. A rule matching no files also "passes".
+
+The second block restricts the backend tree:
 
 ```js
 {
