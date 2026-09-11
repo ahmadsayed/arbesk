@@ -364,7 +364,10 @@ A later task must own that; it is out of this spike's throwaway scope.
 
 ## Step 9 — Record results and commit — **PASS**
 
-See the commit below.
+Committed on `feature/cad-gen` as **`498127c`** — `spike: verify manifold-3d loads under bun,
+in a child, and compiled` (5 files changed, 621 insertions, 1 deletion). The pre-commit
+`fallow audit --changed-since HEAD` gate **passed** — `✓ No issues in 9 changed files` — so no
+`--no-verify` was needed. This line was corrected in a follow-up docs-only commit.
 
 ---
 
