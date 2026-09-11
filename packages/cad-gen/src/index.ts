@@ -6,3 +6,10 @@
  */
 export { CONTRACT_VERSION, PRELUDE_VERSION } from "./core/contract.ts";
 export { CadError, CadDesignError, CadGuardError, CadKernelError } from "./errors.ts";
+export type {
+  CadDesign, CadMesh, CadParameter, CadParameterMap,
+  CadStats, ManifoldModule, TokenUsage,
+} from "./types.ts";
+export {
+  parseDesign, validateParameterOverrides, referencedIdentifiers,
+} from "./core/document.ts";
