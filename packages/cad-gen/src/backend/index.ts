@@ -3,3 +3,7 @@ export { runValidation } from "./validate-runner.ts";
 export type { RunnerOptions, RunnerResult } from "./validate-runner.ts";
 export { validateDesign } from "./validate.ts";
 export type { ValidateOptions, ValidationOutcome } from "./validate.ts";
+export { createDeepSeekClient, ProviderError } from "./deepseek.ts";
+export type {
+  DeepSeekClient, DeepSeekConfig, LlmContentBlock, LlmMessage,
+} from "./deepseek.ts";
