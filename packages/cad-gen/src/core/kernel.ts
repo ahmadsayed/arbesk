@@ -102,13 +102,36 @@ function meshFrom(raw: ManifoldMeshData): CadMesh {
   return { positions, indices: new Uint32Array(raw.triVerts) };
 }
 
+/** The bounds reported for a solid with no geometry. */
+const EMPTY_BBOX: [number, number, number] = [0, 0, 0];
+
+/**
+ * The axis-aligned bounds of a solid, with the empty case made concrete.
+ * @remarks An empty manifold has no extent, so Manifold reports
+ *   min = [+Infinity, +Infinity, +Infinity] and max = [-Infinity, ...].
+ *   JSON.stringify turns every one of those into null, so the payload failed
+ *   the parent's shape check and an empty result — a *script* fault the
+ *   nonempty gate exists to explain — came back as "kernel host produced an
+ *   invalid result". A message that names no cause and reads like a server
+ *   problem gives the repair loop nothing to act on.
+ *   Zeros are the honest bound for nothing, and they keep the payload the
+ *   three finite numbers CadStats promises. This normalises the *empty* case
+ *   only: the shape check downstream is untouched, so a forged or malformed
+ *   payload is still rejected fail-closed.
+ */
+function boundsOf(result: any, triangles: number): ManifoldBox {
+  if (triangles > 0) return result.boundingBox() as ManifoldBox;
+  return { min: EMPTY_BBOX, max: EMPTY_BBOX };
+}
+
 /** Collects the geometry facts the validation gates read. */
 function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
   // The module is untyped past the port, so the kernel's Box shape is
   // restated here (and only here) to keep the tuple type on bboxMm.
-  const box = result.boundingBox() as ManifoldBox;
+  const triangles = result.numTri();
+  const box = boundsOf(result, triangles);
   return {
-    triangles: result.numTri(),
+    triangles,
     vertices: result.numVert(),
     volumeMm3: result.volume(),
     bboxMm: { min: [...box.min], max: [...box.max] },

@@ -15,3 +15,5 @@ export {
 } from "./core/document.ts";
 export { guardScript } from "./core/guard.ts";
 export type { GuardResult } from "./core/guard.ts";
+export { evaluateStaticGates, evaluateKernelGates } from "./core/gates.ts";
+export type { GateResult, KernelLimits } from "./core/gates.ts";

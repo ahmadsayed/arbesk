@@ -22,7 +22,20 @@ class FakeManifold {
   }
 }
 
+/**
+ * A stand-in for an empty solid: no triangles, and the Infinity bounds Manifold
+ * really reports for one (verified against manifold-3d 3.5.3).
+ */
+class EmptyManifold extends FakeManifold {
+  numTri() { return 0; }
+  numVert() { return 0; }
+  volume() { return 0; }
+  boundingBox() { return { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }; }
+  getMesh() { return { vertProperties: [], numProp: 3, triVerts: [] }; }
+}
+
 const MODULE = { Manifold: FakeManifold, CrossSection: class {} };
+const EMPTY_MODULE = { Manifold: EmptyManifold, CrossSection: class {} };
 
 const design = (code) => ({
   code,
@@ -58,5 +71,23 @@ describe("createCadKernel", () => {
     });
     expect(Array.from(mesh.positions)).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]);
     expect(Array.from(mesh.indices)).toEqual([0, 1, 2, 0, 1, 3]);
+  });
+
+  // Regression (Task 7): a hole wider than the part removes the whole solid.
+  // Manifold bounds an empty mesh with +/-Infinity, which JSON.stringify turns
+  // into null, so the payload failed the parent's shape check and the attempt
+  // was reported as "kernel host produced an invalid result" - a host fault -
+  // instead of the nonempty gate that says what the model must change.
+  it("gives an empty solid a definite, JSON-safe bounding box", () => {
+    const kernel = createCadKernel(EMPTY_MODULE);
+    const { stats } = kernel.run(design("return new M();"));
+
+    expect(stats.triangles).toBe(0);
+    expect(stats.volumeMm3).toBe(0);
+    // The point of the fix: the stats survive the wire to the parent process.
+    expect(JSON.parse(JSON.stringify(stats)).bboxMm).toEqual({
+      min: [0, 0, 0],
+      max: [0, 0, 0],
+    });
   });
 });
