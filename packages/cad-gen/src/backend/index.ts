@@ -7,3 +7,7 @@ export { createDeepSeekClient, ProviderError } from "./deepseek.ts";
 export type {
   DeepSeekClient, DeepSeekConfig, LlmContentBlock, LlmMessage,
 } from "./deepseek.ts";
+export {
+  SYSTEM_PROMPT, buildTurnMessages, buildRepairMessages, PROMPT_HELPER_NAMES,
+} from "./prompt.ts";
+export type { TurnInput } from "./prompt.ts";
