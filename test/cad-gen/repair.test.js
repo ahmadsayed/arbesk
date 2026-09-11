@@ -69,6 +69,26 @@ describe("generateWithRepair with a throwing validator", () => {
     });
   });
 
+  it("reports a whole-loop duration on the failure diagnostics", async () => {
+    const client = stubClient([VALID_TEXT]);
+    const validate = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      return { ok: false, gates: [{ gate: "kernel", ok: false, error: "bad" }], error: "bad" };
+    };
+
+    const err = await generateWithRepair(deps(client, validate), BASE, 3).catch((e) => e);
+
+    expect(err.name).toBe("CadGenerationFailed");
+    expect("durationMs" in err.diagnostics).toBe(true);
+    expect(Number.isFinite(err.diagnostics.durationMs)).toBe(true);
+    expect(err.diagnostics.durationMs).toBeGreaterThanOrEqual(0);
+    // Three 120ms attempts: the value covers the whole loop, not just the last one.
+    expect(err.diagnostics.durationMs).toBeGreaterThanOrEqual(300);
+    // ...and coexists with the diagnostics Task 12 already reads.
+    expect(err.diagnostics.attempts).toHaveLength(3);
+    expect(err.diagnostics.tokens).toEqual({ prompt: 150, completion: 30 });
+  });
+
   it("survives a validator that throws a non-Error", async () => {
     const client = stubClient([VALID_TEXT]);
     const validate = async () => { throw "plain string fault"; };

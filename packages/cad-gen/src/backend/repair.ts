@@ -105,11 +105,11 @@ export async function generateWithRepair(
   maxAttempts: number,
   signal?: AbortSignal,
 ): Promise<RepairOutcome> {
+  const started = Date.now();
   const attempts: AttemptRecord[] = [];
   const tokens: TokenUsage = { prompt: 0, completion: 0 };
   let messages = baseMessages;
   let lastError = "generation failed";
-  let lastGates: GateResult[] = [];
 
   for (let index = 0; index < maxAttempts; index++) {
     const { text, usage } = await deps.client.complete(messages, signal);
@@ -121,8 +121,12 @@ export async function generateWithRepair(
       design = deps.parseDesign(JSON.parse(text));
     } catch (e) {
       lastError = (e as Error).message;
-      lastGates = [{ gate: "document", ok: false, error: lastError }];
-      attempts.push({ index, ok: false, gates: lastGates, error: lastError });
+      attempts.push({
+        index,
+        ok: false,
+        gates: [{ gate: "document", ok: false, error: lastError }],
+        error: lastError,
+      });
       messages = documentRepairMessages(messages, text, lastError);
       continue;
     }
@@ -139,12 +143,11 @@ export async function generateWithRepair(
     }
 
     lastError = outcome.error ?? "validation failed";
-    lastGates = outcome.gates;
-    messages = deps.buildRepairMessages(messages, design, lastError, lastGates);
+    messages = deps.buildRepairMessages(messages, design, lastError, outcome.gates);
   }
 
   throw new CadGenerationFailed(
     "CAD generation failed after " + maxAttempts + " attempts: " + lastError,
-    { attempts, tokens },
+    { attempts, tokens, durationMs: Date.now() - started },
   );
 }
