@@ -94,6 +94,14 @@
         "brotli-wasm": "^3.0.1",
       },
     },
+    "packages/cad-gen": {
+      "name": "@arbesk/cad-gen",
+      "version": "0.1.0",
+      "dependencies": {
+        "@arbesk/asset-core": "*",
+        "fflate": "catalog:",
+      },
+    },
     "packages/nostr": {
       "name": "@arbesk/nostr",
       "version": "0.1.0",
@@ -141,6 +149,8 @@
     "@arbesk/authz": ["@arbesk/authz@workspace:packages/authz"],
 
     "@arbesk/besk": ["@arbesk/besk@workspace:packages/besk"],
+
+    "@arbesk/cad-gen": ["@arbesk/cad-gen@workspace:packages/cad-gen"],
 
     "@arbesk/nostr": ["@arbesk/nostr@workspace:packages/nostr"],
 

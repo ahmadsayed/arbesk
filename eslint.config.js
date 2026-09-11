@@ -136,6 +136,65 @@ export default [
   },
 
   {
+    name: "arbesk/cad-gen-core",
+    files: ["packages/cad-gen/src/core/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [
+          {
+            group: [
+              "**/frontend/**",
+              "**/src/api/**",
+              "**/constants/**",
+            ],
+            message: "cad-gen core must stay environment-agnostic — consume host capabilities via injected ports, never by reaching into the frontend/backend trees.",
+          },
+          {
+            group: [
+              "**/ipfs/remote-ipfs*",
+              "**/ipfs/write-to-ipfs*",
+              "**/ipfs/asset-core-adapter*",
+              "**/services/*",
+              "**/blockchain/*",
+              "**/workers/*",
+              "**/engine/*",
+              "**/ui/*",
+            ],
+            message: "cad-gen core must stay environment-agnostic — consume these via injected ports.",
+          },
+          {
+            group: ["@babylonjs/*", "babylonjs", "babylon.js"],
+            message: "cad-gen core must not depend on Babylon.js — the host renders the exported mesh.",
+          },
+        ],
+      }],
+      "no-restricted-globals": ["error",
+        { name: "window", message: "cad-gen core is environment-agnostic; inject via ports." },
+        { name: "document", message: "cad-gen core is environment-agnostic; inject via ports." },
+        { name: "BABYLON", message: "cad-gen core must not touch the 3D engine." },
+        { name: "Web3", message: "use injected ports instead of the Web3 CDN global." },
+        { name: "navigator", message: "cad-gen core is environment-agnostic; inject via ports." },
+        { name: "localStorage", message: "use an injected port instead." },
+        { name: "process", message: "cad-gen core is environment-agnostic; the host injects the kernel and paths." },
+        { name: "Buffer", message: "cad-gen core is environment-agnostic; use Uint8Array/TextEncoder." },
+      ],
+    },
+  },
+
+  {
+    name: "arbesk/cad-gen-backend",
+    files: ["packages/cad-gen/src/backend/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: ["**/frontend/**", "**/constants/**"],
+          message: "cad-gen backend is consumed by src/api only; it must not reach into the frontend or app constants.",
+        }],
+      }],
+    },
+  },
+
+  {
     name: "arbesk/nostr",
     files: ["packages/nostr/src/**/*.ts"],
     rules: {

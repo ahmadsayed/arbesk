@@ -1,0 +1,25 @@
+{
+  "name": "@arbesk/cad-gen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arbesk engineering-CAD generation SDK: Manifold-script codegen, static guard, kernel port and GLB/3MF exporters. Environment-agnostic core plus a Node-only backend.",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "bun run clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@arbesk/asset-core": "*",
+    "fflate": "catalog:"
+  },
+  "license": "ISC"
+}
