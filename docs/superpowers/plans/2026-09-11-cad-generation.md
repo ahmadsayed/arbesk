@@ -28,6 +28,13 @@
 
 Gates every later task. If steps 4, 6 or 8 fail, **STOP** and re-plan: the spec's fallback (section 11) is static-only validation.
 
+> **Post-spike corrections (applied after Task 1 ran).** The kernel PASSED in every runtime, and the
+> spike proved three defects in this plan's own snippets, all since fixed: the loader needs
+> `module.setup()` before `Manifold.cube` exists; the wasm directory must be resolved from
+> `PROJECT_ROOT`/cwd and never from `import.meta.url`; and in a compiled single-file server the
+> `child.ts` entry does not exist on disk. Full evidence:
+> `docs/superpowers/plans/cad-spike-results.md`.
+
 **Files:**
 - Modify: `package.json` (workspaces.catalog)
 - Create: `scripts/cad-spike.mjs` (throwaway probe — deleted in Task 14)
@@ -1072,6 +1079,10 @@ async function main(): Promise<void> {
   const module = await Module({
     locateFile: (file: string) => path.join(req.wasmDir, file),
   });
+  // manifold-3d registers its JS API lazily. Without setup(), Manifold.cube is
+  // undefined and every script dies with "Manifold.cube is not a function".
+  // Verified in Task 1 - see docs/superpowers/plans/cad-spike-results.md.
+  (module as { setup: () => void }).setup();
 
   const kernel = createCadKernel(module as unknown as ManifoldModule);
   try {
@@ -1117,6 +1128,12 @@ export interface RunnerOptions {
   timeoutMs: number;
   /** Reject meshes above this triangle count. */
   maxTriangles: number;
+  /**
+   * Directory holding manifold.wasm.
+   * @remarks The host supplies it (PROJECT_ROOT-relative): a compiled single-file
+   *   binary cannot resolve node_modules from its virtual module URL.
+   */
+  wasmDir?: string;
 }
 
 export type RunnerResult =
@@ -1129,11 +1146,14 @@ export type RunnerResult =
  *   node_modules from a virtual module URL — there the path is PROJECT_ROOT
  *   relative, exactly like the brotli-wasm shim in scripts/build-server.mjs.
  */
-function resolveWasmDir(): string {
+function resolveWasmDir(opts: RunnerOptions): string {
+  if (opts.wasmDir) return opts.wasmDir;
   const override = process.env.CAD_MANIFOLD_WASM_DIR;
   if (override) return override;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(here, "..", "..", "..", "..", "node_modules", "manifold-3d");
+  // cwd-relative, never import.meta.url-relative: inside a compiled binary the
+  // module URL is virtual, so an ascent from it lands on /$bunfs/... and ENOENTs.
+  // Verified in Task 1 - see docs/superpowers/plans/cad-spike-results.md.
+  return path.resolve(process.cwd(), "node_modules", "manifold-3d");
 }
 
 /**
@@ -1143,12 +1163,21 @@ function resolveWasmDir(): string {
  */
 export function runValidation(design: CadDesign, opts: RunnerOptions): Promise<RunnerResult> {
   const childPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "child.ts");
+  // In a compiled single-file server this path does not exist on disk. Fail
+  // loudly rather than spawning a doomed process (ledger: parked finding on
+  // compiled-server child execution).
+  if (!fs.existsSync(childPath)) {
+    return Promise.resolve({
+      ok: false,
+      error: "kernel host unavailable: validation child entry not found at " + childPath,
+    });
+  }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cad-validate-"));
   const requestPath = path.join(dir, "request.json");
   fs.writeFileSync(requestPath, JSON.stringify({
     design,
     maxTriangles: opts.maxTriangles,
-    wasmDir: resolveWasmDir(),
+    wasmDir: resolveWasmDir(opts),
   }));
 
   return new Promise((resolve) => {
@@ -2553,6 +2582,8 @@ export interface CadLimits {
   timeoutMs: number;
   maxTriangles: number;
   maxRepairAttempts: number;
+  /** Host-supplied directory holding manifold.wasm. */
+  wasmDir?: string;
 }
 
 export interface CadGenConfig {
@@ -2618,7 +2649,11 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         buildRepairMessages,
         validate: (design) => validateDesign(design, {
           preludeNames: PRELUDE_NAMES,
-          limits: { timeoutMs: limits.timeoutMs, maxTriangles: limits.maxTriangles },
+          limits: {
+            timeoutMs: limits.timeoutMs,
+            maxTriangles: limits.maxTriangles,
+            ...(limits.wasmDir ? { wasmDir: limits.wasmDir } : {}),
+          },
         }),
       }, buildTurnMessages(input), attempts);
 
@@ -3258,6 +3293,8 @@ import { validateBody } from "../validation.ts";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
 import { acquireCadSlot, releaseCadSlot, cadQuotaHeaders } from "../cad-quota.ts";
+import { PROJECT_ROOT } from "../project-root.ts";
+import path from "node:path";
 import { createCadGenerator } from "@arbesk/cad-gen/backend/index.js";
 
 const Router = express.Router;
@@ -3291,6 +3328,9 @@ function generatorFromEnv(): CadGenerateFn | null {
       timeoutMs: Number(process.env.CAD_EXEC_TIMEOUT_MS || 10000),
       maxTriangles: Number(process.env.CAD_MAX_TRIANGLES || 200000),
       maxRepairAttempts: Number(process.env.CAD_MAX_REPAIR_ATTEMPTS || 3),
+      // PROJECT_ROOT-relative: a compiled server has no usable module-URL ancestry.
+      wasmDir: process.env.CAD_MANIFOLD_WASM_DIR ||
+        path.resolve(PROJECT_ROOT, "node_modules", "manifold-3d"),
     },
   });
   return (input) => generator.generate(input);
@@ -3941,8 +3981,10 @@ if (result.runtime.preludeVersion !== PRELUDE_VERSION) {
   process.exit(1);
 }
 
-const wasmDir = path.resolve("node_modules/manifold-3d");
+const wasmDir = process.env.CAD_MANIFOLD_WASM_DIR ||
+  path.resolve(process.cwd(), "node_modules", "manifold-3d");
 const module = await Module({ locateFile: (f) => path.join(wasmDir, f) });
+module.setup(); // manifold-3d registers its JS API lazily (see Task 1 results)
 const kernel = createCadKernel(module);
 const { mesh, stats } = kernel.run(result.design);
 
@@ -4069,6 +4111,19 @@ Two spec items are recorded as follow-ups rather than tasks, because the spike d
 
 - **JS heap flag** (spec section 5): add `--max-old-space-size` to the spawn in Task 5 once Task 1 confirms the runtime flags Bun honours.
 - **Compiled-server WASM shim** (spec section 11): if Task 1 step 7 shows the compiled binary failing to locate `manifold.wasm`, add a Task 15 for the `scripts/build-server.mjs` manifold shim before shipping, following the brotli-wasm shim already in that file.
+
+Two more gaps came out of the Task 1 spike (evidence in `docs/superpowers/plans/cad-spike-results.md`):
+
+- **Server-side kernel validation does not work in the compiled single-file binary.** The validation
+  child is spawned as a source file, and `bun build --compile` produces a binary with no `src/` on
+  disk and a virtual module URL. Task 5 now fails loudly ("kernel host unavailable") rather than
+  spawning a doomed process. Fixing it properly needs either self-re-exec (`process.execPath` plus a
+  flag the entry point checks before starting the server) or a second compiled child binary. Owned by
+  the deployment milestone; milestone 1 is verified from source, where it works.
+- **`docker/app.Dockerfile` ships no `node_modules`**, so the production image has no
+  `manifold.wasm`. It must copy just that 541 KB file into the runtime stage (or embed it at build
+  time the way the brotli shim embeds its wasm). Deliberately not changed blind here — an untested
+  Dockerfile edit is how a production image breaks.
 
 Also deliberately unimplemented in milestone 1: the `sourceRef` resolution path. The request schema accepts it (Task 12) and `parseEmbeddedDesign` and `readDesignFrom3mf` exist (Task 13), but wiring CID/asset lookup into the facade is the integration milestone. Until then a `sourceRef`-only request reaches the prompt builder with no prior document — the route should reject that combination with 400 rather than silently generating something unrelated. **Add that guard in Task 12 step 4** if you wire the route before the resolution path.
 
