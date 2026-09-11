@@ -33,6 +33,16 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).toContain("parameters");
   });
 
+  // Regression, from the live run: the model hand-built a step fillet from
+  // revolve(circle(r).translate([d1/2 + r, 0])).intersect(cylinder(r, r)). Both
+  // solids were valid, the intersection was EMPTY, and shaft.add(empty) returned
+  // the shaft unchanged - so the part passed every gate with no fillet in it.
+  it("forbids hand-built fillet geometry", () => {
+    expect(SYSTEM_PROMPT).toContain("filletEdges for EVERY fillet");
+    expect(SYSTEM_PROMPT).toContain("NEVER build fillet geometry by hand");
+    expect(SYSTEM_PROMPT).toContain("solid.add(empty) silently returns");
+  });
+
   // Regression, from the live run: the model wrote `base.union(wall)`, which is
   // the STATIC form, and lost a whole attempt to "union is not a function".
   it("names the solid's instance methods and rules out part.union()", () => {
