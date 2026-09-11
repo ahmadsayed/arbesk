@@ -209,6 +209,47 @@ export default [
   },
 
   {
+    // The ENVIRONMENT-AGNOSTIC file set: the browser entry (src/index.ts, src/types.ts,
+    // src/errors.ts) plus core/** — everything that must stay bundle-safe for the browser.
+    // Deliberately EXCLUDES src/backend/**, which legitimately imports node builtins and its
+    // own siblings (a whole-package `**/backend/**` rule would flag backend→backend imports).
+    // Declared AFTER arbesk/cad-gen-core because flat config resolves a rule to the LAST
+    // matching block: this replaces the core block's no-restricted-imports for these files,
+    // so it MUST carry every pattern that block had plus the new ones — otherwise the
+    // core-only ipfs/services/engine/ui and Babylon.js restrictions would silently vanish.
+    // It does NOT repeat `no-restricted-globals`, so the core block's globals restriction
+    // (process, Buffer, window, document, localStorage, …) still applies to core/**.
+    name: "arbesk/cad-gen-env-agnostic-imports",
+    files: ["packages/cad-gen/src/*.ts", "packages/cad-gen/src/core/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [
+          { group: ["**/backend/**"], message: "the browser entry and core/ must never reach into backend/ — that drags child_process and the provider client into the frontend bundle." },
+          { group: ["node:*", "fs", "path", "os", "crypto", "child_process"], message: "cad-gen core is environment-agnostic; the host injects capabilities. Use Uint8Array/TextEncoder, not Buffer." },
+          { group: ["**/frontend/**", "**/src/api/**", "**/constants/**"], message: "cad-gen core is environment-agnostic — consume host capabilities via injected ports." },
+          {
+            group: [
+              "**/ipfs/remote-ipfs*",
+              "**/ipfs/write-to-ipfs*",
+              "**/ipfs/asset-core-adapter*",
+              "**/services/*",
+              "**/blockchain/*",
+              "**/workers/*",
+              "**/engine/*",
+              "**/ui/*",
+            ],
+            message: "cad-gen core must stay environment-agnostic — consume these via injected ports.",
+          },
+          {
+            group: ["@babylonjs/*", "babylonjs", "babylon.js"],
+            message: "cad-gen core must not depend on Babylon.js — the host renders the exported mesh.",
+          },
+        ],
+      }],
+    },
+  },
+
+  {
     name: "arbesk/cad-gen-backend",
     files: ["packages/cad-gen/src/backend/**/*.ts"],
     rules: {
