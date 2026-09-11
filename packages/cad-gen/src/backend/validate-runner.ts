@@ -46,6 +46,9 @@ function resolveWasmDir(opts: RunnerOptions): string {
 /**
  * Bytes of child output retained per stream.
  * @remarks Only the child's last stdout line is ever read, so a tail is enough.
+ *   This cap is also what makes "stats only" hold *by construction*: mesh bytes
+ *   cannot fit through a 16 KB window, so there is deliberately no separate
+ *   mesh-size guard here. Do not add one — it would be unreachable defence.
  */
 const MAX_CAPTURED_OUTPUT = 16 * 1024;
 
@@ -89,6 +92,95 @@ function prepareRequest(payload: unknown): { dir: string } | { error: string } {
     return { error: "kernel host unavailable: " + (e as Error).message };
   }
   return { dir };
+}
+
+/** True for a plain object (what JSON.parse yields for the child's line). */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** True for a finite number (a bounding-box coordinate may be negative). */
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** True for a finite, non-negative number — the only valid count or volume. */
+function isCount(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0;
+}
+
+/** True for exactly three finite numbers, the tuple CadStats.bboxMm requires. */
+function isTriple(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 3 && value.every(isFiniteNumber);
+}
+
+/** Fillet strategies CadStats.filletMode may report. */
+const FILLET_MODES = new Set(["exact", "minkowski", "smooth"]);
+
+/** True when the three counts are present, finite and non-negative. */
+function hasCounts(value: Record<string, unknown>): boolean {
+  return isCount(value.triangles) && isCount(value.vertices) && isCount(value.volumeMm3);
+}
+
+/** True when both bounding-box corners are 3-number tuples. */
+function hasBbox(value: unknown): boolean {
+  return isRecord(value) && isTriple(value.min) && isTriple(value.max);
+}
+
+/** True when the fillet strategy is absent or one of the known ones. */
+function isFilletMode(value: unknown): boolean {
+  return value === undefined || FILLET_MODES.has(value as string);
+}
+
+/**
+ * True when the child's reported stats have the shape CadStats promises.
+ * @remarks The child runs model-written code, so its numbers are a claim. A
+ *   malformed one must never reach the gates as though it had been measured.
+ */
+function isCadStats(value: unknown): value is CadStats {
+  if (!isRecord(value) || !hasCounts(value)) return false;
+  return hasBbox(value.bboxMm) && isFilletMode(value.filletMode);
+}
+
+/** The single rejection every unrecognised payload collapses to. */
+function invalidResult(): RunnerResult {
+  return { ok: false, error: "kernel host produced an invalid result" };
+}
+
+/** Narrows an ok:false payload to its non-empty string error. */
+function errorResult(error: unknown): RunnerResult {
+  if (typeof error === "string" && error.length > 0) return { ok: false, error };
+  return invalidResult();
+}
+
+/** Re-applies the triangle budget to stats the child claims are within it. */
+function applyBudget(stats: CadStats, maxTriangles: number): RunnerResult {
+  if (stats.triangles > maxTriangles) {
+    return { ok: false, error: "triangle budget exceeded: " + stats.triangles + " > " + maxTriangles };
+  }
+  return { ok: true, stats };
+}
+
+/** Validates the ok:true branch's stats, then applies the parent-side budget. */
+function statsResult(raw: Record<string, unknown>, maxTriangles: number): RunnerResult {
+  const stats = raw.stats;
+  if (raw.ok !== true || !isCadStats(stats)) return invalidResult();
+  return applyBudget(stats, maxTriangles);
+}
+
+/**
+ * Validates one line of child output before the parent believes any of it.
+ * @param maxTriangles Parent-side budget, re-applied here because the child's
+ *   own check is self-reported by the same untrusted process.
+ * @remarks Fail closed and never throw: the child is the untrusted executor, so
+ *   an unrecognised payload is a host fault — not a crash, and not a partial
+ *   trust. Extra keys are tolerated (forward compatibility); every field the
+ *   gates read is re-checked.
+ */
+export function parseRunnerResult(raw: unknown, maxTriangles: number): RunnerResult {
+  if (!isRecord(raw)) return invalidResult();
+  if (raw.ok === false) return errorResult(raw.error);
+  return statsResult(raw, maxTriangles);
 }
 
 /**
@@ -162,7 +254,7 @@ export function runValidation(design: CadDesign, opts: RunnerOptions): Promise<R
         return;
       }
       try {
-        resolve(JSON.parse(line) as RunnerResult);
+        resolve(parseRunnerResult(JSON.parse(line), opts.maxTriangles));
       } catch {
         resolve({ ok: false, error: "kernel host produced unreadable output" });
       }

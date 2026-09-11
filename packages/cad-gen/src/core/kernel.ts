@@ -72,10 +72,15 @@ function callScript(
 
 /**
  * Asserts a script handed back a usable, error-free Manifold.
+ * @remarks Identity, not duck typing. The script is the untrusted party and it
+ *   holds `M`, so it can return a hand-rolled object that mimics every method
+ *   the stat gates read — and every gate would then be reporting numbers the
+ *   script itself chose. `instanceof` against the injected module is the one
+ *   check the script cannot forge.
  * @throws CadKernelError when it did not.
  */
-function assertManifold(result: any): any {
-  if (!result || typeof result.getMesh !== "function") {
+function assertManifold(result: any, module: ManifoldModule): any {
+  if (!(result instanceof module.Manifold)) {
     throw new CadKernelError("script did not return a Manifold");
   }
   const status = result.status();
@@ -123,7 +128,10 @@ export function createCadKernel(module: ManifoldModule): CadKernel {
     run(design: CadDesign): KernelRunResult {
       const helpers = buildPrelude(module);
       const fn = compileScript(design.code, names);
-      const result = assertManifold(callScript(fn, parameterValues(design), module, helpers, names));
+      const result = assertManifold(
+        callScript(fn, parameterValues(design), module, helpers, names),
+        module,
+      );
 
       return {
         mesh: meshFrom(result.getMesh()),
