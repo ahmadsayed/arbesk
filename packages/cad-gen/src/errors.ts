@@ -29,3 +29,13 @@ export class CadKernelError extends CadError {
     this.name = "CadKernelError";
   }
 }
+
+/** Every repair attempt failed; carries the attempt log for diagnostics. */
+export class CadGenerationFailed extends CadError {
+  readonly diagnostics: unknown;
+  constructor(message: string, diagnostics: unknown) {
+    super(message);
+    this.name = "CadGenerationFailed";
+    this.diagnostics = diagnostics;
+  }
+}

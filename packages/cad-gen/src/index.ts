@@ -5,7 +5,9 @@
  *   are never reachable from here.
  */
 export { CONTRACT_VERSION, PRELUDE_VERSION } from "./core/contract.ts";
-export { CadError, CadDesignError, CadGuardError, CadKernelError } from "./errors.ts";
+export {
+  CadError, CadDesignError, CadGenerationFailed, CadGuardError, CadKernelError,
+} from "./errors.ts";
 export type {
   CadDesign, CadMesh, CadParameter, CadParameterMap,
   CadStats, ManifoldModule, TokenUsage,
