@@ -2163,7 +2163,10 @@ describe("buildTurnMessages", () => {
     const msgs = buildTurnMessages({ prompt: "a 60mm cube" });
     expect(msgs).toHaveLength(2);
     expect(msgs[0].role).toBe("system");
-    expect(msgs[1].content).toBe("a 60mm cube");
+    // The builder labels the turn "REQUEST:", so the prompt is contained, not equal.
+    // (The plan originally asserted equality against the builder's own prefix - impossible.)
+    expect(String(msgs[1].content)).toContain("a 60mm cube");
+    expect(String(msgs[1].content)).not.toContain("CURRENT DESIGN");
   });
 
   it("includes the prior document verbatim on later turns", () => {
@@ -2481,10 +2484,6 @@ describe("createCadGenerator", () => {
     expect(r.diagnostics.attempts[1].ok).toBe(true);
   }, 60000);
 
-  it("repairs a malformed document without a kernel run", async () => {
-    const g = generator(["not json at all", VALID]);
-    const r = await g.generate({ prompt: "a cube" });
-    expect(r.diagnostics.attempts).toHaveLength(2);
   it("repairs a malformed document without a kernel run", async () => {
     const g = generator(["not json at all", VALID]);
     const r = await g.generate({ prompt: "a cube" });
