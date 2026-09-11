@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { jest } from "@jest/globals";
 import {
   acquireCadSlot, releaseCadSlot, cadQuotaHeaders, _resetCadQuota,
-  lockTtlFor, cadLockTtlMs, CAD_DEFAULT_REQUEST_LIMITS,
+  lockTtlFor, cadLockTtlMs, CAD_DEFAULT_REQUEST_LIMITS, dailyLimitOf,
 } from "../../src/api/cad-quota.ts";
 
 const OPTS = { dailyLimit: 2, lockTtlMs: 1000 };
@@ -74,6 +75,51 @@ describe("daily quota", () => {
     fs.writeFileSync(statePath, JSON.stringify({ nope: true }));
     _resetCadQuota();
     expect(acquireCadSlot(W, opts()).ok).toBe(true);
+  });
+});
+
+describe("unusable daily limit (fail closed)", () => {
+  it("refuses rather than degrading to unlimited when the limit is not a positive number", () => {
+    for (const dailyLimit of [NaN, Infinity, -1, 0]) {
+      _resetCadQuota();
+      const d = acquireCadSlot(W, opts({ dailyLimit }));
+      expect(d.ok).toBe(false);
+      expect(d.reason).toBe("QUOTA");
+      expect(d.limit).toBe(0);
+      expect(d.used).toBe(0);
+    }
+  });
+
+  it("still admits with a valid limit", () => {
+    const d = acquireCadSlot(W, opts({ dailyLimit: 1 }));
+    expect(d.ok).toBe(true);
+    releaseCadSlot(W, d.token);
+  });
+
+  it("advertises the enforced limit, not the caller's garbage", () => {
+    _resetCadQuota();
+    const h = cadQuotaHeaders(W, opts({ dailyLimit: NaN }));
+    expect(h["X-Cad-Quota-Limit"]).toBe("0");
+    expect(h["X-Cad-Quota-Remaining"]).toBe("0");
+  });
+
+  it("passes a usable limit through unchanged", () => {
+    expect(dailyLimitOf(7)).toBe(7);
+    expect(dailyLimitOf(1)).toBe(1);
+  });
+
+  it("says why it refuses, once per bad value instead of once per request", () => {
+    const spy = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      _resetCadQuota();
+      const said = () => spy.mock.calls.filter((c) => String(c[0]).includes("daily limit")).length;
+      acquireCadSlot(W, opts({ dailyLimit: NaN }));
+      expect(said()).toBeGreaterThan(0);
+      for (let i = 0; i < 5; i++) acquireCadSlot(W, opts({ dailyLimit: NaN }));
+      expect(said()).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

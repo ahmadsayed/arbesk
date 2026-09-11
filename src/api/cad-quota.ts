@@ -60,6 +60,33 @@ function statePathOf(opts: QuotaOptions): string {
   return opts.statePath ?? DEFAULT_STATE_PATH;
 }
 
+/** Bad limits already reported, so a broken config cannot flood the log. */
+const reportedBadLimits = new Set<string>();
+
+/**
+ * Normalizes a caller-supplied daily limit.
+ * @remarks Fail closed, deliberately. A typo'd env var parses to NaN and an
+ *   `Infinity` slips through `Number()` too; both make `used >= limit` false
+ *   forever, so the guard would silently degrade to unlimited spend - invisible
+ *   until the bill arrives. A guard that protects a server-side key must not be
+ *   switchable off by passing garbage, so anything that is not a finite number
+ *   >= 1 is normalized to 0, which refuses every request through the normal
+ *   QUOTA branch (a negative value is 0 as well - never silently permissive).
+ * @param limit Raw limit from the caller, usually parsed from the environment.
+ * @returns The limit to enforce: the input when usable, otherwise 0.
+ */
+export function dailyLimitOf(limit: number): number {
+  if (Number.isFinite(limit) && limit >= 1) return limit;
+  const why = Number.isNaN(limit) ? "NaN" : String(limit);
+  if (!reportedBadLimits.has(why)) {
+    reportedBadLimits.add(why);
+    console.log(
+      "[CAD] daily limit " + why + " is not a finite number >= 1 - refusing all CAD requests (fail closed)",
+    );
+  }
+  return 0;
+}
+
 /**
  * Loads the persisted counters.
  * @remarks A missing, corrupt or wrongly-shaped file starts from zero rather
@@ -170,6 +197,7 @@ export function cadLockTtlMs(
 export function acquireCadSlot(wallet: string, opts: QuotaOptions): QuotaDecision {
   const now = nowMs(opts);
   const key = wallet.toLowerCase();
+  const limit = dailyLimitOf(opts.dailyLimit);
 
   const held = locks.get(key);
   if (held) {
@@ -186,12 +214,12 @@ export function acquireCadSlot(wallet: string, opts: QuotaOptions): QuotaDecisio
   const entry = current.wallets[key];
   const used = entry && entry.day === day ? entry.used : 0;
 
-  if (used >= opts.dailyLimit) {
+  if (used >= limit) {
     return {
       ok: false,
       reason: "QUOTA",
       used,
-      limit: opts.dailyLimit,
+      limit,
       resetsAt: nextUtcMidnightSeconds(now),
     };
   }
@@ -200,9 +228,9 @@ export function acquireCadSlot(wallet: string, opts: QuotaOptions): QuotaDecisio
   locks.set(key, { token, startedAt: now });
   current.wallets[key] = { day, used: used + 1 };
   pruneAndSave(opts, current, now);
-  console.log("[CAD] wallet=" + key + " quota=" + (used + 1) + "/" + opts.dailyLimit);
+  console.log("[CAD] wallet=" + key + " quota=" + (used + 1) + "/" + limit);
 
-  return { ok: true, token, used: used + 1, limit: opts.dailyLimit };
+  return { ok: true, token, used: used + 1, limit };
 }
 
 /**
@@ -220,17 +248,19 @@ export function releaseCadSlot(wallet: string, token: string): void {
 export function cadQuotaHeaders(wallet: string, opts: QuotaOptions): Record<string, string> {
   const now = nowMs(opts);
   const current = loadState(opts);
+  const limit = dailyLimitOf(opts.dailyLimit);
   const entry = current.wallets[wallet.toLowerCase()];
   const used = entry && entry.day === utcDay(now) ? entry.used : 0;
   return {
-    "X-Cad-Quota-Limit": String(opts.dailyLimit),
-    "X-Cad-Quota-Remaining": String(Math.max(0, opts.dailyLimit - used)),
+    "X-Cad-Quota-Limit": String(limit),
+    "X-Cad-Quota-Remaining": String(Math.max(0, limit - used)),
     "X-Cad-Quota-Reset": String(nextUtcMidnightSeconds(now)),
   };
 }
 
-/** Test helper: drops the in-memory counters and the lock table. */
+/** Test helper: drops the in-memory counters, the lock table and the log memory. */
 export function _resetCadQuota(): void {
   locks.clear();
+  reportedBadLimits.clear();
   state = null;
 }
