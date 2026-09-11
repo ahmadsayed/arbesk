@@ -123,6 +123,58 @@ describe("unusable daily limit (fail closed)", () => {
   });
 });
 
+describe("unusable lock TTL (falls back to the derived value)", () => {
+  /** What an unusable TTL must behave as: the derived worst case for the defaults. */
+  const DERIVED = lockTtlFor(CAD_DEFAULT_REQUEST_LIMITS);
+
+  it("still refuses a second concurrent request when the TTL is not a positive number", () => {
+    for (const lockTtlMs of [NaN, Infinity, -1, 0]) {
+      _resetCadQuota();
+      let now = 1000;
+      const clock = () => now;
+      expect(acquireCadSlot(W, opts({ lockTtlMs, dailyLimit: 10, now: clock })).ok).toBe(true);
+      // One millisecond later the lock must still be held: with a raw NaN or 0
+      // the comparison is false and the guard would be off entirely.
+      now += 1;
+      const second = acquireCadSlot(W, opts({ lockTtlMs, dailyLimit: 10, now: clock }));
+      expect(second.ok).toBe(false);
+      expect(second.reason).toBe("IN_PROGRESS");
+    }
+  });
+
+  it("holds the lock for the derived TTL, not for the garbage it was handed", () => {
+    let now = 0;
+    const clock = () => now;
+    acquireCadSlot(W, opts({ lockTtlMs: NaN, now: clock }));
+
+    now = DERIVED - 1;
+    expect(acquireCadSlot(W, opts({ lockTtlMs: NaN, now: clock })).reason).toBe("IN_PROGRESS");
+
+    now = DERIVED + 1;
+    expect(acquireCadSlot(W, opts({ lockTtlMs: NaN, now: clock })).ok).toBe(true);
+  });
+
+  it("leaves a usable TTL alone", () => {
+    let now = 1000;
+    const clock = () => now;
+    acquireCadSlot(W, opts({ lockTtlMs: 5000, now: clock }));
+    now += 5001;
+    expect(acquireCadSlot(W, opts({ lockTtlMs: 5000, now: clock })).ok).toBe(true);
+  });
+
+  it("says why it fell back, once per bad value instead of once per request", () => {
+    const spy = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      _resetCadQuota();
+      const said = () => spy.mock.calls.filter((c) => String(c[0]).includes("lock TTL")).length;
+      for (let i = 0; i < 3; i++) acquireCadSlot(W, opts({ lockTtlMs: NaN, now: () => 1000 * i }));
+      expect(said()).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe("in-flight lock", () => {
   it("refuses a second concurrent request for the same wallet", () => {
     expect(acquireCadSlot(W, opts()).ok).toBe(true);

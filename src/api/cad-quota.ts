@@ -12,7 +12,9 @@ import { randomUUID } from "node:crypto";
 import { PROJECT_ROOT } from "./project-root.ts";
 
 export interface QuotaOptions {
+  /** LLM requests per wallet per UTC day; an unusable value refuses everything. */
   dailyLimit: number;
+  /** In-flight lock TTL; an unusable value falls back to the derived TTL. */
   lockTtlMs: number;
   now?: () => number;
   statePath?: string;
@@ -60,8 +62,28 @@ function statePathOf(opts: QuotaOptions): string {
   return opts.statePath ?? DEFAULT_STATE_PATH;
 }
 
-/** Bad limits already reported, so a broken config cannot flood the log. */
-const reportedBadLimits = new Set<string>();
+/** Unusable values already reported, so a broken config cannot flood the log. */
+const reportedBadValues = new Set<string>();
+
+/**
+ * Reports an unusable configuration value once per distinct (kind, value) pair.
+ * @remarks Printing the number the caller passed - never the raw environment
+ *   string - keeps a mistyped value from being echoed as if it were a secret,
+ *   and the dedupe keeps a broken config from filling the log with one line per
+ *   request while still telling an operator why requests are being refused.
+ */
+function reportBadValue(kind: string, value: number, consequence: string): void {
+  const why = Number.isNaN(value) ? "NaN" : String(value);
+  const key = kind + "=" + why;
+  if (reportedBadValues.has(key)) return;
+  reportedBadValues.add(key);
+  console.log("[CAD] " + kind + " " + why + " is not a finite number >= 1 - " + consequence);
+}
+
+/** True for the only values that bound a guard usefully. */
+function isUsableBound(value: number): boolean {
+  return Number.isFinite(value) && value >= 1;
+}
 
 /**
  * Normalizes a caller-supplied daily limit.
@@ -76,14 +98,8 @@ const reportedBadLimits = new Set<string>();
  * @returns The limit to enforce: the input when usable, otherwise 0.
  */
 export function dailyLimitOf(limit: number): number {
-  if (Number.isFinite(limit) && limit >= 1) return limit;
-  const why = Number.isNaN(limit) ? "NaN" : String(limit);
-  if (!reportedBadLimits.has(why)) {
-    reportedBadLimits.add(why);
-    console.log(
-      "[CAD] daily limit " + why + " is not a finite number >= 1 - refusing all CAD requests (fail closed)",
-    );
-  }
+  if (isUsableBound(limit)) return limit;
+  reportBadValue("daily limit", limit, "refusing all CAD requests (fail closed)");
   return 0;
 }
 
@@ -172,20 +188,42 @@ export function lockTtlFor(limits: CadRequestLimits): number {
     + CAD_LOCK_TTL_MARGIN_MS;
 }
 
+/** The derived worst case for the shipped defaults - the backstop below. */
+const DEFAULT_LOCK_TTL_MS = lockTtlFor(CAD_DEFAULT_REQUEST_LIMITS);
+
+/**
+ * Normalizes a caller-supplied lock TTL.
+ * @remarks The opposite direction from the daily limit: a safe value exists for
+ *   a TTL - the derived worst case - so an unusable one falls back to it instead
+ *   of being refused. `now - startedAt <= NaN` (or <= 0) is false, which drops
+ *   the in-flight lock entirely and lets one wallet run unlimited concurrent
+ *   generations with no error anywhere; falling back keeps it held.
+ *   The backstop is derived from the shipped default limits, so a caller with
+ *   retuned limits must supply a usable TTL - cadLockTtlMs does that for it.
+ * @param ttlMs Raw TTL from the caller, usually parsed from the environment.
+ * @returns The TTL to enforce: the input when usable, otherwise the derived one.
+ */
+export function lockTtlOf(ttlMs: number): number {
+  if (isUsableBound(ttlMs)) return ttlMs;
+  reportBadValue("lock TTL", ttlMs, "using the derived worst-case TTL");
+  return DEFAULT_LOCK_TTL_MS;
+}
+
 /**
  * Effective lock TTL: CAD_MAX_REQUEST_MS when an operator set a usable positive
  * value, otherwise the value derived from `limits`.
- * @remarks Callers must pass the same limits they hand the generator, so the
- *   default tracks the real worst case instead of a hard-coded 120s.
+ * @remarks `limits` is deliberately required: an omitted argument would
+ *   silently under-derive the TTL from the defaults, which is the same
+ *   guard-off-by-accident failure this module normalizes away elsewhere.
  * @param limits Limits the generation loop is configured with.
  * @param env Environment holding the operator override (injectable for tests).
  */
 export function cadLockTtlMs(
-  limits: CadRequestLimits = CAD_DEFAULT_REQUEST_LIMITS,
+  limits: CadRequestLimits,
   env: Record<string, string | undefined> = process.env,
 ): number {
   const override = Number(env.CAD_MAX_REQUEST_MS);
-  return Number.isFinite(override) && override > 0 ? override : lockTtlFor(limits);
+  return isUsableBound(override) ? override : lockTtlFor(limits);
 }
 
 /**
@@ -198,10 +236,11 @@ export function acquireCadSlot(wallet: string, opts: QuotaOptions): QuotaDecisio
   const now = nowMs(opts);
   const key = wallet.toLowerCase();
   const limit = dailyLimitOf(opts.dailyLimit);
+  const ttlMs = lockTtlOf(opts.lockTtlMs);
 
   const held = locks.get(key);
   if (held) {
-    if (now - held.startedAt <= opts.lockTtlMs) {
+    if (now - held.startedAt <= ttlMs) {
       return { ok: false, reason: "IN_PROGRESS", startedAt: held.startedAt };
     }
     // Expired: whatever held it is gone (a lock never outlives its request, and
@@ -261,6 +300,6 @@ export function cadQuotaHeaders(wallet: string, opts: QuotaOptions): Record<stri
 /** Test helper: drops the in-memory counters, the lock table and the log memory. */
 export function _resetCadQuota(): void {
   locks.clear();
-  reportedBadLimits.clear();
+  reportedBadValues.clear();
   state = null;
 }
