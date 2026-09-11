@@ -5,7 +5,7 @@
  *   that the server ran it. This is a deny-list plus a helper allow-list, not a
  *   sandbox; the process/worker boundary is the sandbox.
  */
-import { referencedIdentifiers } from "./document.ts";
+import { referencedIdentifiers, stripNonCode } from "./document.ts";
 
 export type GuardResult =
   | { ok: true }
@@ -78,25 +78,30 @@ export function guardScript(code: string, preludeNames: Iterable<string>): Guard
     return { ok: false, reason: "EMPTY_CODE" };
   }
 
+  // Prose cannot execute. Every scan below runs on the source with comments and
+  // string literals blanked out, so a parenthesised aside in a comment is not
+  // read as a call and a comment cannot stand in for a missing `return`.
+  const source = stripNonCode(code);
+
   for (const { pattern, label } of DENIED) {
-    if (pattern.test(code)) {
+    if (pattern.test(source)) {
       return { ok: false, reason: "DENIED_CONSTRUCT", detail: label };
     }
   }
 
-  if (!/\breturn\b/.test(code)) {
+  if (!/\breturn\b/.test(source)) {
     return { ok: false, reason: "NO_RETURN", detail: "script must return a Manifold" };
   }
 
   const allowed = new Set<string>([...preludeNames, ...ALLOWED_GLOBALS, "PARAMETERS", "P", "M"]);
-  for (const name of referencedIdentifiers(code)) {
+  for (const name of referencedIdentifiers(source)) {
     if (KEYWORDS.has(name)) continue;
     if (allowed.has(name)) continue;
     // Locally declared functions and variables are the script's own business.
-    const declared = new RegExp("\\b(?:const|let|var|function)\\s+" + escapeIdentifier(name) + "\\b").test(code);
+    const declared = new RegExp("\\b(?:const|let|var|function)\\s+" + escapeIdentifier(name) + "\\b").test(source);
     if (declared) continue;
     // Method calls (xs.map(...)) are not bare prelude calls.
-    const bare = new RegExp("(?:^|[^\\w.$])" + escapeIdentifier(name) + "\\s*\\(").test(code);
+    const bare = new RegExp("(?:^|[^\\w.$])" + escapeIdentifier(name) + "\\s*\\(").test(source);
     if (!bare) continue;
     return { ok: false, reason: "UNKNOWN_HELPER", detail: name };
   }

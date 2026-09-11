@@ -32,6 +32,16 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).toContain("summary");
     expect(SYSTEM_PROMPT).toContain("parameters");
   });
+
+  // Regression, from the live run: the model wrote `base.union(wall)`, which is
+  // the STATIC form, and lost a whole attempt to "union is not a function".
+  it("names the solid's instance methods and rules out part.union()", () => {
+    for (const method of ["add(other)", "subtract(other)", "intersect(other)"]) {
+      expect(SYSTEM_PROMPT).toContain(method);
+    }
+    expect(SYSTEM_PROMPT).toContain("NO instance .union()");
+    expect(SYSTEM_PROMPT).toContain("M.union(a, b)");
+  });
 });
 
 // The prompt IS the API documentation the model is prompted against, so the

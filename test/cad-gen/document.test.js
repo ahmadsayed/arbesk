@@ -72,3 +72,28 @@ describe("referencedIdentifiers", () => {
     expect(names.has("map")).toBe(true); // lexical only — the guard filters these
   });
 });
+
+// Regression: this scan reads *code*, but comments and string literals were
+// being scanned as if they were code. "leg (" in a comment is not a call.
+describe("referencedIdentifiers - ignores non-code", () => {
+  it("ignores a parenthesised aside in a comment", () => {
+    const names = referencedIdentifiers("// hole through the vertical leg (normal = X)\nreturn box(1, 1, 1);");
+    expect([...names]).toEqual(["box"]);
+  });
+
+  it("ignores a parenthesised aside in a string literal", () => {
+    const names = referencedIdentifiers("const note = 'the leg (left)';\nreturn box(1, 1, 1);");
+    expect([...names]).toEqual(["box"]);
+  });
+
+  it("ignores a name called inside a template literal", () => {
+    const tick = String.fromCharCode(96);
+    const code = "const t = " + tick + "leg (" + tick + ";\nreturn box(1, 1, 1);";
+    expect([...referencedIdentifiers(code)]).toEqual(["box"]);
+  });
+
+  it("still collects real calls", () => {
+    const names = referencedIdentifiers("return hole(box(1,1,1), {});");
+    expect([...names].sort()).toEqual(["box", "hole"]);
+  });
+});

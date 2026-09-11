@@ -59,6 +59,32 @@ const HELPER_DOCS = [
   "bbox(part) -> { min, max, size }      volume(part) -> mm3",
 ].join("\n");
 
+/**
+ * The solid's own method surface.
+ * @remarks Added after the live run showed the model writing `part.union(...)`:
+ *   Manifold has add/subtract/intersect on the INSTANCE and union/difference/
+ *   intersection only as STATICS, so that one wrong guess cost a whole round
+ *   trip ("base.union is not a function"). Names verified against
+ *   manifold-3d 3.5.3's manifold.d.ts. This block deliberately sits AFTER the
+ *   OUTPUT section: the helper-table lockstep test parses every name-paren
+ *   occurrence before it, and these are not helpers.
+ */
+const SOLID_METHODS = [
+  "Every helper above returns a solid. A solid has exactly these chainable",
+  "methods, and no others:",
+  "  part.add(other)               union of two solids",
+  "  part.subtract(other)          cut other out of part",
+  "  part.intersect(other)         keep only the overlap",
+  "  part.translate([x, y, z])     move the solid, millimetres",
+  "  part.rotate([x, y, z])        rotate about each axis, in DEGREES",
+  "  part.scale(v)                 v is a number (uniform) or [x, y, z]",
+  "  part.mirror([x, y, z])        reflect through the plane with that normal",
+  "There is NO instance .union(), .difference() or .intersection(). Those exist",
+  "only as statics on M: M.union(a, b), M.difference(a, b), M.intersection(a, b)",
+  "and the variadic M.union([a, b, c]). Calling part.union(other) throws",
+  "\"part.union is not a function\" and wastes the whole attempt.",
+].join("\n");
+
 const OUTPUT_SHAPE = [
   "Reply with a single JSON object and nothing else:",
   '{ "code": "<function body>", "parameters": { "<name>": { "value": <number>,',
@@ -77,6 +103,9 @@ export const SYSTEM_PROMPT = [
   "",
   "OUTPUT",
   OUTPUT_SHAPE,
+  "",
+  "SOLID METHODS",
+  SOLID_METHODS,
   "",
   "When a previous design is supplied, treat it as the current state: return the",
   "COMPLETE updated script, preserving everything the user did not ask to change.",

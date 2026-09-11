@@ -71,7 +71,17 @@ function linkAbort(controller: AbortController, signal?: AbortSignal): void {
   if (signal) signal.addEventListener("abort", () => controller.abort(), { once: true });
 }
 
-/** Builds the OpenAI-compatible request body for one turn. */
+/**
+ * Builds the OpenAI-compatible request body for one turn.
+ * @remarks `temperature` is accepted but has NO EFFECT while thinking mode is
+ *   on, which is the provider default ("Thinking mode does not support the
+ *   temperature, presence_penalty, or frequency_penalty parameters... setting
+ *   these parameters will not trigger an error but will also have no effect" -
+ *   DeepSeek API docs, Thinking Mode). It is left in place because it becomes
+ *   meaningful the moment thinking is disabled with
+ *   `thinking: { type: "disabled" }`; do not read it as a determinism guarantee
+ *   today, since the provider is currently free to sample.
+ */
 function buildPayload(config: DeepSeekConfig, messages: LlmMessage[]): unknown {
   return {
     model: config.model,

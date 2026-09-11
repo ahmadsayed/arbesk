@@ -86,3 +86,73 @@ describe("guardScript — structure", () => {
     expect(check(code).ok).toBe(true);
   });
 });
+
+// Regression, found against the live DeepSeek API (2026-09-11): the bare-call
+// heuristic matched a word followed by "(" inside a COMMENT, so the guard
+// rejected valid scripts. The model's own workaround was to delete its
+// comments ("Removed comment text that tripped the helper guard"), which
+// corrupts the artifact we ship.
+describe("guardScript - prose and string literals", () => {
+  const prose = [
+    ["a parenthesised aside", "// hole through the vertical leg (normal = X)"],
+    ["two asides", "// upright member (Z) and base member (X)"],
+    ["an aside naming a fastener", "// self-tapping screw boss (M3)"],
+    ["an aside mid-sentence", "// the plate (80 mm wide) is extruded to thickness"],
+    ["a parenthesised abbreviation", "// mill finish (Ra 3.2) on all faces"],
+    ["a block comment aside", "/* the hub (left) carries the load */"],
+  ];
+
+  it.each(prose)("allows %s in a comment", (_label, comment) => {
+    expect(check(comment + "\nreturn box(P.w, P.d, P.h);").ok).toBe(true);
+  });
+
+  it("allows a parenthesised aside inside a string literal", () => {
+    expect(check("const note = 'the leg (left)';\nreturn box(1, 1, 1);").ok).toBe(true);
+  });
+
+  it("allows an aside in a comment above a real call to the same word", () => {
+    const code = [
+      "// the leg (along +X) is the long one",
+      "const leg = box(P.l, P.w, P.t);",
+      "return leg;",
+    ].join("\n");
+    expect(check(code).ok).toBe(true);
+  });
+
+  it("still rejects a real call to an unknown helper", () => {
+    const r = check("return mysteryHelper(1);");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("UNKNOWN_HELPER");
+    expect(r.detail).toBe("mysteryHelper");
+  });
+
+  it("still rejects an unknown helper called in code with prose around it", () => {
+    const code = [
+      "// build the boss (M3)",
+      "return mysteryHelper(1);",
+    ].join("\n");
+    const r = check(code);
+    expect(r.ok).toBe(false);
+    expect(r.detail).toBe("mysteryHelper");
+  });
+
+  it("still rejects a denied construct that is real code", () => {
+    expect(check("// avoid eval() here\nreturn eval('1');").ok).toBe(false);
+  });
+
+  it("does not let a comment satisfy the return requirement", () => {
+    const r = check("// this returns the finished part");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("NO_RETURN");
+  });
+
+  it("does not let a string literal satisfy the return requirement", () => {
+    expect(check("const s = 'return the part';").ok).toBe(false);
+  });
+
+  it("keeps scanning after an unterminated string (fail-closed)", () => {
+    const r = check("const s = 'oops\nreturn eval('1');");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("DENIED_CONSTRUCT");
+  });
+});

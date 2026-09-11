@@ -85,15 +85,108 @@ export function validateParameterOverrides(
 }
 
 /**
+ * Index of the quote closing the literal opened at `start`, or -1 when there
+ * is none.
+ * @remarks Template literals may span lines; the other two may not, so a
+ *   newline before a closing quote means the opener was an apostrophe in
+ *   prose, not a string.
+ */
+function stringEnd(code: string, start: number): number {
+  const quote = code[start];
+  for (let i = start + 1; i < code.length; i++) {
+    if (code[i] === "\\") { i++; continue; }
+    if (code[i] === quote) return i;
+    if (quote !== "`" && code[i] === "\n") return -1;
+  }
+  return -1;
+}
+
+/** A half-open [from, to) span of source that is not code. */
+interface NonCodeSpan {
+  from: number;
+  to: number;
+}
+
+/** Quote characters that open a string literal. */
+const QUOTES = ["\"", "'", "`"];
+
+/** The span of a line comment, which runs to the end of the line. */
+function lineCommentSpan(code: string, i: number): NonCodeSpan {
+  const end = code.indexOf("\n", i);
+  return { from: i, to: end === -1 ? code.length : end };
+}
+
+/** The span of a block comment, or null when it is never closed. */
+function blockCommentSpan(code: string, i: number): NonCodeSpan | null {
+  const end = code.indexOf("*/", i + 2);
+  return end === -1 ? null : { from: i, to: end + 2 };
+}
+
+/** The span of a string literal, or null when it is never closed. */
+function stringSpan(code: string, i: number): NonCodeSpan | null {
+  const end = stringEnd(code, i);
+  return end === -1 ? null : { from: i, to: end + 1 };
+}
+
+/**
+ * The non-code span opening at `i`, or null when `i` is ordinary code.
+ * @remarks Every helper here fails closed: an unterminated block comment or
+ *   string returns null, so its remainder stays visible to the scanners rather
+ *   than being hidden behind a missing terminator.
+ */
+function nonCodeSpanAt(code: string, i: number): NonCodeSpan | null {
+  if (code.startsWith("//", i)) return lineCommentSpan(code, i);
+  if (code.startsWith("/*", i)) return blockCommentSpan(code, i);
+  return QUOTES.includes(code[i]) ? stringSpan(code, i) : null;
+}
+
+/** Overwrites a span with spaces, leaving line breaks in place. */
+function blank(out: string[], span: NonCodeSpan): void {
+  for (let k = span.from; k < span.to; k++) {
+    if (out[k] !== "\n") out[k] = " ";
+  }
+}
+
+/**
+ * Blanks out comments and string literals, preserving every length and line
+ * break.
+ * @remarks Every lexical scan in this package is looking for *code*, and prose
+ *   cannot execute. Without this, `// hole through the vertical leg (normal =
+ *   X)` reads as a call to a helper named `leg`, and the guard rejects a valid
+ *   script. Measured against the live model: it diagnosed the false positive
+ *   and repaired it by deleting its own comments, so the artifact we ship lost
+ *   its documentation. Length is preserved so offsets and line breaks still
+ *   line up.
+ */
+export function stripNonCode(code: string): string {
+  const out = code.split("");
+  let i = 0;
+
+  while (i < code.length) {
+    const span = nonCodeSpanAt(code, i);
+    if (span === null) {
+      i++;
+      continue;
+    }
+    blank(out, span);
+    i = span.to;
+  }
+
+  return out.join("");
+}
+
+/**
  * Collects identifiers that are *called* in the script, so static gates can
  * reject calls to prelude helpers that do not exist.
  * @remarks Deliberately lexical rather than a full parse: the gate only needs
- *   candidate names, and the kernel run is the real arbiter.
+ *   candidate names, and the kernel run is the real arbiter. Comments and
+ *   string literals are blanked first - they are not code.
  */
 export function referencedIdentifiers(code: string): Set<string> {
   const names = new Set<string>();
   const re = /([A-Za-z_$][\w$]*)\s*\(/g;
+  const source = stripNonCode(code);
   let m: RegExpExecArray | null;
-  while ((m = re.exec(code)) !== null) names.add(m[1]);
+  while ((m = re.exec(source)) !== null) names.add(m[1]);
   return names;
 }
