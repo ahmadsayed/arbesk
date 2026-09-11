@@ -44,6 +44,12 @@ export interface DeepSeekClient {
   ): Promise<{ text: string; usage: TokenUsage }>;
 }
 
+/** Why a request failed, when there is no HTTP status to report. */
+type TransportReason = "timeout" | "abort" | "network";
+
+/** Status for failures that carry no HTTP status of their own (gateway-class). */
+const PROVIDER_FAILURE_STATUS = 502;
+
 /** Maps an HTTP status to the documented provider error code. */
 function providerErrorCode(status: number): string {
   if (status === 401 || status === 403) return "PROVIDER_AUTH_FAILED";
@@ -95,6 +101,66 @@ function readCompletion(json: any): { text: string; usage: TokenUsage } {
   };
 }
 
+/**
+ * Classifies why a request ended: the caller gave up, our timeout fired, or the
+ * network did.
+ */
+function failureReason(
+  input: AbortSignal | undefined,
+  controller: AbortController,
+): TransportReason {
+  if (input?.aborted) return "abort";
+  return controller.signal.aborted ? "timeout" : "network";
+}
+
+/**
+ * Normalizes anything the transport layer throws into the documented contract.
+ * @remarks Nothing is swallowed - the original message travels in the text, so
+ *   a timeout still reads as a timeout - but every failure reaches the caller
+ *   as one type, instead of every caller needing its own instanceof fallback.
+ */
+function transportFailure(
+  err: unknown,
+  reason: TransportReason,
+  timeoutMs: number,
+): ProviderError {
+  if (err instanceof ProviderError) return err;
+  const detail = err instanceof Error ? err.message : String(err);
+  const what = reason === "timeout"
+    ? "request timed out after " + timeoutMs + "ms"
+    : reason === "abort" ? "request aborted by the caller" : "transport failure";
+  return new ProviderError(
+    "deepseek " + what + ": " + detail,
+    PROVIDER_FAILURE_STATUS,
+    "PROVIDER_ERROR",
+  );
+}
+
+/** True for the abort error a fetch body read raises when its signal fires. */
+function isAbort(err: unknown): boolean {
+  return typeof err === "object" && err !== null
+    && (err as { name?: string }).name === "AbortError";
+}
+
+/**
+ * Reads the completion body, reporting an unparseable one as a provider failure.
+ * @remarks An abort is re-thrown untouched so the caller can report it as the
+ *   timeout or caller-cancel that it is, rather than as malformed JSON.
+ */
+async function readJsonBody(response: Response): Promise<any> {
+  try {
+    return await response.json();
+  } catch (err) {
+    if (isAbort(err)) throw err;
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new ProviderError(
+      "deepseek returned a body that is not valid JSON: " + detail,
+      PROVIDER_FAILURE_STATUS,
+      "PROVIDER_ERROR",
+    );
+  }
+}
+
 export function createDeepSeekClient(config: DeepSeekConfig): DeepSeekClient {
   const doFetch = config.fetchImpl ?? fetch;
   const timeoutMs = config.timeoutMs ?? 120000;
@@ -105,31 +171,37 @@ export function createDeepSeekClient(config: DeepSeekConfig): DeepSeekClient {
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       linkAbort(controller, signal);
 
-      let response: Response;
       try {
-        response = await doFetch(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: "Bearer " + config.apiKey,
+        const response = await doFetch(
+          config.baseUrl.replace(/\/+$/, "") + "/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: "Bearer " + config.apiKey,
+            },
+            body: JSON.stringify(buildPayload(config, messages)),
+            signal: controller.signal,
           },
-          body: JSON.stringify(buildPayload(config, messages)),
-          signal: controller.signal,
-        });
+        );
+
+        if (!response.ok) {
+          const body = await response.text().catch(() => "");
+          throw new ProviderError(
+            "deepseek " + response.status + ": " + body.slice(0, 300),
+            response.status,
+            providerErrorCode(response.status),
+          );
+        }
+
+        return readCompletion(await readJsonBody(response));
+      } catch (err) {
+        throw transportFailure(err, failureReason(signal, controller), timeoutMs);
       } finally {
+        // Cleared here and nowhere earlier: the timer stays armed through the
+        // body read, so a server that sends headers then stalls still times out.
         clearTimeout(timer);
       }
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        throw new ProviderError(
-          "deepseek " + response.status + ": " + body.slice(0, 300),
-          response.status,
-          providerErrorCode(response.status),
-        );
-      }
-
-      return readCompletion(await response.json());
     },
   };
 }

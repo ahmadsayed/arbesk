@@ -1,4 +1,6 @@
-import { createDeepSeekClient } from "@arbesk/cad-gen/backend/deepseek.js";
+import {
+  createDeepSeekClient, ProviderError,
+} from "@arbesk/cad-gen/backend/deepseek.js";
 
 const completion = (content) => ({
   choices: [{ message: { content } }],
@@ -68,4 +70,47 @@ describe("createDeepSeekClient", () => {
     expect(blocks[1].type).toBe("image_url");
     expect(blocks[1].image_url.url).toBe("data:image/png;base64,AAAA");
   });
+
+  it("maps a transport failure to PROVIDER_ERROR", async () => {
+    const c = client(async () => {
+      throw new TypeError("fetch failed");
+    });
+    await expect(c.complete([])).rejects.toBeInstanceOf(ProviderError);
+    await expect(c.complete([])).rejects.toMatchObject({
+      code: "PROVIDER_ERROR",
+    });
+    await expect(c.complete([])).rejects.toThrow(/fetch failed/);
+  });
+
+  it("maps a non-JSON 200 body to PROVIDER_ERROR", async () => {
+    const c = client(async () => new Response("<html>bad gateway</html>", { status: 200 }));
+    await expect(c.complete([])).rejects.toBeInstanceOf(ProviderError);
+    await expect(c.complete([])).rejects.toMatchObject({
+      code: "PROVIDER_ERROR",
+    });
+    await expect(c.complete([])).rejects.toThrow(/not valid JSON/);
+  });
+
+  it("keeps the timeout armed while the response body is read", async () => {
+    // Headers arrive immediately; the body settles only when the client aborts,
+    // which is what a real fetch does when its signal fires mid-body. A client
+    // that disarms its timeout at the headers never aborts, so this test hangs
+    // until the jest timeout instead of failing an assertion.
+    const c = createDeepSeekClient({
+      apiKey: "k", baseUrl: "https://api.deepseek.com",
+      model: "deepseek-flash", timeoutMs: 25,
+      fetchImpl: async (_url, init) => new Response(new ReadableStream({
+        start(controller) {
+          init.signal.addEventListener("abort", () =>
+            controller.error(new DOMException("The operation was aborted.", "AbortError")));
+        },
+      }), { status: 200 }),
+    });
+    await expect(c.complete([])).rejects.toBeInstanceOf(ProviderError);
+    await expect(c.complete([])).rejects.toMatchObject({
+      code: "PROVIDER_ERROR",
+    });
+    await expect(c.complete([])).rejects.toThrow(/timed out after 25ms/);
+  }, 3000);
 });
+
