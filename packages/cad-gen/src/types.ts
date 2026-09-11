@@ -33,6 +33,9 @@ export interface CadStats {
   };
   /** Which fillet strategy actually ran (see the spec's fidelity table). */
   filletMode?: "exact" | "minkowski" | "smooth";
+  /** Ball resolution the opening actually used, so a draft fillet is never
+   *  mistaken for a high-quality one. Only set when an opening ran. */
+  filletQuality?: "draft" | "high";
 }
 
 /** Renderer-neutral mesh in Manifold coordinates (millimetres, Z-up). */

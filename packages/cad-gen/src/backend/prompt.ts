@@ -42,6 +42,11 @@ const RULES = [
   "never silently replaced by a different solid: choose a smaller r and retry.",
   "chamferEdges is a rounding alias for filletEdges: this kernel has no flat bevel,",
   "so it rounds the edges with the same ball opening and the same radius limit.",
+  "Pass { quality: \"high\" } to filletEdges or chamferEdges only when the user asks",
+  "for a smooth, high-quality fillet or the fillet is the part's most visible feature.",
+  "The default quality is \"draft\", which rounds with a coarser ball: it is fast",
+  "and right for most parts, and high quality can take many seconds on revolved",
+  "or complex geometry, long enough to time out. Do not use it by default.",
   "filletEdges defaults to mode \"auto\", which is the opening described above, and",
   "mode \"minkowski\" is that same opening. mode \"smooth\" is appearance-only and",
   "NOT dimension-preserving: it moves the surface outward and changes the part's",
@@ -60,8 +65,8 @@ const HELPER_DOCS = [
   "roundedBox(w, d, h, r)                EXACT prismatic fillet",
   "hole(part, { diameter, axis, at, through })   axis 'x'|'y'|'z'; at [a,b] in-plane",
   "boltCircle(part, { count, diameter, circleDiameter, axis, at })",
-  "filletEdges(part, r, { mode })        rounds edges, keeps the outer size",
-  "chamferEdges(part, r)                 same rounding as filletEdges, no flat bevel",
+  "filletEdges(part, r, { mode, quality })   rounds edges, keeps the outer size",
+  "chamferEdges(part, r, { quality })    same rounding as filletEdges, no flat bevel",
   "bbox(part) -> { min, max, size }      volume(part) -> mm3",
 ].join("\n");
 

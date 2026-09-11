@@ -136,6 +136,7 @@ function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
     volumeMm3: result.volume(),
     bboxMm: { min: [...box.min], max: [...box.max] },
     ...(helpers.lastFilletMode ? { filletMode: helpers.lastFilletMode } : {}),
+    ...(helpers.lastFilletQuality ? { filletQuality: helpers.lastFilletQuality } : {}),
   };
 }
 

@@ -33,6 +33,15 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).toContain("parameters");
   });
 
+  // The opening's cost is driven by the rounding ball's facet count, so draft is
+  // the default and the model has to know both that "high" exists and that it
+  // is not the default - otherwise it asks for it on every part and times out.
+  it("documents the fillet quality option and its cost", () => {
+    expect(SYSTEM_PROMPT).toContain('quality: "high"');
+    expect(SYSTEM_PROMPT).toMatch(/default quality is "draft"/);
+    expect(SYSTEM_PROMPT).toMatch(/Do not use it by default/i);
+  });
+
   // Regression, from the live run: the model hand-built a step fillet from
   // revolve(circle(r).translate([d1/2 + r, 0])).intersect(cylinder(r, r)). Both
   // solids were valid, the intersection was EMPTY, and shaft.add(empty) returned

@@ -139,3 +139,58 @@ describe("prelude geometry", () => {
     expect(taper.stats.volumeMm3).toBeCloseTo((5 / 3) * 175, 3);
   }, 30000);
 });
+
+// The opening's cost is driven by the rounding ball's facet count, and the
+// effect is large: on a stepped shaft the dilation takes 1.0s with 8 segments,
+// 3.2s with 16 and 15.6s with 32, while the volume moves well under 1%. Draft
+// is the default so ordinary fillets fit the kernel timeout; high is an
+// explicit request, and the quality actually used is reported either way.
+describe("fillet quality", () => {
+  it("defaults to draft and reports it", async () => {
+    const r = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5);");
+    expect(r.ok).toBe(true);
+    expect(r.stats.filletMode).toBe("minkowski");
+    expect(r.stats.filletQuality).toBe("draft");
+  }, 30000);
+
+  it("reports high when high is requested", async () => {
+    const r = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5, { quality: 'high' });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.filletQuality).toBe("high");
+  }, 30000);
+
+  it("draft and high agree on the outer dimensions", async () => {
+    const sharp = await run("return box(20, 20, 20);");
+    const draft = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5);");
+    const high = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5, { quality: 'high' });");
+
+    expect(draft.ok).toBe(true);
+    expect(high.ok).toBe(true);
+    expectSameBbox(draft.stats.bboxMm, sharp.stats.bboxMm);
+    expectSameBbox(high.stats.bboxMm, sharp.stats.bboxMm);
+    // A coarser ball is a slightly different solid, not a different part:
+    // measured at 0.099% of the volume on this 20 mm cube with r = 1.5.
+    const relative = Math.abs(draft.stats.volumeMm3 - high.stats.volumeMm3) /
+      high.stats.volumeMm3;
+    expect(relative).toBeLessThan(0.01);
+  }, 60000);
+
+  it("chamferEdges takes the same option", async () => {
+    const r = await run("const b = box(20, 20, 20);\nreturn chamferEdges(b, 1.5, { quality: 'high' });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.filletQuality).toBe("high");
+  }, 30000);
+
+  // A caller that asked for high and silently got draft has no way to tell.
+  it("refuses an unknown quality instead of downgrading quietly", async () => {
+    const r = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5, { quality: 'ultra' });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/quality must be "draft" or "high"/);
+  }, 30000);
+
+  it("reports no opening quality when no opening ran", async () => {
+    const r = await run("return roundedBox(20, 20, 20, 2);");
+    expect(r.stats.filletMode).toBe("exact");
+    expect(r.stats.filletQuality).toBeUndefined();
+  }, 30000);
+});
