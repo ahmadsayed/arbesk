@@ -16,7 +16,8 @@
       "zod": "^3.25.76",
       "@swc/core": "^1.16.0",
       "nostr-tools": "^2.23.5",
-      "fast-xml-parser": "^4.5.3"
+      "fast-xml-parser": "^4.5.3",
+      "manifold-3d": "^3.5.3"
     }
   },
   "scripts": {
@@ -76,6 +77,7 @@
     "fflate": "catalog:",
     "helmet": "^8.2.0",
     "ipfs-http-client": "^60.0.0",
+    "manifold-3d": "catalog:",
     "morgan": "^1.11.0",
     "nostr-tools": "catalog:",
     "pinata": "^2.5.6",
