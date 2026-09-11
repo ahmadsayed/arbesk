@@ -1121,9 +1121,14 @@ async function main(): Promise<void> {
   const requestPath = process.argv[2];
   const req = JSON.parse(fs.readFileSync(requestPath, "utf8")) as ChildRequest;
 
+  // manifold-3d's bundled manifold.d.ts declares `locateFile: () => string`
+  // (zero arity) while Emscripten actually calls it WITH the filename, so the
+  // typed config rejects a correct callback (TS2322). Cast the config object,
+  // never the callback, and do not augment the upstream .d.ts - an upgrade
+  // would silently drop it.
   const module = await Module({
     locateFile: (file: string) => path.join(req.wasmDir, file),
-  });
+  } as unknown as Parameters<typeof Module>[0]);
   // manifold-3d registers its JS API lazily. Without setup(), Manifold.cube is
   // undefined and every script dies with "Manifold.cube is not a function".
   // Verified in Task 1 - see docs/superpowers/plans/cad-spike-results.md.
@@ -4028,7 +4033,11 @@ if (result.runtime.preludeVersion !== PRELUDE_VERSION) {
 
 const wasmDir = process.env.CAD_MANIFOLD_WASM_DIR ||
   path.resolve(process.cwd(), "node_modules", "manifold-3d");
-const module = await Module({ locateFile: (f) => path.join(wasmDir, f) });
+// `checkJs` is on: the callback parameter needs an inline JSDoc type, and the
+// config needs a cast because manifold-3d declares locateFile with zero arity.
+/** @type {any} */
+const moduleConfig = { locateFile: (/** @type {string} */ f) => path.join(wasmDir, f) };
+const module = await Module(moduleConfig);
 module.setup(); // manifold-3d registers its JS API lazily (see Task 1 results)
 const kernel = createCadKernel(module);
 const { mesh, stats } = kernel.run(result.design);
