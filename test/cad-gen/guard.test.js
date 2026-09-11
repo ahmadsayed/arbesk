@@ -17,6 +17,9 @@ describe("guardScript — denylist", () => {
     ["constructor escape", "({}).constructor.constructor('return 1')();"],
     ["unbounded loop", "while (true) {}"],
     ["__proto__", "const p = x.__proto__;"],
+    ["process member access", "return process.mainModule.require('fs');"],
+    ["globalThis member access", "return globalThis.fetch('http://x');"],
+    ["self member access", "return self.importScripts('x');"],
   ];
 
   it.each(denied)("rejects %s", (_label, code) => {
@@ -64,5 +67,22 @@ describe("guardScript — structure", () => {
     ].join("\n");
     const r = check(code);
     expect(r.ok).toBe(true);
+  });
+
+  it("allows engineering prose in comments", () => {
+    const code = [
+      "// self-tapping screw boss, 4mm mill process",
+      "// global dimensions are in mm",
+      "return box(P.w, P.d, P.h);",
+    ].join("\n");
+    expect(check(code).ok).toBe(true);
+  });
+
+  it("allows a comment describing a window frame", () => {
+    const code = [
+      "// window frame profile, extruded and filleted",
+      "return roundedBox(P.w, P.d, P.h, 2);",
+    ].join("\n");
+    expect(check(code).ok).toBe(true);
   });
 });

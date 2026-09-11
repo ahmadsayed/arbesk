@@ -19,16 +19,19 @@ const DENIED: { pattern: RegExp; label: string }[] = [
   { pattern: /\beval\s*\(/, label: "eval" },
   { pattern: /\bnew\s+Function\b/, label: "Function constructor" },
   { pattern: /\bFunction\s*\(/, label: "Function constructor" },
-  { pattern: /\bprocess\b/, label: "process" },
-  { pattern: /\bglobalThis\b/, label: "globalThis" },
-  { pattern: /\bglobal\b/, label: "global" },
-  { pattern: /\bself\b/, label: "self" },
-  { pattern: /\bwindow\b/, label: "window" },
-  { pattern: /\bdocument\b/, label: "document" },
+  // A global is only reachable through a member access (process.exit,
+  // globalThis.fetch, self.importScripts), so these require one - a bare
+  // mention, e.g. in a comment about a self-tapping screw, cannot do anything.
+  { pattern: /\bprocess\s*\??\s*[.[]/, label: "process" },
+  { pattern: /\bglobalThis\s*\??\s*[.[]/, label: "globalThis" },
+  { pattern: /\bglobal\s*\??\s*[.[]/, label: "global" },
+  { pattern: /\bself\s*\??\s*[.[]/, label: "self" },
+  { pattern: /\bwindow\s*\??\s*[.[]/, label: "window" },
+  { pattern: /\bdocument\s*\??\s*[.[]/, label: "document" },
   { pattern: /\bfetch\s*\(/, label: "fetch" },
   { pattern: /\bXMLHttpRequest\b/, label: "XMLHttpRequest" },
   { pattern: /\bchild_process\b/, label: "child_process" },
-  { pattern: /\bWebAssembly\b/, label: "WebAssembly" },
+  { pattern: /\bWebAssembly\s*\??\s*[.[]/, label: "WebAssembly" },
   { pattern: /\bconstructor\s*\.\s*constructor\b/, label: "constructor escape" },
   { pattern: /__proto__/, label: "__proto__" },
   { pattern: /\bwhile\s*\(\s*true\s*\)/, label: "unbounded loop" },
@@ -56,6 +59,16 @@ const ALLOWED_GLOBALS = new Set([
 ]);
 
 /**
+ * Escapes an identifier before it is interpolated into a RegExp source.
+ * @remarks `referencedIdentifiers` admits `$` (its pattern is `[A-Za-z_$][\w$]*`),
+ *   which is an anchor rather than a literal in a pattern. Escaping every
+ *   non-word character is exact for that identifier alphabet.
+ */
+function escapeIdentifier(value: string): string {
+  return value.replace(/[^\w]/g, "\\$&");
+}
+
+/**
  * Validates a script before it is handed to the kernel.
  * @param code Script body (the inside of a function).
  * @param preludeNames Helper names the host will inject.
@@ -80,10 +93,10 @@ export function guardScript(code: string, preludeNames: Iterable<string>): Guard
     if (KEYWORDS.has(name)) continue;
     if (allowed.has(name)) continue;
     // Locally declared functions and variables are the script's own business.
-    const declared = new RegExp("\\b(?:const|let|var|function)\\s+" + name + "\\b").test(code);
+    const declared = new RegExp("\\b(?:const|let|var|function)\\s+" + escapeIdentifier(name) + "\\b").test(code);
     if (declared) continue;
     // Method calls (xs.map(...)) are not bare prelude calls.
-    const bare = new RegExp("(?:^|[^\\w.$])" + name + "\\s*\\(").test(code);
+    const bare = new RegExp("(?:^|[^\\w.$])" + escapeIdentifier(name) + "\\s*\\(").test(code);
     if (!bare) continue;
     return { ok: false, reason: "UNKNOWN_HELPER", detail: name };
   }
