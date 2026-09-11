@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import {
   runValidation,
   parseRunnerResult,
@@ -19,6 +21,48 @@ describe("runValidation", () => {
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/timed out/i);
   }, 20000);
+});
+
+describe("runValidation hardening", () => {
+  // The guard permits bounded loops and allows console, so a design may legally
+  // flood stdout. Buffering that unboundedly is a denial of service against the
+  // *server*: before the runner capped its capture window a flood like this one
+  // cost the parent ~2 GB of heap - measured in Task 5 - and ended in a
+  // RangeError thrown inside the stream handler. The flood is 150k lines of
+  // 4 KB (~614 MB), deliberately more than V8's maximum string length (~512 MB),
+  // so an uncapped parent cannot merely lose the result: it throws. A tail is
+  // all the protocol needs, because the stats line is written last.
+  // 4 KB lines also keep the flood inside what a node child actually delivers
+  // through a pipe; node drops the whole stream on a single oversize write
+  // (ENOBUFS), which is a property of the child's runtime, not of this cap.
+  it("caps a flooding child's stdout instead of buffering it", async () => {
+    const r = await runValidation(
+      design(
+        "for (let i = 0; i < 150000; i++) console.log('x'.repeat(4096));\n" +
+          "return box(10, 20, 30);",
+      ),
+      OPTS,
+    );
+    expect(r.ok).toBe(true);
+    expect(r.stats.volumeMm3).toBeCloseTo(6000, 0);
+  }, 180000);
+
+  // A kernel that cannot load is a *host* fault, exactly like a missing child
+  // entry or an unwritable tmpdir: the child exits non-zero and the runner must
+  // resolve, never reject, or one bad wasm path takes the server down.
+  it("reports a missing kernel as a host fault instead of throwing", async () => {
+    const missing = path.join(os.tmpdir(), "cad-gen-no-such-wasm-dir");
+    const r = await runValidation(design("return box(1, 1, 1);"), {
+      ...OPTS,
+      wasmDir: missing,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/kernel host failed/i);
+
+    // The caller survived it: the runner is still usable afterwards.
+    const after = await runValidation(design("return box(2, 2, 2);"), OPTS);
+    expect(after.ok).toBe(true);
+  }, 60000);
 });
 
 const MAX = 200000;
