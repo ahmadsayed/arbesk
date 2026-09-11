@@ -16,7 +16,10 @@ later task verbatim):
 
 1. **`wasm.setup()` is required.** `manifold-3d@3.5.3` does not install its JS API until
    `setup()` is called. Every snippet in the brief and in the plan omits it, so
-   `Manifold.cube` is `undefined`. `ManifoldModule` (plan line 453) needs `setup: () => void`.
+   `Manifold.cube` is `undefined`. It is a **loader** responsibility: call it in
+   `backend/child.ts` immediately after `Module({ locateFile })`, before the module is handed to
+   `createCadKernel`. Then ruling F2's widened port (`{ Manifold: any; CrossSection: any }`) is
+   correct as written and needs no `setup` member.
 2. **`locateFile` must be fed a `PROJECT_ROOT`-relative absolute path, not an
    `import.meta.url`-relative one.** The brief's step-8 snippet works under `bun` and **still
    fails in the compiled binary**, because `import.meta.url` there is
@@ -91,9 +94,12 @@ installed manifold-3d@3.5.3 with binaries:
 (Bun also re-encoded the `description` field's `\u2014` escape to a literal em dash on that write;
 that cosmetic line was reverted, so the committed `package.json` diff is only the two lines above.)
 
-**Controller decision point:** if `manifold-3d` is meant to be owned by the future
-`packages/cad-gen` rather than the root, move the `"catalog:"` reference there in Task 5. It has to
-live *somewhere* a workspace can resolve it, or nothing downstream installs.
+**This is consistent with the ledger's ruling F1**, which already places the `"catalog:"`
+reference in `packages/cad-gen/package.json` at Task 5 (the first import lives in that package's
+`backend/child.ts`). The root entry added here is a **Task-1-scoped stopgap** so the probes can
+resolve the module at all; F1's own cost analysis notes Bun resolves upward and "a mistaken add
+cannot break anything". **Task 5 should still add the reference to `packages/cad-gen`** — and may
+drop the root one then, since nothing outside the probes imports it today.
 
 ## Step 2 — Install and record what lands — **PASS**
 
@@ -406,6 +412,8 @@ The brief's two probe scripts and `.tmp/` are deleted in Task 14.
   path-resolution defects in the snippets, each fixed by one line and re-verified.
 - **Deviation from the brief's file list is disclosed**, not hidden: `package.json` gained a
   `dependencies` entry the brief did not mention. Without it step 2's artifacts cannot exist.
+  Cross-checked against the SDD ledger: this is the install-time half of ruling F1, which places the
+  reference in `packages/cad-gen` at Task 5. The root entry is a Task-1 stopgap, flagged for F1.
 - **Probes were not weakened** to make anything pass; the only edits are the two corrections, both
   annotated in-file with the observed error they fix.
 - **What I did NOT verify — no claim is made about it.** The **browser** runtime. The design has
@@ -422,13 +430,20 @@ The brief's two probe scripts and `.tmp/` are deleted in Task 14.
 
 ## Concerns / recommended follow-ups for the controller
 
-1. **Plan snippet bug (blocking for every later task): add `wasm.setup()`.** Affects the brief,
-   `packages/cad-gen/src/core/kernel.ts` callers, `backend/child.ts` (plan line 1072) and the
-   `ManifoldModule` port (plan line 453). The port type needs `setup: () => void`.
-2. **Plan snippet bug: `resolveWasmDir()` (plan lines 1132-1137) defaults to an
-   `import.meta.url`-relative path**, which is exactly the virtual `/$bunfs` case the compiled
-   server hits. The `CAD_MANIFOLD_WASM_DIR` override works, but the *default* must be
-   `path.resolve(PROJECT_ROOT, "node_modules", "manifold-3d")`.
+1. **Plan snippet bug (blocking for every later task): add `wasm.setup()` in the loader.**
+   Affects the brief and `backend/child.ts` (plan line 1072) — one line right after
+   `await Module({ locateFile })`. Because it is host-side, ruling F2's widened port type
+   (`{ Manifold: any; CrossSection: any }`) stands and needs no `setup` member. Every snippet that
+   calls the kernel without it fails with `TypeError: Manifold.cube is not a function`.
+2. **The ledger's "4-level ascent verified correct from both `src/backend` and `dist/backend`"
+   is true only for source execution.** `resolveWasmDir()` (plan lines 1132-1137) defaults to an
+   `import.meta.url`-relative ascent; under `bun` that is right, but inside a compiled binary
+   `import.meta.url` is virtual, so the ascent lands on `/$bunfs/node_modules/manifold-3d` and
+   ENOENTs — proven in step 8. The `CAD_MANIFOLD_WASM_DIR` override works, but the *default* must
+   be `path.resolve(PROJECT_ROOT, "node_modules", "manifold-3d")` (or the wasm must be embedded at
+   build time). Note the parent-side ascent is *not* load-bearing at all: `backend/child.ts`
+   receives `req.wasmDir` from the parent, so only the parent's default resolution matters, and
+   the parent is the compiled binary in production.
 3. **`docker/app.Dockerfile` must ship `manifold.wasm` into the runtime stage** (541 KB; the JS
    glue is already bundled). No task in the current plan covers this and production would otherwise
    fail at first validation. Consider whether the deploy task (Task 13/14) absorbs it.
