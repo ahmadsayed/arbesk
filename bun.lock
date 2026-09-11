@@ -8,6 +8,7 @@
         "@arbesk/ai-asset-gen": "*",
         "@arbesk/asset-core": "*",
         "@arbesk/authz": "*",
+        "@arbesk/cad-gen": "*",
         "@arbesk/nostr": "*",
         "@arbesk/wallet": "*",
         "@coinbase/cdp-sdk": "^1.53.0",

@@ -19,7 +19,11 @@ const wasmDir = process.env.CAD_MANIFOLD_WASM_DIR ??
   path.resolve(process.cwd(), "node_modules", "manifold-3d");
 
 // The loader contract: an absolute wasm directory handed to Emscripten.
-const wasm = await Module({ locateFile: (file) => path.join(wasmDir, file) });
+// manifold-3d's .d.ts declares `locateFile: () => string`, but Emscripten calls
+// it with the requested filename — hence the cast (which also types `file`).
+const wasm = await Module(/** @type {any} */ ({
+  locateFile: (/** @type {string} */ file) => path.join(wasmDir, file),
+}));
 wasm.setup();
 const { Manifold } = wasm;
 

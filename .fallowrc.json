@@ -23,7 +23,8 @@
     "@arbesk/asset-core",
     "@arbesk/wallet",
     "@arbesk/authz",
-    "@arbesk/ai-asset-gen"
+    "@arbesk/ai-asset-gen",
+    "@arbesk/cad-gen"
   ],
   "boundaries": {
     "zones": [

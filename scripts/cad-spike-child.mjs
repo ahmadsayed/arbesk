@@ -5,4 +5,6 @@ wasm.setup();
 const { Manifold } = wasm;
 Manifold.cube([1, 1, 1], true); // hold a live solid
 console.log("CHILD_READY");
-while (true) {} // hostile script: must be killable
+while (true) {
+  // Deliberate hostile spin loop — the parent must be able to kill this process.
+}
