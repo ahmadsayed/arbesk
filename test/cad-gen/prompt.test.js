@@ -1,5 +1,5 @@
 import {
-  SYSTEM_PROMPT, buildTurnMessages, buildRepairMessages, PROMPT_HELPER_NAMES,
+  SYSTEM_PROMPT, buildTurnMessages, buildRepairMessages,
 } from "@arbesk/cad-gen/backend/prompt.js";
 import { PRELUDE_NAMES } from "@arbesk/cad-gen/core/prelude.js";
 
@@ -32,14 +32,63 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).toContain("summary");
     expect(SYSTEM_PROMPT).toContain("parameters");
   });
+});
 
-  // A helper the prompt does not document will never be used, and the guard
-  // accepts exactly PRELUDE_NAMES - so an undocumented name is dead API and a
-  // documented name outside the list is a script the guard rejects.
+// The prompt IS the API documentation the model is prompted against, so the
+// helper table and PRELUDE_NAMES must agree in BOTH directions. Asserting that
+// PROMPT_HELPER_NAMES equals PRELUDE_NAMES would be vacuous - the constant is
+// built from PRELUDE_NAMES - so the documented names are parsed back out of the
+// prompt TEXT and compared as a set. An undocumented helper is dead API the
+// model will never call; a documented helper that does not exist is exactly the
+// hallucinated API call this project's static guard exists to reject.
+const HELPER_TABLE_START = "AVAILABLE HELPERS";
+const HELPER_TABLE_END = "OUTPUT";
+
+/** The helper reference table, exactly as the model receives it. */
+const helperTable = () => {
+  const start = SYSTEM_PROMPT.indexOf(HELPER_TABLE_START);
+  const end = SYSTEM_PROMPT.indexOf(HELPER_TABLE_END, start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  return SYSTEM_PROMPT.slice(start, end);
+};
+
+/**
+ * Every helper name the table documents.
+ * @remarks A documented name is one that OPENS a row, or that starts a further
+ *   column of one (after " / " as in rect / circle, or after the column gap as
+ *   in bbox / volume). Scanning every name-paren occurrence instead would flag
+ *   description words - the roundRect row's "profile (r clamped)" - as
+ *   documented helpers, which is the false positive this test exists to catch
+ *   in the other direction. The extraction deliberately binds on the prompt
+ *   text, not on a constant derived from the same source it is checking.
+ */
+const documentedHelperNames = () => [
+  ...new Set(
+    [...helperTable().matchAll(/(?:^[ \t]*|\/\s*|\s{2,})([a-zA-Z_$][\w$]*)\s*\(/gm)]
+      .map((hit) => hit[1]),
+  ),
+];
+
+describe("SYSTEM_PROMPT helper table", () => {
   it("documents every helper the prelude injects", () => {
-    expect(PROMPT_HELPER_NAMES).toEqual([...PRELUDE_NAMES]);
-    for (const name of PROMPT_HELPER_NAMES) {
-      expect(SYSTEM_PROMPT).toContain(name);
+    const documented = new Set(documentedHelperNames());
+    const missing = [...PRELUDE_NAMES].filter((name) => !documented.has(name)).sort();
+    expect(missing).toEqual([]);
+  });
+
+  it("documents no helper the prelude does not inject", () => {
+    const injected = new Set(PRELUDE_NAMES);
+    const hallucinated = documentedHelperNames()
+      .filter((name) => !injected.has(name)).sort();
+    expect(hallucinated).toEqual([]);
+  });
+
+  it("names each prelude helper as a whole word", () => {
+    // Substring matching would let "box" pass on the strength of "roundedBox".
+    const words = SYSTEM_PROMPT.match(/[a-zA-Z_$][\w$]*/g) ?? [];
+    for (const name of PRELUDE_NAMES) {
+      expect(words).toContain(name);
     }
   });
 });
@@ -81,12 +130,9 @@ describe("buildTurnMessages", () => {
     const msgs = buildTurnMessages({ prompt: "a 60mm cube" });
     expect(msgs).toHaveLength(2);
     expect(msgs[0].role).toBe("system");
-    // The brief asserted toBe("a 60mm cube") while its own implementation
-    // prefixes the "REQUEST:" label, so the two could never agree. The intent
-    // is what is pinned here: turn one carries the request and no prior design.
-    const text = String(msgs[1].content);
-    expect(text).toContain("a 60mm cube");
-    expect(text).not.toContain("CURRENT DESIGN");
+    // The controller confirmed the "REQUEST:" label stays and patched the plan,
+    // so the exact first-turn content is pinned rather than a substring of it.
+    expect(msgs[1].content).toBe("REQUEST:\na 60mm cube");
   });
 
   it("includes the prior document verbatim on later turns", () => {
