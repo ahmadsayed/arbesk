@@ -10,7 +10,7 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "filletEdges", "chamferEdges",
+  "roundedBox", "hole", "boltCircle", "spurGear", "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
 
@@ -34,6 +34,115 @@ export type FilletQuality = "draft" | "high";
 
 /** Segments a circular feature gets when neither the script nor the host says. */
 const DEFAULT_SEGMENTS = 64;
+
+/**
+ * Standard gear proportions, as multiples of the module.
+ * @remarks ISO 53 / the usual 20-degree full-depth system. Changing either is
+ *   changing the tooth form, not tuning it, so they are constants rather than
+ *   options - two gears only mesh if both use the same ones.
+ */
+const GEAR_ADDENDUM = 1;
+const GEAR_DEDENDUM = 1.25;
+/** Involute samples per flank. More is smoother and slower. */
+const GEAR_FLANK_STEPS = 8;
+
+/** The involute function, inv(a) = tan(a) - a. */
+const involute = (a: number): number => Math.tan(a) - a;
+
+interface GearRadii {
+  /** d/2 where d = module x teeth. Two gears mesh on this circle. */
+  pitch: number;
+  /** The circle the involute is generated from. */
+  base: number;
+  /** Outer radius: the tips of the teeth. */
+  tip: number;
+  /** Root radius: the valleys between them. */
+  root: number;
+}
+
+/** The four radii every spur gear is defined by. */
+function gearRadii(m: number, z: number, phi: number): GearRadii {
+  const pitch = (m * z) / 2;
+  return {
+    pitch,
+    base: pitch * Math.cos(phi),
+    tip: pitch + GEAR_ADDENDUM * m,
+    root: pitch - GEAR_DEDENDUM * m,
+  };
+}
+
+/**
+ * Half the angular width of one tooth at radius r.
+ * @remarks The involute, and the whole reason a gear is not a polygon with
+ *   pointy bits: the flank rolls on the base circle, so the tooth is widest at
+ *   the base circle and narrows toward the tip by exactly inv(a) - inv(phi).
+ *   That taper is what lets two gears of equal module and pressure angle turn
+ *   together at a constant ratio. A trapezoid - the obvious guess - does not,
+ *   and looks almost right on screen while being unusable.
+ */
+function halfToothAngle(r: number, radii: GearRadii, z: number, phi: number): number {
+  const clamped = Math.max(r, radii.base);
+  const alpha = Math.acos(Math.min(1, radii.base / clamped));
+  return Math.PI / (2 * z) + involute(phi) - involute(alpha);
+}
+
+/**
+ * One tooth's outline, counter-clockwise, from its leading root to its trailing one.
+ * @remarks Below the base circle there is no involute, so the flank continues
+ *   radially down to the root - the standard approximation, and why the root
+ *   land is a plain arc.
+ */
+function toothPoints(
+  i: number,
+  z: number,
+  phi: number,
+  radii: GearRadii,
+  steps: number,
+): number[][] {
+  const pitchAngle = (2 * Math.PI) / z;
+  const centre = i * pitchAngle;
+  const at = (r: number, a: number): number[] => [r * Math.cos(a), r * Math.sin(a)];
+  const rootAngle = halfToothAngle(radii.base, radii, z, phi);
+  const radiusAt = (s: number): number =>
+    radii.base + (radii.tip - radii.base) * (s / steps);
+  const pts: number[][] = [at(radii.root, centre - rootAngle)];
+
+  for (let s = 0; s <= steps; s++) {
+    pts.push(at(radiusAt(s), centre - halfToothAngle(radiusAt(s), radii, z, phi)));
+  }
+  pts.push(at(radii.tip, centre));
+  for (let s = steps; s >= 0; s--) {
+    pts.push(at(radiusAt(s), centre + halfToothAngle(radiusAt(s), radii, z, phi)));
+  }
+  pts.push(at(radii.root, centre + rootAngle), at(radii.root, centre + pitchAngle / 2));
+  return pts;
+}
+
+/**
+ * Rejects a gear spec the kernel cannot build.
+ * @remarks A bore at or beyond the root circle would leave nothing to hold the
+ *   teeth, and the result would be a ring rather than the gear that was asked
+ *   for - so it is refused by name rather than silently returned.
+ */
+function assertGearSpec(m: number, z: number, thickness: number, bore: number, root: number): void {
+  if (!(m > 0)) throw new Error("spurGear needs a positive module");
+  if (!(z >= 3)) throw new Error("spurGear needs at least 3 teeth");
+  if (!(thickness > 0)) throw new Error("spurGear needs a positive thickness");
+  if (bore > 0 && bore / 2 >= root) {
+    throw new Error("spurGear: a " + bore + " bore does not fit inside the root diameter of " +
+      (2 * root).toFixed(2));
+  }
+}
+
+/** The closed 2D outline of a spur gear, as [x, y] millimetre points. */
+function spurOutlinePoints(m: number, z: number, phi: number, steps: number): number[][] {
+  const radii = gearRadii(m, z, phi);
+  const points: number[][] = [];
+  for (let i = 0; i < z; i++) {
+    for (const p of toothPoints(i, z, phi, radii, steps)) points.push(p);
+  }
+  return points;
+}
 
 export interface PreludeOptions {
   /**
@@ -259,6 +368,30 @@ export function buildPrelude(
         });
       }
       return out;
+    },
+
+    /**
+     * A spur gear, centred on the origin and extruded along Z.
+     * @remarks Realises the involute profile so the model never writes the tooth
+     *   trigonometry itself. The failure this replaces was a gear whose teeth
+     *   were trapezoids: it looked plausible and meshed with nothing.
+     *   To mesh, two gears need the SAME module and pressure angle, axes
+     *   parallel, at centre distance (module x (z1 + z2)) / 2.
+     */
+    spurGear: (opts: any = {}) => {
+      const o = opts ?? {};
+      const phi = ((o.pressureAngle ?? 20) * Math.PI) / 180;
+      const bore = o.bore ?? 0;
+      const radii = gearRadii(o.module, o.teeth, phi);
+      assertGearSpec(o.module, o.teeth, o.thickness, bore, radii.root);
+      const solid = Manifold.extrude(
+        CrossSection.ofPolygons([spurOutlinePoints(o.module, o.teeth, phi, o.steps ?? GEAR_FLANK_STEPS)]),
+        o.thickness, 0, 0, [1, 1], true,
+      );
+      if (!(bore > 0)) return solid;
+      return solid.subtract(
+        Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
+      );
     },
 
     /**

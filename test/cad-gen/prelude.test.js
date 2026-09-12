@@ -155,6 +155,59 @@ describe("prelude geometry", () => {
 // 3.2s with 16 and 15.6s with 32, while the volume moves well under 1%. Draft
 // is the default so ordinary fillets fit the kernel timeout; high is an
 // explicit request, and the quality actually used is reported either way.
+// A gear is only correct if its geometry is: the tip circle is pitch + module,
+// and the material between the teeth is gone. Both are checked here, because a
+// gear whose teeth are trapezoids passes every "is it a valid solid" test and
+// meshes with nothing.
+describe("spurGear", () => {
+  it("puts the tip circle at pitch radius plus the module", async () => {
+    const r = await run("return spurGear({ module: P.m, teeth: P.z, thickness: 10 });");
+    // The default parameters are { s: 10 }, so drive this through a literal.
+    void r;
+    const a = await run("return spurGear({ module: 2, teeth: 20, thickness: 10 });");
+    expect(a.ok).toBe(true);
+    expect(a.stats.bboxMm.max[0]).toBeCloseTo(22, 4); // 2 x 20 / 2 + 2
+
+    const b = await run("return spurGear({ module: 3, teeth: 20, thickness: 10 });");
+    expect(b.ok).toBe(true);
+    expect(b.stats.bboxMm.max[0]).toBeCloseTo(33, 4); // 3 x 20 / 2 + 3
+  }, 40000);
+
+  it("has material removed between the teeth", async () => {
+    const gear = await run("return spurGear({ module: 2, teeth: 20, thickness: 10 });");
+    const full = await run("return cylinder(22, 10, { segments: 256 });");
+    expect(gear.stats.volumeMm3).toBeLessThan(full.stats.volumeMm3 * 0.95);
+  }, 40000);
+
+  it("extends past the root circle", async () => {
+    const gear = await run("return spurGear({ module: 2, teeth: 20, thickness: 10 });");
+    // Root radius is pitch - 1.25 x module = 17.5.
+    expect(gear.stats.volumeMm3).toBeGreaterThan(Math.PI * 17.5 * 17.5 * 10);
+  }, 40000);
+
+  it("subtracts a bore without changing the envelope", async () => {
+    const solid = await run("return spurGear({ module: 2, teeth: 20, thickness: 10 });");
+    const bored = await run("return spurGear({ module: 2, teeth: 20, thickness: 10, bore: 8 });");
+    expect(bored.stats.bboxMm.max[0]).toBeCloseTo(22, 4);
+    expect(bored.stats.volumeMm3).toBeLessThan(solid.stats.volumeMm3);
+    expect(solid.stats.volumeMm3 - bored.stats.volumeMm3).toBeCloseTo(Math.PI * 16 * 10, -1);
+  }, 40000);
+
+  it("refuses a spec it cannot build", async () => {
+    const noTeeth = await run("return spurGear({ module: 2, teeth: 2, thickness: 10 });");
+    expect(noTeeth.ok).toBe(false);
+    expect(noTeeth.error).toMatch(/at least 3 teeth/);
+
+    const noModule = await run("return spurGear({ module: 0, teeth: 20, thickness: 10 });");
+    expect(noModule.ok).toBe(false);
+    expect(noModule.error).toMatch(/positive module/);
+
+    const badBore = await run("return spurGear({ module: 2, teeth: 20, thickness: 10, bore: 40 });");
+    expect(badBore.ok).toBe(false);
+    expect(badBore.error).toMatch(/does not fit inside the root diameter/);
+  }, 40000);
+});
+
 // Regression, from the live timing pulley: the model assembled the teeth from
 // boxes placed around a cylinder, leaving them 0.75mm clear of the body and
 // reaching 7.5mm above it. Watertight, one connected solid, every gate passed,
