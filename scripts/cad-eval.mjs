@@ -13,8 +13,11 @@
  *   bun scripts/cad-eval.mjs --file <scenarios.json>
  *   ... [--out <dir>]        (default: test-results/cad-eval, which is gitignored)
  *
- * The default output directory is inside the project so the renders are easy to
- * browse - open test-results/cad-eval/ and look at the PNGs.
+ * Each run gets its OWN numbered directory inside the output root -
+ * <root>/attempt#1, <root>/attempt#2, ... - so a gallery accumulates as the
+ * prelude, the prompt and the fidelity settings change, and a later attempt can
+ * be compared against an earlier one instead of overwriting it. The run prints
+ * the directory it wrote to; open it and look at the PNGs.
  *
  * Reads DEEPSEEK_API_KEY from the project .env. Runs the kernel IN PROCESS with
  * no wall-clock cap, so a pathological part will simply take a long time: this
@@ -366,6 +369,26 @@ function writeGlb(file, mesh) {
 const DEFAULT_OUT_DIR = path.join(PROJECT_ROOT, "test-results", "cad-eval");
 
 /**
+ * Creates and returns the next free `attempt#N` directory under `root`.
+ * @remarks Never reuses a number, so an earlier attempt stays on disk to compare
+ *   against. The counter is derived from what is already there rather than kept
+ *   in a file, so deleting a gallery resets it and nothing can drift.
+ * @param {string} root Gallery root, created if absent.
+ * @returns {string} Absolute path to the freshly created run directory.
+ */
+function nextAttemptDir(root) {
+  fs.mkdirSync(root, { recursive: true });
+  const taken = new Set(fs.readdirSync(root));
+  for (let n = 1; ; n++) {
+    const name = "attempt#" + n;
+    if (taken.has(name)) continue;
+    const dir = path.join(root, name);
+    fs.mkdirSync(dir);
+    return dir;
+  }
+}
+
+/**
  * Splits `--out <dir>` out of argv.
  * @param {string[]} argv Arguments after the script path.
  * @returns {{ outDir: string, rest: string[] }} Output directory and the rest.
@@ -406,7 +429,8 @@ async function main() {
   }
   const env = loadEnv(path.join(PROJECT_ROOT, ".env"));
   if (!env.DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY missing from .env");
-  fs.mkdirSync(outDir, { recursive: true });
+  const runDir = nextAttemptDir(outDir);
+  console.log("run directory: " + runDir);
 
   // manifold.d.ts declares locateFile as zero-arity while Emscripten calls it WITH
   // the filename, so the typed config rejects a correct callback (TS2322). Type the
@@ -427,9 +451,9 @@ async function main() {
   });
 
   for (const scenario of scenariosFrom(rest)) {
-    await runScenario({ generator, kernel, outDir, scenario });
+    await runScenario({ generator, kernel, outDir: runDir, scenario });
   }
-  console.log("\nrenders written to " + outDir);
+  console.log("\nrenders written to " + runDir);
 }
 
 /**
