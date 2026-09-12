@@ -7,6 +7,8 @@ import type { CadDesign, TokenUsage } from "../types.ts";
 import { CONTRACT_VERSION, PRELUDE_VERSION } from "../core/contract.ts";
 import { PRELUDE_NAMES } from "../core/prelude.ts";
 import { parseDesign } from "../core/document.ts";
+import { attributionsFor } from "../core/attribution.ts";
+import type { Attribution } from "../core/attribution.ts";
 import { validateStatic } from "./validate.ts";
 import { createDeepSeekClient } from "./deepseek.ts";
 import { buildTurnMessages, buildRepairMessages } from "./prompt.ts";
@@ -56,6 +58,14 @@ export interface CadDiagnostics {
 export interface CadGenerateResult {
   design: CadDesign;
   runtime: { contractVersion: number; preludeVersion: string };
+  /**
+   * Credits owed for any ported design this part derives from.
+   * @remarks Computed from the helpers the script CALLS, never from the model,
+   *   so it cannot be forgotten or over-claimed. Empty when nothing licensed is
+   *   involved - standard dimensions and our own maths are facts, not works.
+   *   This is the field the UI shows the user.
+   */
+  attribution: Attribution[];
   diagnostics: CadDiagnostics;
 }
 
@@ -102,6 +112,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
       return {
         design: { ...outcome.design, turn: (input.priorDesign?.turn ?? 0) + 1 },
         runtime: { contractVersion: CONTRACT_VERSION, preludeVersion: PRELUDE_VERSION },
+        attribution: attributionsFor(outcome.design.code),
         diagnostics: {
           attempts: outcome.attempts,
           durationMs: Date.now() - started,

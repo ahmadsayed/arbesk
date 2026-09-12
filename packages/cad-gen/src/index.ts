@@ -15,6 +15,8 @@ export type {
 export {
   parseDesign, validateParameterOverrides, referencedIdentifiers,
 } from "./core/document.ts";
+export { ATTRIBUTED_HELPERS, attributionsFor } from "./core/attribution.ts";
+export type { Attribution } from "./core/attribution.ts";
 export { guardScript } from "./core/guard.ts";
 export type { GuardResult } from "./core/guard.ts";
 export { evaluateStaticGates, evaluateKernelGates } from "./core/gates.ts";

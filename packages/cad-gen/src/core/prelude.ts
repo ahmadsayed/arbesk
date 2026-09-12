@@ -543,7 +543,10 @@ export function buildPrelude(
      *   and still not a stand - a V-wedge, a flat panel with a fin. The profile
      *   is 91 hand-tuned points; there is nothing to infer and nothing to get
      *   wrong, so it is quoted.
-     *   ATTRIBUTION IS REQUIRED: see ATTRIBUTED_HELPERS in ./attribution.ts.
+     *   LICENCE: ported from DrLex0's SmartPhoneHolder, which is CC-BY. The
+     *   credit is declared in ATTRIBUTED_HELPERS (./attribution.ts) and returned
+     *   with every design that calls this, for the UI to show. Do not remove that
+     *   entry: without it this helper produces a derivative work with no credit.
      *   The unit is one solid - a channel cut through a body - and nothing is
      *   assembled, which is why it cannot come apart.
      * @param opts thickness (phone gap, mm), lift (how high the phone sits),
