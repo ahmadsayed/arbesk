@@ -1,6 +1,16 @@
 import { runValidation } from "@arbesk/cad-gen/backend/validate-runner.js";
 
-const OPTS = { timeoutMs: 20000, maxTriangles: 200000 };
+// These assert the prelude's GEOMETRY PRECISION, so they run at delivery
+// fidelity rather than at the validation profile: validation trades
+// tessellation for speed on purpose, and an 8-segment 4mm hole is about 10%
+// off the analytic volume by design. The validation profile has its own test.
+const OPTS = {
+  timeoutMs: 20000,
+  maxTriangles: 200000,
+  segments: 64,
+  minAngle: 10,
+  minEdgeLength: 1,
+};
 const design = (code) => ({ code, parameters: { s: { value: 10, unit: "mm" } }, summary: "" });
 const run = (code) => runValidation(design(code), OPTS);
 
@@ -145,6 +155,41 @@ describe("prelude geometry", () => {
 // 3.2s with 16 and 15.6s with 32, while the volume moves well under 1%. Draft
 // is the default so ordinary fillets fit the kernel timeout; high is an
 // explicit request, and the quality actually used is reported either way.
+// The validation pass deliberately runs coarse. What it must still get right is
+// everything validation actually asks: a valid, non-empty solid of the right
+// size. What it must NOT be trusted for is precision - see the caveat on
+// VALIDATION_FIDELITY.
+describe("validation fidelity profile", () => {
+  const coarse = (code) => runValidation(design(code), {
+    timeoutMs: 20000,
+    maxTriangles: 200000,
+    segments: 0,
+    minAngle: 20,
+    minEdgeLength: 2,
+  });
+
+  it("keeps the outer dimensions exactly", async () => {
+    const r = await coarse("const b = box(80, 60, 8);\nreturn hole(b, { diameter: 5, axis: 'z' });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bboxMm.min[0]).toBeCloseTo(-40, 6);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(40, 6);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(4, 6);
+  });
+
+  it("reports a plausible volume", async () => {
+    const r = await coarse("const b = box(80, 60, 8);\nreturn hole(b, { diameter: 5, axis: 'z' });");
+    const exact = 80 * 60 * 8 - Math.PI * 2.5 * 2.5 * 8;
+    // Within 2%: a coarse hole is a polygon, not a circle.
+    expect(Math.abs(r.stats.volumeMm3 - exact) / exact).toBeLessThan(0.02);
+  });
+
+  it("still refuses an impossible radius", async () => {
+    const r = await coarse("const p = box(20, 20, 1);\nreturn filletEdges(p, 5);");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/too large/);
+  });
+});
+
 describe("fillet quality", () => {
   it("defaults to draft and reports it", async () => {
     const r = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5);");

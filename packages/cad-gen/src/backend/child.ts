@@ -15,6 +15,35 @@ interface ChildRequest {
   design: CadDesign;
   maxTriangles: number;
   wasmDir: string;
+  /** Resolution controls; see VALIDATION_FIDELITY in validate-runner.ts. */
+  segments?: number;
+  minAngle?: number;
+  minEdgeLength?: number;
+}
+
+/**
+ * Applies the request's resolution controls to a loaded module.
+ * @remarks These are module-level defaults read by the primitive constructors,
+ *   so they must be set before the script builds anything. Extracted from
+ *   main() to keep its branching - and the change-risk score the pre-commit
+ *   gate enforces - down. The optional calls are guarded because a host may
+ *   inject a bare module with no resolution API.
+ */
+function applyResolution(module: ManifoldModule, req: ChildRequest): void {
+  applyControl(module.setMinCircularAngle, req.minAngle);
+  applyControl(module.setMinCircularEdgeLength, req.minEdgeLength);
+}
+
+/**
+ * Calls one resolution setter, if the request specified it and the module has it.
+ * @remarks Split out of applyResolution because the two optional guards in one
+ *   function pushed its change-risk score over the gate.
+ */
+function applyControl(
+  set: ((value: number) => void) | undefined,
+  value: number | undefined,
+): void {
+  if (value !== undefined) set?.(value);
 }
 
 /**
@@ -40,7 +69,10 @@ async function main(): Promise<void> {
   // Verified in Task 1 - see docs/superpowers/plans/cad-spike-results.md.
   (module as { setup: () => void }).setup();
 
-  const kernel = createCadKernel(module as unknown as ManifoldModule);
+  const api = module as unknown as ManifoldModule;
+  applyResolution(api, req);
+
+  const kernel = createCadKernel(api, { segments: req.segments });
   try {
     const { stats } = kernel.run(req.design);
     if (stats.triangles > req.maxTriangles) {

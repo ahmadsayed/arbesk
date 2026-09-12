@@ -60,4 +60,13 @@ export interface TokenUsage {
 export interface ManifoldModule {
   Manifold: any;
   CrossSection: any;
+  /**
+   * Adaptive circular-resolution controls.
+   * @remarks Module-level, NOT static on Manifold, despite what manifold.d.ts
+   *   implies — verified against manifold-3d 3.5.3 at runtime. Optional so a
+   *   host that only needs geometry can inject a bare module.
+   */
+  setMinCircularAngle?: (angle: number) => void;
+  setMinCircularEdgeLength?: (length: number) => void;
+  setCircularSegments?: (segments: number) => void;
 }

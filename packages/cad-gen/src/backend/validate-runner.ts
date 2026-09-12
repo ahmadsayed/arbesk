@@ -21,7 +21,28 @@ export interface RunnerOptions {
    *   binary cannot resolve node_modules from its virtual module URL.
    */
   wasmDir?: string;
+  /** Circular segments for features the script does not size. 0 = adaptive. */
+  segments?: number;
+  /** Adaptive minimum angle between segments, degrees. */
+  minAngle?: number;
+  /** Adaptive minimum segment edge length, mm. */
+  minEdgeLength?: number;
 }
+
+/**
+ * Resolution the validation pass runs at.
+ * @remarks Validation only has to answer "is this a valid, non-empty solid of
+ *   roughly the right size", and the opening's cost is dominated by
+ *   part triangles x ball vertices, so fidelity is the one lever that matters.
+ *   Measured on an 80x60x8 plate with six 5mm holes, opening r=2:
+ *   the prelude's hard-coded 64 segments takes 85.2s, the kernel's own adaptive
+ *   default 29.9s, and this 7.0s - 12x for a 0.24% volume change and an
+ *   identical bounding box. Both knobs are exactly twice the kernel defaults
+ *   (10 degrees / 1.0mm), so this is the default shape, coarser.
+ * @remarks The prelude must be told segments: 0 for this to bite - an explicit
+ *   count overrides the adaptive controls entirely.
+ */
+export const VALIDATION_FIDELITY = { segments: 0, minAngle: 20, minEdgeLength: 2 } as const;
 
 export type RunnerResult =
   | { ok: true; stats: CadStats }
@@ -203,6 +224,9 @@ export function runValidation(design: CadDesign, opts: RunnerOptions): Promise<R
     design,
     maxTriangles: opts.maxTriangles,
     wasmDir: resolveWasmDir(opts),
+    segments: opts.segments ?? VALIDATION_FIDELITY.segments,
+    minAngle: opts.minAngle ?? VALIDATION_FIDELITY.minAngle,
+    minEdgeLength: opts.minEdgeLength ?? VALIDATION_FIDELITY.minEdgeLength,
   });
   if ("error" in prepared) return Promise.resolve({ ok: false, error: prepared.error });
   const { dir } = prepared;

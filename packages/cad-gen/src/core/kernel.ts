@@ -7,7 +7,7 @@
 import type { CadDesign, CadMesh, CadStats, ManifoldModule } from "../types.ts";
 import { CadKernelError } from "../errors.ts";
 import { PRELUDE_NAMES, buildPrelude } from "./prelude.ts";
-import type { PreludeHelpers } from "./prelude.ts";
+import type { PreludeHelpers, PreludeOptions } from "./prelude.ts";
 
 export interface KernelRunResult {
   mesh: CadMesh;
@@ -145,12 +145,15 @@ function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
  * @throws CadKernelError when the script is malformed, throws, or does not
  *   return a valid Manifold.
  */
-export function createCadKernel(module: ManifoldModule): CadKernel {
+export function createCadKernel(
+  module: ManifoldModule,
+  options: PreludeOptions = {},
+): CadKernel {
   const names = [...PRELUDE_NAMES];
 
   return {
     run(design: CadDesign): KernelRunResult {
-      const helpers = buildPrelude(module);
+      const helpers = buildPrelude(module, options);
       const fn = compileScript(design.code, names);
       const result = assertManifold(
         callScript(fn, parameterValues(design), module, helpers, names),

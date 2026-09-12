@@ -32,6 +32,23 @@ export interface PreludeHelpers {
  */
 export type FilletQuality = "draft" | "high";
 
+/** Segments a circular feature gets when neither the script nor the host says. */
+const DEFAULT_SEGMENTS = 64;
+
+export interface PreludeOptions {
+  /**
+   * Circular segments for every feature the script does not size itself.
+   * @remarks 0 hands the decision to the kernel's adaptive default, which is
+   *   derived from a maximum angle and a minimum edge length. The old
+   *   hard-coded 64 stays the default because it is the delivery quality, but
+   *   it is 4x what the kernel picks for a 2.5mm hole, and - because an
+   *   explicit count OVERRIDES the adaptive settings - passing it made every
+   *   host-side fidelity control inert. A host trading fidelity for speed
+   *   passes 0 here and sets the adaptive controls on the module.
+   */
+  segments?: number;
+}
+
 /** Ball tessellation per quality level. */
 const BALL_SEGMENTS: Record<FilletQuality, number> = { draft: 16, high: 32 };
 
@@ -84,10 +101,17 @@ function alignToAxis(solid: any, axis: unknown): any {
  * Builds the helper set bound to a loaded Manifold module.
  * @param module A loaded manifold-3d toplevel (Manifold + CrossSection).
  */
-export function buildPrelude(module: ManifoldModule): PreludeHelpers {
+export function buildPrelude(
+  module: ManifoldModule,
+  options: PreludeOptions = {},
+): PreludeHelpers {
   lastFilletMode = undefined;
   lastFilletQuality = undefined;
   const { Manifold, CrossSection } = module;
+
+  /** One feature's segment count: the script's choice, else the host's. */
+  const segmentsFor = (featureOpts: any): number =>
+    featureOpts?.segments ?? options.segments ?? DEFAULT_SEGMENTS;
 
   /** Cuts one axis-aligned hole; the two in-plane coordinates come from opts.at. */
   const cutHole = (part: any, opts: any): any => {
@@ -98,7 +122,7 @@ export function buildPrelude(module: ManifoldModule): PreludeHelpers {
     const span = box.max[a] - box.min[a];
     const depth = through ? span * 2 : (opts.depth ?? span);
     const cutter = alignToAxis(
-      Manifold.cylinder(depth, diameter / 2, diameter / 2, 64, true), axis,
+      Manifold.cylinder(depth, diameter / 2, diameter / 2, segmentsFor(opts), true), axis,
     );
     const inPlane = a === 0 ? [1, 2] : a === 1 ? [0, 2] : [0, 1];
     const centre: [number, number, number] = [0, 0, 0];
@@ -140,20 +164,20 @@ export function buildPrelude(module: ManifoldModule): PreludeHelpers {
     const radius = Math.max(0, Math.min(r, Math.min(w, d) / 2));
     if (radius === 0) return CrossSection.square([w, d], true);
     return CrossSection.square([w - 2 * radius, d - 2 * radius], true)
-      .offset(radius, "Round", 2, 64);
+      .offset(radius, "Round", 2, segmentsFor(undefined));
   };
 
   const helpers: Record<string, unknown> = {
     box: (w: number, d: number, h: number) => Manifold.cube([w, d, h], true),
 
     cylinder: (r: number, h: number, opts: any = {}) =>
-      Manifold.cylinder(h, r, r, opts.segments ?? 64, true),
+      Manifold.cylinder(h, r, r, segmentsFor(opts), true),
 
-    sphere: (r: number, opts: any = {}) => Manifold.sphere(r, opts.segments ?? 64),
+    sphere: (r: number, opts: any = {}) => Manifold.sphere(r, segmentsFor(opts)),
 
     rect: (w: number, d: number) => CrossSection.square([w, d], true),
 
-    circle: (r: number, opts: any = {}) => CrossSection.circle(r, opts.segments ?? 64),
+    circle: (r: number, opts: any = {}) => CrossSection.circle(r, segmentsFor(opts)),
 
     roundRect,
 
@@ -162,7 +186,7 @@ export function buildPrelude(module: ManifoldModule): PreludeHelpers {
         uniformScale(opts.scaleTop), true),
 
     revolve: (profile: any, opts: any = {}) =>
-      Manifold.revolve(profile, opts.segments ?? 64, opts.degrees ?? 360),
+      Manifold.revolve(profile, segmentsFor(opts), opts.degrees ?? 360),
 
     /**
      * Exact prismatic fillet: round the 2D profile, then extrude.
