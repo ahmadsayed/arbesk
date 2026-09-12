@@ -155,6 +155,55 @@ describe("prelude geometry", () => {
 // 3.2s with 16 and 15.6s with 32, while the volume moves well under 1%. Draft
 // is the default so ordinary fillets fit the kernel timeout; high is an
 // explicit request, and the quality actually used is reported either way.
+// Regression, from the live timing pulley: the model assembled the teeth from
+// boxes placed around a cylinder, leaving them 0.75mm clear of the body and
+// reaching 7.5mm above it. Watertight, one connected solid, every gate passed,
+// and unusable. A toothed profile is ONE contour, so the teeth cannot detach.
+describe("polygon", () => {
+  it("extrudes a closed contour to the expected volume", async () => {
+    const r = await run("return extrude(polygon([[0,0],[10,0],[10,10],[0,10]]), 5);");
+    expect(r.ok).toBe(true);
+    expect(r.stats.volumeMm3).toBeCloseTo(500, 6);
+  });
+
+  it("cuts a bore from an enclosed contour", async () => {
+    const code = [
+      "const outer = [[0,0],[20,0],[20,20],[0,20]];",
+      "const bore = [[5,5],[15,5],[15,15],[5,15]];",
+      "return extrude(polygon([outer, bore]), 5);",
+    ].join("\n");
+    const r = await run(code);
+    expect(r.ok).toBe(true);
+    expect(r.stats.volumeMm3).toBeCloseTo((400 - 100) * 5, 6);
+  });
+
+  it("reaches the outer radius for a toothed outline", async () => {
+    const code = [
+      "const pts = [];",
+      "const step = (2 * Math.PI) / 20;",
+      "for (let i = 0; i < 20; i++) {",
+      "  const a0 = i * step;",
+      "  for (const frac of [0, 0.25, 0.5, 0.75]) {",
+      "    const r = (frac === 0.25 || frac === 0.5) ? 15 : 13.5;",
+      "    pts.push([r * Math.cos(a0 + step * frac), r * Math.sin(a0 + step * frac)]);",
+      "  }",
+      "}",
+      "return extrude(polygon(pts), 10);",
+    ].join("\n");
+    const r = await run(code);
+    expect(r.ok).toBe(true);
+    // A 20-tooth outline of rOut 15 / rIn 13.5 has area ~637.28.
+    expect(r.stats.volumeMm3).toBeCloseTo(637.28 * 10, -1);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(15, 1);
+  });
+
+  it("refuses a contour with fewer than three points", async () => {
+    const r = await run("return extrude(polygon([[0,0],[10,0]]), 5);");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/at least 3 points/);
+  });
+});
+
 // The validation pass deliberately runs coarse. What it must still get right is
 // everything validation actually asks: a valid, non-empty solid of the right
 // size. What it must NOT be trusted for is precision - see the caveat on

@@ -9,7 +9,7 @@ import type { ManifoldModule } from "../types.ts";
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
-  "rect", "circle", "roundRect", "extrude", "revolve",
+  "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -87,6 +87,31 @@ function axisIndex(axis: unknown): 0 | 1 | 2 {
 function uniformScale(scale: unknown): [number, number] {
   if (typeof scale === "number") return [scale, scale];
   return Array.isArray(scale) ? [scale[0], scale[1]] : [1, 1];
+}
+
+/**
+ * Accepts one contour or many, and returns the many-form the kernel wants.
+ * @remarks A contour is a list of [x, y] pairs; a set of contours is a list of
+ *   those. So the test is whether the first element is itself a point.
+ */
+function normaliseContours(points: any[]): any[] {
+  const first = points[0];
+  return Array.isArray(first) && typeof first[0] === "number" ? [points] : points;
+}
+
+/**
+ * Rejects a contour the kernel cannot triangulate.
+ * @remarks The count is per CONTOUR, not of the outer list: two contours of four
+ *   points is six elements but only two of them are contours, so checking the
+ *   outer length rejects a perfectly good profile with a bore.
+ * @throws Error when any contour has fewer than three points.
+ */
+function assertContours(contours: any[]): void {
+  for (const contour of contours) {
+    if (!Array.isArray(contour) || contour.length < 3) {
+      throw new Error("polygon needs at least 3 points per contour");
+    }
+  }
 }
 
 /** Rotates a Z-aligned solid onto the requested axis. */
@@ -176,6 +201,26 @@ export function buildPrelude(
     sphere: (r: number, opts: any = {}) => Manifold.sphere(r, segmentsFor(opts)),
 
     rect: (w: number, d: number) => CrossSection.square([w, d], true),
+
+    /**
+     * Builds a 2D profile from a point list, ready for extrude or revolve.
+     * @remarks The primitive for any part whose cross-section is a CUSTOM
+     *   OUTLINE: gear and sprocket teeth, a cam, a pulley, a bracket that is not
+     *   a rectangle. There is no way to assemble those from boxes around a
+     *   cylinder without getting the placement arithmetic wrong, and a tooth
+     *   that floats a fraction of a millimetre off the body still produces a
+     *   watertight solid that passes every gate - measured on a live timing
+     *   pulley, whose teeth sat 0.75mm clear of the body and reached above it.
+     *   Pass one contour, or several when the profile has holes: the default
+     *   even-odd fill rule makes a contour enclosed by another a hole, which is
+     *   how a bore is drawn.
+     */
+    polygon: (points: any, opts: any = {}) => {
+      if (!Array.isArray(points)) throw new Error("polygon needs a list of [x, y] points");
+      const contours = normaliseContours(points);
+      assertContours(contours);
+      return CrossSection.ofPolygons(contours, opts.fillRule ?? "EvenOdd");
+    },
 
     circle: (r: number, opts: any = {}) => CrossSection.circle(r, segmentsFor(opts)),
 
