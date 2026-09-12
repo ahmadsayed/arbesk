@@ -26,17 +26,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import Module from "manifold-3d";
-import { createCadGenerator } from "../packages/cad-gen/src/backend/index.ts";
-import { createCadKernel } from "../packages/cad-gen/src/core/kernel.ts";
 import { buildPrelude, PRELUDE_NAMES } from "../packages/cad-gen/src/core/prelude.ts";
+import { meshToGlb, meshTo3mf } from "../packages/cad-gen/src/core/export/index.ts";
+import { PROJECT_ROOT, cadGeneratorFrom, loadCadKernel, loadEnv } from "./lib/cad-harness.mjs";
 
 /** @typedef {{ positions: Float32Array, indices: Uint32Array }} Mesh */
 /** @typedef {{ width?: number, height?: number, dir?: number[], tint?: number[],
  *   frame?: { centre: number[], extent: number } }} RenderOptions */
 
-const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
-const WASM_DIR = path.join(PROJECT_ROOT, "node_modules", "manifold-3d");
 
 // ---------------------------------------------------------------- environment
 
@@ -45,20 +42,6 @@ const WASM_DIR = path.join(PROJECT_ROOT, "node_modules", "manifold-3d");
  * @param {string} file Absolute path to the env file.
  * @returns {Record<string, string>} Key/value pairs, quotes stripped.
  */
-function loadEnv(file) {
-  /** @type {Record<string, string>} */
-  const env = {};
-  if (!fs.existsSync(file)) return env;
-  for (const raw of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0) continue;
-    env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-  }
-  return env;
-}
-
 // ------------------------------------------------------------------ PNG output
 
 const CRC_TABLE = (() => {
@@ -458,67 +441,28 @@ function renderComponents(file, meshes, tints, opts) {
   return writePng(file, width, height, out);
 }
 
-// ----------------------------------------------------------------------- GLB
+// ----------------------------------------------------------------- GLB / 3MF
 
-/** Column-major mm (Z-up) -> m (Y-up), applied on the node matrix, never baked. */
-const GLB_MATRIX = [0.001, 0, 0, 0, 0, 0, -0.001, 0, 0, 0.001, 0, 0, 0, 0, 0, 1];
-
-/**
- * @param {Buffer} buf Any buffer.
- * @param {number} fill Pad byte.
- * @returns {Buffer} The buffer padded to a 4-byte boundary.
- */
-function pad4(buf, fill) {
-  const rem = buf.length % 4;
-  return rem ? Buffer.concat([buf, Buffer.alloc(4 - rem, fill)]) : buf;
-}
+// Export goes through the SHARED core exporters, not a local writer. This file
+// used to carry its own 40-line GLB encoder, which is precisely the drift the
+// shared core exists to prevent: it wrote no normals, no design sidecar, and
+// nothing tied it to the code the browser worker will run. meshToGlb and
+// meshTo3mf are the same two functions the client calls, so a file this harness
+// produces is byte-comparable with one the client produces.
 
 /**
- * Writes a mesh as a binary glTF.
- * @param {string} file Destination path.
+ * Writes a mesh as GLB and 3MF, design document embedded in both.
+ * @param {string} stem Destination path without extension.
  * @param {Mesh} mesh Mesh in millimetres, Z-up.
- * @returns {number} Bytes written.
+ * @param {any} design The design document that produced the mesh.
+ * @returns {{ glb: number, threeMf: number }} Bytes written for each format.
  */
-function writeGlb(file, mesh) {
-  const nv = mesh.positions.length / 3;
-  const ni = mesh.indices.length;
-  const posBuf = Buffer.from(mesh.positions.buffer, mesh.positions.byteOffset, mesh.positions.byteLength);
-  const idxBuf = Buffer.from(mesh.indices.buffer, mesh.indices.byteOffset, mesh.indices.byteLength);
-  const bin = pad4(Buffer.concat([posBuf, idxBuf]), 0);
-  const { min, max } = boundsOf(mesh);
-
-  const gltf = {
-    asset: { version: "2.0", generator: "arbesk cad-eval harness" },
-    scene: 0,
-    scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: "part", matrix: GLB_MATRIX }],
-    meshes: [{ name: "part", primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
-    materials: [{ name: "cad", pbrMetallicRoughness: { baseColorFactor: [0.8, 0.82, 0.86, 1], metallicFactor: 0.1, roughnessFactor: 0.45 } }],
-    accessors: [
-      { bufferView: 0, componentType: 5126, count: nv, type: "VEC3", min, max },
-      { bufferView: 1, componentType: 5125, count: ni, type: "SCALAR" },
-    ],
-    bufferViews: [
-      { buffer: 0, byteOffset: 0, byteLength: nv * 12, target: 34962 },
-      { buffer: 0, byteOffset: nv * 12, byteLength: ni * 4, target: 34963 },
-    ],
-    buffers: [{ byteLength: bin.length }],
-  };
-
-  const json = pad4(Buffer.from(JSON.stringify(gltf), "utf8"), 0x20);
-  const header = Buffer.alloc(12);
-  header.write("glTF", 0, "ascii");
-  header.writeUInt32LE(2, 4);
-  header.writeUInt32LE(12 + 16 + json.length + bin.length, 8);
-  const jsonHead = Buffer.alloc(8);
-  jsonHead.writeUInt32LE(json.length, 0);
-  jsonHead.write("JSON", 4, "ascii");
-  const binHead = Buffer.alloc(8);
-  binHead.writeUInt32LE(bin.length, 0);
-  binHead.write("BIN\0", 4, "ascii");
-  const out = Buffer.concat([header, jsonHead, json, binHead, bin]);
-  fs.writeFileSync(file, out);
-  return out.length;
+function writeExports(stem, mesh, design) {
+  const glb = meshToGlb(mesh, design);
+  const threeMf = meshTo3mf(mesh, design);
+  fs.writeFileSync(stem + ".glb", glb);
+  fs.writeFileSync(stem + ".3mf", threeMf);
+  return { glb: glb.length, threeMf: threeMf.length };
 }
 
 // ---------------------------------------------------------------------- main
@@ -608,23 +552,10 @@ async function main() {
   const runDir = nextAttemptDir(outDir);
   console.log("run directory: " + runDir);
 
-  // manifold.d.ts declares locateFile as zero-arity while Emscripten calls it WITH
-  // the filename, so the typed config rejects a correct callback (TS2322). Type the
-  // options bag as any rather than casting the callback - the same workaround, and
-  // the same reason, as backend/child.ts.
-  /** @type {any} */
-  const moduleOptions = { locateFile: (/** @type {string} */ f) => path.join(WASM_DIR, f) };
-  const module = await Module(moduleOptions);
-  module.setup();
-  // Delivery fidelity: this harness renders what the user would get, not the
-  // coarse proxy the old server-side validation pass ran at.
-  const kernel = createCadKernel(module, { segments: 64 });
-  const generator = createCadGenerator({
-    apiKey: env.DEEPSEEK_API_KEY,
-    model: env.CAD_MODEL || "deepseek-flash",
-    ...(env.DEEPSEEK_BASE_URL ? { baseUrl: env.DEEPSEEK_BASE_URL } : {}),
-    ...(env.CAD_THINKING ? { thinking: true } : {}),
-  });
+  // Kernel options, the locateFile workaround and the delivery-fidelity segment
+  // count live in the shared harness module - see scripts/lib/cad-harness.mjs.
+  const { module, kernel } = await loadCadKernel();
+  const generator = cadGeneratorFrom(env);
 
   for (const scenario of scenariosFrom(rest)) {
     await runScenario({ generator, kernel, module, outDir: runDir, scenario });
@@ -659,7 +590,8 @@ async function runScenario(ctx) {
     console.log("solids   " + solids + (solids > 1 ? "   <-- NOT ONE BODY, pieces are not joined" : ""));
     const png = path.join(outDir, stem + ".png");
     console.log("png " + png + " (" + renderComponents(png, meshes, tints, {}) + " B)");
-    console.log("glb " + writeGlb(path.join(outDir, stem + ".glb"), mesh) + " B");
+    const written = writeExports(path.join(outDir, stem), mesh, result.design);
+    console.log("glb " + written.glb + " B  3mf " + written.threeMf + " B");
   } catch (e) {
     console.log("FAILED after " + (Date.now() - started) + "ms: " + (e instanceof Error ? e.message : String(e)));
   }

@@ -15,6 +15,7 @@ should follow that package's own guide, not the root one:
 | `@arbesk/authz` | `packages/authz/` | Asset access policy (ownership + Merkle editor proof), on top of `@arbesk/wallet`. | `packages/authz/AGENTS.md` |
 | `@arbesk/asset-core` | `packages/asset-core/` | Asset engine: manifests, glTF/3MF compose/decompose, domain state, editor lists. | `packages/asset-core/AGENTS.md` + `docs/ASSET_CORE_SDK.md` |
 | `@arbesk/ai-asset-gen` | `packages/ai-asset-gen/` | 3D-model generation (mock + Tripo3D), capability-gated facade. Backend-only. | `packages/ai-asset-gen/AGENTS.md` |
+| `@arbesk/cad-gen` | `packages/cad-gen/` | Engineering CAD: prompt → Manifold JS → GLB/3MF. Environment-agnostic `core/` (guard, prelude, kernel port, exporters) plus a Node-only `backend/` (DeepSeek, prompt, static gates). | `packages/cad-gen/AGENTS.md` |
 
 `@arbesk/besk` (`packages/besk/`) is the CLI **consumer** of these SDKs (not an
 SDK itself): it composes `createArbeskCore` with its own Node adapters and
@@ -32,13 +33,15 @@ only): `--verbose`/`-v` in the CLI, `ARBESK_VERBOSE=1` everywhere.
 
 ```
 @arbesk/wallet  ──(depends on)──▶  @arbesk/authz
-@arbesk/asset-core                 (independent)
+@arbesk/cad-gen  ──(depends on)──▶  @arbesk/asset-core   (GLB serialization)
 @arbesk/ai-asset-gen               (independent, backend-only)
 ```
 
-Only `@arbesk/authz` depends on another in-repo package (it imports
-`@arbesk/wallet/merkle.js`); `@arbesk/wallet` and `@arbesk/asset-core` are
-independent of each other and of the frontend/backend trees.
+`@arbesk/authz` imports `@arbesk/wallet/merkle.js`, and `@arbesk/cad-gen`
+imports `@arbesk/asset-core/formats/gltf/gltf-core.js` for GLB serialization
+(never hand-roll a GLB container — see the cad-gen guide). `@arbesk/wallet`,
+`@arbesk/asset-core` and `@arbesk/ai-asset-gen` are independent of each other
+and of the frontend/backend trees.
 
 > **Intentional duplication — Merkle primitives.** Because `@arbesk/asset-core`
 > cannot import `@arbesk/wallet` (they are independent), `asset-core` keeps a
