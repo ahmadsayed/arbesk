@@ -10,7 +10,7 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "stack",
+  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -503,6 +503,37 @@ export function buildPrelude(
       return baseSegment(w, d, iB, 0, iM, zRiser)
         .add(baseSegment(w, d, iM, zRiser, iM, zTaper))
         .add(baseSegment(w, d, iM, zTaper, 0, GF_BASE_HEIGHT));
+    },
+
+    /**
+     * One post per [x, y] hole position, rising from a base at z = 0.
+     * @remarks Mounting a board is where placement accuracy actually matters: a
+     *   case whose posts are half a millimetre out does not fit the thing it was
+     *   measured for. Passing the hole pattern straight from the board's
+     *   published dimensions removes the per-post arithmetic, which is the step
+     *   that goes wrong. Opts: outer diameter, height, and an optional screw
+     *   diameter bored down from the top.
+     */
+    standoffs: (holes: any, opts: any = {}) => {
+      const o = opts ?? {};
+      const outer = o.diameter ?? 6;
+      const height = o.height ?? 5;
+      if (!Array.isArray(holes) || holes.length === 0) {
+        throw new Error("standoffs needs a non-empty list of [x, y] positions");
+      }
+      let out: any = null;
+      for (const [x, y] of holes) {
+        let post: any = Manifold.cylinder(height, outer / 2, outer / 2, segmentsFor(undefined), true)
+          .translate([x, y, height / 2]);
+        if (o.screw > 0) {
+          post = post.subtract(
+            Manifold.cylinder(height + 2, o.screw / 2, o.screw / 2, segmentsFor(undefined), true)
+              .translate([x, y, height / 2]),
+          );
+        }
+        out = out ? out.add(post) : post;
+      }
+      return out;
     },
 
     /**
