@@ -649,6 +649,9 @@ async function runScenario(ctx) {
     console.log("generate " + (Date.now() - started) + "ms  attempts=" +
       result.diagnostics.attempts.length + "  tokens=" + JSON.stringify(result.diagnostics.tokens));
     console.log("summary: " + result.design.summary);
+    // Written BEFORE the build, so a design whose kernel run throws is still on
+    // disk to read: that is exactly when its code is most wanted.
+    fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(result.design, null, 2));
     const buildStart = Date.now();
     const { mesh, stats } = kernel.run(result.design);
     console.log("kernel   " + (Date.now() - buildStart) + "ms  " + JSON.stringify(stats));
@@ -657,7 +660,6 @@ async function runScenario(ctx) {
     const png = path.join(outDir, stem + ".png");
     console.log("png " + png + " (" + renderComponents(png, meshes, tints, {}) + " B)");
     console.log("glb " + writeGlb(path.join(outDir, stem + ".glb"), mesh) + " B");
-    fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(result.design, null, 2));
   } catch (e) {
     console.log("FAILED after " + (Date.now() - started) + "ms: " + (e instanceof Error ? e.message : String(e)));
   }

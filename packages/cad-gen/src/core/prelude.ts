@@ -317,6 +317,32 @@ function standoffPosts(module: ManifoldModule, holes: any[], o: any, segments: n
 }
 
 /**
+ * Normalises a cutout edge to 'x-', 'x+', 'y-' or 'y+'.
+ * @remarks The axis and the sign are read INDEPENDENTLY, so '+x', 'x_max' and
+ *   'x+' all mean the same edge. Two live runs were lost to a strict spelling
+ *   check: the model reached for boardCase correctly, described the cutout
+ *   sensibly, and was refused on syntax. Refusing a spelling a caller finds
+ *   natural costs a whole attempt and teaches it nothing about the geometry.
+ * @param value Whatever the caller passed.
+ * @returns The normalised edge.
+ * @throws Error naming the value received, so a repair turn can fix it.
+ */
+function edgeOf(value: unknown): string {
+  const s = String(value ?? "").toLowerCase();
+  const axis = s.includes("x") ? "x" : s.includes("y") ? "y" : "";
+  if (axis === "") {
+    throw new Error(
+      "cutout edge must name an axis and a side, got '" + s + "'. Use 'x-' for the " +
+      "edge at x = 0, 'x+' for the edge at x = boardLength, and 'y-' / 'y+' likewise " +
+      "for the y edges. A word like 'left' does not say which board axis it means, " +
+      "and guessing it would put a port through the wrong wall.",
+    );
+  }
+  const negative = s.includes("-") || s.includes("min") || s.includes("neg");
+  return axis + (negative ? "-" : "+");
+}
+
+/**
  * A block that punches one opening through a case wall.
  * @remarks Deliberately overshoots the wall on both sides, so the opening is a
  *   through-hole rather than a pocket - a connector needs clearance outside the
@@ -334,9 +360,14 @@ function cutoutFor(
   const depth = wall + gap + 4;
   const w = c.width ?? 12;
   const h = c.height ?? 12;
-  const sill = c.sill ?? 0;
+  // Both spellings, because the model's is the better one: it writes
+  // `{ wall: 'y+', at: 66, z: 6 }` where this API originally demanded
+  // `{ edge: 'y+', sill: 6 }`. `wall` and `z` say what they are; `edge` and
+  // `sill` are jargon. Refusing the clearer vocabulary to keep a synonym count
+  // at zero costs a whole attempt and teaches the caller nothing.
+  const sill = c.z ?? c.sill ?? 0;
   const half = gap + wall;
-  switch (c.edge) {
+  switch (edgeOf(c.wall ?? c.edge)) {
     case "x-":
       return Manifold.cube([depth * 2, w, h], true).translate([-half + wall - depth, c.at, sill + h / 2]);
     case "x+":
@@ -746,7 +777,9 @@ export function buildPrelude(
      * @param opts boardLength and boardWidth (the PCB); holes as [[x, y], ...]
      *   board-relative; wall, floor, clearance, height (interior above the
      *   floor), standoff and screw; cutouts as
-     *   [{ edge: 'x-'|'x+'|'y-'|'y+', at, width, height, sill }].
+     *   [{ wall: 'x-'|'x+'|'y-'|'y+', at, width, height, z }] - `edge` and
+     *   `sill` are accepted as aliases - where `at` is the position along that
+     *   wall and `z` is how far its sill sits above the case floor.
      */
     boardCase: (opts: any = {}) => {
       const o = { ...CASE_DEFAULTS, ...(opts ?? {}) };
