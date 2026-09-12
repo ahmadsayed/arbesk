@@ -29,9 +29,11 @@ import zlib from "node:zlib";
 import Module from "manifold-3d";
 import { createCadGenerator } from "../packages/cad-gen/src/backend/index.ts";
 import { createCadKernel } from "../packages/cad-gen/src/core/kernel.ts";
+import { buildPrelude, PRELUDE_NAMES } from "../packages/cad-gen/src/core/prelude.ts";
 
 /** @typedef {{ positions: Float32Array, indices: Uint32Array }} Mesh */
-/** @typedef {{ width?: number, height?: number, dir?: number[] }} RenderOptions */
+/** @typedef {{ width?: number, height?: number, dir?: number[], tint?: number[],
+ *   frame?: { centre: number[], extent: number } }} RenderOptions */
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
 const WASM_DIR = path.join(PROJECT_ROOT, "node_modules", "manifold-3d");
@@ -179,11 +181,15 @@ function renderMesh(mesh, opts = {}) {
   const ss = 2;
   const dir = unit(opts.dir ?? [1, -1.5, 0.85]);
   const bg = [20, 22, 27];
+  const base = opts.tint ?? [214, 219, 228];
   const pos = mesh.positions;
   const idx = mesh.indices;
   const nv = pos.length / 3;
   const { min, max } = boundsOf(mesh);
-  const centre = [0, 1, 2].map((a) => (min[a] + max[a]) / 2);
+  // A shared frame is what lets several components be composited into one
+  // image: fitting each mesh to the frame on its own would draw them at
+  // different scales and they would not line up.
+  const centre = opts.frame?.centre ?? [0, 1, 2].map((a) => (min[a] + max[a]) / 2);
   const forward = [-dir[0], -dir[1], -dir[2]];
   const right = unit(cross(forward, [0, 0, 1]));
   const camUp = cross(right, forward);
@@ -202,14 +208,14 @@ function renderMesh(mesh, opts = {}) {
 
   const W = width * ss;
   const H = height * ss;
-  const scale = (Math.min(W, H) * 0.42) / extent;
+  const scale = (Math.min(W, H) * 0.42) / (opts.frame?.extent ?? extent);
   const depth = new Float64Array(W * H).fill(Infinity);
   const shade = new Float64Array(W * H);
   const lit = new Uint8Array(W * H);
   const light = unit([dir[0], dir[1], dir[2] + 0.9]);
 
   rasterize({ pos, idx, cx, cy, cz, scale, W, H, depth, shade, lit, light });
-  return { rgb: resolve({ width, height, ss, W, lit, shade, bg }), width, height };
+  return { rgb: resolve({ width, height, ss, W, lit, shade, bg, base }), width, height };
 }
 
 /**
@@ -266,7 +272,7 @@ function rasterize(s) {
 /**
  * Box-filters the supersampled buffers down to the output image.
  * @param {{ width: number, height: number, ss: number, W: number,
- *   lit: Uint8Array, shade: Float64Array, bg: number[] }} s Render state.
+ *   lit: Uint8Array, shade: Float64Array, bg: number[], base: number[] }} s Render state.
  * @returns {Buffer} Tightly packed RGB bytes.
  */
 function resolve(s) {
@@ -281,9 +287,9 @@ function resolve(s) {
         for (let sx = 0; sx < s.ss; sx++) {
           const o = (y * s.ss + sy) * s.W + (x * s.ss + sx);
           if (s.lit[o]) {
-            r += 214 * s.shade[o];
-            g += 219 * s.shade[o];
-            bl += 228 * s.shade[o];
+            r += s.base[0] * s.shade[o];
+            g += s.base[1] * s.shade[o];
+            bl += s.base[2] * s.shade[o];
           } else {
             r += s.bg[0];
             g += s.bg[1];
@@ -298,6 +304,131 @@ function resolve(s) {
     }
   }
   return rgb;
+}
+
+// ------------------------------------------------------------- reference STL
+
+/**
+ * Reads an ASCII STL into a mesh.
+ * @remarks Ground truth for comparison has to go through the SAME renderer as
+ *   our own output, or the comparison is of two different pictures rather than
+ *   of two different parts. OpenSCAD writes ASCII STL by default, and this is
+ *   the whole of that format: a facet normal line, an outer loop, three vertex
+ *   lines, an endloop.
+ * @param {string} file Path to an ASCII .stl.
+ * @returns {Mesh} Positions and triangle indices.
+ */
+function readAsciiStl(file) {
+  const text = fs.readFileSync(file, "utf8");
+  if (!/^\s*solid/.test(text)) {
+    throw new Error(file + " is not an ASCII STL (binary STL is not supported)");
+  }
+  /** @type {number[]} */
+  const positions = [];
+  /** @type {number[]} */
+  const indices = [];
+  for (const line of text.split("\n")) {
+    const m = /^\s*vertex\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)/.exec(line);
+    if (!m) continue;
+    positions.push(Number(m[1]), Number(m[2]), Number(m[3]));
+    if (positions.length % 9 === 0) {
+      const v = positions.length / 3 - 3;
+      indices.push(v, v + 1, v + 2);
+    }
+  }
+  return { positions: new Float32Array(positions), indices: new Uint32Array(indices) };
+}
+
+// ----------------------------------------------------------------- components
+
+/** Distinct tints, so a body that is not joined to the rest is obvious. */
+const TINTS = [
+  [214, 219, 228],
+  [232, 158, 138],
+  [140, 198, 162],
+  [206, 170, 228],
+  [238, 212, 140],
+];
+
+/**
+ * Splits a design into its connected solids and tints each one.
+ * @remarks A render shows SURFACES, not connectivity: two bodies a tenth of a
+ *   millimetre apart are pixel-identical to two bodies welded together, so the
+ *   eye cannot separate a joined part from a detached one. Counting the
+ *   components and colouring them differently is what makes the difference
+ *   visible - Manifold.decompose() is exact where the eye is not. Live evidence:
+ *   a timing pulley whose teeth floated 0.75mm clear of the body rendered as
+ *   "loose bars" that I had to read the code to explain, and a blind bore that
+ *   was invisible from every angle.
+ * @param {any} module A loaded manifold-3d module.
+ * @param {any} design The design document.
+ * @returns {{ solids: number, meshes: Mesh[], tints: number[][] }} What to draw.
+ */
+function componentsOf(module, design) {
+  /** @type {Record<string, number>} */
+  const values = {};
+  for (const [k, v] of Object.entries(design.parameters)) values[k] = /** @type {any} */ (v).value;
+  const fn = new Function("PARAMETERS", "P", "M", ...PRELUDE_NAMES, design.code);
+  const helpers = buildPrelude(module, { segments: 64 });
+  const part = fn(values, values, module.Manifold, ...PRELUDE_NAMES.map((n) => helpers[n]));
+  const solids = part.decompose();
+  return {
+    solids: solids.length,
+    meshes: solids.map((/** @type {any} */ s) => {
+      const raw = s.getMesh();
+      const nv = raw.vertProperties.length / raw.numProp;
+      const positions = new Float32Array(nv * 3);
+      for (let v = 0; v < nv; v++) {
+        positions[v * 3] = raw.vertProperties[v * raw.numProp];
+        positions[v * 3 + 1] = raw.vertProperties[v * raw.numProp + 1];
+        positions[v * 3 + 2] = raw.vertProperties[v * raw.numProp + 2];
+      }
+      return { positions, indices: new Uint32Array(raw.triVerts) };
+    }),
+    tints: solids.map((/** @type {any} */ _s, /** @type {number} */ i) => TINTS[i % TINTS.length]),
+  };
+}
+
+/**
+ * Draws every component into one image, each in its own tint.
+ * @param {string} file Destination PNG.
+ * @param {Mesh[]} meshes Component meshes, all in the same world frame.
+ * @param {number[][]} tints One tint per mesh.
+ * @param {RenderOptions} opts Size and view direction.
+ * @returns {number} Bytes written.
+ */
+function renderComponents(file, meshes, tints, opts) {
+  const boxes = meshes.map((m) => boundsOf(m));
+  const centre = [0, 1, 2].map((a) =>
+    (Math.min(...boxes.map((b) => b.min[a])) + Math.max(...boxes.map((b) => b.max[a]))) / 2);
+  const extent = Math.max(...boxes.flatMap((b) =>
+    [0, 1, 2].map((a) => Math.max(Math.abs(b.min[a] - centre[a]), Math.abs(b.max[a] - centre[a])))));
+  const layers = meshes.map((mesh, i) =>
+    renderMesh(mesh, { ...opts, tint: tints[i], frame: { centre, extent } }));
+  const width = layers[0].width;
+  const height = layers[0].height;
+  const out = Buffer.alloc(width * height * 3);
+  // Paint furthest-component-first so a small piece is never hidden behind a
+  // large one: a loose standoff must not be occluded by the box it fell off.
+  const order = meshes.map((m, i) => ({ i, size: m.indices.length })).sort((a, b) => b.size - a.size);
+  for (const { i } of order) {
+    const rgb = layers[i].rgb;
+    for (let p = 0; p < out.length; p += 3) {
+      if (rgb[p] !== 20 || rgb[p + 1] !== 22 || rgb[p + 2] !== 27) {
+        out[p] = rgb[p];
+        out[p + 1] = rgb[p + 1];
+        out[p + 2] = rgb[p + 2];
+      }
+    }
+  }
+  for (let p = 0; p < out.length; p += 3) {
+    if (out[p] === 0 && out[p + 1] === 0 && out[p + 2] === 0) {
+      out[p] = 20;
+      out[p + 1] = 22;
+      out[p + 2] = 27;
+    }
+  }
+  return writePng(file, width, height, out);
 }
 
 // ----------------------------------------------------------------------- GLB
@@ -423,6 +554,24 @@ const slug = (name) => name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").t
 
 async function main() {
   const { outDir, rest } = parseArgs(process.argv.slice(2));
+  // Reference mode: render a known-good STL through our own renderer so a
+  // comparison is of two PARTS, not of two different pictures.
+  if (rest[0] === "--stl") {
+    const mesh = readAsciiStl(rest[1]);
+    const stats = boundsOf(mesh);
+    const target = rest[2] ?? path.join(outDir, path.basename(rest[1]).replace(/\.stl$/i, ".png"));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    writePng(target, ...(() => {
+      const image = renderMesh(mesh, { width: 720, height: 560 });
+      return /** @type {[number, number, Buffer]} */ ([image.width, image.height, image.rgb]);
+    })());
+    console.log("reference " + rest[1]);
+    console.log("  triangles " + mesh.indices.length / 3);
+    console.log("  size mm   " + [0, 1, 2].map((a) => (stats.max[a] - stats.min[a]).toFixed(2)).join(" x "));
+    console.log("  centre mm " + [0, 1, 2].map((a) => ((stats.min[a] + stats.max[a]) / 2).toFixed(2)).join(", "));
+    console.log("  png       " + target);
+    return;
+  }
   if (rest.length === 0) {
     console.error("usage: bun scripts/cad-eval.mjs <prompt...> | --file <scenarios.json> [--out DIR]");
     process.exit(2);
@@ -451,14 +600,14 @@ async function main() {
   });
 
   for (const scenario of scenariosFrom(rest)) {
-    await runScenario({ generator, kernel, outDir: runDir, scenario });
+    await runScenario({ generator, kernel, module, outDir: runDir, scenario });
   }
   console.log("\nrenders written to " + runDir);
 }
 
 /**
  * Generates, builds, renders and reports one scenario.
- * @param {{ generator: any, kernel: any, outDir: string,
+ * @param {{ generator: any, kernel: any, module: any, outDir: string,
  *   scenario: { name: string, prompt: string } }} ctx Run context.
  * @returns {Promise<void>} Resolves once the scenario has been reported.
  */
@@ -476,9 +625,10 @@ async function runScenario(ctx) {
     const buildStart = Date.now();
     const { mesh, stats } = kernel.run(result.design);
     console.log("kernel   " + (Date.now() - buildStart) + "ms  " + JSON.stringify(stats));
-    const image = renderMesh(mesh);
+    const { solids, meshes, tints } = componentsOf(ctx.module, result.design);
+    console.log("solids   " + solids + (solids > 1 ? "   <-- NOT ONE BODY, pieces are not joined" : ""));
     const png = path.join(outDir, stem + ".png");
-    console.log("png " + png + " (" + writePng(png, image.width, image.height, image.rgb) + " B)");
+    console.log("png " + png + " (" + renderComponents(png, meshes, tints, {}) + " B)");
     console.log("glb " + writeGlb(path.join(outDir, stem + ".glb"), mesh) + " B");
     fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(result.design, null, 2));
   } catch (e) {
