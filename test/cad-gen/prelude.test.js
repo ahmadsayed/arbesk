@@ -155,6 +155,62 @@ describe("prelude geometry", () => {
 // 3.2s with 16 and 15.6s with 32, while the volume moves well under 1%. Draft
 // is the default so ordinary fillets fit the kernel timeout; high is an
 // explicit request, and the quality actually used is reported either way.
+// Gridfinity is a COMPATIBILITY standard - a base a hundredth of a millimetre
+// out does not seat in anyone else's baseplate - so the envelope is pinned here
+// rather than left to the model.
+describe("gridfinityBase", () => {
+  it("is 41.5mm across for one cell and 4.75mm tall", async () => {
+    const r = await run("return gridfinityBase({ unitsX: 1, unitsY: 1 });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(20.75, 4); // (42 - 0.5) / 2
+    expect(r.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(4.75, 4); // 0.8 + 1.8 + 2.15
+  }, 40000);
+
+  it("scales by whole 42mm cells", async () => {
+    const r = await run("return gridfinityBase({ unitsX: 2, unitsY: 3 });");
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo((2 * 42 - 0.5) / 2, 4);
+    expect(r.stats.bboxMm.max[1]).toBeCloseTo((3 * 42 - 0.5) / 2, 4);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(4.75, 4);
+  }, 40000);
+
+  it("tapers, so it is lighter than a straight prism of the top footprint", async () => {
+    const r = await run("return gridfinityBase({ unitsX: 1, unitsY: 1 });");
+    const topPrism = 41.5 * 41.5 * 4.75;
+    const bottomPrism = 35.6 * 35.6 * 4.75;
+    expect(r.stats.volumeMm3).toBeLessThan(topPrism);
+    expect(r.stats.volumeMm3).toBeGreaterThan(bottomPrism);
+  }, 40000);
+
+  // Both builders are CENTRED, so a hand-assembled bin leaves a gap - the base
+  // ends at 4.75 and a box placed at z = 5 starts at 0. stack() is the fix.
+  it("stacks a wall on the base without a gap", async () => {
+    const handRolled = await run([
+      "const base = gridfinityBase({ unitsX: 1, unitsY: 1 });",
+      "const wall = box(41.5, 41.5, 10).translate([0, 0, 10]);",
+      "return base.add(wall);",
+    ].join("\n"));
+    // Valid, and 5.25mm of daylight between the two pieces.
+    expect(handRolled.ok).toBe(true);
+    expect(handRolled.stats.bboxMm.max[2]).toBeCloseTo(15, 3);
+
+    const stacked = await run([
+      "const base = gridfinityBase({ unitsX: 1, unitsY: 1 });",
+      "const wall = box(41.5, 41.5, 10);",
+      "return stack([base, wall]);",
+    ].join("\n"));
+    expect(stacked.ok).toBe(true);
+    expect(stacked.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
+    expect(stacked.stats.bboxMm.max[2]).toBeCloseTo(14.75, 3); // 4.75 base + 10 wall
+  }, 40000);
+
+  it("refuses a fractional cell count", async () => {
+    const r = await run("return gridfinityBase({ unitsX: 0, unitsY: 1 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/at least 1/);
+  }, 40000);
+});
+
 // The centring bug, in the form the live timing pulley hit it three times: a
 // flange stacked at z = +width against a body spanning -7.5..7.5 lands clear of
 // the part. stack() lays solids end to end instead of relying on the model's

@@ -109,6 +109,7 @@ const HELPER_DOCS = [
   "hole(part, { diameter, axis, at, through })   axis 'x'|'y'|'z'; at [a,b] in-plane",
   "boltCircle(part, { count, diameter, circleDiameter, axis, at })",
   "spurGear({ module, teeth, thickness, bore?, pressureAngle? })   involute gear",
+  "gridfinityBase({ unitsX, unitsY })    standard Gridfinity base, sitting on z = 0",
   "filletEdges(part, r, { mode, quality })   rounds edges, keeps the outer size",
   "chamferEdges(part, r, { quality })    same rounding as filletEdges, no flat bevel",
   "bbox(part) -> { min, max, size }      volume(part) -> mm3",
@@ -140,6 +141,46 @@ const SOLID_METHODS = [
   "\"part.union is not a function\" and wastes the whole attempt.",
 ].join("\n");
 
+/**
+ * Dimensions of the standards these parts are built against.
+ * @remarks This is the whole reason a case or a bin can be asked for by name:
+ *   the numbers are not derivable, they are quoted from the published specs, and
+ *   a model that guesses them produces something that does not fit. It is
+ *   rendered AFTER the OUTPUT section so the helper-table lockstep test, which
+ *   parses every name-paren occurrence before it, never reads a dimension as a
+ *   helper.
+ */
+const STANDARDS = [
+  "GRIDFINITY. Compatibility is exact - a base a hundredth out does not seat in",
+  "someone else's baseplate, so use these and do not round them: 42mm grid pitch;",
+  "0.25mm clearance per side, so a 1x1 footprint is 41.5mm; height unit 7mm; bin",
+  "corner radius 3.75mm; base profile 4.75mm tall (0.8mm 45-degree taper, 1.8mm",
+  "riser, 2.15mm taper); magnet holes 6.5mm dia x 2.4mm deep and M3 screw holes",
+  "3mm dia x 6mm deep, on a 26mm square inside each cell. gridfinityBase gives",
+  "the base sitting on z = 0 - build the floor and walls directly on top of it.",
+  "The stacking lip that lets one bin carry another is the base profile mirrored,",
+  "4.75mm tall, around the top rim, and it ADDS to the nominal height.",
+  "",
+  "RASPBERRY PI. Model B family (3B, 3B+, 4B, 5): board 85 x 56mm, 1.5mm thick,",
+  "four 2.75mm holes inset 3.5mm from two edges, on a 58 x 49mm rectangle - so at",
+  "(3.5,3.5), (3.5,52.5), (61.5,3.5), (61.5,52.5). Tallest parts are the USB and",
+  "Ethernet block at about 16mm and the GPIO header at 8.5mm. Zero and Zero 2 W:",
+  "board 65 x 30mm, 2.75mm holes on a 58 x 23mm rectangle with the same 3.5mm",
+  "inset. Leave a cutout for the ports on the edge they sit on; a closed wall",
+  "across them makes the case useless.",
+  "",
+  "ARDUINO UNO R3. Board 68.58 x 53.34mm, four 3.2mm holes measured from one",
+  "corner: (13.97,2.54), (15.24,50.8), (66.04,7.62), (66.04,35.56). Cutouts are",
+  "needed for the USB-B and barrel jack on one short edge, and the headers stand",
+  "about 8.5mm above the board.",
+  "",
+  "PHONES have no standard, so pick sensible numbers and state them: a modern",
+  "handset is 70-80mm wide and 8-11mm thick with a case. A desk stand leans it",
+  "back 60-75 degrees from horizontal, with a ledge at least 12mm tall and a slot",
+  "at least 12mm wide, and it must be stable - a wide flat foot, not a thin one.",
+  "If charging access matters, leave the bottom edge open rather than closed.",
+].join("\n");
+
 const OUTPUT_SHAPE = [
   "Reply with a single JSON object and nothing else:",
   '{ "code": "<function body>", "parameters": { "<name>": { "value": <number>,',
@@ -162,9 +203,13 @@ export const SYSTEM_PROMPT = [
   "SOLID METHODS",
   SOLID_METHODS,
   "",
+  "STANDARDS",
+  STANDARDS,
+  "",
   "When a previous design is supplied, treat it as the current state: return the",
   "COMPLETE updated script, preserving everything the user did not ask to change.",
 ].join("\n");
+
 
 export interface TurnInput {
   prompt: string;

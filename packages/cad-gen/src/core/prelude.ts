@@ -10,7 +10,8 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "stack", "filletEdges", "chamferEdges",
+  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "stack",
+  "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
 
@@ -43,6 +44,27 @@ const DEFAULT_SEGMENTS = 64;
  */
 const GEAR_ADDENDUM = 1;
 const GEAR_DEDENDUM = 1.25;
+/**
+ * Gridfinity, from gridfinity.xyz/specification via the reference CadQuery
+ * generator. These are COMPATIBILITY constants: a bin whose base is a
+ * hundredth of a millimetre out does not seat in anyone else's baseplate, so
+ * they are not tunable and the numbers are quoted rather than derived.
+ */
+const GF_GRID = 42;
+/** Per-side clearance, so a 1x1 footprint is 41.5 rather than 42. */
+const GF_CLEARANCE = 0.25;
+const GF_HEIGHT_UNIT = 7;
+/** Base profile, bottom to top: 45-degree taper, riser, 45-degree taper. */
+const GF_TAPER_BOTTOM = 0.8;
+const GF_RISER = 1.8;
+const GF_TAPER_TOP = 2.15;
+const GF_BASE_HEIGHT = GF_TAPER_BOTTOM + GF_RISER + GF_TAPER_TOP;
+const GF_CORNER_RADIUS = 3.75;
+/** Magnet and M3 screw centres sit on this square within each cell. */
+const GF_HOLE_SPACING = 26;
+const GF_MAGNET_DIAMETER = 6.5;
+const GF_MAGNET_DEPTH = 2.4;
+
 /** Involute samples per flank. More is smoother and slower. */
 const GEAR_FLANK_STEPS = 8;
 
@@ -325,6 +347,39 @@ export function buildPrelude(
     return eroded.minkowskiSum(ball);
   };
 
+  /**
+   * A rounded-rect solid spanning z0 to z1.
+   * @remarks Builders here are centred, so a slab is placed by giving both ends
+   *   rather than a centre and a height - which is the arithmetic that kept
+   *   putting flanges in mid-air.
+   */
+  const slab = (w: number, d: number, r: number, z0: number, z1: number): any =>
+    Manifold.extrude(roundRect(w, d, Math.max(0, r)), z1 - z0, 0, 0, [1, 1], true)
+      .translate([0, 0, (z0 + z1) / 2]);
+
+  /**
+   * One Gridfinity base segment: the footprint inset `i0` at z0 lofted to inset
+   * `i1` at z1.
+   * @remarks A 45-degree chamfer is an OFFSET, so the corner radius has to grow
+   *   by the same amount the walls move. extrude's scaleTop cannot do that - it
+   *   scales the radius proportionally - so this lofts with the convex hull of
+   *   two thin rounded rectangles, which is exact because a rounded rectangle is
+   *   convex. Passing i0 == i1 gives the straight riser.
+   */
+  const baseSegment = (
+    w: number, d: number, i0: number, z0: number, i1: number, z1: number,
+  ): any => {
+    // The wafers sit INSIDE the segment: the lower one grows upward from z0 and
+    // the upper one ends at z1, so the hull spans exactly z0..z1. Centring them
+    // on z0 and z1 would put 0.005mm of slop on the ends, and Gridfinity has no
+    // room for slop.
+    const eps = 0.01;
+    return Manifold.hull([
+      slab(w - 2 * i0, d - 2 * i0, GF_CORNER_RADIUS - i0, z0, z0 + eps),
+      slab(w - 2 * i1, d - 2 * i1, GF_CORNER_RADIUS - i1, z1 - eps, z1),
+    ]);
+  };
+
   const roundRect = (w: number, d: number, r: number): any => {
     const radius = Math.max(0, Math.min(r, Math.min(w, d) / 2));
     if (radius === 0) return CrossSection.square([w, d], true);
@@ -423,6 +478,31 @@ export function buildPrelude(
       return solid.subtract(
         Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
       );
+    },
+
+    /**
+     * The standard Gridfinity base for a unitsX x unitsY bin, sitting on z = 0.
+     * @remarks The compatibility-critical half of a Gridfinity part: 42mm cells,
+     *   a 41.5mm footprint per cell, and the 4.75mm three-segment base profile.
+     *   Build the bin's floor and walls on top of this - the walls are plain
+     *   boxes - and add the stacking lip if the bin must carry another on top.
+     */
+    gridfinityBase: (opts: any = {}) => {
+      const o = opts ?? {};
+      const ux = o.unitsX ?? 1;
+      const uy = o.unitsY ?? ux;
+      if (!(ux >= 1) || !(uy >= 1)) {
+        throw new Error("gridfinityBase needs unitsX and unitsY of at least 1");
+      }
+      const w = ux * GF_GRID - 2 * GF_CLEARANCE;
+      const d = uy * GF_GRID - 2 * GF_CLEARANCE;
+      const iB = GF_TAPER_BOTTOM + GF_TAPER_TOP;
+      const iM = GF_TAPER_TOP;
+      const zRiser = GF_TAPER_BOTTOM;
+      const zTaper = GF_TAPER_BOTTOM + GF_RISER;
+      return baseSegment(w, d, iB, 0, iM, zRiser)
+        .add(baseSegment(w, d, iM, zRiser, iM, zTaper))
+        .add(baseSegment(w, d, iM, zTaper, 0, GF_BASE_HEIGHT));
     },
 
     /**
