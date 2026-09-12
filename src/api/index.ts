@@ -14,6 +14,7 @@ const {
 } = await import("../config.ts");
 
 import generateAssetNode from "./assets/generate-node.ts";
+import cadRoutes from "./routes/cad.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import sessionRouter from "./sessions.ts";
@@ -66,6 +67,10 @@ export default (deps: ApiDeps) => {
   // ─── Generations ──────────────────────────────────────────────────────────
 
   v1.use("/generations", generateAssetNode(core, storage));
+
+  // ─── CAD generation (code only; the client runs the kernel) ────────────────
+
+  v1.use("/cad", cadRoutes());
 
   // ─── Comments Archive ─────────────────────────────────────────────────────
 

@@ -298,3 +298,116 @@ export const gcSchema = z.object({
   maxUnpin: z.number().int().positive().optional(),
   chainId: chainIdSchema.optional(),
 });
+
+// ─── CAD generation ────────────────────────────────────────────────────────
+
+/**
+ * Largest script body accepted from a client.
+ * @remarks Matches the cap parseDesign enforces on a model reply (64 KiB), so
+ *   a document the server produced can always be echoed back to it. Smaller
+ *   and the iteration loop would reject its own output.
+ */
+const CAD_MAX_CODE_CHARS = 64 * 1024;
+
+/** Most parameters a design may declare - parseDesign's own ceiling. */
+const CAD_MAX_PARAMETERS = 40;
+
+/**
+ * Absolute ceiling on one image's base64 payload.
+ * @remarks This is a MEMORY bound, not a policy one: express.json parses the
+ *   whole body into strings before any route runs, so an unbounded field is a
+ *   hole an anonymous-in-effect request can push a heap through. The policy cap
+ *   is CAD_MAX_IMAGE_BYTES, checked in the route where it can answer 413.
+ *   12 MiB of base64 is about 9 MiB of image, comfortably above the 8 MiB
+ *   default the spec documents.
+ */
+const CAD_MAX_IMAGE_BASE64 = 12 * 1024 * 1024;
+
+/** Character ceiling on a human-readable change note. */
+const CAD_MAX_SUMMARY_CHARS = 2000;
+
+/**
+ * One millimetre dimension.
+ * @remarks Mirrors CadParameter, and deliberately as strict: unit is mm,
+ *   values are finite, and min/max are advisory bounds a UI may clamp to. The
+ *   VALUE is the only thing the kernel reads, so it is the only field that
+ *   must be a finite number - a JSON null there reaches PARAMETERS as NaN and
+ *   fails a static gate with a message about the script, not the request.
+ */
+const cadParameterSchema = z.object({
+  value: z.number().finite(),
+  unit: z.literal("mm").optional().default("mm"),
+  min: z.number().finite().optional(),
+  max: z.number().finite().optional(),
+  label: z.string().max(200).optional(),
+});
+
+/**
+ * A design document as the client echoes it back.
+ * @remarks This is the stateless-continuity payload: priorDesign carries the
+ *   prior parameter VALUES, which live outside the script. Validated here so a
+ *   malformed echo is a 400 naming the field rather than a crash inside prompt
+ *   assembly.
+ */
+const cadDesignSchema = z.object({
+  code: z.string().min(1).max(CAD_MAX_CODE_CHARS),
+  parameters: z
+    .record(cadParameterSchema)
+    .refine((p) => Object.keys(p).length > 0, "a design needs at least one parameter")
+    .refine(
+      (p) => Object.keys(p).length <= CAD_MAX_PARAMETERS,
+      "a design may declare at most " + CAD_MAX_PARAMETERS + " parameters",
+    ),
+  summary: z.string().max(CAD_MAX_SUMMARY_CHARS).optional().default(""),
+  turn: z.number().int().positive().optional(),
+});
+
+/** One attached view: base64 payload plus its mime type. */
+const cadImageSchema = z.object({
+  data: z.string().min(1).max(CAD_MAX_IMAGE_BASE64),
+  mime: z
+    .string()
+    .regex(/^image\/(png|jpeg|webp)$/, "mime must be image/png, image/jpeg or image/webp"),
+});
+
+/** One geometric-gate failure a client's kernel run reported. */
+const cadFailureSchema = z.object({
+  gate: z.string().min(1).max(64),
+  error: z.string().min(1).max(2000),
+});
+
+/**
+ * Where a design came from: an IPFS CID or an on-chain asset id.
+ * @remarks Accepted by the schema but not yet resolvable - see the route's
+ *   not-implemented branch. Kept in the contract so a client can be written
+ *   against it before the resolution path lands.
+ */
+const cadSourceRefSchema = z.union([
+  z.object({ cid: z.string().min(1).max(200) }),
+  z.object({ assetId: z.string().min(1).max(200) }),
+]);
+
+/** Server-capped by CAD_MAX_REPAIR_ATTEMPTS as well; 3 is the shipped bound. */
+const cadRepairAttempts = z.number().int().min(0).max(3);
+
+/** Body of POST /api/v1/cad/generations. */
+export const cadGenerateSchema = z.object({
+  prompt: z.string().min(1).max(4000),
+  priorDesign: cadDesignSchema.optional(),
+  sourceRef: cadSourceRefSchema.optional(),
+  images: z.array(cadImageSchema).max(4).optional(),
+  repairAttempts: cadRepairAttempts.optional(),
+});
+
+/**
+ * Body of POST /api/v1/cad/repairs.
+ * @remarks priorDesign is REQUIRED here, unlike on /generations: a repair with
+ *   nothing to repair is just a generation, and accepting it would give one
+ *   prompt two ways to reach the provider for the same money.
+ */
+export const cadRepairSchema = z.object({
+  prompt: z.string().min(1).max(4000),
+  priorDesign: cadDesignSchema,
+  failures: z.array(cadFailureSchema).min(1).max(8),
+  repairAttempts: cadRepairAttempts.optional(),
+});

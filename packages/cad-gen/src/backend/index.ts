@@ -20,6 +20,6 @@ export { generateWithRepair } from "./repair.ts";
 export type { AttemptRecord, RepairDeps, RepairOutcome } from "./repair.ts";
 export { createCadGenerator } from "./facade.ts";
 export type {
-  CadDiagnostics, CadGenerateInput, CadGenerateResult, CadGenConfig,
+  CadDiagnostics, CadFailure, CadGenerateInput, CadGenerateResult, CadGenConfig,
   CadGenerator, CadLimits,
 } from "./facade.ts";

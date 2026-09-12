@@ -133,6 +133,19 @@ const walletRelayLimiter = createLimiter({
   message: "Wallet relay rate limit exceeded.",
 });
 
+/**
+ * Hourly limiter for the CAD endpoints.
+ * @remarks This bounds bursts INSIDE the daily round quota, which is the spend
+ *   guard. One round is one paid DeepSeek call, so the default is well under
+ *   the generation limiter's: a client that repairs in a tight loop is exactly
+ *   the shape this cap exists for.
+ */
+const cadLimiter = createLimiter({
+  max: () => Number(process.env.CAD_RATE_LIMIT_MAX || 20),
+  windowMs: 60 * 60 * 1000,
+  message: "CAD request rate limit exceeded.",
+});
+
 export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
 export const unpinRateLimit = unpinLimiter.middleware;
 export const gcRateLimit = gcLimiter.middleware;
@@ -141,6 +154,7 @@ export const userResolveRateLimit = userResolveLimiter.middleware;
 export const emailOtpRequestRateLimit = emailOtpRequestLimiter.middleware;
 export const emailOtpVerifyRateLimit = emailOtpVerifyLimiter.middleware;
 export const walletRelayRateLimit = walletRelayLimiter.middleware;
+export const cadRateLimit = cadLimiter.middleware;
 
 /**
  * Generation rate-limit middleware.
@@ -163,4 +177,5 @@ export function _resetRateLimiters(): void {
   emailOtpRequestLimiter.store.resetAll();
   emailOtpVerifyLimiter.store.resetAll();
   walletRelayLimiter.store.resetAll();
+  cadLimiter.store.resetAll();
 }

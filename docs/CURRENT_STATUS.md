@@ -382,6 +382,7 @@ frontend/src/js/
 | Merkle editor collaboration | ✅ | ✅ |
 | Token burn | ✅ | ✅ |
 | Real 3D generation (Tripo3D BYOK) | ✅ text + image-to-3D, HD texture, retopo, rig & animate | ✅ |
+| Engineering CAD generation (`POST /api/v1/cad/*`, `@arbesk/cad-gen`) | ✅ server generates Manifold JS + static gates; client runs the kernel | ✅ |
 
 ### Beta blockers
 
@@ -404,7 +405,8 @@ frontend/src/js/
 |-----|-------|----------|
 | CDP email login on Hardhat | `smart-wallet-support.ts` | 🟡 Smart wallets only supported on Base Sepolia |
 | Health check endpoint | — | 🟢 Ops convenience |
-| OpenSCAD WASM | — | ⚪ Explicitly deferred |
+| OpenSCAD WASM | — | ⚪ Explicitly deferred (superseded in practice by `@arbesk/cad-gen`, which generates Manifold JS directly) |
+| Browser CAD worker (client kernel + render + repair round trip) | `packages/cad-gen` | 🟡 Milestone 2 — the two REST endpoints and the exporters it calls are done; `scripts/cad-smoke.mjs` is its reference implementation |
 
 ---
 
@@ -430,6 +432,34 @@ frontend/src/js/
 | `frontend/.env` | ❌ Not present (optional, not currently used) |
 
 Optional root `.env` kill-switch: `INDEXER_DISABLE_TESTNET=1` skips starting the Base Sepolia token indexer (see `.env.example`).
+
+#### Engineering CAD generation (`POST /api/v1/cad/*`)
+
+Server-side generation of **engineering** parts (as opposed to Tripo3D's organic
+meshes): DeepSeek writes a Manifold script plus a parameter table, the server
+runs the **static gates**, and the **client** runs the kernel, the geometry gates
+and the export. The server therefore never executes generated code, never
+returns geometry and never produces a file.
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `DEEPSEEK_API_KEY` | — | **Server-only, never served to the browser.** Unset → every CAD request is 503 `CAD_NOT_CONFIGURED` |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | OpenAI-compatible endpoint |
+| `DEEPSEEK_MODEL` | `deepseek-flash` | Reported back on every response as `provider.model` |
+| `CAD_THINKING` | off | `true`/`1`/`yes` enables provider thinking mode. Costs latency and buys nothing for well-specified parts |
+| `CAD_GENERATION_ENABLED` | unset → enabled when the key is set | `false`/`0`/`no` is the kill switch (503) |
+| `CAD_MAX_REPAIR_ATTEMPTS` | `3` | Static repair rounds inside one request; also caps a client's `repairAttempts` |
+| `CAD_DAILY_REQUEST_LIMIT` | `50` | **ROUNDS** per wallet per UTC day, **not generations**: `/generations` and `/repairs` each cost one unit, because each is one paid provider call. Persisted in `.data/cad-quota.json` |
+| `CAD_MAX_IMAGE_BYTES` | `8388608` | Largest decoded attachment; checked **before** the wallet is charged (413) |
+| `CAD_MAX_REQUEST_MS` | derived | In-flight lock TTL. The default is derived, not fixed: `attempts × 120000 + 30000` = **390 000 ms** |
+| `CAD_RATE_LIMIT_MAX` | `20` | Hourly wallet-keyed limiter, bounding bursts inside the daily round quota |
+
+`CAD_EXEC_TIMEOUT_MS` and `CAD_MAX_TRIANGLES` are **gone**: there is no
+server-side kernel to time out or to bound, so those limits moved to the client
+with the kernel. Any config or doc still naming them is stale.
+
+Every response carries `X-Cad-Quota-Limit`, `X-Cad-Quota-Remaining` and
+`X-Cad-Quota-Reset` (epoch seconds), so a UI can show "43 of 50 left today".
 
 `DEFAULT_CHAIN_ID` (root `.env`) sets the deployment default chain that anonymous chain reads follow (see `frontend/src/js/blockchain/read-contract.ts`); it falls back to Hardhat local, and `start-prod.sh --testnet` exports `84532`.
 
