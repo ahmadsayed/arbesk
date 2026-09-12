@@ -71,7 +71,8 @@ and of the frontend/backend trees.
 ```bash
 bun run build:packages   # tsc → dist/ (ESM + .d.ts); bun runs the four
                          # independent packages in parallel, then @arbesk/authz
-                         # (it type-checks against @arbesk/wallet's dist)
+                         # and @arbesk/cad-gen (they type-check against
+                         # @arbesk/wallet's and @arbesk/asset-core's dist)
 bun run typecheck        # after build (resolves @arbesk/* via workspace symlinks)
 bun run test             # jest maps @arbesk/*.js → each package's .ts source (no build step)
 ```

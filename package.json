@@ -21,7 +21,7 @@
     }
   },
   "scripts": {
-    "build:packages": "bun run --parallel --if-present --filter '@arbesk/asset-core' --filter '@arbesk/nostr' --filter '@arbesk/wallet' --filter '@arbesk/ai-asset-gen' --filter '@arbesk/cad-gen' build && bun run --if-present --filter '@arbesk/authz' build",
+    "build:packages": "bun run --parallel --if-present --filter '@arbesk/asset-core' --filter '@arbesk/nostr' --filter '@arbesk/wallet' --filter '@arbesk/ai-asset-gen' build && bun run --parallel --if-present --filter '@arbesk/authz' --filter '@arbesk/cad-gen' build",
     "prestart": "bun run build:packages",
     "pretypecheck": "bun run build:packages",
     "pretypecheck:frontend": "bun run build:packages",
