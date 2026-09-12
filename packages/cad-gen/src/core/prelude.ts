@@ -10,7 +10,8 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "stack",
+  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
+  "cupRack", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -43,6 +44,36 @@ const DEFAULT_SEGMENTS = 64;
  *   is a fair signal that the defaults were doing work the caller's spec should
  *   do in one place.
  */
+/** Defaults for railHook, every one overridable. */
+const HOOK_DEFAULTS = {
+  railDiameter: 25, wall: 5, width: 20, clearance: 0.4, drop: 40, stem: 9,
+};
+
+/** Defaults for cupRack, every one overridable. */
+const RACK_DEFAULTS = {
+  cupDiameter: 85, clearance: 3, columns: 2, rows: 2, pocketDepth: 22, wall: 3,
+};
+
+/**
+ * The ring of a rail hook, as one closed contour: outer arc out, inner arc back.
+ * @param inner Inner radius, mm. @param outer Outer radius, mm.
+ * @param sweep Degrees wrapped, centred on the gap at the bottom.
+ * @returns Points for a single closed polygon.
+ */
+function hookRing(inner: number, outer: number, sweep: number): number[][] {
+  const steps = 60;
+  const start = -60;
+  /** @param i Step index. @param r Radius. @returns The point at that step. */
+  const at = (i: number, r: number): number[] => {
+    const a = ((start + (sweep * i) / steps) * Math.PI) / 180;
+    return [r * Math.cos(a), r * Math.sin(a)];
+  };
+  const pts: number[][] = [];
+  for (let i = 0; i <= steps; i++) pts.push(at(i, outer));
+  for (let i = steps; i >= 0; i--) pts.push(at(i, inner));
+  return pts;
+}
+
 const CASE_DEFAULTS = {
   boardLength: 85, boardWidth: 56, wall: 2.5, floor: 2.5, clearance: 2,
   standoff: 4, height: 18, cornerRadius: 3, standoffDiameter: 6, screw: 2.4,
@@ -357,28 +388,22 @@ function cutoutFor(
   module: ManifoldModule, c: any, L: number, W: number, gap: number, wall: number,
 ): any {
   const Manifold = module.Manifold;
-  const depth = wall + gap + 4;
-  const w = c.width ?? 12;
-  const h = c.height ?? 12;
   // Both spellings, because the model's is the better one: it writes
   // `{ wall: 'y+', at: 66, z: 6 }` where this API originally demanded
   // `{ edge: 'y+', sill: 6 }`. `wall` and `z` say what they are; `edge` and
   // `sill` are jargon. Refusing the clearer vocabulary to keep a synonym count
   // at zero costs a whole attempt and teaches the caller nothing.
-  const sill = c.z ?? c.sill ?? 0;
+  const s = { width: 12, height: 12, ...c };
+  const depth = wall + gap + 4;
   const half = gap + wall;
-  switch (edgeOf(c.wall ?? c.edge)) {
-    case "x-":
-      return Manifold.cube([depth * 2, w, h], true).translate([-half + wall - depth, c.at, sill + h / 2]);
-    case "x+":
-      return Manifold.cube([depth * 2, w, h], true).translate([L + half - wall + depth, c.at, sill + h / 2]);
-    case "y-":
-      return Manifold.cube([w, depth * 2, h], true).translate([c.at, -half + wall - depth, sill + h / 2]);
-    case "y+":
-      return Manifold.cube([w, depth * 2, h], true).translate([c.at, W + half - wall + depth, sill + h / 2]);
-    default:
-      throw new Error("cutout edge must be 'x-', 'x+', 'y-' or 'y+'");
-  }
+  const edge = edgeOf(s.wall ?? s.edge);
+  const alongX = edge.charAt(0) === "x";
+  const span = alongX ? L : W;
+  const seat = edge.charAt(1) === "+" ? span + half - wall + depth : wall - half - depth;
+  const across = [seat, s.at, (s.z ?? s.sill ?? 0) + s.height / 2];
+  const centre = alongX ? across : [across[1], across[0], across[2]];
+  const size = alongX ? [depth * 2, s.width, s.height] : [s.width, depth * 2, s.height];
+  return Manifold.cube(size, true).translate(centre);
 }
 
 /** Rotates a Z-aligned solid onto the requested axis. */
@@ -813,6 +838,78 @@ export function buildPrelude(
 
       for (const c of o.cutouts) {
         part = part.subtract(cutoutFor(module, c, L, W, gap, wall));
+      }
+      return part;
+    },
+
+    /**
+     * A hook that clips over a rail and cannot come off.
+     * @remarks ONE extruded profile plus a stem that overlaps it, so the part is
+     *   a single body and there is no join to get wrong. A live attempt drew this
+     *   hook as an assembly and it came out as SIX disconnected pieces.
+     *   The ring wraps 300 degrees, leaving a gap at the bottom narrower than the
+     *   rail: it slides on from the end of the rail and cannot be pulled off, and
+     *   because the gap faces down the load pulls the ring CLOSED rather than
+     *   open. A ring that wraps less than 180 degrees is an open C and drops its
+     *   load the moment it swings.
+     * @param opts railDiameter, wall, width (extrusion), drop (stem length),
+     *   stem (stem thickness), clearance.
+     */
+    railHook: (opts: any = {}) => {
+      const o = { ...HOOK_DEFAULTS, ...(opts ?? {}) };
+      const inner = o.railDiameter / 2 + o.clearance;
+      const outer = inner + o.wall;
+      const width = o.width;
+      const drop = o.drop;
+      const stem = o.stem;
+
+      const ringSolid = Manifold.extrude(
+        CrossSection.ofPolygons([hookRing(inner, outer, 300)], "EvenOdd"),
+        width, 0, 0, [1, 1], true,
+      );
+      // The stem hangs off the back of the ring and OVERLAPS it, so the union is
+      // one body - not two shapes that happen to touch.
+      const stemSolid = Manifold.cube([stem, drop, width], true)
+        .translate([-(inner + o.wall / 2), -(inner + drop / 2) + 2, 0]);
+      return ringSolid.add(stemSolid).rotate([90, 0, 0]);
+    },
+
+    /**
+     * A rack of cup pockets on a stable base.
+     * @remarks The failure this replaces was a 6mm-thick plate with four holes
+     *   in it: one valid solid of exactly the right footprint that cannot hold a
+     *   mug, because a mug is 95-100mm tall and the plate was 6mm. Nothing in the
+     *   pipeline compares proportions against purpose, so the pockets are DEEP by
+     *   construction here - a cup sits down inside the rack rather than through
+     *   it.
+     * @param opts count (defaults to a square grid), cupDiameter, columns,
+     *   rows, pocketDepth, wall, clearance.
+     */
+    cupRack: (opts: any = {}) => {
+      const o = { ...RACK_DEFAULTS, ...(opts ?? {}) };
+      const cup = o.cupDiameter;
+      const gap = o.clearance;
+      const cols = o.columns;
+      const rows = o.rows;
+      const depth = o.pocketDepth;
+      const wall = o.wall;
+      const pitch = cup + gap + wall;
+      const plateX = cols * pitch + wall;
+      const plateY = rows * pitch + wall;
+
+      let part: any = Manifold.extrude(
+        roundRect(plateX, plateY, 4), depth, 0, 0, [1, 1], true,
+      ).translate([plateX / 2, plateY / 2, depth / 2]);
+
+      const cutter = Manifold.cylinder(depth + 2, (cup + gap) / 2, (cup + gap) / 2, segmentsFor(undefined), true);
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          part = part.subtract(cutter.translate([
+            wall + pitch / 2 + i * pitch,
+            wall + pitch / 2 + j * pitch,
+            depth / 2,
+          ]));
+        }
       }
       return part;
     },
