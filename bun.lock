@@ -13,6 +13,8 @@
         "@arbesk/wallet": "*",
         "@coinbase/cdp-sdk": "^1.53.0",
         "@gltf-transform/core": "catalog:",
+        "@hono/node-server": "^2.1.1",
+        "@hono/zod-validator": "^0.9.1",
         "@openzeppelin/merkle-tree": "catalog:",
         "brotli-wasm": "^3.0.1",
         "commander": "^15.0.0",
@@ -21,6 +23,7 @@
         "express-rate-limit": "^8.5.2",
         "fflate": "catalog:",
         "helmet": "^8.2.0",
+        "hono": "^4.13.7",
         "ipfs-http-client": "^60.0.0",
         "manifold-3d": "catalog:",
         "morgan": "^1.11.0",
@@ -295,6 +298,8 @@
     "@gltf-transform/functions": ["@gltf-transform/functions@4.5.0", "", { "dependencies": { "@gltf-transform/core": "^4.5.0", "@gltf-transform/extensions": "^4.5.0", "ktx-parse": "^1.1.0", "ndarray": "^1.0.19", "ndarray-lanczos": "^0.3.0", "ndarray-pixels": "^5.2.0" } }, "sha512-7sMOuEfksMyF+/NTwUnEOgh7djohJ5XfeYg8rzXDG+9JIdbGVUpvJUY3XVBJCUJJ04dusDvcTHloOi1wfM8lnw=="],
 
     "@hono/node-server": ["@hono/node-server@2.1.1", "", { "peerDependencies": { "hono": "^4" } }, "sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg=="],
+
+    "@hono/zod-validator": ["@hono/zod-validator@0.9.1", "", { "peerDependencies": { "hono": ">=4.11.2", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-iiv6w0qrIc0arfvCtUqBWsvl4fXjzaTcQcCJTTtCnkawF9HHGE+KjEl0ox3gQJ6rKZEgE3mLExlQCF72M+mNuw=="],
 
     "@humanfs/core": ["@humanfs/core@0.19.2", "", { "dependencies": { "@humanfs/types": "^0.15.0" } }, "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA=="],
 

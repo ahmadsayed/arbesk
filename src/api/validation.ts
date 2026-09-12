@@ -1,25 +1,7 @@
 import { sendError } from "./errors.ts";
+import { formatIssues, issuesFromZod } from "../shared/zod-issues.ts";
 import type { RequestHandler } from "express";
-import type { ZodError, ZodSchema } from "zod";
-
-interface ValidationIssue {
-  path: (string | number)[];
-  message: string;
-}
-
-/**
- * Format Zod issues into a concise log string.
- */
-function formatIssues(issues: ValidationIssue[]): string {
-  return issues.map((i) => i.path.join(".") + ": " + i.message).join("; ");
-}
-
-function issuesFromZod(error: ZodError): ValidationIssue[] {
-  return error.issues.map((issue) => ({
-    path: issue.path,
-    message: issue.message,
-  }));
-}
+import type { ZodSchema } from "zod";
 
 /**
  * Creates Express middleware that validates `req.body` against a Zod schema.

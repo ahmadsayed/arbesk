@@ -75,5 +75,10 @@ reasonix.toml
 
 # Local npm cache (sandbox installs)
 .npm-cache/
+
+# fallow audit baseline cache ('bun run audit', and therefore the pre-commit
+# hook, stages a copy of the repo here). The copy also collides with the jest
+# Haste map - see modulePathIgnorePatterns in jest.config.js.
+.tmp/
 blockchain/migrations/
 .cutover-backup.json

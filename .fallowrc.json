@@ -145,6 +145,16 @@
       "exports": ["addChatMessage"]
     },
 
+    // The Hono port's middleware surface. Nothing imports these yet because
+    // src/index.ts is still Express end to end - the port is deliberately
+    // unwired. They are the API the route-wiring step consumes, and
+    // generationRateLimit is exercised by test/api/hono-rate-limit.test.js
+    // today.
+    {
+      "file": "src/hono/rate-limit.ts",
+      "exports": ["uploadUrlRateLimit", "unpinRateLimit", "gcRateLimit", "paymasterRateLimit", "userResolveRateLimit", "emailOtpRequestRateLimit", "emailOtpVerifyRateLimit", "walletRelayRateLimit", "cadRateLimit"]
+    },
+
     // Test-only public surface: consumed via dynamic import() in Jest specs
     // (fallow's syntactic graph cannot resolve dynamic imports).
     {

@@ -6,8 +6,9 @@
 
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import type { NextFunction, Request, Response } from "express";
-
-const DEFAULT_WINDOW_MS = 60 * 1000;
+import {
+  DEFAULT_WINDOW_MS, LIMITER_SPECS, isByokBody,
+} from "../shared/rate-limit-specs.ts";
 
 type MaxOption =
   | number
@@ -62,99 +63,23 @@ export default function createRateLimitMiddleware({
   return createLimiter({ max, windowMs, message }).middleware;
 }
 
-const uploadUrlLimiter = createLimiter({
-  max: () => Number(process.env.UPLOAD_URL_RATE_LIMIT_MAX || 20),
-  message: "Upload credential rate limit exceeded.",
-});
+// Policy comes from src/shared/rate-limit-specs.ts; this file is only the
+// express-rate-limit adapter for it. Built by iterating the table rather than
+// naming each limiter, so adding one is a single edit in the shared table and
+// the reset below cannot fall out of sync with it.
+const limiters = Object.fromEntries(
+  Object.entries(LIMITER_SPECS).map(([name, spec]) => [name, createLimiter(spec)]),
+);
 
-const generationLimiter = createLimiter({
-  max: () =>
-    Number(
-      process.env.GENERATION_RATE_LIMIT_MAX ||
-        (process.env.MOCK_3D_GENERATION === "true" ? 1000 : 10),
-    ),
-  windowMs: 60 * 60 * 1000,
-  message: "Generation rate limit exceeded.",
-});
-
-/**
- * BYOK (Bring Your Own Key) requests bypass the server-side generation rate
- * limit.
- * @remarks The caller consumes their own provider quota.
- */
-function isByok(req: Request): boolean {
-  const provider = req.body?.provider;
-  const providerKey = req.body?.providerKey;
-  return (
-    typeof provider === "string" &&
-    provider.length > 0 &&
-    provider !== "mock" &&
-    typeof providerKey === "string" &&
-    providerKey.trim().length > 0
-  );
-}
-
-const unpinLimiter = createLimiter({
-  max: () => Number(process.env.UNPIN_RATE_LIMIT_MAX || 30),
-  message: "Unpin rate limit exceeded.",
-});
-
-const gcLimiter = createLimiter({
-  max: () => Number(process.env.GC_RATE_LIMIT_MAX || 10),
-  windowMs: 60 * 60 * 1000, // 1 hour
-  message: "GC rate limit exceeded.",
-});
-
-const paymasterLimiter = createLimiter({
-  max: () => Number(process.env.PAYMASTER_RATE_LIMIT_MAX || 30),
-  message: "Paymaster rate limit exceeded.",
-});
-
-const userResolveLimiter = createLimiter({
-  max: () => Number(process.env.USER_RESOLVE_RATE_LIMIT_MAX || 10),
-  message: "Email resolution rate limit exceeded.",
-});
-
-const emailOtpRequestLimiter = createLimiter({
-  max: () => Number(process.env.EMAIL_OTP_REQUEST_RATE_LIMIT_MAX || 5),
-  windowMs: 15 * 60 * 1000,
-  message: "Too many code requests. Try again later.",
-});
-
-const emailOtpVerifyLimiter = createLimiter({
-  max: () => Number(process.env.EMAIL_OTP_VERIFY_RATE_LIMIT_MAX || 10),
-  windowMs: 15 * 60 * 1000,
-  message: "Too many verification attempts. Request a new code.",
-});
-
-const walletRelayLimiter = createLimiter({
-  max: () => Number(process.env.WALLET_RELAY_RATE_LIMIT_MAX || 30),
-  windowMs: 60 * 1000,
-  message: "Wallet relay rate limit exceeded.",
-});
-
-/**
- * Hourly limiter for the CAD endpoints.
- * @remarks This bounds bursts INSIDE the daily round quota, which is the spend
- *   guard. One round is one paid DeepSeek call, so the default is well under
- *   the generation limiter's: a client that repairs in a tight loop is exactly
- *   the shape this cap exists for.
- */
-const cadLimiter = createLimiter({
-  max: () => Number(process.env.CAD_RATE_LIMIT_MAX || 20),
-  windowMs: 60 * 60 * 1000,
-  message: "CAD request rate limit exceeded.",
-});
-
-export const uploadUrlRateLimit = uploadUrlLimiter.middleware;
-export const unpinRateLimit = unpinLimiter.middleware;
-export const gcRateLimit = gcLimiter.middleware;
-export const paymasterRateLimit = paymasterLimiter.middleware;
-export const userResolveRateLimit = userResolveLimiter.middleware;
-export const emailOtpRequestRateLimit = emailOtpRequestLimiter.middleware;
-export const emailOtpVerifyRateLimit = emailOtpVerifyLimiter.middleware;
-export const walletRelayRateLimit = walletRelayLimiter.middleware;
-export const cadRateLimit = cadLimiter.middleware;
+export const uploadUrlRateLimit = limiters.uploadUrl.middleware;
+export const unpinRateLimit = limiters.unpin.middleware;
+export const gcRateLimit = limiters.gc.middleware;
+export const paymasterRateLimit = limiters.paymaster.middleware;
+export const userResolveRateLimit = limiters.userResolve.middleware;
+export const emailOtpRequestRateLimit = limiters.emailOtpRequest.middleware;
+export const emailOtpVerifyRateLimit = limiters.emailOtpVerify.middleware;
+export const walletRelayRateLimit = limiters.walletRelay.middleware;
+export const cadRateLimit = limiters.cad.middleware;
 
 /**
  * Generation rate-limit middleware.
@@ -162,20 +87,15 @@ export const cadRateLimit = cadLimiter.middleware;
  *   requests count toward the global limit.
  */
 export const generationRateLimit = (req: Request, res: Response, next: NextFunction) => {
-  if (isByok(req)) return next();
-  return generationLimiter.middleware(req, res, next);
+  if (isByokBody(req.body)) return next();
+  return limiters.generation.middleware(req, res, next);
 };
 
-/** Resets all in-memory rate-limit stores. */
+/**
+ * Resets all in-memory rate-limit stores.
+ * @remarks Iterates the table: a limiter added to the shared specs is reset
+ *   automatically, where the previous hand-written list silently was not.
+ */
 export function _resetRateLimiters(): void {
-  uploadUrlLimiter.store.resetAll();
-  generationLimiter.store.resetAll();
-  unpinLimiter.store.resetAll();
-  gcLimiter.store.resetAll();
-  paymasterLimiter.store.resetAll();
-  userResolveLimiter.store.resetAll();
-  emailOtpRequestLimiter.store.resetAll();
-  emailOtpVerifyLimiter.store.resetAll();
-  walletRelayLimiter.store.resetAll();
-  cadLimiter.store.resetAll();
+  for (const limiter of Object.values(limiters)) limiter.store.resetAll();
 }

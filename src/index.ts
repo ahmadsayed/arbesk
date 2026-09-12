@@ -9,6 +9,7 @@ import type { TokenIndexer } from "morgan";
 import helmet from "helmet";
 import compression from "compression";
 import { PROJECT_ROOT } from "./api/project-root.ts";
+import { buildCspDirectives } from "./shared/csp.ts";
 
 // Load .env files BEFORE any module that reads process.env (config.ts).
 // process.loadEnvFile is the Node 20.12+ built-in (also supported by Bun);
@@ -81,33 +82,6 @@ app.use(compression());
  * the "Report-Only" suffix. Monitor violations in browser
  * console before promoting to enforcing mode.
  */
-const pinataGateway = process.env.PINATA_GATEWAY;
-const publicOrigin = process.env.PUBLIC_ORIGIN; // e.g. https://promptscad.com
-const connectSrc = [
-  "'self'",
-  "http://127.0.0.1:5001",
-  "http://127.0.0.1:8545",
-  "http://127.0.0.1:9090",
-  "ws://localhost:9090",
-  "wss://localhost:9090",
-  "https://*.llamarpc.com",
-  "https://*.publicnode.com",
-  "https://esm.sh",
-  // CDP / Base Sepolia
-  "https://api.cdp.coinbase.com",
-  "https://*.cdp.coinbase.com",
-  "https://sepolia.base.org",
-];
-const imgSrc = ["'self'", "blob:", "data:", "http://127.0.0.1:8080"];
-if (pinataGateway) {
-  connectSrc.push(`https://${pinataGateway}`);
-  imgSrc.push(`https://${pinataGateway}`);
-}
-if (publicOrigin) {
-  // Same-origin API plus the ingress-proxied Nostr relay (wss://<host>/nostr).
-  connectSrc.push(publicOrigin, publicOrigin.replace(/^http/, "ws"));
-}
-
 app.use(
   helmet({
     // Allow the DeepSeek Harness side-viewer to embed the Studio in an iframe
@@ -115,26 +89,11 @@ app.use(
     // you disable the side-viewer or harden a public deployment.
     frameguard: false,
     contentSecurityPolicy: {
+      // ONE copy of the policy, in src/shared/csp.ts. The Hono server reads
+      // the same map, so the two stacks cannot enforce different CSPs while
+      // the migration is in flight.
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-eval'",
-          "'unsafe-inline'",
-          "https://cdn.babylonjs.com",
-          "https://cdn.jsdelivr.net",
-          "https://esm.sh",
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        connectSrc,
-        imgSrc,
-        fontSrc: ["'self'"],
-        mediaSrc: ["'self'"],
-        workerSrc: ["'self'", "blob:"],
-        frameSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
+        ...buildCspDirectives(),
         // Helmet adds this by default, but browsers ignore it in Report-Only
         // mode and log a console warning on every page load. Re-add it when
         // the policy is promoted to enforcing mode.

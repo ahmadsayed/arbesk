@@ -4,16 +4,22 @@ export default {
     "/blockchain/",
     "/.claude/",
     "<rootDir>/\\.worktrees/",
+    "<rootDir>/\\.tmp/",
     "/e2e/"
   ],
   coverageDirectory: "coverage/js",
-  // Haste map must not see linked worktrees: their packages/*/package.json
-  // collide with the main checkout's @arbesk/* workspace packages.
-  modulePathIgnorePatterns: ["<rootDir>/.worktrees/"],
+  // Haste map must not see linked worktrees or the audit cache: their
+  // packages/*/package.json collide with the main checkout's @arbesk/*
+  // workspace packages. .tmp/ holds the baseline copy that 'bun run audit'
+  // stages, and the pre-commit hook runs that same audit - so without this
+  // entry, committing once makes the whole API suite fail to resolve
+  // @arbesk/wallet.
+  modulePathIgnorePatterns: ["<rootDir>/.worktrees/", "<rootDir>/.tmp/"],
   coveragePathIgnorePatterns: [
     "/node_modules/",
     "/frontend/dist/",
     "<rootDir>/\\.worktrees/",
+    "<rootDir>/\\.tmp/",
     "/e2e/",
     "/blockchain/"
   ],
