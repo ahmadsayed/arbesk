@@ -41,6 +41,10 @@ const FROM_ROOT_ENV = [
   "CDP_API_KEY_ID",
   "CDP_API_KEY_SECRET",
   "CDP_WALLET_SECRET",
+  // CAD generation (src/api/routes/cad.ts) authenticates to DeepSeek with this
+  // server-side key — it is not BYOK, so an unconfigured deployment answers
+  // 503 CAD_NOT_CONFIGURED instead of prompting the user for a key.
+  "DEEPSEEK_API_KEY",
 ];
 
 // Optional: included when present, skipped with a note otherwise.
@@ -90,7 +94,7 @@ const ORDER = [
   "DEFAULT_CHAIN_ID", "API_URL", "CONTRACT_ADDRESS",
   "NOSTR_RELAY_URL", "PUBLIC_NOSTR_URL", "PUBLIC_ORIGIN", "NOSTR_SERVICE_PRIVATE_KEY",
   "CDP_PROJECT_ID", "CDP_PAYMASTER_URL", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "CDP_WALLET_SECRET",
-  "RESEND_API_KEY", "GC_ADMIN_TOKEN", "MOCK_3D_GENERATION",
+  "RESEND_API_KEY", "GC_ADMIN_TOKEN", "DEEPSEEK_API_KEY", "MOCK_3D_GENERATION",
 ];
 
 const out = ORDER.filter((k) => result[k] !== undefined)
