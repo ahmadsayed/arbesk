@@ -9,8 +9,12 @@
  * blowup were all found; none of them were visible to a passing unit test.
  *
  * Usage:
- *   bun scripts/cad-eval.mjs <outDir> <prompt> [prompt...]
- *   bun scripts/cad-eval.mjs <outDir> --file <scenarios.json>
+ *   bun scripts/cad-eval.mjs "<prompt>" ["<prompt>" ...]
+ *   bun scripts/cad-eval.mjs --file <scenarios.json>
+ *   ... [--out <dir>]        (default: test-results/cad-eval, which is gitignored)
+ *
+ * The default output directory is inside the project so the renders are easy to
+ * browse - open test-results/cad-eval/ and look at the PNGs.
  *
  * Reads DEEPSEEK_API_KEY from the project .env. Runs the kernel IN PROCESS with
  * no wall-clock cap, so a pathological part will simply take a long time: this
@@ -358,6 +362,24 @@ function writeGlb(file, mesh) {
 
 // ---------------------------------------------------------------------- main
 
+/** Where renders land when the caller does not name a directory. */
+const DEFAULT_OUT_DIR = path.join(PROJECT_ROOT, "test-results", "cad-eval");
+
+/**
+ * Splits `--out <dir>` out of argv.
+ * @param {string[]} argv Arguments after the script path.
+ * @returns {{ outDir: string, rest: string[] }} Output directory and the rest.
+ */
+function parseArgs(argv) {
+  const at = argv.indexOf("--out");
+  if (at === -1) return { outDir: DEFAULT_OUT_DIR, rest: argv };
+  const named = argv[at + 1];
+  return {
+    outDir: named && !named.startsWith("--") ? path.resolve(named) : DEFAULT_OUT_DIR,
+    rest: [...argv.slice(0, at), ...argv.slice(at + 2)],
+  };
+}
+
 /**
  * Resolves the scenario list from argv.
  * @param {string[]} argv Arguments after the output directory.
@@ -377,9 +399,9 @@ function scenariosFrom(argv) {
 const slug = (name) => name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
 
 async function main() {
-  const [outDir, ...rest] = process.argv.slice(2);
-  if (!outDir || rest.length === 0) {
-    console.error("usage: bun scripts/cad-eval.mjs <outDir> <prompt...> | --file <scenarios.json>");
+  const { outDir, rest } = parseArgs(process.argv.slice(2));
+  if (rest.length === 0) {
+    console.error("usage: bun scripts/cad-eval.mjs <prompt...> | --file <scenarios.json> [--out DIR]");
     process.exit(2);
   }
   const env = loadEnv(path.join(PROJECT_ROOT, ".env"));
@@ -407,6 +429,7 @@ async function main() {
   for (const scenario of scenariosFrom(rest)) {
     await runScenario({ generator, kernel, outDir, scenario });
   }
+  console.log("\nrenders written to " + outDir);
 }
 
 /**
