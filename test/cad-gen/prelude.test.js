@@ -155,6 +155,64 @@ describe("prelude geometry", () => {
 // 3.2s with 16 and 15.6s with 32, while the volume moves well under 1%. Draft
 // is the default so ordinary fillets fit the kernel timeout; high is an
 // explicit request, and the quality actually used is reported either way.
+// The centring bug, in the form the live timing pulley hit it three times: a
+// flange stacked at z = +width against a body spanning -7.5..7.5 lands clear of
+// the part. stack() lays solids end to end instead of relying on the model's
+// half-height arithmetic, so the pieces cannot come apart.
+describe("stack", () => {
+  it("lays solids end to end from a base at the origin", async () => {
+    const code = [
+      "const a = box(20, 20, 10);",
+      "const b = box(10, 10, 4);",
+      "return stack([a, b]);",
+    ].join("\n");
+    const r = await run(code);
+    expect(r.ok).toBe(true);
+    // 10 then 4 tall, starting at 0.
+    expect(r.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(14, 4);
+    expect(r.stats.volumeMm3).toBeCloseTo(20 * 20 * 10 + 10 * 10 * 4, 4);
+  }, 40000);
+
+  it("closes the gap a hand-stacked assembly leaves", async () => {
+    // The pulley's exact mistake: body centred, flange placed past its end.
+    const wrong = await run([
+      "const body = cylinder(10, 15);",
+      "const flange = cylinder(14, 2);",
+      "return body.add(flange.translate([0, 0, 15]));",
+    ].join("\n"));
+    const right = await run([
+      "const body = cylinder(10, 15);",
+      "const flange = cylinder(14, 2);",
+      "return stack([body, flange]);",
+    ].join("\n"));
+    // Both are valid solids; only one is attached.
+    expect(wrong.ok).toBe(true);
+    expect(right.ok).toBe(true);
+    expect(right.stats.bboxMm.max[2]).toBeCloseTo(17, 4); // 15 then 2
+    expect(wrong.stats.bboxMm.max[2]).toBeCloseTo(16, 4); // 15, from -7.5..7.5
+    expect(wrong.stats.bboxMm.min[2]).toBeCloseTo(-7.5, 4);
+  }, 40000);
+
+  it("honours an axis other than Z", async () => {
+    const code = [
+      "const a = box(10, 10, 10);",
+      "const b = box(4, 4, 4);",
+      "return stack([a, b], { axis: 'x' });",
+    ].join("\n");
+    const r = await run(code);
+    expect(r.ok).toBe(true);
+    expect(r.stats.bboxMm.min[0]).toBeCloseTo(0, 4);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(14, 4);
+  }, 40000);
+
+  it("refuses an empty list", async () => {
+    const r = await run("return stack([]);");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/non-empty list of solids/);
+  }, 40000);
+});
+
 // A gear is only correct if its geometry is: the tip circle is pitch + module,
 // and the material between the teeth is gone. Both are checked here, because a
 // gear whose teeth are trapezoids passes every "is it a valid solid" test and

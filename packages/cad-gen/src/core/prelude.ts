@@ -10,7 +10,7 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "filletEdges", "chamferEdges",
+  "roundedBox", "hole", "boltCircle", "spurGear", "stack", "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
 
@@ -223,6 +223,37 @@ function assertContours(contours: any[]): void {
   }
 }
 
+/**
+ * Lays solids end to end along one axis, from a base at the origin, and unions them.
+ * @remarks Every builder in this prelude is CENTRED, so assembling parts by hand
+ *   means adding up half-heights - and that arithmetic is where assemblies go
+ *   wrong. A live timing pulley stacked a flange at z = +width against a body
+ *   spanning -7.5..7.5, which put it 6.5mm clear of the part with the bore never
+ *   reaching it: a detached disc, and it took three attempts to notice. This
+ *   removes the arithmetic instead of correcting it. Solids are stacked in the
+ *   order given, so [flange, body, flange] is a body with a flange at each end.
+ * @throws Error when the list is empty or holds something that is not a solid.
+ */
+function stackAlong(solids: any[], axis: 0 | 1 | 2): any {
+  if (!Array.isArray(solids) || solids.length === 0) {
+    throw new Error("stack needs a non-empty list of solids");
+  }
+  let cursor = 0;
+  let out: any = null;
+  for (const solid of solids) {
+    if (typeof solid?.boundingBox !== "function") {
+      throw new Error("stack needs solids, not " + typeof solid);
+    }
+    const box = solid.boundingBox();
+    const shift = [0, 0, 0];
+    shift[axis] = cursor - box.min[axis];
+    const placed = solid.translate(shift);
+    out = out ? out.add(placed) : placed;
+    cursor += box.max[axis] - box.min[axis];
+  }
+  return out;
+}
+
 /** Rotates a Z-aligned solid onto the requested axis. */
 function alignToAxis(solid: any, axis: unknown): any {
   const a = axisIndex(axis);
@@ -393,6 +424,14 @@ export function buildPrelude(
         Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
       );
     },
+
+    /**
+     * Lays solids end to end along Z (or x/y) from a base at the origin.
+     * @remarks Use this to assemble coaxial parts - a body with a flange at each
+     *   end, a stack of plates - instead of adding up half-heights. See
+     *   stackAlong for why that arithmetic is the usual cause of detached parts.
+     */
+    stack: (solids: any[], opts: any = {}) => stackAlong(solids, axisIndex(opts.axis)),
 
     /**
      * Rounds the part's existing edges with radius r, leaving its outer

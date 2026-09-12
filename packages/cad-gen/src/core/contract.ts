@@ -7,4 +7,4 @@
 export const CONTRACT_VERSION = 1;
 
 /** Date-stamped prelude revision shipped with this build. */
-export const PRELUDE_VERSION = "2026-09-13";
+export const PRELUDE_VERSION = "2026-09-14";
