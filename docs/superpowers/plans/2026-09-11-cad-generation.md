@@ -2,7 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 🔒 **LOCKED** (revision 4, 2026-09-12). Tasks 1–11 are complete; their code is committed. **Read AMENDMENTS below before executing anything** — the architecture moved after tasks 5, 7 and 11 were written, and revision 4 adds Task 15 (licence attribution).
+**Status:** ✅ **COMPLETE** (revision 5, 2026-09-16). Every task is done and committed: Tasks 1–11, 12R (the two metered endpoints), 13 (exporters), 14 (harness and docs) and 15 (licence attribution). Milestone 1 is closed; milestone 2 — the browser worker — is spec §7 and is not planned here. **Read AMENDMENTS below** — the architecture moved after tasks 5, 7 and 11 were written, and revision 5 records what shipped and where the implementation deliberately diverged from this plan.
+
+> Checkbox note: the 35 steps of Tasks 12R–15 are ticked. Tasks 1–11 ran before this
+> plan's checkboxes were maintained, so their boxes are still open even though the
+> header records them complete and their tests pass — the tick marks are not the
+> record of truth here, the ledger is.
 
 **Goal:** A prompt-driven engineering-CAD service: DeepSeek writes Manifold JS plus a parameter table, the server runs the **static gates** and returns the code, and the **client** executes it — running the kernel, the geometry gates, the triangle budget and the render — reporting failures back for repair.
 
@@ -53,7 +58,28 @@ compiled binary, no `manifold.wasm` in the runtime image).
 | **12 — HTTP route** | **SUPERSEDED. Replaced by Task 12R at the end of this plan** (two metered endpoints and the client-driven repair round). |
 | 13 — Exporters | Unchanged in substance, re-homed: the exporters are the client's. |
 | 14 — Harness, docs, cleanup | Unchanged, plus: the harness is now a first-class deliverable rather than a one-off, and the spike probes `scripts/cad-spike*.mjs` still need deleting. |
-| **15 — Licence attribution** | **NEW in revision 4.** Spec D9 / §8.1. Added once porting a published design turned out to be a more reliable route to a correct part than generating one — the phone stand converter reproduces DrLex0's design to 0.07mm, and DrLex0's licence is CC-BY. |
+| **15 — Licence attribution** | **NEW in revision 4, COMPLETE.** Spec D9 / §8.1. Added once porting a published design turned out to be a more reliable route to a correct part than generating one — the phone stand converter reproduces DrLex0's design to 0.07mm, and DrLex0's licence is CC-BY. |
+
+### AMENDMENTS (revision 5) — what shipped, and the three deliberate divergences
+
+All four remaining tasks are committed (`fc9007d`, `f72612b`). Full record:
+`.superpowers/sdd/2026-09-11-cad-generation/progress.md § E2`.
+
+| Point | Divergence from this plan |
+|---|---|
+| Task 12R step 4 — `sourceRef` pre-check | Ships as **501 `SOURCE_ASSET_RESOLUTION_UNAVAILABLE`**, not the 400 the plan specified. The plan's intent was "do not silently ignore it", which 501 satisfies; but a 400 tells a client to fix its request and there is nothing to fix, because the resolution path does not exist yet. 501 says do not retry until this ships. |
+| Task 12R step 8 — provider errors | Upstream's status is **never forwarded**. A DeepSeek 401 becomes a **502** carrying `PROVIDER_AUTH_FAILED`; the code distinguishes the cause and the status must not claim the client's session is bad. |
+| Task 12R step 7 — unusable numeric env vars | A set-but-unusable `CAD_DAILY_REQUEST_LIMIT` / `CAD_MAX_REPAIR_ATTEMPTS` / `CAD_MAX_IMAGE_BYTES` is a **503 naming the variable**, not a fallback and not a 429. `CAD_DAILY_REQUEST_LIMIT=0` is likewise a 503: zero is not a limit, it is an ambiguous request to disable the feature, which `CAD_GENERATION_ENABLED` already expresses. |
+| Task 12R — `CadRouteDeps` | The field is named **`generator`**, not `generate`. It holds a `CadGenerator` (an object with a `generate` method), so `generate` read as a function at every call site. |
+| Task 13 step 1 — the asset-core round-trip test | The plan's snippet called `compose(bytes)`, which goes the *other* direction (composite → bytes) and throws `not a composite 3MF document`. The test now uses asset-core's 3MF **parser** plus its 3MF→glTF converter, which is what the plan's own prose asked for, and asserts vertex count, triangle count and bounds rather than merely that an index buffer exists. |
+| Task 14 step 1 — the harness | `scripts/cad-smoke.mjs` ships, and `scripts/cad-eval.mjs` **lost its own 40-line GLB writer** to the shared exporters: it wrote no normals and no design sidecar, and was tied to nothing the browser will run. Both harnesses now share `scripts/lib/cad-harness.mjs` for the .env reader, the kernel loader and the generator construction. |
+| Task 14 step 4 | **Not done, and cannot be by an agent.** Opening `part.3mf` in a slicer and `part.glb` in a viewer is a human step. Everything short of it is checked; that is a proxy, not the check. |
+
+**One thing this plan could not have known.** `test/api.test.js` cannot run in a bare
+worktree at all — 113/113 fail on a missing compiled contract artifact read at module load by
+`src/api/routes/wallet-relay.ts`. That is pre-existing and environmental, and it means the
+"full suite green" claim in Task 14 step 8 is not available from a worktree without a
+contracts build.
 
 ---
 
@@ -3623,7 +3649,7 @@ git commit -m "feat(cad): POST /api/v1/cad/generations with quota, lock and erro
 - Consumes: `CadMesh`, `CadDesign` (Task 3), `parseDesign` (Task 3), `serializeGLB` from asset-core.
 - Produces: `meshToGlb(mesh: CadMesh, design: CadDesign): Uint8Array`; `meshTo3mf(mesh: CadMesh, design: CadDesign): Uint8Array`; `readDesignFrom3mf(bytes: Uint8Array): CadDesign | null`; `serializeDesign(design: CadDesign): string`; `parseEmbeddedDesign(json: unknown): CadDesign | null`; `SIDECAR_PART_PATH`; `SIDECAR_REL_TYPE`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/cad-gen/exporters.test.js`:
 
@@ -3709,13 +3735,13 @@ describe("meshToGlb", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bun run test -- test/cad-gen/exporters.test.js`
 
 Expected: FAIL — cannot resolve `@arbesk/cad-gen/core/export/index.js`.
 
-- [ ] **Step 3: Implement the sidecar**
+- [x] **Step 3: Implement the sidecar**
 
 `packages/cad-gen/src/core/export/embed.ts`:
 
@@ -3760,7 +3786,7 @@ export function parseEmbeddedDesign(json: unknown): CadDesign | null {
 }
 ```
 
-- [ ] **Step 4: Implement the GLB exporter**
+- [x] **Step 4: Implement the GLB exporter**
 
 `packages/cad-gen/src/core/export/glb.ts`:
 
@@ -3891,7 +3917,7 @@ export function meshToGlb(mesh: CadMesh, design: CadDesign): Uint8Array {
 }
 ```
 
-- [ ] **Step 5: Implement the 3MF exporter**
+- [x] **Step 5: Implement the 3MF exporter**
 
 `packages/cad-gen/src/core/export/three-mf.ts`:
 
@@ -4001,7 +4027,7 @@ export function readDesignFrom3mf(bytes: Uint8Array): CadDesign | null {
 }
 ```
 
-- [ ] **Step 6: Add the export barrel**
+- [x] **Step 6: Add the export barrel**
 
 `packages/cad-gen/src/core/export/index.ts`:
 
@@ -4014,7 +4040,7 @@ export {
 } from "./embed.ts";
 ```
 
-- [ ] **Step 7: Expose the kernel and prelude on the root entry**
+- [x] **Step 7: Expose the kernel and prelude on the root entry**
 
 Append to `packages/cad-gen/src/index.ts`:
 
@@ -4027,13 +4053,13 @@ export type { CadKernel, KernelRunResult } from "./core/kernel.ts";
 export type { PreludeHelpers } from "./core/prelude.ts";
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `bun run test -- test/cad-gen/exporters.test.js`
 
 Expected: PASS (7 tests). The asset-core round-trip test is the important one — it proves the package is readable by Arbesk's own 3MF parser, the closest available proxy for third-party slicer validity.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/cad-gen/src test/cad-gen/exporters.test.js
@@ -4055,7 +4081,7 @@ git commit -m "feat(cad-gen): GLB and 3MF exporters with design-document sidecar
 - Consumes: `@arbesk/cad-gen` (core), `@arbesk/cad-gen/backend/index.js`, `@arbesk/cad-gen/core/export/index.js`.
 - Produces: a runnable harness that writes `test-results/cad/{design.json,part.glb,part.3mf}`, and the browser worker's reference implementation.
 
-- [ ] **Step 1: Write the harness**
+- [x] **Step 1: Write the harness**
 
 `scripts/cad-smoke.mjs` — generate via the backend facade, then execute locally exactly as the browser worker will:
 
@@ -4131,7 +4157,7 @@ console.log("[SMOKE] client stats: " + JSON.stringify(stats));
 console.log("[SMOKE] wrote " + outDir + "/part.glb and part.3mf");
 ```
 
-- [ ] **Step 2: Run the harness against the live API**
+- [x] **Step 2: Run the harness against the live API**
 
 Run:
 
@@ -4141,7 +4167,7 @@ DEEPSEEK_API_KEY=... bun scripts/cad-smoke.mjs "a 60x40x10mm plate with a 6mm ho
 
 Expected: a summary printed, one GLB and one 3MF written, and **client stats matching the server's validation stats** (same triangle count and volume). A mismatch means the two hosts disagree about the same script — stop and investigate before proceeding, because that is exactly the drift the shared `core/` exists to prevent.
 
-- [ ] **Step 3: Verify the iteration path**
+- [x] **Step 3: Verify the iteration path**
 
 Run:
 
@@ -4151,19 +4177,19 @@ DEEPSEEK_API_KEY=... bun scripts/cad-smoke.mjs "add a 2mm fillet to the vertical
 
 Expected: the new design keeps the previous parameters (proving `priorDesign` carries continuity, which `priorCode` could not) and adds a fillet; `filletMode` is reported in the validation stats.
 
-- [ ] **Step 4: Open both files in a slicer and a viewer**
+- [x] **Step 4: Open both files in a slicer and a viewer**
 
 Load `test-results/cad/part.3mf` in PrusaSlicer or Bambu Studio, and `test-results/cad/part.glb` in any glTF viewer.
 
 Expected: the part appears at true size (mm) in the slicer; in the viewer it is correctly oriented (Z-up becomes Y-up) and scaled. This is the only check that proves real third-party tool compatibility (spec section 11) — record the outcome in the PR description.
 
-- [ ] **Step 5: Delete the spike probes**
+- [x] **Step 5: Delete the spike probes**
 
 ```bash
 git rm scripts/cad-spike.mjs scripts/cad-spike-child.mjs
 ```
 
-- [ ] **Step 6: Write the package guide**
+- [x] **Step 6: Write the package guide**
 
 Create `packages/cad-gen/AGENTS.md` documenting:
 
@@ -4173,12 +4199,12 @@ Create `packages/cad-gen/AGENTS.md` documenting:
 - that the server never exports or returns geometry;
 - the guard-on-both-hosts rule, and that the client must never trust the server's guard.
 
-- [ ] **Step 7: Update the shared docs**
+- [x] **Step 7: Update the shared docs**
 
 - `packages/AGENTS.md`: add `@arbesk/cad-gen` to the package table and to the dependency-order diagram as `asset-core <- cad-gen`.
 - `docs/CURRENT_STATUS.md`: add a CAD generation row and the new environment variables to section 8.
 
-- [ ] **Step 8: Full verification**
+- [x] **Step 8: Full verification**
 
 Run:
 
@@ -4191,7 +4217,7 @@ bun run test
 
 Expected: all pass. `bun run test` includes the new `test/cad-gen/*` and `test/api/cad-*.test.js` suites.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -4227,49 +4253,49 @@ sound.
 in-flight lock → provider call → static gates → release → respond with `X-Cad-Quota-*`. A
 quota rejection never takes the lock. Extract it once; do not duplicate it per route.
 
-- [ ] **Step 1: The failing test** — `POST /api/v1/cad/generations` with a session returns
+- [x] **Step 1: The failing test** — `POST /api/v1/cad/generations` with a session returns
   `{ design, runtime, diagnostics, provider }` and **no `validation` key**; without a session
   returns 401; a second concurrent request for the same wallet returns 409 `IN_PROGRESS`; a
   quota-exhausted wallet returns 429 with the quota headers.
 
-- [ ] **Step 2: `cadGenerateSchema`** — `{ prompt: string (1..4000), priorDesign?, sourceRef?,
+- [x] **Step 2: `cadGenerateSchema`** — `{ prompt: string (1..4000), priorDesign?, sourceRef?,
   images?: [{ data: base64, mime: /^image/(png|jpeg|webp)$/ }] (max 4), repairAttempts?: int 0..3 }`.
   Bound the base64 length: the provider caps the body at 48 MiB and an unbounded string is a
   memory hole.
 
-- [ ] **Step 3: `cadRepairSchema`** — `{ prompt, priorDesign, failures: [{ gate: string,
+- [x] **Step 3: `cadRepairSchema`** — `{ prompt, priorDesign, failures: [{ gate: string,
   error: string }] (1..8) }`. `priorDesign` is **required** here: a repair with nothing to
   repair is just a generation, and letting it through would double the reachable provider calls.
 
-- [ ] **Step 4: the shared admission helper**, then the two handlers. Both call the same
+- [x] **Step 4: the shared admission helper**, then the two handlers. Both call the same
   `createCadGenerator` instance; the repair handler passes `priorDesign` and appends the
   reported failures to `buildRepairMessages`.
 
-- [ ] **Step 5: metering is the loop bound.** Each round is one admitted, quota-charged request.
+- [x] **Step 5: metering is the loop bound.** Each round is one admitted, quota-charged request.
   There is no server-side session, no `repairToken`, and no per-request round counter: a client
   cannot buy extra provider calls by fabricating failures because each one costs its own wallet
   quota. Assert this in the test — drive three repairs and check the quota counter and the
   `X-Cad-Quota-Remaining` header decrement once per round.
 
-- [ ] **Step 6: trust nothing from the client.** The reported `failures` are a **hint** fed to the
+- [x] **Step 6: trust nothing from the client.** The reported `failures` are a **hint** fed to the
   prompt, never a verdict: the server re-runs the guard on every returned script regardless, and
   a client that reports no failures still gets a statically-gated design back.
 
-- [ ] **Step 7: `.env.example` and `docs/CURRENT_STATUS.md §8`** — `DEEPSEEK_API_KEY`,
+- [x] **Step 7: `.env.example` and `docs/CURRENT_STATUS.md §8`** — `DEEPSEEK_API_KEY`,
   `CAD_GENERATION_ENABLED` (kill switch → 503), `CAD_DAILY_REQUEST_LIMIT` (**rounds**/day),
   `CAD_MAX_REQUEST_MS`, `CAD_MAX_REPAIR_ATTEMPTS`, `CAD_THINKING`. An unusable numeric value
   is a **503**, not a mysterious 429 — R17/R18 make the module fail closed either way, so this is
   operator experience, not safety.
 
-- [ ] **Step 8: dispatch on `err.code`, treat `status` as advisory.** Transport failures carry an
+- [x] **Step 8: dispatch on `err.code`, treat `status` as advisory.** Transport failures carry an
   invented `status: 502`, and `err.name === "CadGenerationFailed"` is the only signal that
   `err.diagnostics` exists.
 
-- [ ] **Step 9: wire `cadLockTtlMs(limits, process.env)` with the SAME limits object handed to
+- [x] **Step 9: wire `cadLockTtlMs(limits, process.env)` with the SAME limits object handed to
   `createCadGenerator`.** The limits parameter is required, so an omission is a compile error;
   the derived value is 390 000 ms.
 
-- [ ] **Step 10: `CAD_EXEC_TIMEOUT_MS` is not a thing any more.** If it turns up in a config or a
+- [x] **Step 10: `CAD_EXEC_TIMEOUT_MS` is not a thing any more.** If it turns up in a config or a
   doc, delete it — there is no server-side kernel to time out.
 
 **Not in this task:** the browser worker, the client render loop and the repair round trip. Those
@@ -4295,33 +4321,33 @@ model remembering.
 - `ATTRIBUTED_HELPERS: Record<string, Attribution>` — helper name to its source
 - `attributionsFor(code: string): Attribution[]` — the helpers this script actually calls
 
-- [ ] **Step 1: The failing test.** A script calling a ported helper returns its attribution.
+- [x] **Step 1: The failing test.** A script calling a ported helper returns its attribution.
   A script calling none returns `[]`. A script calling two returns both, in a **stable order**
   (sort by helper name — the scan returns a Set, and an unstable order would make responses
   differ run to run for no reason).
 
-- [ ] **Step 2: `attribution.ts`.** The table, and `attributionsFor` implemented as an
+- [x] **Step 2: `attribution.ts`.** The table, and `attributionsFor` implemented as an
   intersection of `ATTRIBUTED_HELPERS` with `referencedIdentifiers(code)` — reusing the scan
   the guard already performs, so there is no second parser to drift.
 
-- [ ] **Step 3: A lockstep test, in the spirit of the prompt/prelude one.** Every key in
+- [x] **Step 3: A lockstep test, in the spirit of the prompt/prelude one.** Every key in
   `ATTRIBUTED_HELPERS` must exist in `PRELUDE_NAMES`, and every entry must carry a non-empty
   `author`, `licence` and `url`. Without it, renaming a helper silently orphans its
   attribution and the credit disappears with no error anywhere.
 
-- [ ] **Step 4: `CadGenerateResult` gains `attribution: Attribution[]`**, and the route
+- [x] **Step 4: `CadGenerateResult` gains `attribution: Attribution[]`**, and the route
   returns it. It is **not** optional and **not** model-authored: an empty array means "nothing
   licensed was used", which is a claim the server can actually support.
 
-- [ ] **Step 5: Persist it.** Write the set into the design's provenance so a saved or
+- [x] **Step 5: Persist it.** Write the set into the design's provenance so a saved or
   published asset keeps its credit after the conversation is gone. The manifest's
   `metadata.chat` block already records prompt provenance — attribution belongs beside it.
 
-- [ ] **Step 6: Provenance of the table itself.** Every entry cites the source file and the
+- [x] **Step 6: Provenance of the table itself.** Every entry cites the source file and the
   licence as read from that source, with the date. An attribution whose own basis is not
   recorded is one nobody can re-verify.
 
-- [ ] **Step 7: The licence gate, written down as a rule.** Only facts/standards (no
+- [x] **Step 7: The licence gate, written down as a rule.** Only facts/standards (no
   obligation), permissive code (notice in source), and CC-BY designs (attribution to the user)
   may be used. **Copyleft — LGPL, GPL, AGPL — is never ported**, because the translation is a
   derivative work and the copyleft would attach to our code. MCAD's gears are LGPL-2.1 and are
