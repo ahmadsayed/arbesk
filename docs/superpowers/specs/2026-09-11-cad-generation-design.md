@@ -24,12 +24,12 @@ the browser worker and WASM bundling are milestone 2.
 |---|----------|-----------|
 | D1 | Canonical design state is a **full Manifold script plus a required `PARAMETERS` object**; every turn rewrites the complete script | Never leaves anyone holding a half-applied patch; and because dimensions are references rather than literals, the script is *reusable* — which is what makes client-side parameter edits possible at all |
 | D2 | New workspace package `@arbesk/cad-gen` with an **environment-agnostic core** plus a **backend adapter** | The design document, prelude, guard and exporters must run on **both** hosts, so the package is shaped like `@arbesk/asset-core` (ports + injected capabilities), not like `@arbesk/ai-asset-gen` (backend-only) |
-| D3 | The server executes generated code **only to validate**, in a fresh child process behind a static allowlist — never exporting, never returning the mesh | Keeps the repair loop meaningful (broken code is fixed before the user sees it) at ~100 ms–1 s per attempt, against an LLM call of 3–30 s. The kernel was never the expensive part; exporting was the pointless part |
+| D3 | The server **does not execute generated code at all** — it runs the static gates and returns code the client executes. The kernel belongs to the client, which is the host that builds the delivered mesh | A server-side run evaluates a **proxy** at a different fidelity, and the two provably disagree: measured, an 80x60x8 plate with six 5 mm holes is 15 466 triangles at the validation profile and 245 652 at delivery fidelity against a 200 000 budget — the proxy **passes what the real part fails**. It was also 91 % of pipeline latency (2 203 ms generating, 23 023 ms in the kernel, 1 ms exporting), it made the server execute untrusted model code, and it caused two deployment blockers: no `child.ts` on disk in the compiled binary, no `manifold.wasm` in the runtime image |
 | D4 | The API is **stateless**; continuity comes from an inline `priorDesign` (the full previous document — code *and* parameters) or a `sourceRef` (CID / asset ID) the backend resolves | No design-session registry to build, expire or replicate. Per-wallet **quota and concurrency** state (§6) is separate infrastructure state, not design state |
-| D5 | Every attempt passes **validation gates**; failures feed a **bounded auto-repair loop** (3 attempts, env-tunable) | The client only ever receives code that passed; the response carries the attempt log so failures are debuggable |
+| D5 | The server runs the **static gates** plus a bounded auto-repair loop (3 attempts, env-tunable). The **client** runs the kernel, the geometry gates and the render, and reports failures back for repair | The host that builds the mesh is the only authority on whether it builds. The server guarantees what it can actually check — that the code is structurally sound and passed every static gate — and the response carries the attempt log so failures are debuggable |
 | D6 | The model writes **free-form Manifold JS against a curated prelude** | Maximum expressiveness; the prelude is where the fillet strategy is encapsulated so the model never improvises it |
 | D7 | **No `mode: "execute"`** and no server-side artifact production | With the client owning execution, a parameter edit is a local re-run: zero tokens, zero network, zero server CPU. The earlier server-side execute mode and its 500/day budget are deleted, not deferred |
-| D8 | Per-SIWE limits: **50 LLM requests/day**, **one in-flight request per wallet**, plus the existing hourly limiter | Generation costs server-side tokens and CPU; the quota is durable and the lock prevents a wallet running two at once |
+| D8 | Per-SIWE limits: a **rounds/day budget covering the whole loop** (initial attempt plus every repair), **one in-flight request per wallet**, plus the existing hourly limiter | Every round is one paid provider call, so the quota is denominated in **rounds, not generations**. A repair is a metered request like any other, which bounds abuse with no server-side session state at all: a client cannot buy extra LLM calls by fabricating failures, because each one costs its own wallet quota |
 
 ## 3. Architecture
 
@@ -154,7 +154,7 @@ Manifold is a **mesh kernel**; it has no `fillet()`/`chamfer()`. Three strategie
 actually used** in validation stats so fidelity is never silently overstated. True B-rep
 fillets and STEP export would require an OCCT-class kernel — out of scope (§12).
 
-## 5. Validation (the server's only use of the kernel)
+## 5. Validation — split across the two hosts
 
 ### Static gates — always, in-process, no execution
 
@@ -164,27 +164,36 @@ Script size cap; reject `import`, `require`, `eval`, `Function`, `process`,
 hallucinated API calls for free, before spending a kernel run); parse the code without
 executing it (`new Function(code)` compiles but is never invoked).
 
-### Kernel validation — per attempt, in a fresh child process
+### Kernel validation — CLIENT ONLY, in the browser worker
 
-`backend/validate-runner.ts` spawns `backend/child.ts`, which loads `manifold.wasm`,
-runs the script, evaluates `status()`, `numTri()`, `volume()` and the bounding box, and
-returns **stats only**. The mesh is discarded in the child; **no bytes cross back, and
-nothing is exported**. Limits: wall-clock timeout (10 s, hard kill), JS heap flag, and a
-triangle budget enforced in the child.
+The client runs the same `core/kernel.ts` the server would have, in a worker, against the
+WASM build. It is the host that renders, so it is the host that decides. Gates: runs →
+returns a `Manifold` → `status() === 'NoError'` → non-zero triangle count within budget →
+positive volume → bounding box consistent with the declared parameters.
 
-Gates: runs → returns a `Manifold` → `status() === 'NoError'` → non-zero triangle count
-within budget → positive volume → bounding box consistent with the declared parameters.
+> **The triangle budget is fidelity-dependent and belongs here.** At the coarse validation
+> profile the plate above reports 15 466 triangles; at delivery fidelity, 245 652. A budget
+> checked anywhere but on the delivered mesh is checking a different object.
 
-> Honest limit: `child_process` has no built-in memory rlimit. Milestone 1 ships
-> timeout + triangle budget + heap flag; true `ulimit`-based caps are a hardening
-> follow-up (§11).
+`backend/validate-runner.ts` + `backend/child.ts` survive as an **evaluation harness** —
+offline build, measurement and rendering of a design — and are exported with that label.
+They are not in the request path.
 
-### Repair
+### Repair — split across the wire
 
-On any gate failure the failing code plus the exact error go back as a further turn, up to
-`CAD_MAX_REPAIR_ATTEMPTS` (default 3). Exhausting the budget returns
-`CAD_GENERATION_FAILED` with the last error and the full attempt log — the client never
-receives code that failed validation.
+A **static** failure is repaired server-side, inside one request: the failing code plus the
+exact error go back as a further turn, up to `CAD_MAX_REPAIR_ATTEMPTS` (default 3).
+Exhausting that budget returns `CAD_GENERATION_FAILED` with the last error and the full
+attempt log.
+
+A **geometric** failure is repaired across the wire, because only the client can detect it:
+the client posts the failure back, the server spends one metered round, and the client
+re-renders. The loop is bounded by the wallet's round budget rather than by a server-side
+counter, so it needs no session state (D8).
+
+> What the server can no longer promise: that the client receives code that builds.
+> What it can promise: that the client receives code that passed every static gate, and
+> that the attempt log says so.
 
 ## 6. HTTP API
 
@@ -212,10 +221,10 @@ Response — **code, never files**:
 {
   "design": { "code": "…", "parameters": { … }, "summary": "…", "turn": 3 },
   "runtime": { "contractVersion": 1, "preludeVersion": "2026-09-11" },
-  "validation": {
-    "mode": "kernel", "ok": true,
-    "stats": { "triangles": 4820, "volume_mm3": 91234.5, "bbox_mm": [80, 60, 12], "filletMode": "minkowski" }
-  },
+  // NO "validation" field. The server ran no kernel, so it cannot claim the design is
+  // geometrically sound; a field named "validation" that no longer validates is a trap
+  // for whoever reads this API next. What it does guarantee is that the design passed
+  // every static gate, which is what "diagnostics.attempts" records.
   "diagnostics": {
     "attempts": [{ "index": 0, "ok": false, "gates": { … }, "error": "…" }],
     "durationMs": 8412,

@@ -243,24 +243,27 @@ describe("derived lock TTL (R16)", () => {
   /** Representative limit sets: the defaults, and tunings on both sides. */
   const LIMITS = [
     CAD_DEFAULT_REQUEST_LIMITS,
-    { attempts: 1, providerTimeoutMs: 120000, kernelTimeoutMs: 10000 },
-    { attempts: 5, providerTimeoutMs: 30000, kernelTimeoutMs: 5000 },
-    { attempts: 2, providerTimeoutMs: 60000, kernelTimeoutMs: 1 },
+    { attempts: 1, providerTimeoutMs: 120000 },
+    { attempts: 5, providerTimeoutMs: 30000 },
+    { attempts: 2, providerTimeoutMs: 60000 },
   ];
 
   it("exceeds the worst-case request duration for every representative limits set", () => {
     for (const limits of LIMITS) {
-      const worstCase = limits.attempts * (limits.providerTimeoutMs + limits.kernelTimeoutMs);
+      const worstCase = limits.attempts * limits.providerTimeoutMs;
       expect(lockTtlFor(limits)).toBeGreaterThan(worstCase);
     }
   });
 
   it("pins the defaults the derivation is built from", () => {
     expect(CAD_DEFAULT_REQUEST_LIMITS).toEqual({
-      attempts: 3, providerTimeoutMs: 120000, kernelTimeoutMs: 10000,
+      attempts: 3, providerTimeoutMs: 120000,
     });
     // The whole 3-attempt loop, not one 120s provider call: the defect R16 names.
     expect(lockTtlFor(CAD_DEFAULT_REQUEST_LIMITS)).toBeGreaterThan(120000 * 3);
+    // No kernel term: the server runs static gates only, so a request is
+    // bounded by provider calls alone. 3 x 120000 + 30000.
+    expect(lockTtlFor(CAD_DEFAULT_REQUEST_LIMITS)).toBe(390000);
   });
 
   it("outlives the retry loop it guards", () => {
@@ -273,7 +276,7 @@ describe("derived lock TTL (R16)", () => {
     now = 120001; // past the old hard-coded 120s TTL, still inside the real worst case
     expect(acquireCadSlot(W, opts({ lockTtlMs: ttl, now: clock })).reason).toBe("IN_PROGRESS");
 
-    now = 3 * (120000 + 10000); // the last attempt can still be running here
+    now = 3 * 120000; // the last attempt can still be running here
     expect(acquireCadSlot(W, opts({ lockTtlMs: ttl, now: clock })).reason).toBe("IN_PROGRESS");
 
     releaseCadSlot(W, held.token);
@@ -292,11 +295,11 @@ describe("derived lock TTL (R16)", () => {
   });
 
   it("derives from the caller's limits, so a tune-up moves the TTL with it", () => {
-    const base = { attempts: 3, providerTimeoutMs: 30000, kernelTimeoutMs: 5000 };
+    const base = { attempts: 3, providerTimeoutMs: 30000 };
     const moreAttempts = { ...base, attempts: 5 };
     expect(cadLockTtlMs(base, {})).toBe(lockTtlFor(base));
     // Exactly one more attempt pair per extra attempt - no hidden constant.
     expect(cadLockTtlMs(moreAttempts, {}) - cadLockTtlMs(base, {}))
-      .toBe(2 * (base.providerTimeoutMs + base.kernelTimeoutMs));
+      .toBe(2 * base.providerTimeoutMs);
   });
 });

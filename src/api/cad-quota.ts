@@ -148,29 +148,32 @@ function pruneAndSave(opts: QuotaOptions, current: PersistedState, now: number):
   }
 }
 
-/** The limits one CAD request's worst-case duration is derived from. */
+/**
+ * The limits one CAD request's worst-case duration is derived from.
+ * @remarks There is deliberately no kernel term. The server no longer runs the
+ *   kernel in the request path - it runs static gates only - so a request is
+ *   bounded by provider calls and nothing else. The kernel timeout moved to the
+ *   client along with the kernel.
+ */
 export interface CadRequestLimits {
   /** Provider calls one admitted request may spend (initial attempt + repairs). */
   attempts: number;
   /** Per-call provider timeout - the DeepSeek client's timeoutMs. */
   providerTimeoutMs: number;
-  /** Per-attempt kernel (Manifold) execution timeout. */
-  kernelTimeoutMs: number;
 }
 
 /**
- * What @arbesk/cad-gen and the DeepSeek client ship with: 3 attempts, a 120s
- * per-call provider timeout and a 10s kernel timeout.
+ * What @arbesk/cad-gen and the DeepSeek client ship with: 3 provider calls at a
+ * 120s per-call timeout.
  */
 export const CAD_DEFAULT_REQUEST_LIMITS: CadRequestLimits = {
   attempts: 3,
   providerTimeoutMs: 120000,
-  kernelTimeoutMs: 10000,
 };
 
 /**
- * Head-room over the worst case: prompt assembly, kernel WASM cold start,
- * response serialization and the skew between admission and the first call.
+ * Head-room over the worst case: prompt assembly, response serialization and the
+ * skew between admission and the first provider call.
  */
 export const CAD_LOCK_TTL_MARGIN_MS = 30000;
 
@@ -178,14 +181,13 @@ export const CAD_LOCK_TTL_MARGIN_MS = 30000;
  * Derives the in-flight lock TTL from the limits that bound the request.
  * @remarks A TTL shorter than the request it guards expires mid-request, which
  *   admits a second concurrent generation for the same wallet and defeats the
- *   one-in-flight guarantee. Deriving it from attempts x (provider timeout +
- *   kernel timeout) means retuning those numbers cannot leave the TTL behind.
+ *   one-in-flight guarantee. Deriving it from attempts x provider timeout means
+ *   retuning those numbers cannot leave the TTL behind.
  * @param limits The limits the generation loop is actually configured with.
  * @returns The worst-case request duration plus the margin, in milliseconds.
  */
 export function lockTtlFor(limits: CadRequestLimits): number {
-  return limits.attempts * (limits.providerTimeoutMs + limits.kernelTimeoutMs)
-    + CAD_LOCK_TTL_MARGIN_MS;
+  return limits.attempts * limits.providerTimeoutMs + CAD_LOCK_TTL_MARGIN_MS;
 }
 
 /** The derived worst case for the shipped defaults - the backstop below. */

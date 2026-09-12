@@ -3,23 +3,25 @@
  * @remarks Wires the DeepSeek client, the prompt, the kernel-backed validator
  *   and the repair loop. This is the only entry the Express route needs.
  */
-import type { CadDesign, CadStats, TokenUsage } from "../types.ts";
+import type { CadDesign, TokenUsage } from "../types.ts";
 import { CONTRACT_VERSION, PRELUDE_VERSION } from "../core/contract.ts";
 import { PRELUDE_NAMES } from "../core/prelude.ts";
 import { parseDesign } from "../core/document.ts";
-import { validateDesign } from "./validate.ts";
+import { validateStatic } from "./validate.ts";
 import { createDeepSeekClient } from "./deepseek.ts";
 import { buildTurnMessages, buildRepairMessages } from "./prompt.ts";
 import type { TurnInput } from "./prompt.ts";
 import { generateWithRepair } from "./repair.ts";
 import type { AttemptRecord } from "./repair.ts";
 
+/**
+ * What the server bounds. Deliberately small: the kernel limits (timeout,
+ * triangle budget, wasm directory) belong to the host that runs the kernel, and
+ * that host is the client.
+ */
 export interface CadLimits {
-  timeoutMs: number;
-  maxTriangles: number;
+  /** Static repair rounds spent before giving up. */
   maxRepairAttempts: number;
-  /** Host-supplied directory holding manifold.wasm. */
-  wasmDir?: string;
 }
 
 export interface CadGenConfig {
@@ -43,10 +45,17 @@ export interface CadDiagnostics {
   tokens: TokenUsage;
 }
 
+/**
+ * One generated design.
+ * @remarks There is deliberately NO `validation` field. The server ran no
+ *   kernel, so it cannot claim the design is geometrically sound; a field named
+ *   `validation` that no longer validates is a trap for whoever reads the API
+ *   next. What the server does guarantee is that the design passed every static
+ *   gate, which is what `diagnostics.attempts` records.
+ */
 export interface CadGenerateResult {
   design: CadDesign;
   runtime: { contractVersion: number; preludeVersion: string };
-  validation: { mode: "kernel"; ok: true; stats: CadStats };
   diagnostics: CadDiagnostics;
 }
 
@@ -55,8 +64,6 @@ export interface CadGenerator {
 }
 
 const DEFAULTS: CadLimits = {
-  timeoutMs: 10000,
-  maxTriangles: 200000,
   maxRepairAttempts: 3,
 };
 
@@ -86,20 +93,15 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         client,
         parseDesign,
         buildRepairMessages,
-        validate: (design) => validateDesign(design, {
-          preludeNames: PRELUDE_NAMES,
-          limits: {
-            timeoutMs: limits.timeoutMs,
-            maxTriangles: limits.maxTriangles,
-            ...(limits.wasmDir ? { wasmDir: limits.wasmDir } : {}),
-          },
-        }),
+        // Static only, and deliberately so: the server never runs the kernel.
+        // See validateStatic for why, and for the measurement that shows the
+        // server-side proxy disagreeing with the delivered part.
+        validate: async (design) => validateStatic(design, PRELUDE_NAMES),
       }, buildTurnMessages(input), attempts, input.signal);
 
       return {
         design: { ...outcome.design, turn: (input.priorDesign?.turn ?? 0) + 1 },
         runtime: { contractVersion: CONTRACT_VERSION, preludeVersion: PRELUDE_VERSION },
-        validation: { mode: "kernel", ok: true, stats: outcome.stats as CadStats },
         diagnostics: {
           attempts: outcome.attempts,
           durationMs: Date.now() - started,

@@ -7,6 +7,9 @@ const body = (code, summary = "x") => JSON.stringify({
 });
 
 const VALID = body("return box(P.s, P.s, P.s);", "Create a 10mm cube");
+// Fails a STATIC gate, which is the only kind the server repairs now.
+const BROKEN_GUARD = body("return mysteryHelper(P.s);", "broken");
+// Geometrically broken but statically fine: the server must hand this back.
 const BROKEN_KERNEL = body("return box(P.s, NaN, P.s);", "broken");
 const BROKEN_PARSE = body("throw new Error('nope');", "broken");
 
@@ -52,16 +55,35 @@ describe("createCadGenerator", () => {
     expect(seen).toEqual([{ type: "disabled" }, { type: "enabled" }]);
   }, 40000);
 
-  it("returns a validated design on the first attempt", async () => {
+  it("returns a design on the first attempt", async () => {
     const g = generator([VALID]);
     const r = await g.generate({ prompt: "a 10mm cube" });
     expect(r.design.parameters.s.value).toBe(10);
     expect(r.design.turn).toBe(1);
-    expect(r.validation.mode).toBe("kernel");
-    expect(r.validation.stats.volumeMm3).toBeCloseTo(1000, 0);
     expect(r.diagnostics.attempts).toHaveLength(1);
     expect(r.runtime.contractVersion).toBe(1);
     expect(typeof r.runtime.preludeVersion).toBe("string");
+  }, 40000);
+
+  // The server runs no kernel, so it must NOT claim the geometry is sound. A
+  // field named "validation" that no longer validates would be a trap for
+  // whoever reads the API next.
+  it("makes no claim about geometry", async () => {
+    const g = generator([VALID]);
+    const r = await g.generate({ prompt: "a 10mm cube" });
+    expect(r.validation).toBeUndefined();
+    expect(r.diagnostics.attempts[0].gates.map((x) => x.gate)).not.toContain("kernel");
+  }, 40000);
+
+  // Pins the deliberate boundary: a design that is statically clean but
+  // geometrically broken is handed BACK, not repaired. The client catches it and
+  // drives the repair round, because only the host that builds the mesh can.
+  it("hands back a design whose only failure is geometric", async () => {
+    const g = generator([BROKEN_KERNEL]);
+    const r = await g.generate({ prompt: "a cube" });
+    expect(r.design.code).toContain("NaN");
+    expect(r.diagnostics.attempts).toHaveLength(1);
+    expect(r.diagnostics.attempts[0].ok).toBe(true);
   }, 40000);
 
   it("increments the turn from the prior document", async () => {
@@ -78,8 +100,8 @@ describe("createCadGenerator", () => {
     expect(r.design.turn).toBe(4);
   }, 40000);
 
-  it("repairs a script that fails a kernel gate", async () => {
-    const g = generator([BROKEN_KERNEL, VALID]);
+  it("repairs a script that fails a static gate", async () => {
+    const g = generator([BROKEN_GUARD, VALID]);
     const r = await g.generate({ prompt: "a cube" });
     expect(r.design.code).toContain("box(P.s");
     expect(r.diagnostics.attempts).toHaveLength(2);
@@ -102,7 +124,7 @@ describe("createCadGenerator", () => {
   }, 60000);
 
   it("accumulates token usage across attempts", async () => {
-    const g = generator([BROKEN_KERNEL, VALID]);
+    const g = generator([BROKEN_GUARD, VALID]);
     const r = await g.generate({ prompt: "x" });
     expect(r.diagnostics.tokens).toEqual({ prompt: 100, completion: 20 });
   }, 60000);
