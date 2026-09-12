@@ -48,7 +48,12 @@
   },
   "health": {
     "thresholdOverrides": [],
-    "ignore": ["blockchain/scripts/**", "test/**"]
+    // Tooling, not product. These are operator and developer entry points whose
+    // functions are long but linear - a CLI main, a rasteriser inner loop, a
+    // deploy script - which is exactly where cyclomatic and CRAP mislead. They
+    // also carry no test coverage by design, and CRAP's coverage term assumes
+    // tests that will never exist for them.
+    "ignore": ["blockchain/scripts/**", "test/**", "scripts/**"]
   },
   "ignoreDependencies": [
     "@coinbase/cdp-core",
