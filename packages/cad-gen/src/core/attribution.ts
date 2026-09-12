@@ -21,6 +21,15 @@
  *   Copyleft (LGPL, GPL, AGPL) is never ported at all: translating is creating a
  *   derivative work, so the copyleft would attach to our code.
  *
+ *   ONE SHARP EDGE, found while checking this table's sources. Facts are not
+ *   copyrightable, so reading a GPL-licensed file to learn that a board is 85mm
+ *   long creates no derivative work - only copying its EXPRESSION would (names,
+ *   structure, comments, and a fortiori code). That distinction is what makes
+ *   the board dimensions in SYSTEM_PROMPT safe to quote even though one of the
+ *   files they were cross-checked against is GPL-3.0. It is a narrow line:
+ *   quote numbers from a primary source, never lift code or prose from a
+ *   copyleft file, and prefer the primary source so the question does not arise.
+ *
  *   So the table is not a compliance form. It is the record of whose work a part
  *   rests on, and it covers permissive sources because that is the honest thing,
  *   not because the licence compels it.

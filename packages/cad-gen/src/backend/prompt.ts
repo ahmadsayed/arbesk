@@ -183,6 +183,26 @@ const SOLID_METHODS = [
  *   parses every name-paren occurrence before it, never reads a dimension as a
  *   helper.
  */
+/**
+ * PROVENANCE, checked 2026-09-12. These numbers are physical facts about real
+ * hardware - a board's outline, a connector's shell - and facts are not
+ * copyrightable, so quoting them creates no derivative work. The check that
+ * matters is that we copy NUMBERS and never EXPRESSION (names, structure,
+ * comments), and that is what happened here.
+ *
+ * The licences of every source consulted, so the next person does not have to
+ * redo this:
+ *   - Raspberry Pi board, hole pattern and connector sizes: cross-checked
+ *     against process1183/openscad-library, which is GPL-3.0. NO code, names or
+ *     comments were taken from it - the facts are also in Raspberry Pi's own
+ *     mechanical drawings, which is the correct primary citation. Treat that
+ *     repository as off-limits for anything expressive.
+ *   - Arduino Uno R3 hole pattern: KiCad's footprint library (CC-BY-SA-4.0 with
+ *     a design exception) and Arduino's published drawing, which agree exactly.
+ *     Used to VERIFY, not to copy.
+ *   - Gridfinity: the published specification's grid and base profile.
+ *   - BOSL2 gear proportions: BSD-2-Clause. Credited in ATTRIBUTED_HELPERS.
+ */
 const STANDARDS = [
   "GRIDFINITY. Compatibility is exact - a base a hundredth out does not seat in",
   "someone else's baseplate, so use these and do not round them: 42mm grid pitch;",
