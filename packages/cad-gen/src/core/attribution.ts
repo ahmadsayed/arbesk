@@ -10,13 +10,20 @@
  *   credit for it.
  *
  *   Licence gate, per the spec's section 8.1. Before adding an entry, check the
- *   source's licence against these three classes:
- *     - facts and standards (a 42mm grid, a board's hole spacing) - no obligation,
- *       because dimensions are not creative works;
- *     - permissive code (MIT, BSD, Apache-2) - a notice in our source is enough;
- *     - attribution designs (CC-BY) - THIS TABLE, so the credit reaches the user.
- *   Copyleft (LGPL, GPL, AGPL) is never ported: translating is creating a
+ *   source's licence against these classes:
+ *     - facts and standards (a 42mm grid, a board's hole spacing) - NO entry.
+ *       Dimensions are not creative works, so there is nothing to credit.
+ *     - permissive code (MIT, BSD, Apache-2) - ENTRY HERE, even though the
+ *       licence only asks for a notice. A notice buried in our source is not a
+ *       credit the person holding the printed part can see, and crediting costs
+ *       nothing but the truth.
+ *     - attribution designs (CC-BY) - ENTRY HERE, and required.
+ *   Copyleft (LGPL, GPL, AGPL) is never ported at all: translating is creating a
  *   derivative work, so the copyleft would attach to our code.
+ *
+ *   So the table is not a compliance form. It is the record of whose work a part
+ *   rests on, and it covers permissive sources because that is the honest thing,
+ *   not because the licence compels it.
  */
 import { referencedIdentifiers } from "./document.ts";
 
@@ -40,6 +47,16 @@ export interface Attribution {
  *   someone reading the port cannot miss why it is there.
  */
 export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
+  // BSD-2-Clause: a notice would satisfy it, and a notice is not a credit the
+  // user can see. Credited for the gear profile's proportions and construction,
+  // which were checked against this library rather than invented.
+  spurGear: {
+    helper: "spurGear",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), gears.scad",
+    author: "Revar Desmera",
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
   phoneStand: {
     helper: "phoneStand",
     work: "SmartPhoneHolder",

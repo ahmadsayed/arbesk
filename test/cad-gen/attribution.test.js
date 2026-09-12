@@ -24,9 +24,25 @@ describe("attributionsFor", () => {
     expect(owed[0].url).toContain("DrLex0");
   });
 
-  it("owes nothing when the script calls no ported helper", () => {
-    expect(attributionsFor("const b = box(10, 10, 10);\nreturn spurGear({ module: 2, teeth: 20, thickness: 5 });")).toEqual([]);
+  it("owes nothing when the script calls no attributed helper", () => {
+    expect(attributionsFor("const b = box(10, 10, 10);\nreturn b;")).toEqual([]);
     expect(attributionsFor("return gridfinityBase({ unitsX: 1, unitsY: 1 });")).toEqual([]);
+  });
+
+  // Permissive sources are attributed too: BSD-2 asks only for a notice, and a
+  // notice buried in our source is not a credit the user can see.
+  it("credits permissive sources as well as share-alike ones", () => {
+    const owed = attributionsFor("return spurGear({ module: 2, teeth: 20, thickness: 8 });");
+    expect(owed).toHaveLength(1);
+    expect(owed[0].licence).toBe("BSD-2-Clause");
+    expect(owed[0].url).toContain("BOSL2");
+  });
+
+  it("returns every credit a script owes, in a stable order", () => {
+    const code = "return spurGear({ module: 2, teeth: 20, thickness: 8 }).add(phoneStand({}));";
+    const owed = attributionsFor(code);
+    expect(owed.map((a) => a.helper)).toEqual(["phoneStand", "spurGear"]);
+    expect(attributionsFor(code)).toEqual(owed);
   });
 
   it("cannot be over-claimed: mentioning the name in a comment earns nothing", () => {

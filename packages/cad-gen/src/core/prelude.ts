@@ -461,6 +461,12 @@ export function buildPrelude(
      *   were trapezoids: it looked plausible and meshed with nothing.
      *   To mesh, two gears need the SAME module and pressure angle, axes
      *   parallel, at centre distance (module x (z1 + z2)) / 2.
+     *   LICENCE: the profile's proportions and construction were checked against
+     *   BOSL2 gears.scad, which is BSD-2-Clause, by Revar Desmera and other
+     *   contributors. The credit is declared in ATTRIBUTED_HELPERS
+     *   (./attribution.ts) and returned with every design that calls this -
+     *   BSD-2 would be satisfied by a notice in our source, but a notice is not
+     *   a credit the person holding the printed part can see.
      */
     spurGear: (opts: any = {}) => {
       const o = opts ?? {};

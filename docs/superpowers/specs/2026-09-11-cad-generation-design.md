@@ -40,7 +40,7 @@ the browser worker and WASM bundling are milestone 2.
 | D5 | The server runs the **static gates** plus a bounded auto-repair loop (3 attempts, env-tunable). The **client** runs the kernel, the geometry gates and the render, and reports failures back for repair | The host that builds the mesh is the only authority on whether it builds. The server guarantees what it can actually check — that the code is structurally sound and passed every static gate — and the response carries the attempt log so failures are debuggable |
 | D6 | The model writes **free-form Manifold JS against a curated prelude** | Maximum expressiveness; the prelude is where the fillet strategy is encapsulated so the model never improvises it |
 | D7 | **No `mode: "execute"`** and no server-side artifact production | With the client owning execution, a parameter edit is a local re-run: zero tokens, zero network, zero server CPU. The earlier server-side execute mode and its 500/day budget are deleted, not deferred |
-| D9 | Parts derived from a **licensed reference design** carry **attribution**, surfaced in the API response and persisted with the design. The server derives the set from the helpers the script actually **calls**, never from the model's memory | A ported profile is a derivative work, so a CC-BY credit has to reach the user, not just the source tree. A model cannot be relied on to remember a licence, and an attribution that depends on remembering is one that goes missing the first time the prompt is trimmed. Deriving it from `referencedIdentifiers(code)` — the scan the guard already runs — also stops it being over-claimed: a design that never calls the helper carries no credit for it |
+| D9 | Parts resting on a **reference design or library** carry **attribution** — permissive sources included, not only share-alike ones — surfaced in the API response and persisted with the design. The server derives the set from the helpers the script actually **calls**, never from the model's memory | A ported profile is a derivative work, so a CC-BY credit has to reach the user, not just the source tree. A model cannot be relied on to remember a licence, and an attribution that depends on remembering is one that goes missing the first time the prompt is trimmed. Deriving it from `referencedIdentifiers(code)` — the scan the guard already runs — also stops it being over-claimed: a design that never calls the helper carries no credit for it |
 | D8 | Per-SIWE limits: a **rounds/day budget covering the whole loop** (initial attempt plus every repair), **one in-flight request per wallet**, plus the existing hourly limiter | Every round is one paid provider call, so the quota is denominated in **rounds, not generations**. A repair is a metered request like any other, which bounds abuse with no server-side session state at all: a client cannot buy extra LLM calls by fabricating failures, because each one costs its own wallet quota |
 
 ## 3. Architecture
@@ -422,9 +422,15 @@ at runtime:
 | source | example | obligation |
 |---|---|---|
 | **Facts and standards** | Gridfinity's 42 mm grid and 4.75 mm base profile; Raspberry Pi board and hole dimensions; ISO gear proportions | **None.** Dimensions are facts, not creative works, so quoting them is not derivation |
-| **Permissive code** (MIT, BSD-2/3, Apache-2) | BOSL2's gear maths | Keep the copyright notice in our source. No user-facing obligation |
+| **Permissive code** (MIT, BSD-2/3, Apache-2) | BOSL2's gear maths | **Also attributed to the user.** The licence asks only for a notice in our source, and a notice buried in a repository is not a credit the person holding the printed part can see |
 | **Attribution designs** (CC-BY) | DrLex0's `SmartPhoneHolder` | **Attribution must reach the user.** A ported profile is a derivative work, so the credit belongs in the response, not only in the source tree |
 | **Copyleft** (LGPL, GPL, AGPL) | MCAD | **Not usable, ever.** Translating is creating a derivative work, so the copyleft would attach to our ported code |
+
+> **The table is not a compliance form.** It is the record of whose work a part rests on, so it
+> covers permissive sources even where the licence would be satisfied by a notice. Crediting
+> costs nothing but the truth, and a credit that only appears when a licence compels it is a
+> credit that reads as a legal formality rather than as acknowledgement. Only facts and
+> standards - dimensions, standard proportions - carry no entry, because they are not works.
 
 **Attribution is computed, never remembered.** Each prelude helper that derives from a
 licensed source declares it in a table keyed by helper name; the server intersects that table
