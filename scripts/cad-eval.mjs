@@ -319,10 +319,13 @@ function resolve(s) {
  * @returns {Mesh} Positions and triangle indices.
  */
 function readAsciiStl(file) {
-  const text = fs.readFileSync(file, "utf8");
-  if (!/^\s*solid/.test(text)) {
-    throw new Error(file + " is not an ASCII STL (binary STL is not supported)");
+  const buf = fs.readFileSync(file);
+  // OpenSCAD writes ASCII, but almost every STL published elsewhere is binary.
+  // Detected the standard way: a binary file's first five bytes are not "solid".
+  if (!/^\s*solid/.test(buf.subarray(0, 5).toString("utf8"))) {
+    return readBinaryStl(buf);
   }
+  const text = buf.toString("utf8");
   /** @type {number[]} */
   const positions = [];
   /** @type {number[]} */
@@ -337,6 +340,30 @@ function readAsciiStl(file) {
     }
   }
   return { positions: new Float32Array(positions), indices: new Uint32Array(indices) };
+}
+
+/**
+ * Reads a binary STL into a mesh.
+ * @remarks 80-byte header, a triangle count, then 50 bytes each: a normal the
+ *   renderer recomputes anyway, three vertices, and a trailing attribute.
+ * @param {Buffer} buf The whole file.
+ * @returns {Mesh} Positions and triangle indices.
+ */
+function readBinaryStl(buf) {
+  const count = buf.readUInt32LE(80);
+  const positions = new Float32Array(count * 9);
+  const indices = new Uint32Array(count * 3);
+  for (let t = 0; t < count; t++) {
+    const at = 84 + t * 50 + 12;
+    for (let v = 0; v < 3; v++) {
+      const o = t * 9 + v * 3;
+      positions[o] = buf.readFloatLE(at + v * 12);
+      positions[o + 1] = buf.readFloatLE(at + v * 12 + 4);
+      positions[o + 2] = buf.readFloatLE(at + v * 12 + 8);
+      indices[t * 3 + v] = t * 3 + v;
+    }
+  }
+  return { positions, indices };
 }
 
 // ----------------------------------------------------------------- components
