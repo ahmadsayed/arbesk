@@ -10,7 +10,7 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "stack",
+  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "phoneStand", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -53,17 +53,15 @@ const GEAR_DEDENDUM = 1.25;
 const GF_GRID = 42;
 /** Per-side clearance, so a 1x1 footprint is 41.5 rather than 42. */
 const GF_CLEARANCE = 0.25;
-const GF_HEIGHT_UNIT = 7;
 /** Base profile, bottom to top: 45-degree taper, riser, 45-degree taper. */
 const GF_TAPER_BOTTOM = 0.8;
 const GF_RISER = 1.8;
 const GF_TAPER_TOP = 2.15;
 const GF_BASE_HEIGHT = GF_TAPER_BOTTOM + GF_RISER + GF_TAPER_TOP;
 const GF_CORNER_RADIUS = 3.75;
-/** Magnet and M3 screw centres sit on this square within each cell. */
-const GF_HOLE_SPACING = 26;
-const GF_MAGNET_DIAMETER = 6.5;
-const GF_MAGNET_DEPTH = 2.4;
+// The 7mm height unit, the 26mm magnet/screw square and the 6.5mm magnet holes
+// are quoted in SYSTEM_PROMPT's STANDARDS section rather than kept here: no
+// helper reads them, and a constant nothing reads is a constant that drifts.
 
 /** Involute samples per flank. More is smoother and slower. */
 const GEAR_FLANK_STEPS = 8;
@@ -534,6 +532,125 @@ export function buildPrelude(
         out = out ? out.add(post) : post;
       }
       return out;
+    },
+
+
+    /**
+     * A desk stand that holds a phone or tablet at a lean.
+     * @remarks PORTED, not generated. Direct translation of DrLex0's
+     *   SmartPhoneHolder (CC-BY), profile points and all: every previous attempt
+     *   to have the model draw this shape produced something that was one solid
+     *   and still not a stand - a V-wedge, a flat panel with a fin. The profile
+     *   is 91 hand-tuned points; there is nothing to infer and nothing to get
+     *   wrong, so it is quoted.
+     *   ATTRIBUTION IS REQUIRED: see ATTRIBUTED_HELPERS in ./attribution.ts.
+     *   The unit is one solid - a channel cut through a body - and nothing is
+     *   assembled, which is why it cannot come apart.
+     * @param opts thickness (phone gap, mm), lift (how high the phone sits),
+     *   width (how much of the phone it holds).
+     */
+    phoneStand: (opts: any = {}) => {
+      const o = opts ?? {};
+      const thick = o.thickness ?? 12;
+      const lift = o.lift ?? 40;
+      const width = o.width ?? 60;
+      const rearLip = o.rearLip ?? 15;
+      const DEG10 = (10 * Math.PI) / 180;
+      const ox = thick * Math.cos(DEG10);
+      const ox2 = ox + (thick * Math.sin(DEG10) + lift - 38.2967) * Math.tan(DEG10);
+      const lift2 = lift + thick * Math.sin(DEG10);
+      const rear = rearLip + 14.495;
+      const outer: number[][] = [
+      [rear, 0],
+      [rear, 2],
+      [16.495, 2],
+      [15.877, 2.09789],
+      [15.3195, 2.38197],
+      [14.877, 2.82443],
+      [14.5929, 3.38197],
+      [14.495, 4],
+      [14.4182, 23.5716 + lift],
+      [14.1905, 24.322 + lift],
+      [13.8209, 25.0135 + lift],
+      [13.3234, 25.6196 + lift],
+      [12.7173, 26.1171 + lift],
+      [12.0258, 26.4867 + lift],
+      [11.2754, 26.7144 + lift],
+      [10.495, 26.7912 + lift],
+      [8.758, 26.7912 + lift],
+      [7.96429, 26.7155 + lift],
+      [7.17439, 26.4914 + lift],
+      [6.41864, 26.1273 + lift],
+      [5.72611, 25.6374 + lift],
+      [5.12338, 25.0405 + lift],
+      [4.63365, 24.3595 + lift],
+      [4.27570, 23.6205 + lift],
+      [4.06332, 22.852 + lift],
+      [0.034995, 0.447456 + lift],
+      [-0.234827, 0.165604 + lift],
+      [-0.591969, 0.008461 + lift],
+      [-0.982058, lift],
+      [0.362259 - ox, -0.159795 + lift2],
+      [0.080406 - ox, 0.110022 + lift2],
+      [-0.076738 - ox, 0.467158 + lift2],
+      [-0.085251 - ox, 0.857245 + lift2],
+      [0.959858 - ox, 6.78435 + lift2],
+      [-1.00976 - ox, 7.13165 + lift2],
+      [-7.90847 - ox2, 5.81525],
+      [-7.83752 - ox2, 4.7634],
+      [-7.59339 - ox2, 3.764],
+      [-7.1821 - ox2, 2.84167],
+      [-6.61377 - ox2, 2.0191],
+      [-5.90239 - ox2, 1.31657],
+      [-5.06549 - ox2, 0.751364],
+      [-4.12367 - ox2, 0.3374],
+      [-3.10012 - ox2, 0.084871],
+      [-2.02004 - ox2, 0],
+      ];
+      const inner: number[][] = [
+      [12.495, 4],
+      [12.3971, 3.38197],
+      [12.1131, 2.82443],
+      [11.6706, 2.38197],
+      [11.1131, 2.09789],
+      [10.495, 2],
+      [-2.59531 - ox2, 2.09461],
+      [-3.48387 - ox2, 2.37482],
+      [-4.26807 - ox2, 2.82985],
+      [-4.91777 - ox2, 3.44222],
+      [-5.40802 - ox2, 4.18839],
+      [-5.71996 - ox2, 5.03969],
+      [-5.84161 - ox2, 5.96341],
+      [-5.7683 - ox2, 6.92404],
+      [-0.638426 - ox, -2.71833 + lift2],
+      [-0.368612 - ox, -2.43648 + lift2],
+      [-0.011475 - ox, -2.27934 + lift2],
+      [0.378613 - ox, -2.27083 + lift2],
+      [-0.658872, -2.01151 + lift],
+      [0.0041122, -1.90311 + lift],
+      [0.626352, -1.6499 + lift],
+      [1.17665, -1.26458 + lift],
+      [1.62741, -0.766468 + lift],
+      [1.95602, -0.180542 + lift],
+      [2.14601, 0.463818 + lift],
+      [6.24633, 23.3314 + lift],
+      [6.52989, 23.8064 + lift],
+      [6.91965, 24.2143 + lift],
+      [7.38906, 24.5273 + lift],
+      [7.90612, 24.7241 + lift],
+      [8.43559, 24.7912 + lift],
+      [10.495, 24.7912 + lift],
+      [11.0127, 24.7231 + lift],
+      [11.495, 24.5233 + lift],
+      [11.9092, 24.2054 + lift],
+      [12.2271, 23.7912 + lift],
+      [12.4269, 23.3089 + lift],
+      [12.495, 22.7912 + lift],
+      ];
+      void rear;
+      return Manifold.extrude(
+        CrossSection.ofPolygons([outer, inner], "EvenOdd"), width, 0, 0, [1, 1], true,
+      ).rotate([0, 0, 90]).translate([lift / 2 + 10, 0, 0]);
     },
 
     /**

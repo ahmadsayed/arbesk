@@ -17,10 +17,6 @@
  * 66.79 x 49.82 x 60.00mm reference, missing only the subtracted slots and
  * corner cutters that this does not yet port.
  */
- * Ports DrLex0's SmartPhoneHolder extrusionProfile() to Manifold JS.
- * Reads the SCAD, pulls the 91-point polygon and its two closed paths, resolves
- * the SCAD parameter expressions, and extrudes the resulting contour.
- */
 import fs from "node:fs";
 import path from "node:path";
 import Module from "manifold-3d";
@@ -30,6 +26,7 @@ const SCAD = path.join(ROOT, "test-results/reference/SmartPhoneHolder.scad");
 const src = fs.readFileSync(SCAD, "utf8");
 
 // The parameters this instance was exported with (drives the example STL).
+/** @type {Record<string, number>} */
 const P = { thick: 12.0, lift: 40, width: 60.0, rearLip: 15 };
 P.rear = P.rearLip + 14.495;
 P.ox = P.thick * Math.cos((10 * Math.PI) / 180);
@@ -37,6 +34,7 @@ P.ox2 = P.ox + (P.thick * Math.sin((10 * Math.PI) / 180) + P.lift - 38.2967) * M
 P.lift2 = P.lift + P.thick * Math.sin((10 * Math.PI) / 180);
 
 /** Resolves a SCAD numeric expression against the parameter table. */
+/** @param {string} e A SCAD numeric expression. @returns {number} Its value. */
 const evalExpr = (e) => {
   const body = e.replace(/\/\/[^\n]*/g, "").trim().replace(/,$/, "");
   if (!/^[-+*/().\d\sA-Za-z_]+$/.test(body)) throw new Error("unsupported expression: " + body);
@@ -46,12 +44,12 @@ const evalExpr = (e) => {
 // points = [ [x, y], ... ] inside extrusionProfile().
 const profileAt = src.indexOf("module extrusionProfile()");
 const pointsBlock = src.slice(src.indexOf("points = [", profileAt), src.indexOf("], paths = [", profileAt));
-const points = [...pointsBlock.matchAll(/\[\s*([^\[\]]+?)\s*\]/g)]
+const points = [...pointsBlock.matchAll(/\[\s*([^[\]]+?)\s*\]/g)]
   .map((m) => m[1].split(",").map((v) => evalExpr(v)));
 console.log("points parsed: " + points.length);
 
 const pathsBlock = src.slice(src.indexOf("paths = [", profileAt), src.indexOf("]);", src.indexOf("paths = [", profileAt)));
-const paths = [...pathsBlock.matchAll(/\[([^\[\]]+)\]/g)]
+const paths = [...pathsBlock.matchAll(/\[([^[\]]+)\]/g)]
   .map((m) => m[1].split(",").map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v)));
 
 console.log("paths: " + paths.map((p) => p.length).join(" + ") + " indices");
@@ -79,7 +77,7 @@ const { CrossSection, Manifold } = m;
 // The SCAD applies rotate([0,0,90]) after extruding; bake it into the profile
 // so the ported part comes out in the same orientation as the reference STL.
 const rotated = contours.map((c) => c.map(([x, y]) => [-y, x]));
-const cs = CrossSection.ofPolygons(rotated, "EvenOdd");
+const cs = CrossSection.ofPolygons(/** @type {any} */ (rotated), "EvenOdd");
 console.log("profile area: " + cs.area().toFixed(1) + " mm2");
 const solid = Manifold.extrude(cs, P.width, 0, 0, [1, 1], true);
 const b = solid.boundingBox();
