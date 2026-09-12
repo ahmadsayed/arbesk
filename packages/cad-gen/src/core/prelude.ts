@@ -10,7 +10,7 @@ import type { ManifoldModule } from "../types.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "phoneStand", "stack",
+  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -35,6 +35,19 @@ export type FilletQuality = "draft" | "high";
 
 /** Segments a circular feature gets when neither the script nor the host says. */
 const DEFAULT_SEGMENTS = 64;
+
+/**
+ * Printability defaults for boardCase, every one overridable by the caller.
+ * @remarks A defaults object rather than a chain of \`??\` at each use: the chain
+ *   read fine and pushed the function's branching past the complexity gate, which
+ *   is a fair signal that the defaults were doing work the caller's spec should
+ *   do in one place.
+ */
+const CASE_DEFAULTS = {
+  boardLength: 85, boardWidth: 56, wall: 2.5, floor: 2.5, clearance: 2,
+  standoff: 4, height: 18, cornerRadius: 3, standoffDiameter: 6, screw: 2.4,
+  holes: [] as number[][], cutouts: [] as any[],
+};
 
 /**
  * Standard gear proportions, as multiples of the module.
@@ -272,6 +285,69 @@ function stackAlong(solids: any[], axis: 0 | 1 | 2): any {
     cursor += box.max[axis] - box.min[axis];
   }
   return out;
+}
+
+/**
+ * One post per [x, y] position, rising from a base at z = 0.
+ * @remarks Shared by `standoffs` and `boardCase`: a case that mounted its board
+ *   with different arithmetic from a standalone standoff would be two chances to
+ *   get the same placement wrong.
+ * @param module The loaded Manifold module.
+ * @param holes Board-relative [x, y] mounting-hole positions.
+ * @param o diameter, height, and an optional screw bore.
+ * @param segments Circular segments for the posts.
+ * @returns The posts unioned, or null when there are none.
+ */
+function standoffPosts(module: ManifoldModule, holes: any[], o: any, segments: number): any {
+  const outer = o.diameter ?? 6;
+  const height = o.height ?? 5;
+  let out: any = null;
+  for (const [x, y] of holes) {
+    let post: any = module.Manifold.cylinder(height, outer / 2, outer / 2, segments, true)
+      .translate([x, y, height / 2]);
+    if (o.screw > 0) {
+      post = post.subtract(
+        module.Manifold.cylinder(height + 2, o.screw / 2, o.screw / 2, segments, true)
+          .translate([x, y, height / 2]),
+      );
+    }
+    out = out ? out.add(post) : post;
+  }
+  return out;
+}
+
+/**
+ * A block that punches one opening through a case wall.
+ * @remarks Deliberately overshoots the wall on both sides, so the opening is a
+ *   through-hole rather than a pocket - a connector needs clearance outside the
+ *   case as much as inside it.
+ * @param module The loaded Manifold module, for its cube.
+ * @param c One cutout spec: edge, at, width, height, sill.
+ * @param L Board length, mm. @param W Board width, mm.
+ * @param gap Board-to-wall clearance. @param wall Wall thickness.
+ * @returns A solid to subtract.
+ */
+function cutoutFor(
+  module: ManifoldModule, c: any, L: number, W: number, gap: number, wall: number,
+): any {
+  const Manifold = module.Manifold;
+  const depth = wall + gap + 4;
+  const w = c.width ?? 12;
+  const h = c.height ?? 12;
+  const sill = c.sill ?? 0;
+  const half = gap + wall;
+  switch (c.edge) {
+    case "x-":
+      return Manifold.cube([depth * 2, w, h], true).translate([-half + wall - depth, c.at, sill + h / 2]);
+    case "x+":
+      return Manifold.cube([depth * 2, w, h], true).translate([L + half - wall + depth, c.at, sill + h / 2]);
+    case "y-":
+      return Manifold.cube([w, depth * 2, h], true).translate([c.at, -half + wall - depth, sill + h / 2]);
+    case "y+":
+      return Manifold.cube([w, depth * 2, h], true).translate([c.at, W + half - wall + depth, sill + h / 2]);
+    default:
+      throw new Error("cutout edge must be 'x-', 'x+', 'y-' or 'y+'");
+  }
 }
 
 /** Rotates a Z-aligned solid onto the requested axis. */
@@ -520,24 +596,10 @@ export function buildPrelude(
      */
     standoffs: (holes: any, opts: any = {}) => {
       const o = opts ?? {};
-      const outer = o.diameter ?? 6;
-      const height = o.height ?? 5;
       if (!Array.isArray(holes) || holes.length === 0) {
         throw new Error("standoffs needs a non-empty list of [x, y] positions");
       }
-      let out: any = null;
-      for (const [x, y] of holes) {
-        let post: any = Manifold.cylinder(height, outer / 2, outer / 2, segmentsFor(undefined), true)
-          .translate([x, y, height / 2]);
-        if (o.screw > 0) {
-          post = post.subtract(
-            Manifold.cylinder(height + 2, o.screw / 2, o.screw / 2, segmentsFor(undefined), true)
-              .translate([x, y, height / 2]),
-          );
-        }
-        out = out ? out.add(post) : post;
-      }
-      return out;
+      return standoffPosts(module, holes, o, segmentsFor(undefined));
     },
 
 
@@ -660,6 +722,66 @@ export function buildPrelude(
       return Manifold.extrude(
         CrossSection.ofPolygons([outer, inner], "EvenOdd"), width, 0, 0, [1, 1], true,
       ).rotate([0, 0, 90]).translate([lift / 2 + 10, 0, 0]);
+    },
+
+    /**
+     * A one-piece case body for a PCB, with standoffs on its mounting holes.
+     * @remarks Owns ONE frame so there is no frame to mix up: the board's
+     *   lower-left corner is (0, 0), it rises along +z, and the case is built
+     *   around it. That matters because the failure here was never size - it was
+     *   standoffs placed in board coordinates while the shell was built centred
+     *   on the origin, which put two of four posts outside the walls and passed
+     *   every gate. Taking the hole list straight from the board's published
+     *   dimensions removes the arithmetic rather than correcting it.
+     *
+     *   Ports are cut THROUGH the wall with `cutouts`, each given as the edge to
+     *   cut, where along that edge, and how big - a wall closed across a
+     *   connector makes the case useless, and a plug needs clearance outside the
+     *   wall as well as inside.
+     *
+     *   LICENCE: the shell structure - an open tray, ports grouped on one edge,
+     *   standoffs on the floor - was worked out against raksahb's OpenSCAD Pi 4
+     *   case, which is MIT. The credit is declared in ATTRIBUTED_HELPERS
+     *   (./attribution.ts) and returned with every design that calls this.
+     * @param opts boardLength and boardWidth (the PCB); holes as [[x, y], ...]
+     *   board-relative; wall, floor, clearance, height (interior above the
+     *   floor), standoff and screw; cutouts as
+     *   [{ edge: 'x-'|'x+'|'y-'|'y+', at, width, height, sill }].
+     */
+    boardCase: (opts: any = {}) => {
+      const o = { ...CASE_DEFAULTS, ...(opts ?? {}) };
+      const L = o.boardLength;
+      const W = o.boardWidth;
+      const wall = o.wall;
+      const floorT = o.floor;
+      const gap = o.clearance;
+      const stand = o.standoff;
+      const cavity = o.height;
+      const r = o.cornerRadius;
+      const total = floorT + cavity;
+      const outerL = L + 2 * (gap + wall);
+      const outerW = W + 2 * (gap + wall);
+      const cx = L / 2;
+      const cy = W / 2;
+
+      // Shell, in the board's frame, sitting on z = 0.
+      let part: any = Manifold.extrude(roundRect(outerL, outerW, r), total, 0, 0, [1, 1], true)
+        .translate([cx, cy, total / 2])
+        .subtract(Manifold.cube([L + 2 * gap, W + 2 * gap, cavity + 1], true)
+          .translate([cx, cy, floorT + (cavity + 1) / 2]));
+
+      if (o.holes.length > 0) {
+        part = part.add(standoffPosts(module, o.holes, {
+          diameter: o.standoffDiameter,
+          height: stand,
+          screw: o.screw,
+        }, segmentsFor(undefined)).translate([0, 0, floorT]));
+      }
+
+      for (const c of o.cutouts) {
+        part = part.subtract(cutoutFor(module, c, L, W, gap, wall));
+      }
+      return part;
     },
 
     /**

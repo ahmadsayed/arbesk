@@ -47,6 +47,15 @@ export interface Attribution {
  *   someone reading the port cannot miss why it is there.
  */
 export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
+  // MIT: the shell structure - an open tray, ports grouped on one edge, standoffs
+  // on the floor - was worked out against this case body rather than invented.
+  boardCase: {
+    helper: "boardCase",
+    work: "OpenSCAD RPi 4 case (rpi/pi-case-body.stl, rpi_case.scad)",
+    author: "raksahb",
+    licence: "MIT",
+    url: "https://github.com/raksahb/openscad",
+  },
   // BSD-2-Clause: a notice would satisfy it, and a notice is not a credit the
   // user can see. Credited for the gear profile's proportions and construction,
   // which were checked against this library rather than invented.
