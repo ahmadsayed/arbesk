@@ -1,10 +1,13 @@
 # Manifold-based engineering CAD generation (`@arbesk/cad-gen`) — design
 
-**Date:** 2026-09-11 · **Revision:** 3 · **Status:** 🔒 **LOCKED** · **Milestone:** 1 (code generation service)
+**Date:** 2026-09-11 · **Revision:** 4 · **Status:** 🔒 **LOCKED** · **Milestone:** 1 (code generation service)
 
-> **Locked 2026-09-11.** This document is the contract; changes require a new revision, not an
-> edit. Revision 3 moved the kernel out of the server request path (D3, D5, §5) and made the
-> daily quota meter **rounds** rather than generations (D8). The full ruling record with
+> **Locked 2026-09-11; revision 4 2026-09-12.** This document is the contract; changes require
+> a new revision, not an edit. Revision 3 moved the kernel out of the server request path
+> (D3, D5, §5) and made the daily quota meter **rounds** rather than generations (D8).
+> Revision 4 adds **licence attribution** for parts derived from reference designs (D9, §8.1),
+> which became necessary the moment porting a published design turned out to be a more
+> reliable route to a correct part than generating one. The full ruling record with
 > measurements behind every decision is
 > `.superpowers/sdd/2026-09-11-cad-generation/progress.md` — read it before changing anything
 > here. The plan that executes this spec is
@@ -37,6 +40,7 @@ the browser worker and WASM bundling are milestone 2.
 | D5 | The server runs the **static gates** plus a bounded auto-repair loop (3 attempts, env-tunable). The **client** runs the kernel, the geometry gates and the render, and reports failures back for repair | The host that builds the mesh is the only authority on whether it builds. The server guarantees what it can actually check — that the code is structurally sound and passed every static gate — and the response carries the attempt log so failures are debuggable |
 | D6 | The model writes **free-form Manifold JS against a curated prelude** | Maximum expressiveness; the prelude is where the fillet strategy is encapsulated so the model never improvises it |
 | D7 | **No `mode: "execute"`** and no server-side artifact production | With the client owning execution, a parameter edit is a local re-run: zero tokens, zero network, zero server CPU. The earlier server-side execute mode and its 500/day budget are deleted, not deferred |
+| D9 | Parts derived from a **licensed reference design** carry **attribution**, surfaced in the API response and persisted with the design. The server derives the set from the helpers the script actually **calls**, never from the model's memory | A ported profile is a derivative work, so a CC-BY credit has to reach the user, not just the source tree. A model cannot be relied on to remember a licence, and an attribution that depends on remembering is one that goes missing the first time the prompt is trimmed. Deriving it from `referencedIdentifiers(code)` — the scan the guard already runs — also stops it being over-claimed: a design that never calls the helper carries no credit for it |
 | D8 | Per-SIWE limits: a **rounds/day budget covering the whole loop** (initial attempt plus every repair), **one in-flight request per wallet**, plus the existing hourly limiter | Every round is one paid provider call, so the quota is denominated in **rounds, not generations**. A repair is a metered request like any other, which bounds abuse with no server-side session state at all: a client cannot buy extra LLM calls by fabricating failures, because each one costs its own wallet quota |
 
 ## 3. Architecture
@@ -238,7 +242,16 @@ Response — **code, never files**:
     "durationMs": 8412,
     "tokens": { "prompt": 3120, "completion": 840 }
   },
-  "provider": { "id": "deepseek", "model": "deepseek-flash" }
+  "provider": { "id": "deepseek", "model": "deepseek-flash" },
+  // Credit for any licensed reference design this part derives from (§8.1). Computed
+  // from the helpers the script actually CALLS, never from what the model says. Empty
+  // when nothing licensed is involved - standard dimensions and our own maths are
+  // facts, not works. This is what the chat shows the user.
+  "attribution": [
+    { "work": "SmartPhoneHolder", "author": "DrLex", "licence": "CC-BY",
+      "url": "https://github.com/DrLex0/print3d-customizable-smartphone-holder",
+      "helper": "phoneStand" }
+  ]
 }
 ```
 
@@ -399,6 +412,38 @@ allowlist. Guard-on-both-hosts is defence in depth, not redundancy.
 - No on-chain quota gate in milestone 1: nothing is minted and no asset is created, so the
   free-tier contract semantics do not apply yet. Revisit when generation becomes a
   published asset.
+
+### Licences and attribution
+
+A part this system produces can be a **derivative of someone else's design**, so the licence
+of the source travels with the output. Four classes, and only one of them asks anything of us
+at runtime:
+
+| source | example | obligation |
+|---|---|---|
+| **Facts and standards** | Gridfinity's 42 mm grid and 4.75 mm base profile; Raspberry Pi board and hole dimensions; ISO gear proportions | **None.** Dimensions are facts, not creative works, so quoting them is not derivation |
+| **Permissive code** (MIT, BSD-2/3, Apache-2) | BOSL2's gear maths | Keep the copyright notice in our source. No user-facing obligation |
+| **Attribution designs** (CC-BY) | DrLex0's `SmartPhoneHolder` | **Attribution must reach the user.** A ported profile is a derivative work, so the credit belongs in the response, not only in the source tree |
+| **Copyleft** (LGPL, GPL, AGPL) | MCAD | **Not usable, ever.** Translating is creating a derivative work, so the copyleft would attach to our ported code |
+
+**Attribution is computed, never remembered.** Each prelude helper that derives from a
+licensed source declares it in a table keyed by helper name; the server intersects that table
+with `referencedIdentifiers(code)` — the same lexical scan the guard already performs for
+`UNKNOWN_HELPER` — and returns the matches. Two properties fall out of doing it that way:
+
+- It cannot be **forgotten**, because the model is not part of the calculation.
+- It cannot be **over-claimed**, because a script that never calls the helper produces no
+  credit for it.
+
+The set is returned in the response body (`attribution`, §6) for the chat to display, **and**
+written into the design's provenance, so a saved or published asset keeps its credit after the
+conversation is gone.
+
+> Open question for the owner, not a technical one: a ported design is a derivative work of
+> the *design*, not merely of the code, and CC-BY's obligations on a 3D-printed derivative are
+> a legal question, not an engineering one. Attribution-in-the-response is the conservative
+> reading and the one this spec adopts; confirm it with whoever owns the licence position
+> before shipping a ported helper.
 
 ## 9. Testing
 

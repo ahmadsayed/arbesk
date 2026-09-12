@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 🔒 **LOCKED** (revision 3, 2026-09-11). Tasks 1–11 are complete; their code is committed. **Read AMENDMENTS below before executing anything** — the architecture moved after tasks 5, 7 and 11 were written.
+**Status:** 🔒 **LOCKED** (revision 4, 2026-09-12). Tasks 1–11 are complete; their code is committed. **Read AMENDMENTS below before executing anything** — the architecture moved after tasks 5, 7 and 11 were written, and revision 4 adds Task 15 (licence attribution).
 
 **Goal:** A prompt-driven engineering-CAD service: DeepSeek writes Manifold JS plus a parameter table, the server runs the **static gates** and returns the code, and the **client** executes it — running the kernel, the geometry gates, the triangle budget and the render — reporting failures back for repair.
 
@@ -53,6 +53,7 @@ compiled binary, no `manifold.wasm` in the runtime image).
 | **12 — HTTP route** | **SUPERSEDED. Replaced by Task 12R at the end of this plan** (two metered endpoints and the client-driven repair round). |
 | 13 — Exporters | Unchanged in substance, re-homed: the exporters are the client's. |
 | 14 — Harness, docs, cleanup | Unchanged, plus: the harness is now a first-class deliverable rather than a one-off, and the spike probes `scripts/cad-spike*.mjs` still need deleting. |
+| **15 — Licence attribution** | **NEW in revision 4.** Spec D9 / §8.1. Added once porting a published design turned out to be a more reliable route to a correct part than generating one — the phone stand converter reproduces DrLex0's design to 0.07mm, and DrLex0's licence is CC-BY. |
 
 ---
 
@@ -4273,6 +4274,65 @@ quota rejection never takes the lock. Extract it once; do not duplicate it per r
 
 **Not in this task:** the browser worker, the client render loop and the repair round trip. Those
 are milestone 2 (§7 of the spec); this task ships the two endpoints they call.
+
+---
+
+---
+
+### Task 15: Licence attribution (spec D9, §8.1)
+
+A ported design is a **derivative work**, so its licence travels with the output. This task
+makes the credit automatic, because the one thing that must not happen is it depending on the
+model remembering.
+
+**Files:**
+- Create: `packages/cad-gen/src/core/attribution.ts`
+- Modify: `packages/cad-gen/src/backend/facade.ts` (return the set)
+- Test: `test/cad-gen/attribution.test.js`
+
+**Interfaces:**
+- `interface Attribution { work: string; author: string; licence: string; url: string; helper: string }`
+- `ATTRIBUTED_HELPERS: Record<string, Attribution>` — helper name to its source
+- `attributionsFor(code: string): Attribution[]` — the helpers this script actually calls
+
+- [ ] **Step 1: The failing test.** A script calling a ported helper returns its attribution.
+  A script calling none returns `[]`. A script calling two returns both, in a **stable order**
+  (sort by helper name — the scan returns a Set, and an unstable order would make responses
+  differ run to run for no reason).
+
+- [ ] **Step 2: `attribution.ts`.** The table, and `attributionsFor` implemented as an
+  intersection of `ATTRIBUTED_HELPERS` with `referencedIdentifiers(code)` — reusing the scan
+  the guard already performs, so there is no second parser to drift.
+
+- [ ] **Step 3: A lockstep test, in the spirit of the prompt/prelude one.** Every key in
+  `ATTRIBUTED_HELPERS` must exist in `PRELUDE_NAMES`, and every entry must carry a non-empty
+  `author`, `licence` and `url`. Without it, renaming a helper silently orphans its
+  attribution and the credit disappears with no error anywhere.
+
+- [ ] **Step 4: `CadGenerateResult` gains `attribution: Attribution[]`**, and the route
+  returns it. It is **not** optional and **not** model-authored: an empty array means "nothing
+  licensed was used", which is a claim the server can actually support.
+
+- [ ] **Step 5: Persist it.** Write the set into the design's provenance so a saved or
+  published asset keeps its credit after the conversation is gone. The manifest's
+  `metadata.chat` block already records prompt provenance — attribution belongs beside it.
+
+- [ ] **Step 6: Provenance of the table itself.** Every entry cites the source file and the
+  licence as read from that source, with the date. An attribution whose own basis is not
+  recorded is one nobody can re-verify.
+
+- [ ] **Step 7: The licence gate, written down as a rule.** Only facts/standards (no
+  obligation), permissive code (notice in source), and CC-BY designs (attribution to the user)
+  may be used. **Copyleft — LGPL, GPL, AGPL — is never ported**, because the translation is a
+  derivative work and the copyleft would attach to our code. MCAD's gears are LGPL-2.1 and are
+  out for exactly this reason; BOSL2's are BSD-2 and are in.
+
+**Not in this task:** rendering the credit in the chat. The server returns the data; the
+Studio's bubble is milestone 2 (§7).
+
+**Also not in this task, and it is a real open question:** whether attribution-in-the-response
+satisfies CC-BY for a *3D-printed* derivative. That is a legal call, flagged in §8.1, not
+something to settle in code.
 
 ---
 
