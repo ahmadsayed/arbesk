@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A prompt-driven engineering-CAD service: DeepSeek writes Manifold JS plus a parameter table, the server validates it by running the Manifold kernel in an isolated child process, and the client executes the returned code to produce GLB/3MF.
+**Status:** 🔒 **LOCKED** (revision 3, 2026-09-11). Tasks 1–11 are complete; their code is committed. **Read AMENDMENTS below before executing anything** — the architecture moved after tasks 5, 7 and 11 were written.
 
-**Architecture:** `@arbesk/cad-gen` splits into an environment-agnostic `core/` (design document, guard, prelude, kernel port, exporters — bundlable into the browser) and a Node-only `backend/` (DeepSeek client, prompt assembly, repair loop, child-process validator, facade). The Express route stays thin: validate, authenticate, quota, lock, delegate. The server **never** produces files — it returns a validated design document.
+**Goal:** A prompt-driven engineering-CAD service: DeepSeek writes Manifold JS plus a parameter table, the server runs the **static gates** and returns the code, and the **client** executes it — running the kernel, the geometry gates, the triangle budget and the render — reporting failures back for repair.
+
+**Architecture:** `@arbesk/cad-gen` splits into an environment-agnostic `core/` (design document, guard, prelude, kernel port, exporters — bundlable into the browser) and a Node-only `backend/` (DeepSeek client, prompt assembly, static repair loop, facade). The Express routes stay thin: authenticate, quota, lock, delegate. The server **never executes generated code and never produces files**; it returns a design document that passed every static gate.
 
 **Tech Stack:** TypeScript (erasable syntax, Bun runtime, no emit), Manifold WASM (`manifold-3d@3.5.3`), DeepSeek OpenAI-compatible API (`deepseek-flash`), Zod, express-rate-limit, Jest + supertest, fflate (3MF OPC zip), `@arbesk/asset-core` (`serializeGLB`).
 
@@ -15,12 +17,42 @@
 - **Erasable TypeScript only** — no enums, no namespaces, no parameter properties; type-only imports MUST use `import type`; relative imports inside `src/` carry explicit `.ts` extensions.
 - **`core/` must be environment-agnostic** — no Node globals (`Buffer`, `fs`, `path`, `process`, `child_process`), no browser globals (`window`, `document`, `navigator`, `localStorage`), no imports from `frontend/`, `src/api/` or `constants/`.
 - **`packages/cad-gen/src/index.ts` exports `core/` ONLY.** The browser bundles the root entry; a backend re-export there would drag `child_process` and the DeepSeek client into the frontend bundle. Backend consumers import `@arbesk/cad-gen/backend/index.js`.
-- **The server never returns geometry and never exports files.** Validation discards the mesh; GLB/3MF are the client's job.
+- **The server never executes generated code, never returns geometry and never exports files.** The kernel, the geometry gates and GLB/3MF belong to the client.
 - **Backend logs** use `[TAG]` prefixes — this feature uses `[CAD]`. Never log prompt text or API keys.
-- **Validation gate values:** timeout 10000 ms, triangle budget 200000, repair attempts 3, daily limit 50, lock TTL 120000 ms.
+- **Validation split:** the server runs the static gates only (`validateStatic`). Kernel execution, the geometry gates and the triangle budget are the client's. The kernel limits (timeout, triangle budget, wasm dir) left `CadLimits` with the kernel.
+- **Server limit values:** static repair attempts 3; lock TTL derived as `attempts × providerTimeout + 30000` = 390000 ms (no kernel term); daily limit meters **rounds**, not generations.
 - **Units:** Manifold is millimetres/Z-up. GLB applies `[0.001,0,0,0, 0,0,-0.001,0, 0,0.001,0,0, 0,0,0,1]` on the **node matrix** (never baked into vertices). 3MF stays mm/Z-up.
 - **Never bypass `@arbesk/asset-core`** for glTF serialization — import `serializeGLB` from `@arbesk/asset-core/formats/gltf/gltf-core.js`.
 - Run `bun run lint && bun run typecheck` before every commit.
+
+---
+
+## AMENDMENTS (revision 3) — read before executing any task
+
+The architecture moved on 2026-09-11: **the kernel left the server request path** (ruling S11,
+which supersedes S10). The server generates code and runs the static gates; the client runs
+the kernel, the geometry gates, the triangle budget and the render, and reports failures back
+for repair across the wire. The reasoning and every measurement are in
+`.superpowers/sdd/2026-09-11-cad-generation/progress.md`; the contract is the spec, revision 3.
+
+Why: a server-side kernel run validates a **proxy** at a different fidelity, and the two
+provably disagree — an 80×60×8 plate with six 5 mm holes is 15 466 triangles at the validation
+profile and 245 652 at delivery fidelity against a 200 000 budget, so the proxy passes what
+the real part fails. It was also 91 % of pipeline latency, it made the server execute
+untrusted model code, and it caused both deployment blockers (no `child.ts` on disk in the
+compiled binary, no `manifold.wasm` in the runtime image).
+
+| Task | State after revision 3 |
+|---|---|
+| 1–4 | **Complete, unchanged.** |
+| 5 — Kernel port + child-process validation runner | **Complete, re-homed.** `validate-runner.ts` + `child.ts` survive as the **evaluation harness** (offline build/measure/render) and are exported with that label from `backend/index.ts`. They are not in the request path. |
+| 6 — Prelude bodies | **Complete, amended.** `buildPrelude`/`createCadKernel` take a `segments` option (default 64); `filletEdges`/`chamferEdges` take a `quality` ("draft" default, "high" on request), reported on `stats.filletQuality`. |
+| 7 — Validation gates | **Complete, split.** `validateStatic` is the runtime path; `validateDesign` is harness-only. `CadGenerateResult` no longer carries a `validation` field at all. |
+| 8–10 | **Complete, amended.** Thinking mode is disabled by default (`thinking: { type: "disabled" }`); `CadLimits` is now `{ maxRepairAttempts }`. |
+| 11 — Quota and lock | **Complete, amended.** `CadRequestLimits` drops `kernelTimeoutMs`; the derived TTL is 390 000 ms. The daily limit now meters **rounds**. |
+| **12 — HTTP route** | **SUPERSEDED. Replaced by Task 12R at the end of this plan** (two metered endpoints and the client-driven repair round). |
+| 13 — Exporters | Unchanged in substance, re-homed: the exporters are the client's. |
+| 14 — Harness, docs, cleanup | Unchanged, plus: the harness is now a first-class deliverable rather than a one-off, and the spike probes `scripts/cad-spike*.mjs` still need deleting. |
 
 ---
 
@@ -3141,7 +3173,12 @@ git commit -m "feat(cad): per-wallet daily quota and in-flight lock"
 
 ---
 
-### Task 12: HTTP route, schema and environment
+### Task 12: HTTP route, schema and environment — ⛔ SUPERSEDED
+
+> **Replaced by Task 12R at the end of this plan.** The text below describes the single-endpoint,
+> server-validated route that revision 3 removed. It is kept only as a record of what was
+> planned. **Do not execute it** — no server-side kernel means no `validation` field and no
+> single request that returns code already known to build.
 
 **Files:**
 - Create: `src/api/routes/cad.ts`
@@ -4163,6 +4200,79 @@ Completes milestone 1: the server generates a validated Manifold design
 document; the harness proves the same shared core executes it and exports
 GLB/3MF, and is the browser worker's reference implementation."
 ```
+
+---
+
+---
+
+### Task 12R: The two metered endpoints and the client-driven repair round
+
+Replaces Task 12. The server's whole runtime job is: authenticate, meter, call the provider,
+run the static gates, return code. It never runs the kernel and never claims the geometry is
+sound.
+
+**Files:**
+- Create: `src/api/routes/cad.ts`
+- Modify: `src/api/schemas.ts` (append `cadGenerateSchema`, `cadRepairSchema`)
+- Modify: `src/api/index.ts` (mount)
+- Modify: `.env.example`
+- Test: `test/api/cad-route.test.js`
+
+**Interfaces:**
+- Consumes: `createCadGenerator` (Task 10), `acquireCadSlot`, `releaseCadSlot`, `cadQuotaHeaders`, `cadLockTtlMs` (Task 11), `validateBody`, `sendError`, `authenticate`.
+- Produces: `cadRouter(deps?): Router`; `CadRouteDeps = { generate?, authenticateOverride? }`.
+
+**Both endpoints run the identical admission sequence** — session auth → Zod → quota check →
+in-flight lock → provider call → static gates → release → respond with `X-Cad-Quota-*`. A
+quota rejection never takes the lock. Extract it once; do not duplicate it per route.
+
+- [ ] **Step 1: The failing test** — `POST /api/v1/cad/generations` with a session returns
+  `{ design, runtime, diagnostics, provider }` and **no `validation` key**; without a session
+  returns 401; a second concurrent request for the same wallet returns 409 `IN_PROGRESS`; a
+  quota-exhausted wallet returns 429 with the quota headers.
+
+- [ ] **Step 2: `cadGenerateSchema`** — `{ prompt: string (1..4000), priorDesign?, sourceRef?,
+  images?: [{ data: base64, mime: /^image/(png|jpeg|webp)$/ }] (max 4), repairAttempts?: int 0..3 }`.
+  Bound the base64 length: the provider caps the body at 48 MiB and an unbounded string is a
+  memory hole.
+
+- [ ] **Step 3: `cadRepairSchema`** — `{ prompt, priorDesign, failures: [{ gate: string,
+  error: string }] (1..8) }`. `priorDesign` is **required** here: a repair with nothing to
+  repair is just a generation, and letting it through would double the reachable provider calls.
+
+- [ ] **Step 4: the shared admission helper**, then the two handlers. Both call the same
+  `createCadGenerator` instance; the repair handler passes `priorDesign` and appends the
+  reported failures to `buildRepairMessages`.
+
+- [ ] **Step 5: metering is the loop bound.** Each round is one admitted, quota-charged request.
+  There is no server-side session, no `repairToken`, and no per-request round counter: a client
+  cannot buy extra provider calls by fabricating failures because each one costs its own wallet
+  quota. Assert this in the test — drive three repairs and check the quota counter and the
+  `X-Cad-Quota-Remaining` header decrement once per round.
+
+- [ ] **Step 6: trust nothing from the client.** The reported `failures` are a **hint** fed to the
+  prompt, never a verdict: the server re-runs the guard on every returned script regardless, and
+  a client that reports no failures still gets a statically-gated design back.
+
+- [ ] **Step 7: `.env.example` and `docs/CURRENT_STATUS.md §8`** — `DEEPSEEK_API_KEY`,
+  `CAD_GENERATION_ENABLED` (kill switch → 503), `CAD_DAILY_REQUEST_LIMIT` (**rounds**/day),
+  `CAD_MAX_REQUEST_MS`, `CAD_MAX_REPAIR_ATTEMPTS`, `CAD_THINKING`. An unusable numeric value
+  is a **503**, not a mysterious 429 — R17/R18 make the module fail closed either way, so this is
+  operator experience, not safety.
+
+- [ ] **Step 8: dispatch on `err.code`, treat `status` as advisory.** Transport failures carry an
+  invented `status: 502`, and `err.name === "CadGenerationFailed"` is the only signal that
+  `err.diagnostics` exists.
+
+- [ ] **Step 9: wire `cadLockTtlMs(limits, process.env)` with the SAME limits object handed to
+  `createCadGenerator`.** The limits parameter is required, so an omission is a compile error;
+  the derived value is 390 000 ms.
+
+- [ ] **Step 10: `CAD_EXEC_TIMEOUT_MS` is not a thing any more.** If it turns up in a config or a
+  doc, delete it — there is no server-side kernel to time out.
+
+**Not in this task:** the browser worker, the client render loop and the repair round trip. Those
+are milestone 2 (§7 of the spec); this task ships the two endpoints they call.
 
 ---
 

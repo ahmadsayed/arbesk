@@ -1,6 +1,14 @@
 # Manifold-based engineering CAD generation (`@arbesk/cad-gen`) — design
 
-**Date:** 2026-09-11 · **Revision:** 2 · **Status:** design, pending review · **Milestone:** 1 (code generation service)
+**Date:** 2026-09-11 · **Revision:** 3 · **Status:** 🔒 **LOCKED** · **Milestone:** 1 (code generation service)
+
+> **Locked 2026-09-11.** This document is the contract; changes require a new revision, not an
+> edit. Revision 3 moved the kernel out of the server request path (D3, D5, §5) and made the
+> daily quota meter **rounds** rather than generations (D8). The full ruling record with
+> measurements behind every decision is
+> `.superpowers/sdd/2026-09-11-cad-generation/progress.md` — read it before changing anything
+> here. The plan that executes this spec is
+> `docs/superpowers/plans/2026-09-11-cad-generation.md`, also locked.
 
 ## 1. Goal
 
@@ -237,6 +245,33 @@ Response — **code, never files**:
 There is no `artifacts` array and no `formats` field: GLB and 3MF are produced on the
 client (§7).
 
+### `POST /api/v1/cad/repairs`
+
+The client-driven half of the repair loop. When the client's kernel run fails a geometric gate,
+it posts the failure back; the server spends **one metered round** and returns new code.
+
+```jsonc
+{
+  "prompt": "add three 6mm through-holes along X, -Y and Z",  // the original request
+  "priorDesign": { "code": "…", "parameters": { … }, "summary": "…" },  // REQUIRED
+  "failures": [{ "gate": "kernel", "error": "part is empty after subtract" }]
+}
+```
+
+`priorDesign` is required: a repair with nothing to repair is just a generation, and accepting
+it would double the reachable provider calls for one prompt. The response body is identical to
+`/generations` — the two endpoints differ only in what they feed the prompt.
+
+**The reported failures are a hint, never a verdict.** They are rendered into the repair turn to
+tell the model what went wrong, and that is all: the server re-runs the guard on whatever comes
+back regardless, and a client reporting nothing still receives a statically-gated design. The
+server never trusts a client's account of geometry it cannot see.
+
+**Admission is identical to `/generations`** — same auth, same quota unit, same lock, same
+headers. There is no session, no `repairToken` and no per-request round counter: the wallet's
+round budget *is* the loop bound, and a client cannot buy extra provider calls by fabricating
+failures, because each fabricated failure costs its own wallet quota.
+
 ### Quota, concurrency and budget
 
 Three controls keyed by the **SIWE wallet address** (`res.locals.userAddress` — the same
@@ -246,15 +281,24 @@ key the existing limiters use), all enforced before any LLM call.
 (mirroring `generation-tasks.ts`), acquired synchronously at admission and released in a
 `finally` so a failed or repaired request always frees it. A blocked request gets **409
 `GENERATION_IN_PROGRESS`** with `Retry-After` and `details: { startedAt }`. A hard TTL
-(`CAD_MAX_REQUEST_MS`, default 120 s) with lazy expiry stops a crashed request wedging a
-wallet. The lock is deliberately **not** persisted — in-flight work cannot survive a
+(`CAD_MAX_REQUEST_MS`) with lazy expiry stops a crashed request wedging a wallet. The default
+is **derived**, not hard-coded: `attempts × providerTimeout + 30000` = 3 × 120 000 + 30 000 =
+**390 000 ms**. There is no kernel term any more — the server runs static gates only — so
+`CAD_EXEC_TIMEOUT_MS` is gone. The lock is deliberately **not** persisted — in-flight work cannot survive a
 restart.
 
-**Daily request quota — 50 LLM requests.** `CAD_DAILY_REQUEST_LIMIT` (default 50) per
-wallet over a **UTC calendar day**. One *accepted request* is one unit regardless of how
-many repair attempts it internally spends, so a user is never charged for the model's
-failures. Consumption happens at admission, which closes the fail-and-retry storm.
-Exhaustion returns **429 `DAILY_QUOTA_EXCEEDED`** with `details: { limit, used, resetsAt }`.
+**Daily round quota — `CAD_DAILY_REQUEST_LIMIT`, per wallet, UTC day.** The unit is
+**one provider round**, not one generation: every call to `/generations` *and* every call to
+`/repairs` costs one unit, because every one of them is a paid API call. Consumption happens
+at admission, which closes the fail-and-retry storm. Exhaustion returns **429
+`DAILY_QUOTA_EXCEEDED`** with `details: { limit, used, resetsAt }`.
+
+> This replaced the original "one accepted request is one unit regardless of how many repair
+> attempts it internally spends". That rule held only while repairs were server-internal; once
+> the client drives them, a repair is an ordinary metered request and must be charged like one.
+> **The number also needs setting from the observed repair rate** — it now meters rounds, so a
+> limit of 50 buys fewer generations than it used to. Most parts passed on the first attempt
+> live; the hard ones took 2–3 rounds.
 
 **Hourly limiter.** The existing wallet-keyed `express-rate-limit` pattern
 (`src/api/rate-limiter.ts`), with a CAD-specific budget, bounds bursts inside the day.
