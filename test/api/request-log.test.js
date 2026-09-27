@@ -1,8 +1,8 @@
 import { jest } from "@jest/globals";
 import { Hono } from "hono";
-import { requestLog } from "../../src/hono/request-log.ts";
+import { requestLog } from "../../src/api/request-log.ts";
 
-describe("hono requestLog middleware", () => {
+describe("requestLog middleware", () => {
   let logSpy;
 
   beforeEach(() => {

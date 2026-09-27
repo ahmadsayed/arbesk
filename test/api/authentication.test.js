@@ -1,12 +1,12 @@
 import { jest } from "@jest/globals";
 import { Hono } from "hono";
-import authorize from "../../src/hono/auth.ts";
+import authorize from "../../src/api/authentication.ts";
 import {
   createSession,
   invalidateSession,
 } from "../../src/api/sessions.ts";
 
-describe("hono session-auth middleware", () => {
+describe("session-auth middleware", () => {
   function buildApp() {
     const app = new Hono();
     app.get(

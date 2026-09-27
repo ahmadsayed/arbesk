@@ -5,35 +5,44 @@
  *   valid for 24 hours.
  */
 
+import type { MiddlewareHandler } from "hono";
 import { validateSession } from "./sessions.ts";
-import type { NextFunction, Request, Response } from "express";
+import { sendError } from "./errors.ts";
 
-export default async function authorize(
-  request: Request,
-  response: Response,
-  next: NextFunction,
-) {
+export interface AuthVariables {
+  userAddress: string;
+  txHash: string | null;
+}
+
+/** Hono env for routes behind {@link authorize}. */
+export interface AuthEnv {
+  Variables: AuthVariables;
+}
+
+/**
+ * Middleware validating `Authorization: Session <token>` and exposing
+ * the wallet address as `c.get("userAddress")`.
+ */
+const authorize: MiddlewareHandler<AuthEnv> = async (
+  c,
+  next,
+) => {
   try {
-    const authHeader = request.headers["authorization"];
+    const authHeader = c.req.header("authorization");
     if (!authHeader) {
       console.log(`[AUTH] rejected - missing Authorization header`);
-      return response.status(401).json({
-        error: {
-          code: "MISSING_AUTH",
-          message: "Missing Authorization header",
-        },
-      });
+      return sendError(c, 401, "MISSING_AUTH", "Missing Authorization header");
     }
 
     const parts = authHeader.split(" ");
     if (parts.length !== 2 || parts[0].toLowerCase() !== "session") {
       console.log(`[AUTH] rejected - invalid format or scheme`);
-      return response.status(401).json({
-        error: {
-          code: "INVALID_AUTH_FORMAT",
-          message: "Invalid Authorization format. Expected: Session <token>",
-        },
-      });
+      return sendError(
+        c,
+        401,
+        "INVALID_AUTH_FORMAT",
+        "Invalid Authorization format. Expected: Session <token>",
+      );
     }
 
     const token = parts[1];
@@ -41,27 +50,23 @@ export default async function authorize(
 
     if (!address) {
       console.log(`[AUTH] rejected - invalid or expired session token`);
-      return response.status(401).json({
-        error: {
-          code: "INVALID_SESSION",
-          message:
-            "Session token is invalid or expired. Create a new session by signing again.",
-        },
-      });
+      return sendError(
+        c,
+        401,
+        "INVALID_SESSION",
+        "Session token is invalid or expired. Create a new session by signing again.",
+      );
     }
 
-    response.locals.userAddress = address;
-    response.locals.txHash = null;
+    c.set("userAddress", address);
+    c.set("txHash", null);
     console.log(`[AUTH] session valid - address=${address}`);
-    return next();
+    return await next();
   } catch (error) {
     const err = error as Error;
     console.error("[AUTH] error:", err.message);
-    return response.status(403).json({
-      error: {
-        code: "AUTH_FAILED",
-        message: "Authentication failed: " + err.message,
-      },
-    });
+    return sendError(c, 403, "AUTH_FAILED", "Authentication failed: " + err.message);
   }
-}
+};
+
+export default authorize;

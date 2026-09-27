@@ -1,5 +1,6 @@
-import express from "express";
-import type { Request, Response } from "express";
+import { Hono } from "hono";
+import type { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { serializeGLB } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import {
   isCompressedPayload,
@@ -28,13 +29,12 @@ import {
 import type { TaskEntry } from "../generation-tasks.ts";
 import type { StorageAdapter } from "../storage/index.ts";
 import authenticate from "../authentication.ts";
+import type { AuthEnv } from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
 import { validateBody } from "../validation.ts";
 import { generateAssetSchema, providerBalanceSchema } from "../schemas.ts";
 import { verifyOnChainGeneration } from "../generation-verify.ts";
 import { CHAIN_IDS } from "../../../constants/chains.js";
-
-const Router = express.Router;
 
 /** Capabilities the mock provider declares (text-only, synchronous samples). */
 const MOCK_CAPABILITIES: GenerationCapability[] = ["text-to-3d"];
@@ -180,24 +180,24 @@ function providerErrorCode(status: number): string {
  * documented provider code; anything unexpected is a 500 with `serverCode`.
  */
 function sendProviderOrServerError(
-  res: Response,
+  c: Context,
   err: Error,
   serverCode: string,
 ): Response {
   if (err instanceof TripoApiError) {
-    return res.status(err.status).json({
+    return c.json({
       error: {
         code: providerErrorCode(err.status),
         message: err.message,
       },
-    });
+    }, err.status as ContentfulStatusCode);
   }
-  return res.status(500).json({
+  return c.json({
     error: {
       code: serverCode,
       message: err.message,
     },
-  });
+  }, 500);
 }
 
 /** Source-asset 400s: message matcher → documented error code. */
@@ -221,21 +221,21 @@ const SOURCE_ERROR_RULES: { match: (message: string) => boolean; code: string }[
  * source-asset 400s keep their dedicated codes, other TripoApiErrors map by
  * HTTP status, and anything unexpected is a 500 GENERATION_FAILED.
  */
-function sendGenerationError(res: Response, err: Error): Response {
+function sendGenerationError(c: Context, err: Error): Response {
   console.error("[GEN] error:", err.message);
   const rule =
     err instanceof TripoApiError && err.status === 400
       ? SOURCE_ERROR_RULES.find((r) => r.match(err.message))
       : undefined;
   if (rule) {
-    return res.status(400).json({
+    return c.json({
       error: {
         code: rule.code,
         message: err.message,
       },
-    });
+    }, 400);
   }
-  return sendProviderOrServerError(res, err, "GENERATION_FAILED");
+  return sendProviderOrServerError(c, err, "GENERATION_FAILED");
 }
 
 /**
@@ -244,13 +244,13 @@ function sendGenerationError(res: Response, err: Error): Response {
  * @remarks The user pays the provider directly, so the on-chain quota/payment
  *   gate is bypassed entirely. The key is used transiently and never logged or
  *   persisted; the mock provider needs no key.
- * @returns true when the request was rejected with 400 MISSING_PROVIDER_KEY
+ * @returns the 400 MISSING_PROVIDER_KEY response, or null when the key is fine
  */
 function rejectMissingProviderKey(
-  res: Response,
+  c: Context,
   effectiveProvider: string,
   providerKey: unknown,
-): boolean {
+): Response | null {
   if (effectiveProvider !== "mock") {
     if (
       typeof providerKey !== "string" ||
@@ -259,19 +259,18 @@ function rejectMissingProviderKey(
       console.log(
         "[GEN] rejected - providerKey required for real provider",
       );
-      res.status(400).json({
+      return c.json({
         error: {
           code: "MISSING_PROVIDER_KEY",
           message: "providerKey is required for the selected provider",
         },
-      });
-      return true;
+      }, 400);
     }
     console.log(
       `[GEN] byok provider=${effectiveProvider} key=*** (len=${providerKey.trim().length}) - on-chain gate bypassed`,
     );
   }
-  return false;
+  return null;
 }
 
 /**
@@ -279,7 +278,7 @@ function rejectMissingProviderKey(
  *   placeholder prompt (image input is Tripo3D-only).
  */
 async function runMockGeneration(
-  res: Response,
+  c: Context,
   prompt: string | undefined,
 ): Promise<Response> {
   const mockPrompt = prompt || "image";
@@ -296,7 +295,7 @@ async function runMockGeneration(
   console.log(
     `[GEN] mock returned provider=mock size=${bytes.length} bytes (${assetFormat})`,
   );
-  return res.json({
+  return c.json({
     assetData: assetBase64,
     format: assetFormat,
     path: `asset.${assetFormat}`,
@@ -401,7 +400,7 @@ function findRigSource(
 
 /** Fire the retarget task off a completed rig and register it. */
 async function startRetarget(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   key: string,
   userAddress: string,
@@ -417,7 +416,7 @@ async function startRetarget(
     rigModel: rigSource.rigModel,
   });
   const taskId = registerTask({ tripoTaskId: retargetId, providerKey: key, userAddress, kind: "animate", phase: "retarget", animations });
-  return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
+  return c.json({ taskId, provider: "tripo3d", status: "running", animating: true }, 202);
 }
 
 /**
@@ -425,7 +424,7 @@ async function startRetarget(
  * @returns the 202 response when the shortcut applied, undefined otherwise
  */
 async function tryRetargetOnly(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   key: string,
   userAddress: string,
@@ -433,7 +432,7 @@ async function tryRetargetOnly(
 ): Promise<Response | undefined> {
   const rigSource = findRigSource(userAddress, body);
   if (!rigSource) return undefined;
-  return startRetarget(res, provider, key, userAddress, rigSource, body);
+  return startRetarget(c, provider, key, userAddress, rigSource, body);
 }
 
 /**
@@ -442,7 +441,7 @@ async function tryRetargetOnly(
  * @returns the 202 response when an action flag matched, undefined otherwise
  */
 async function startSourceFollowUp(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   key: string,
   userAddress: string,
@@ -460,14 +459,14 @@ async function startSourceFollowUp(
       tripoTaskId: rigCheckId, providerKey: key, userAddress,
       kind: "animate", phase: "rig-check", animations, rigOnly: Boolean(rigOnly), animateInPlace: Boolean(animateInPlace), sourceFileToken: fileToken, rigModel,
     });
-    return res.status(202).json({ taskId, provider: "tripo3d", status: "running", animating: true });
+    return c.json({ taskId, provider: "tripo3d", status: "running", animating: true }, 202);
   }
 
   if (retopo) {
     console.log(`[GEN] starting retopo source=${sourceAssetCid} faceLimit=${faceLimit ?? "adaptive"}`);
     const decimateId = await provider.retopo({ source, faceLimit });
     const taskId = registerTask({ tripoTaskId: decimateId, providerKey: key, userAddress });
-    return res.status(202).json({ taskId, provider: "tripo3d", status: "running", retopo: true });
+    return c.json({ taskId, provider: "tripo3d", status: "running", retopo: true }, 202);
   }
 
   // retexture (schema guarantees exactly one action flag)
@@ -475,7 +474,7 @@ async function startSourceFollowUp(
     console.log(`[GEN] starting retexture source=${sourceAssetCid}`);
     const refineId = await provider.retexture({ prompt: prompt as string, source, textureQuality });
     const taskId = registerTask({ tripoTaskId: refineId, providerKey: key, userAddress });
-    return res.status(202).json({ taskId, provider: "tripo3d", status: "running", refined: true });
+    return c.json({ taskId, provider: "tripo3d", status: "running", refined: true }, 202);
   }
   return undefined;
 }
@@ -487,7 +486,7 @@ async function startSourceFollowUp(
  *   prompt/image starts a new model.
  */
 async function startFreshGeneration(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   key: string,
   userAddress: string,
@@ -524,11 +523,11 @@ async function startFreshGeneration(
   console.log(
     `[GEN] tripo task registered public=${taskId} tripo=${tripoTaskId}`,
   );
-  return res.status(202).json({
+  return c.json({
     taskId,
     provider: "tripo3d",
     status: "running",
-  });
+  }, 202);
 }
 
 /**
@@ -560,14 +559,14 @@ function buildProgressBody(
  *   terminal — evict the entry and its transient BYOK key instead of waiting
  *   for the TTL); anything unexpected is a 500 GENERATION_FAILED.
  */
-function sendPollError(res: Response, err: Error, taskId: string): Response {
+function sendPollError(c: Context, err: Error, taskId: string): Response {
   console.error("[GEN] get error:", err.message);
   // Auth/credit failures are terminal for the task: evict the entry
   // (and its transient BYOK key) instead of waiting for the TTL.
   if (err instanceof TripoApiError && (err.status === 401 || err.status === 402)) {
     evictTask(taskId);
   }
-  return sendProviderOrServerError(res, err, "GENERATION_FAILED");
+  return sendProviderOrServerError(c, err, "GENERATION_FAILED");
 }
 
 /**
@@ -576,7 +575,7 @@ function sendPollError(res: Response, err: Error, taskId: string): Response {
  *   upstream message alone says "Task failed").
  */
 function sendTaskFailed(
-  res: Response,
+  c: Context,
   entry: TaskEntry,
   taskId: string,
   poll: GenerationStatus,
@@ -594,7 +593,7 @@ function sendTaskFailed(
   console.log(
     `[GEN] task failed taskId=${taskId} stage=${failStage || "generate"} error=${failMessage}`,
   );
-  return res.json({
+  return c.json({
     status: "failed",
     error: {
       code: "PROVIDER_TASK_FAILED",
@@ -609,7 +608,7 @@ function sendTaskFailed(
  *   shortcut.
  */
 async function completeTask(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   entry: TaskEntry,
   taskId: string,
@@ -624,7 +623,7 @@ async function completeTask(
   console.log(
     `[GEN] task complete taskId=${taskId} size=${buffer.length}`,
   );
-  return res.json({
+  return c.json({
     status: "success",
     assetData: Buffer.from(buffer).toString("base64"),
     format: "glb",
@@ -641,7 +640,7 @@ async function completeTask(
  *   riggable); rig → retarget with the requested presets.
  */
 async function advanceAnimateChain(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   entry: TaskEntry,
   taskId: string,
@@ -655,7 +654,7 @@ async function advanceAnimateChain(
     if (!rigOutput?.riggable) {
       evictTask(taskId);
       console.log(`[GEN] animate chain: model not riggable taskId=${taskId}`);
-      return res.json({
+      return c.json({
         status: "failed",
         error: {
           code: "MODEL_NOT_RIGGABLE",
@@ -677,7 +676,7 @@ async function advanceAnimateChain(
     console.log(
       `[GEN] animate chain: rig started taskId=${taskId} tripo=${rig.taskId} rig_type=${rigOutput.rig_type} model=${rig.model}`,
     );
-    return res.json({
+    return c.json({
       status: "running",
       progress: 40,
       stage: "Rigging skeleton",
@@ -697,7 +696,7 @@ async function advanceAnimateChain(
   console.log(
     `[GEN] animate chain: retarget started taskId=${taskId} tripo=${retargetId}`,
   );
-  return res.json({
+  return c.json({
     status: "running",
     progress: 75,
     stage: "Baking animations",
@@ -726,7 +725,7 @@ function resolveProvider(provider: string | undefined): {
  * generation otherwise.
  */
 async function handleTripoRequest(
-  res: Response,
+  c: Context,
   buildTripoProvider: (apiKey: string) => GenerationProvider,
   providerKey: string,
   userAddress: string,
@@ -737,17 +736,17 @@ async function handleTripoRequest(
   const provider = buildTripoProvider(key);
 
   if (sourceAssetCid) {
-    const retargeted = await tryRetargetOnly(res, provider, key, userAddress, body);
+    const retargeted = await tryRetargetOnly(c, provider, key, userAddress, body);
     if (retargeted) return retargeted;
 
     const followUp = await startSourceFollowUp(
-      res, provider, key, userAddress, sourceAssetCid, body,
+      c, provider, key, userAddress, sourceAssetCid, body,
     );
     if (followUp) return followUp;
   }
 
   // await (not bare return) so provider errors land in the route's try/catch.
-  return await startFreshGeneration(res, provider, key, userAddress, body);
+  return await startFreshGeneration(c, provider, key, userAddress, body);
 }
 
 /**
@@ -756,7 +755,7 @@ async function handleTripoRequest(
  * otherwise report the failure.
  */
 async function respondToPoll(
-  res: Response,
+  c: Context,
   provider: GenerationProvider,
   entry: TaskEntry,
   taskId: string,
@@ -764,7 +763,7 @@ async function respondToPoll(
   poll: GenerationStatus,
 ): Promise<Response> {
   if (poll.status === "queued" || poll.status === "running") {
-    return res.json(buildProgressBody(entry, poll));
+    return c.json(buildProgressBody(entry, poll));
   }
 
   // Animate chain: a succeeded rig-check or rig task starts the next phase
@@ -777,15 +776,15 @@ async function respondToPoll(
     poll.status === "success" &&
     !chainTerminal
   ) {
-    return await advanceAnimateChain(res, provider, entry, taskId, userAddress, poll);
+    return await advanceAnimateChain(c, provider, entry, taskId, userAddress, poll);
   }
 
   if (poll.status === "success") {
-    return await completeTask(res, provider, entry, taskId, userAddress, poll);
+    return await completeTask(c, provider, entry, taskId, userAddress, poll);
   }
 
   // failed or cancelled
-  return sendTaskFailed(res, entry, taskId, poll);
+  return sendTaskFailed(c, entry, taskId, poll);
 }
 
 /**
@@ -797,7 +796,7 @@ export default function generateAssetNode(
   core: ArbeskCore,
   storage: StorageAdapter,
 ) {
-  const router = Router();
+  const app = new Hono<AuthEnv>();
 
   /** CID → self-contained GLB bytes (decompress + compose glTF JSON as needed). */
   const sourceResolver = (cid: string): Promise<Buffer> =>
@@ -820,14 +819,15 @@ export default function generateAssetNode(
    * @remarks The browser uploads the asset to IPFS and writes the manifest
    *   directly — no server-side IPFS writes.
    */
-  router.post(
+  app.post(
     "/",
     authenticate,
     generationRateLimit,
     validateBody(generateAssetSchema),
-    async (req: Request, res: Response) => {
+    async (c) => {
       try {
-        const { prompt, nodeId, provider, providerKey } = req.body;
+        const body = c.req.valid("json");
+        const { prompt, nodeId, provider, providerKey } = body;
 
         const { effectiveProvider, useMockAdapter } = resolveProvider(provider);
 
@@ -836,51 +836,50 @@ export default function generateAssetNode(
           `[GEN] nodeId=${nodeId} provider=${effectiveProvider} mock=${useMockAdapter}`,
         );
 
-        if (rejectMissingProviderKey(res, effectiveProvider, providerKey)) {
-          return;
-        }
+        const missingKey = rejectMissingProviderKey(c, effectiveProvider, providerKey);
+        if (missingKey) return missingKey;
 
         // On-chain generation verification (#48): when the client claims an
         // on-chain generation/payment transaction, verify it before spending
         // provider credits. Opt-in — mock/BYOK requests omit the txHash.
-        if (req.body.generationTxHash) {
+        if (body.generationTxHash) {
           const verification = await verifyOnChainGeneration({
-            chainId: Number(req.body.chainId) || CHAIN_IDS.BASE_TESTNET,
-            userAddress: res.locals.userAddress,
+            chainId: Number(body.chainId) || CHAIN_IDS.BASE_TESTNET,
+            userAddress: c.get("userAddress"),
             nodeId,
-            txHash: req.body.generationTxHash,
+            txHash: body.generationTxHash,
           });
           if (!verification.ok) {
-            return res.status(402).json({
+            return c.json({
               error: {
                 code: verification.reason || "GENERATION_NOT_VERIFIED",
                 message: "On-chain generation verification failed",
               },
-            });
+            }, 402);
           }
         }
 
         if (useMockAdapter) {
           // await (not bare return) so a throw lands in the try/catch below.
-          return await runMockGeneration(res, prompt);
+          return await runMockGeneration(c, prompt);
         }
 
         if (effectiveProvider === "tripo3d") {
           // await (not bare return) so provider errors land in the try/catch.
           return await handleTripoRequest(
-            res, buildTripoProvider, providerKey, res.locals.userAddress, req.body,
+            c, buildTripoProvider, providerKey as string, c.get("userAddress"), body,
           );
         }
 
         console.log("[GEN] cloud adapter not implemented - rejecting");
-        return res.status(501).json({
+        return c.json({
           error: {
             code: "NOT_IMPLEMENTED",
             message: "Cloud adapters not yet implemented",
           },
-        });
+        }, 501);
       } catch (error) {
-        return sendGenerationError(res, error as Error);
+        return sendGenerationError(c, error as Error);
       }
     },
   );
@@ -894,21 +893,21 @@ export default function generateAssetNode(
    *   anonymous key-probing oracle; no rate limit because balance checks are
    *   cheap and don't consume generation quota.
    */
-  router.post(
+  app.post(
     "/balance",
     authenticate,
     validateBody(providerBalanceSchema),
-    async (req: Request, res: Response) => {
+    async (c) => {
       try {
-        const key = req.body.providerKey.trim();
+        const key = c.req.valid("json").providerKey.trim();
         const provider = buildTripoProvider(key);
         const result = await provider.getBalance();
         console.log("[GEN] balance fetched for BYOK key=***");
-        return res.json(result);
+        return c.json(result);
       } catch (error) {
         const err = error as Error;
         console.error("[GEN] balance error:", err.message);
-        return sendProviderOrServerError(res, err, "BALANCE_FAILED");
+        return sendProviderOrServerError(c, err, "BALANCE_FAILED");
       }
     },
   );
@@ -921,22 +920,22 @@ export default function generateAssetNode(
    * @remarks Provider credits already consumed are not refunded — the frontend
    *   warns the user before calling this.
    */
-  router.delete("/:taskId", authenticate, async (req: Request, res: Response) => {
-    const taskId = String(req.params.taskId);
-    const entry = getTask(taskId, res.locals.userAddress);
+  app.delete("/:taskId", authenticate, async (c) => {
+    const taskId = c.req.param("taskId");
+    const entry = getTask(taskId, c.get("userAddress"));
     if (!entry) {
-      return res.status(404).json({
+      return c.json({
         error: {
           code: "GENERATION_TASK_NOT_FOUND",
           message: "Generation task not found",
         },
-      });
+      }, 404);
     }
     evictTask(taskId);
     console.log(`[GEN] task cancelled taskId=${taskId} tripo=${entry.tripoTaskId}`);
     const provider = buildTripoProvider(entry.providerKey);
     const upstreamCancelled = await provider.cancel(entry.tripoTaskId);
-    return res.json({ status: "cancelled", upstreamCancelled });
+    return c.json({ status: "cancelled", upstreamCancelled });
   });
 
   /**
@@ -947,19 +946,19 @@ export default function generateAssetNode(
    *   is downloaded and the model bytes are returned for client-side IPFS
    *   upload.
    */
-  router.get("/:taskId", authenticate, async (req: Request, res: Response) => {
+  app.get("/:taskId", authenticate, async (c) => {
     try {
-      const taskId = String(req.params.taskId);
-      const entry = getTask(taskId, res.locals.userAddress);
+      const taskId = c.req.param("taskId");
+      const entry = getTask(taskId, c.get("userAddress"));
 
       if (!entry) {
         console.log(`[GEN] task not found taskId=${taskId}`);
-        return res.status(404).json({
+        return c.json({
           error: {
             code: "GENERATION_TASK_NOT_FOUND",
             message: "Generation task not found",
           },
-        });
+        }, 404);
       }
 
       console.log(`[GEN] polling taskId=${taskId} tripo=${entry.tripoTaskId}`);
@@ -967,12 +966,12 @@ export default function generateAssetNode(
       const poll = await provider.poll(entry.tripoTaskId);
 
       return await respondToPoll(
-        res, provider, entry, taskId, res.locals.userAddress, poll,
+        c, provider, entry, taskId, c.get("userAddress"), poll,
       );
     } catch (error) {
-      return sendPollError(res, error as Error, String(req.params.taskId));
+      return sendPollError(c, error as Error, c.req.param("taskId"));
     }
   });
 
-  return router;
+  return app;
 }

@@ -1,13 +1,12 @@
-import express from "express";
+import { Hono } from "hono";
 import type { CdpClient } from "@coinbase/cdp-sdk";
 import { getCdpClient, findEndUserByEmail } from "../cdp.ts";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
+import type { AuthEnv } from "../authentication.ts";
 import { validateBody } from "../validation.ts";
 import { resolveEmailSchema } from "../schemas.ts";
 import { userResolveRateLimit } from "../rate-limiter.ts";
-
-const Router = express.Router;
 
 /**
  * Scans the project's CDP end users for an exact full-email match and returns
@@ -41,41 +40,41 @@ async function resolveSmartAccountByEmail(
  * Auth: Session token required. Rate-limited per wallet.
  */
 export default function usersRoutes() {
-  const router = Router();
+  const app = new Hono<AuthEnv>();
 
-  router.post(
+  app.post(
     "/resolve-email",
     authenticate,
     userResolveRateLimit,
     validateBody(resolveEmailSchema),
-    async (req, res) => {
+    async (c) => {
       try {
         const cdp = await getCdpClient();
         if (!cdp) {
           return sendError(
-            res,
+            c,
             503,
             "CDP_NOT_CONFIGURED",
             "CDP server API key not configured",
           );
         }
 
-        const result = await resolveSmartAccountByEmail(cdp, req.body.email);
+        const result = await resolveSmartAccountByEmail(cdp, c.req.valid("json").email);
         if (!result) {
           console.log("[USERS] resolve-email - no match");
-          return res.json({ exists: false });
+          return c.json({ exists: false });
         }
         console.log(
           `[USERS] resolve-email - match (smart account: ${result.address ? "yes" : "none"})`,
         );
-        res.json({ exists: true, address: result.address });
+        return c.json({ exists: true, address: result.address });
       } catch (error) {
         const err = error as Error;
         console.error("[USERS] resolve-email error:", err.message);
-        sendError(res, 502, "CDP_LOOKUP_FAILED", "Email lookup failed");
+        return sendError(c, 502, "CDP_LOOKUP_FAILED", "Email lookup failed");
       }
     },
   );
 
-  return router;
+  return app;
 }

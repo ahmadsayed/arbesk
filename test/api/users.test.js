@@ -7,7 +7,7 @@
  */
 import { jest } from "@jest/globals";
 import request from "supertest";
-import express from "express";
+import { mountRoutes } from "../helpers/hono.js";
 
 import { createSession } from "../../src/api/sessions.ts";
 import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
@@ -24,10 +24,7 @@ const SESSION_WALLET = "0x1234567890123456789012345678901234567890";
 const SMART_ACCOUNT = "0x407EDfCFd16a5623012BbB778BD47A2bf861ed40";
 
 function buildApp() {
-  const app = express();
-  app.use(express.json());
-  app.use("/users", usersRoutes());
-  return app;
+  return mountRoutes("/users", usersRoutes());
 }
 
 function sessionHeader(address = SESSION_WALLET) {

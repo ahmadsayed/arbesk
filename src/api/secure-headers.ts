@@ -1,21 +1,18 @@
 /**
- * The Content-Security-Policy directive map, shared by the Express and Hono
- * servers.
+ * Security headers: hono/secure-headers configured to match the previous
+ * helmet setup — report-only CSP, COOP `same-origin-allow-popups`, no
+ * X-Frame-Options (frameguard off), no COEP, and helmet's other defaults
+ * (nosniff, HSTS, no-referrer, CORP same-origin, ...).
  *
- * @remarks This is configuration, not framework code, and it was copied
- *   verbatim into src/hono/secure-headers.ts when the Hono middleware was
- *   ported. Two copies of a SECURITY POLICY is the worst kind of duplication:
- *   adding an origin to one leaves the other stack still refusing it, and the
- *   failure surfaces as a blocked request in a browser console rather than as
- *   anything a test would catch. The migration is exactly the window in which
- *   that happens, so there is now one copy and both stacks read it.
- *
- *   Delivered via HTTP header because <meta> does not support the
- *   "Report-Only" suffix. Monitor violations in the browser console before
- *   promoting to enforcing mode.
+ * @remarks The CSP is delivered via HTTP header because <meta> does not
+ *   support the "Report-Only" suffix. Monitor violations in the browser
+ *   console before promoting to enforcing mode.
  */
 
-/** Directive name to its source list, in helmet's camelCase form. */
+import { secureHeaders as honoSecureHeaders } from "hono/secure-headers";
+import type { MiddlewareHandler } from "hono";
+
+/** Directive name to its source list, in camelCase form. */
 export type CspDirectives = Record<string, string[]>;
 
 /**
@@ -23,7 +20,7 @@ export type CspDirectives = Record<string, string[]>;
  *
  * @remarks Reads PINATA_GATEWAY and PUBLIC_ORIGIN, so it must be called after
  *   the environment is loaded — the same constraint the inline version had.
- * @returns The directive map, ready for helmet or for header serialization.
+ * @returns The directive map, in hono/secure-headers' camelCase form.
  */
 export function buildCspDirectives(): CspDirectives {
   const pinataGateway = process.env.PINATA_GATEWAY;
@@ -72,26 +69,28 @@ export function buildCspDirectives(): CspDirectives {
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     formAction: ["'self'"],
+    // The two directives helmet used to add by default; kept so the policy
+    // did not change when helmet was replaced.
+    frameAncestors: ["'self'"],
+    scriptSrcAttr: ["'none'"],
     // upgrade-insecure-requests stays off: browsers ignore it in Report-Only
     // mode and warn on every page load.
   };
 }
 
-/** camelCase directive name to its dashed header form (defaultSrc -> default-src). */
-function dashify(name: string): string {
-  return name.replace(/[A-Z]/g, (ch) => "-" + ch.toLowerCase());
-}
-
 /**
- * Serializes the CSP directives into a header value.
- *
- * @remarks Only the Hono path needs this: helmet serializes the directive map
- *   itself. Byte-for-byte this matches what helmet emits, which is pinned by
- *   test/api/hono-secure-headers.test.js.
- * @returns The header value in helmet's `name value;name value` form.
+ * Middleware setting the security headers on every response.
  */
-export function buildCspHeaderValue(): string {
-  return Object.entries(buildCspDirectives())
-    .map(([name, values]) => `${dashify(name)} ${values.join(" ")}`)
-    .join(";");
+export function secureHeaders(): MiddlewareHandler {
+  return honoSecureHeaders({
+    contentSecurityPolicyReportOnly: buildCspDirectives(),
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: "same-origin-allow-popups",
+    // Allow the DeepSeek Harness side-viewer to embed the Studio in an iframe
+    // on a different origin (localhost:3080). Local dev only — restore this if
+    // you disable the side-viewer or harden a public deployment.
+    xFrameOptions: false,
+    // helmet's value; hono's default max-age is 180 days.
+    strictTransportSecurity: "max-age=31536000; includeSubDomains",
+  });
 }

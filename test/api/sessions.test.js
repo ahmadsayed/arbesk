@@ -1,6 +1,7 @@
 import { jest } from "@jest/globals";
-import express from "express";
 import request from "supertest";
+import { validator } from "hono/validator";
+import { mountRoutes } from "../helpers/hono.js";
 
 const VALID_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
 const EOA_ADDRESS = "0xEOA000000000000000000000000000000000000A";
@@ -11,16 +12,13 @@ async function loadModule(verifySiweResult) {
     verifyProof: jest.fn(async () => verifySiweResult),
   }));
   jest.unstable_mockModule("../../src/api/validation.ts", () => ({
-    validateBody: jest.fn(() => (req, res, next) => next()),
+    validateBody: jest.fn(() => validator("json", (value) => value)),
   }));
   return await import("../../src/api/sessions.ts");
 }
 
 function createApp(routerFactory) {
-  const app = express();
-  app.use(express.json());
-  app.use("/sessions", routerFactory());
-  return app;
+  return mountRoutes("/sessions", routerFactory());
 }
 
 describe("session helpers", () => {
@@ -127,7 +125,7 @@ describe("session routes", () => {
       }),
     }));
     jest.unstable_mockModule("../../src/api/validation.ts", () => ({
-      validateBody: jest.fn(() => (req, res, next) => next()),
+      validateBody: jest.fn(() => validator("json", (value) => value)),
     }));
     mod = await import("../../src/api/sessions.ts");
     const app = createApp(mod.default);
@@ -150,7 +148,7 @@ describe("session routes", () => {
       ),
     }));
     jest.unstable_mockModule("../../src/api/validation.ts", () => ({
-      validateBody: jest.fn(() => (req, res, next) => next()),
+      validateBody: jest.fn(() => validator("json", (value) => value)),
     }));
     mod = await import("../../src/api/sessions.ts");
     const app = createApp(mod.default);

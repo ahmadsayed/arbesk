@@ -1,7 +1,8 @@
-import express from "express";
-import type { NextFunction, Request, Response } from "express";
+import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
+import type { AuthEnv } from "../authentication.ts";
 import {
   uploadUrlRateLimit,
   unpinRateLimit,
@@ -15,8 +16,6 @@ import { unpinSchema, gcSchema, uploadUrlsSchema } from "../schemas.ts";
 import { checkAssetAccess, getTokenUri } from "../authorization.ts";
 import { getConfiguredContracts } from "../../config.ts";
 import { maybeDecompress } from "../ipfs-utils.ts";
-
-const Router = express.Router;
 
 /**
  * Max `prev_asset_manifest_cid` links followed when verifying that a CID
@@ -66,20 +65,20 @@ async function cidBelongsToToken(
   return false;
 }
 
-function requireAdminToken(req: Request, res: Response, next: NextFunction) {
+const requireAdminToken: MiddlewareHandler = async (c, next) => {
   const adminToken = process.env.GC_ADMIN_TOKEN;
   if (!adminToken) {
-    return sendError(res, 503, "GC_DISABLED", "GC admin token not configured");
+    return sendError(c, 503, "GC_DISABLED", "GC admin token not configured");
   }
-  const provided = req.headers["x-admin-token"];
+  const provided = c.req.header("x-admin-token");
   if (!provided || provided !== adminToken) {
-    return sendError(res, 403, "FORBIDDEN", "Invalid or missing admin token");
+    return sendError(c, 403, "FORBIDDEN", "Invalid or missing admin token");
   }
-  next();
-}
+  await next();
+};
 
 export default function ipfsRoutes(storage: StorageAdapter) {
-  const router = Router();
+  const app = new Hono<AuthEnv>();
 
   /**
    * POST /api/v1/ipfs/upload-url
@@ -89,20 +88,20 @@ export default function ipfsRoutes(storage: StorageAdapter) {
    *   presigned URL; Kubo mode returns the local API URL. The master Pinata
    *   JWT never reaches the client.
    */
-  router.post(
+  app.post(
     "/upload-url",
     authenticate,
     uploadUrlRateLimit,
-    async (req, res) => {
+    async (c) => {
       try {
         const credential = await storage.mintUploadCredential();
         console.log(
-          `[IPFS] minted upload credential - strategy=${credential.strategy} wallet=${res.locals.userAddress}`,
+          `[IPFS] minted upload credential - strategy=${credential.strategy} wallet=${c.get("userAddress")}`,
         );
-        res.json(credential);
+        return c.json(credential);
       } catch (error) {
         console.error("[IPFS] upload-url error:", (error as Error).message);
-        sendError(res, 500, "UPLOAD_URL_FAILED", (error as Error).message);
+        return sendError(c, 500, "UPLOAD_URL_FAILED", (error as Error).message);
       }
     },
   );
@@ -117,22 +116,22 @@ export default function ipfsRoutes(storage: StorageAdapter) {
    *
    * Body: { count: number } (1-200, default 1)
    */
-  router.post(
+  app.post(
     "/upload-urls",
     authenticate,
     uploadUrlRateLimit,
     validateBody(uploadUrlsSchema),
-    async (req, res) => {
+    async (c) => {
       try {
-        const { count } = req.body;
+        const { count } = c.req.valid("json");
         const credentials = await storage.mintUploadCredentials(count);
         console.log(
-          `[IPFS] minted ${credentials.length} upload credential(s) - strategy=${credentials[0]?.strategy} wallet=${res.locals.userAddress}`,
+          `[IPFS] minted ${credentials.length} upload credential(s) - strategy=${credentials[0]?.strategy} wallet=${c.get("userAddress")}`,
         );
-        res.json({ credentials });
+        return c.json({ credentials });
       } catch (error) {
         console.error("[IPFS] upload-urls error:", (error as Error).message);
-        sendError(res, 500, "UPLOAD_URL_FAILED", (error as Error).message);
+        return sendError(c, 500, "UPLOAD_URL_FAILED", (error as Error).message);
       }
     },
   );
@@ -238,11 +237,11 @@ async function findMatchingContract(
   return { matched };
 }
 
-  router.post("/unpin", authenticate, unpinRateLimit, validateBody(unpinSchema), async (req, res) => {
+  app.post("/unpin", authenticate, unpinRateLimit, validateBody(unpinSchema), async (c) => {
     const startTime = Date.now();
     try {
-      const { cid: startCid, tokenId, chainId, contractAddress, proof } = req.body;
-      const sessionAddress = res.locals.userAddress;
+      const { cid: startCid, tokenId, chainId, contractAddress, proof } = c.req.valid("json");
+      const sessionAddress = c.get("userAddress");
 
       console.log(`[UNPIN] starting from ${startCid} for token ${tokenId}`);
 
@@ -257,7 +256,7 @@ async function findMatchingContract(
         );
         if (!allowlisted) {
           return sendError(
-            res,
+            c,
             400,
             "INVALID_CONTRACT",
             "contractAddress is not a configured Arbesk contract for this chain",
@@ -269,7 +268,7 @@ async function findMatchingContract(
       }
       if (candidates.length === 0) {
         return sendError(
-          res,
+          c,
           400,
           "INVALID_TOKEN",
           `No contract configured for chain ${chainId ?? "default"}`,
@@ -289,7 +288,7 @@ async function findMatchingContract(
         storage
       );
       if (match.error) {
-        return sendError(res, match.error.status, match.error.code, match.error.message);
+        return sendError(c, match.error.status, match.error.code, match.error.message);
       }
       const matched = match.matched!;
 
@@ -333,7 +332,7 @@ async function findMatchingContract(
         `[UNPIN] done - ${unpinned.length} unpinned, ${shared.size} skipped, ${errors.length} errors (${elapsed}ms)`,
       );
 
-      res.json({
+      return c.json({
         unpinned,
         skipped: Array.from(shared),
         count: unpinned.length,
@@ -341,7 +340,7 @@ async function findMatchingContract(
       });
     } catch (error) {
       console.error("[UNPIN] error:", (error as Error).message);
-      sendError(res, 500, "UNPIN_FAILED", (error as Error).message);
+      return sendError(c, 500, "UNPIN_FAILED", (error as Error).message);
     }
   });
 
@@ -354,27 +353,27 @@ async function findMatchingContract(
    *
    * Body (all optional): { dryRun, maxUnpin, chainId }
    */
-  router.post(
+  app.post(
     "/gc",
     authenticate,
     requireAdminToken,
     gcRateLimit,
     validateBody(gcSchema),
-    async (req, res) => {
+    async (c) => {
       try {
-        const { dryRun, maxUnpin, chainId } = req.body;
+        const { dryRun, maxUnpin, chainId } = c.req.valid("json");
         const result = await runIpfsGC({
           dryRun,
           maxUnpin,
           chainId,
         }, storage);
-        res.json(result);
+        return c.json(result);
       } catch (error) {
         console.error("[GC] route error:", (error as Error).message);
-        sendError(res, 500, "GC_FAILED", (error as Error).message);
+        return sendError(c, 500, "GC_FAILED", (error as Error).message);
       }
     },
   );
 
-  return router;
+  return app;
 }

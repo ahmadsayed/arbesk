@@ -1,19 +1,17 @@
-import express from "express";
+import { Hono } from "hono";
 import { _resetRateLimiters } from "../rate-limiter.ts";
-
-const Router = express.Router;
 
 /**
  * Test-only utilities. Not mounted in production.
  */
 export default function testUtilsRoutes() {
-  const router = Router();
+  const app = new Hono();
 
-  router.post("/reset-rate-limit", (req, res) => {
+  app.post("/reset-rate-limit", (c) => {
     _resetRateLimiters();
     console.log("[RATE-LIMIT] reset via test endpoint");
-    res.json({ ok: true });
+    return c.json({ ok: true });
   });
 
-  return router;
+  return app;
 }

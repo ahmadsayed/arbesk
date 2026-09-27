@@ -11,7 +11,7 @@ Arbesk is a local-first 3D asset studio built around **fractal manifests**: ever
 
 The system currently combines:
 
-- **Mock-backed generative 3D flow** via Express and private IPFS
+- **Mock-backed generative 3D flow** via the Hono backend and private IPFS
 - **Parametric versioning** for free color/scale changes
 - **Babylon.js rendering** with GLB/GLTF loading and one-node-per-asset replacement behavior
 - **Free-tier on-chain generation quota** via `ArbeskAssetFree.recordGeneration()` (10/day per wallet; contract `owner()` bypasses quota)
@@ -74,7 +74,7 @@ The system currently combines:
                                 │ HTTP (auth + adapter calls only)
                                 ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                     Express Backend (thin gatekeeper)                │
+│                      Hono Backend (thin gatekeeper)                  │
 │                                                                      │
 │  /api/v1/generations                                                 │
 │  └─ Session auth + rate limit + mock adapter → returns raw bytes     │
@@ -124,7 +124,7 @@ The system currently combines:
 
 | File | Responsibility |
 |---|---|
-| `src/index.ts` | Express app, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
+| `src/index.ts` | Hono app on @hono/node-server, static frontend serving, request logging, body limits, CSP, Chat WebSocket |
 | `src/api/index.ts` | Route registry — mounts all `/api/v1` routes |
 | `src/api/routes/` | Per-domain route modules (`comments.ts`, `ipfs.ts`, `contracts.ts`, `indexer.ts`, `paymaster.ts`, `openapi.ts`, `test-utils.ts`) |
 | `src/api/assets/generate-node.ts` | Session-auth generation route — calls mock adapter, returns raw bytes (no IPFS writes) |

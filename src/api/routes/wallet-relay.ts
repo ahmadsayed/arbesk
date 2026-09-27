@@ -4,10 +4,9 @@
  * (server-wallet) session.
  * @remarks No browser, no private key on the CLI.
  */
-import express from "express";
+import { Hono } from "hono";
 import fs from "fs";
 import path from "path";
-import type { Request, Response } from "express";
 import type { CdpClient } from "@coinbase/cdp-sdk";
 import type { Authz } from "@arbesk/authz";
 import { createAssetContract } from "@arbesk/wallet";
@@ -25,8 +24,6 @@ import { PROJECT_ROOT } from "../project-root.ts";
 // sit in a dense static-import graph (identity → config → viem/web3) that breaks
 // the full-app ESM import path when a route imports them statically.
 
-const Router = express.Router;
-
 const ABI_PATH = path.resolve(
   PROJECT_ROOT,
   "blockchain/artifacts/contracts/ArbeskAssetFree.sol/ArbeskAssetFree.json",
@@ -37,6 +34,11 @@ const DEFAULT_CHAIN_ID = Number(process.env.DEFAULT_CHAIN_ID || 84532);
 
 /** bytes32(0) — collection-wide editor-grant scope (see #50). */
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+/** A body field that is meaningful only as a string; anything else is absent. */
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
 
 export interface WalletRelayDeps {
   getCdpClientFn?: () => Promise<CdpClient | null>;
@@ -151,21 +153,21 @@ async function publishLiveUpdate(
 
 export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
   const getCdp = deps.getCdpClientFn ?? getCdpClient;
-  const router = Router();
+  const app = new Hono();
 
-  router.post("/", walletRelayRateLimit, validateBody(walletRelaySchema), async (req: Request, res: Response) => {
-    const authHeader = req.headers["authorization"];
+  app.post("/", walletRelayRateLimit, validateBody(walletRelaySchema), async (c) => {
+    const authHeader = c.req.header("authorization");
     if (!authHeader || !authHeader.startsWith("Session ")) {
-      return sendError(res, 401, "MISSING_SESSION", "Session token required");
+      return sendError(c, 401, "MISSING_SESSION", "Session token required");
     }
     const token = authHeader.slice(8);
 
     const { getSessionRecord } = await import("../sessions.ts");
     const record = getSessionRecord(token);
     if (!record) {
-      return sendError(res, 401, "INVALID_SESSION", "Session invalid or expired");
+      return sendError(c, 401, "INVALID_SESSION", "Session invalid or expired");
     }
-    const { op, tokenId, chainId, contractAddress, proof, requiredRole, params = {} } = req.body;
+    const { op, tokenId, chainId, contractAddress, proof, requiredRole, params = {} } = c.req.valid("json");
 
     try {
       const { getContractAddress } = await import("../../config.ts");
@@ -180,18 +182,18 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
 
       const authzResult = await authorizeRelay(authz, op, tokenId, cid, record.address, proof, requiredRole);
       if (authzResult.error) {
-        return sendError(res, authzResult.error.status, authzResult.error.code, authzResult.error.message);
+        return sendError(c, authzResult.error.status, authzResult.error.code, authzResult.error.message);
       }
 
       const cdp = await getCdp();
       if (!cdp) {
-        return sendError(res, 503, "CDP_NOT_CONFIGURED", "CDP server API key not configured");
+        return sendError(c, 503, "CDP_NOT_CONFIGURED", "CDP server API key not configured");
       }
 
       const { userId, address } = await resolveRelayUserId(cdp, record);
       if (!userId) {
         return sendError(
-          res,
+          c,
           403,
           "DELEGATION_REQUIRED",
           "No delegated wallet for this session. Log in via the browser to grant a delegation.",
@@ -215,18 +217,18 @@ export default function walletRelayRoutes(deps: WalletRelayDeps = {}) {
       const args = { tokenId, ...params };
       const result = await executeRelayOp(contract, op, args);
       if (result.error) {
-        return sendError(res, result.error.status, result.error.code, result.error.message);
+        return sendError(c, result.error.status, result.error.code, result.error.message);
       }
       if (op === "updateUri" && typeof params.newUri === "string") {
-        publishLiveUpdate(cid, contractAddr, String(tokenId), params.newUri, params.assetId ?? null).catch(() => {});
+        publishLiveUpdate(cid, contractAddr, String(tokenId), params.newUri, stringOrNull(params.assetId)).catch(() => {});
       }
-      res.status(200).json({ receipt: result.receipt });
+      return c.json({ receipt: result.receipt }, 200);
     } catch (err) {
       const e = err as Error;
       console.error("[RELAY] failed:", e.message);
-      sendError(res, 502, "RELAY_FAILED", "Relay operation failed");
+      return sendError(c, 502, "RELAY_FAILED", "Relay operation failed");
     }
   });
 
-  return router;
+  return app;
 }

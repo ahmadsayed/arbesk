@@ -1,107 +1,115 @@
-import { createRequest, createResponse } from "node-mocks-http";
-import request from "supertest";
-import express from "express";
+import { Hono } from "hono";
 import createRateLimitMiddleware, {
   generationRateLimit,
   _resetRateLimiters,
 } from "../../src/api/rate-limiter.ts";
 
-async function run(mw, { userAddress, ip }) {
-  const req = createRequest({ body: {}, ip });
-  const res = createResponse({ locals: userAddress ? { userAddress } : {} });
-  let nextCalled = false;
-  await mw(req, res, () => {
-    nextCalled = true;
-  });
-  return { res, nextCalled };
+function buildApp(mw, { walletHeader = false } = {}) {
+  const app = new Hono();
+  if (walletHeader) {
+    app.use(async (c, next) => {
+      const wallet = c.req.header("x-test-wallet");
+      if (wallet) c.set("userAddress", wallet);
+      await next();
+    });
+  }
+  app.all("/limited", mw, (c) => c.json({ ok: true }));
+  return app;
 }
 
-describe("rate limiter keying", () => {
-  beforeEach(() => _resetRateLimiters());
-
-  it("keys on res.locals.userAddress even without txHash", async () => {
-    const mw = createRateLimitMiddleware({ max: 2, windowMs: 60000 });
-    expect((await run(mw, { userAddress: "0xWallet", ip: "1.1.1.1" })).nextCalled).toBe(
-      true,
-    );
-    expect((await run(mw, { userAddress: "0xWallet", ip: "2.2.2.2" })).nextCalled).toBe(
-      true,
-    );
-    const third = await run(mw, { userAddress: "0xWallet", ip: "3.3.3.3" });
-    expect(third.nextCalled).toBe(false);
-    expect(third.res.statusCode).toBe(429);
+const get = (app, wallet) =>
+  app.request("http://localhost/limited", {
+    headers: wallet ? { "x-test-wallet": wallet } : {},
   });
 
-  it("falls back to req.ip when no session address", async () => {
-    const mw = createRateLimitMiddleware({ max: 1, windowMs: 60000 });
-    expect((await run(mw, { ip: "9.9.9.9" })).nextCalled).toBe(true);
-    expect((await run(mw, { ip: "9.9.9.9" })).nextCalled).toBe(false);
+describe("rate limiter", () => {
+  beforeEach(() => _resetRateLimiters());
+
+  it("keys on userAddress and allows up to max", async () => {
+    const app = buildApp(createRateLimitMiddleware({ max: 2 }), {
+      walletHeader: true,
+    });
+
+    expect((await get(app, "0xWallet")).status).toBe(200);
+    expect((await get(app, "0xWallet")).status).toBe(200);
+    const third = await get(app, "0xWallet");
+    expect(third.status).toBe(429);
+    const body = await third.json();
+    expect(body.error.code).toBe("RATE_LIMITED");
+  });
+
+  it("falls back to the client IP bucket without a session address", async () => {
+    const app = buildApp(createRateLimitMiddleware({ max: 1 }));
+    // In-process requests share one client identity (no socket).
+    expect((await get(app)).status).toBe(200);
+    expect((await get(app)).status).toBe(429);
   });
 
   it("gives each wallet an independent quota", async () => {
-    const mw = createRateLimitMiddleware({ max: 1, windowMs: 60000 });
-    expect((await run(mw, { userAddress: "0xWalletA", ip: "1.1.1.1" })).nextCalled).toBe(
-      true,
-    );
-    expect((await run(mw, { userAddress: "0xWalletB", ip: "1.1.1.1" })).nextCalled).toBe(
-      true,
-    );
-
-    const blocked = await run(mw, { userAddress: "0xWalletA", ip: "1.1.1.1" });
-    expect(blocked.nextCalled).toBe(false);
-    expect(blocked.res.statusCode).toBe(429);
-  });
-
-  it("does not let an IP-bucket consume a wallet's quota", async () => {
-    const mw = createRateLimitMiddleware({ max: 1, windowMs: 60000 });
-    // Consume the IP bucket for 1.1.1.1.
-    expect((await run(mw, { ip: "1.1.1.1" })).nextCalled).toBe(true);
-    expect((await run(mw, { ip: "1.1.1.1" })).nextCalled).toBe(false);
-
-    // A wallet using the same IP must still be allowed because it keys on address.
-    const wallet = await run(mw, { userAddress: "0xWallet", ip: "1.1.1.1" });
-    expect(wallet.nextCalled).toBe(true);
-  });
-
-  it("returns the configured message and retry-after metadata on rejection", async () => {
-    const mw = createRateLimitMiddleware({
-      max: 1,
-      windowMs: 30000,
-      message: "Custom rate limit message.",
+    const app = buildApp(createRateLimitMiddleware({ max: 1 }), {
+      walletHeader: true,
     });
-    expect((await run(mw, { userAddress: "0xWallet", ip: "1.1.1.1" })).nextCalled).toBe(
-      true,
+
+    expect((await get(app, "0xWalletA")).status).toBe(200);
+    expect((await get(app, "0xWalletB")).status).toBe(200);
+    expect((await get(app, "0xWalletA")).status).toBe(429);
+  });
+
+  it("does not let the IP bucket consume a wallet's quota", async () => {
+    const app = buildApp(createRateLimitMiddleware({ max: 1 }), {
+      walletHeader: true,
+    });
+
+    expect((await get(app)).status).toBe(200);
+    expect((await get(app)).status).toBe(429);
+    expect((await get(app, "0xWallet")).status).toBe(200);
+  });
+
+  it("returns the configured message, retry metadata, and RateLimit-* headers", async () => {
+    const app = buildApp(
+      createRateLimitMiddleware({
+        max: 1,
+        windowMs: 30000,
+        message: "Custom rate limit message.",
+      }),
     );
 
-    const blocked = await run(mw, { userAddress: "0xWallet", ip: "1.1.1.1" });
-    expect(blocked.nextCalled).toBe(false);
-    expect(blocked.res.statusCode).toBe(429);
-    const body = blocked.res._getJSONData();
-    expect(body.error.code).toBe("RATE_LIMITED");
-    expect(body.error.message).toBe("Custom rate limit message.");
-    expect(body.error.details.retryAfterSeconds).toBe(30);
+    const first = await get(app);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("RateLimit-Limit")).toBe("1");
+    expect(first.headers.get("RateLimit-Remaining")).toBe("0");
+    expect(first.headers.get("RateLimit-Policy")).toBe("1;w=30");
+    expect(Number(first.headers.get("RateLimit-Reset"))).toBeGreaterThan(0);
+
+    const blocked = await get(app);
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("Retry-After")).toBe(
+      blocked.headers.get("RateLimit-Reset"),
+    );
+    const body = await blocked.json();
+    expect(body).toEqual({
+      error: {
+        code: "RATE_LIMITED",
+        message: "Custom rate limit message.",
+        details: { retryAfterSeconds: 30 },
+      },
+    });
   });
 
   it("supports a dynamic max function", async () => {
-    const mw = createRateLimitMiddleware({
-      max: (_req, res) => (res.locals.userAddress ? 2 : 1),
-      windowMs: 60000,
-    });
+    const app = buildApp(
+      createRateLimitMiddleware({
+        max: (c) => (c.get("userAddress") ? 2 : 1),
+      }),
+      { walletHeader: true },
+    );
 
-    // Anonymous IP bucket: limit 1.
-    expect((await run(mw, { ip: "2.2.2.2" })).nextCalled).toBe(true);
-    expect((await run(mw, { ip: "2.2.2.2" })).nextCalled).toBe(false);
+    expect((await get(app)).status).toBe(200);
+    expect((await get(app)).status).toBe(429);
 
-    // Wallet bucket: limit 2.
-    expect((await run(mw, { userAddress: "0xWallet", ip: "2.2.2.2" })).nextCalled).toBe(
-      true,
-    );
-    expect((await run(mw, { userAddress: "0xWallet", ip: "2.2.2.2" })).nextCalled).toBe(
-      true,
-    );
-    expect((await run(mw, { userAddress: "0xWallet", ip: "2.2.2.2" })).nextCalled).toBe(
-      false,
-    );
+    expect((await get(app, "0xWallet")).status).toBe(200);
+    expect((await get(app, "0xWallet")).status).toBe(200);
+    expect((await get(app, "0xWallet")).status).toBe(429);
   });
 });
 
@@ -109,17 +117,21 @@ describe("generationRateLimit BYOK bypass", () => {
   const WALLET = "0x1234567890123456789012345678901234567890";
 
   function buildApp() {
-    const app = express();
-    app.use(express.json());
-    app.use((req, res, next) => {
-      res.locals = { userAddress: WALLET };
-      next();
+    const app = new Hono();
+    app.use(async (c, next) => {
+      c.set("userAddress", WALLET);
+      await next();
     });
-    app.post("/generate", generationRateLimit, (req, res) =>
-      res.status(200).json({ ok: true }),
-    );
+    app.post("/generate", generationRateLimit, (c) => c.json({ ok: true }));
     return app;
   }
+
+  const post = (app, body) =>
+    app.request("http://localhost/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
   beforeEach(() => {
     _resetRateLimiters();
@@ -131,68 +143,34 @@ describe("generationRateLimit BYOK bypass", () => {
     delete process.env.GENERATION_RATE_LIMIT_MAX;
   });
 
-  test("mock requests count toward the generation limit", async () => {
+  it("counts mock requests toward the generation limit", async () => {
     const app = buildApp();
-
-    const first = await request(app).post("/generate").send({ provider: "mock" });
-    expect(first.status).toBe(200);
-
-    const second = await request(app).post("/generate").send({ provider: "mock" });
-    expect(second.status).toBe(200);
-
-    const third = await request(app).post("/generate").send({ provider: "mock" });
+    expect((await post(app, { provider: "mock" })).status).toBe(200);
+    expect((await post(app, { provider: "mock" })).status).toBe(200);
+    const third = await post(app, { provider: "mock" });
     expect(third.status).toBe(429);
-    expect(third.body.error.code).toBe("RATE_LIMITED");
+    expect((await third.json()).error.code).toBe("RATE_LIMITED");
   });
 
-  test("BYOK tripo3d requests skip the generation limit", async () => {
+  it("lets BYOK tripo3d requests skip the generation limit", async () => {
     const app = buildApp();
-
     for (let i = 0; i < 5; i += 1) {
-      const res = await request(app)
-        .post("/generate")
-        .send({ provider: "tripo3d", providerKey: "user-key" });
+      const res = await post(app, { provider: "tripo3d", providerKey: "user-key" });
       expect(res.status).toBe(200);
     }
   });
 
-  test("tripo3d without providerKey still counts toward the limit", async () => {
+  it("counts tripo3d requests without providerKey", async () => {
     const app = buildApp();
-
-    const first = await request(app)
-      .post("/generate")
-      .send({ provider: "tripo3d" });
-    expect(first.status).toBe(200);
-
-    const second = await request(app)
-      .post("/generate")
-      .send({ provider: "tripo3d" });
-    expect(second.status).toBe(200);
-
-    const third = await request(app)
-      .post("/generate")
-      .send({ provider: "tripo3d" });
-    expect(third.status).toBe(429);
-    expect(third.body.error.code).toBe("RATE_LIMITED");
+    expect((await post(app, { provider: "tripo3d" })).status).toBe(200);
+    expect((await post(app, { provider: "tripo3d" })).status).toBe(200);
+    expect((await post(app, { provider: "tripo3d" })).status).toBe(429);
   });
 
-  test("whitespace-only providerKey does not bypass the limit", async () => {
+  it("does not bypass on a whitespace-only providerKey", async () => {
     const app = buildApp();
-
-    const first = await request(app)
-      .post("/generate")
-      .send({ provider: "tripo3d", providerKey: "   " });
-    expect(first.status).toBe(200);
-
-    const second = await request(app)
-      .post("/generate")
-      .send({ provider: "tripo3d", providerKey: "   " });
-    expect(second.status).toBe(200);
-
-    const third = await request(app)
-      .post("/generate")
-      .send({ provider: "tripo3d", providerKey: "   " });
-    expect(third.status).toBe(429);
-    expect(third.body.error.code).toBe("RATE_LIMITED");
+    expect((await post(app, { provider: "tripo3d", providerKey: "   " })).status).toBe(200);
+    expect((await post(app, { provider: "tripo3d", providerKey: "   " })).status).toBe(200);
+    expect((await post(app, { provider: "tripo3d", providerKey: "   " })).status).toBe(429);
   });
 });

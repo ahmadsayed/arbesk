@@ -11,7 +11,8 @@
 
 import { jest } from "@jest/globals";
 import request from "supertest";
-import express from "express";
+import { Hono } from "hono";
+import { mountRoutes } from "./helpers/hono.js";
 
 jest.setTimeout(10000);
 
@@ -97,7 +98,7 @@ describe("Manifest comments archive integration", () => {
     });
 
     jest.unstable_mockModule("../src/api/sessions.ts", () => ({
-      default: jest.fn(() => express.Router()),
+      default: jest.fn(() => new Hono()),
       validateSession: jest.fn(() => "0xTestAddress"),
     }));
 
@@ -141,9 +142,7 @@ describe("Manifest comments archive integration", () => {
     const { createBackendCore } = await import("../src/api/asset-core-adapters.ts");
     const storage = createStorageAdapter();
     const core = createBackendCore(storage);
-    app = express();
-    app.use(express.json({ limit: "50mb" }));
-    app.use("/api", createApi({ storage, core }));
+    app = mountRoutes("/api", createApi({ storage, core }));
   });
 
   beforeEach(() => {

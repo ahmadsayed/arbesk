@@ -6,7 +6,7 @@
  */
 import { jest } from "@jest/globals";
 import request from "supertest";
-import express from "express";
+import { mountRoutes } from "../helpers/hono.js";
 
 import { createSession } from "../../src/api/sessions.ts";
 import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
@@ -15,10 +15,7 @@ import paymasterRoutes from "../../src/api/routes/paymaster.ts";
 const SESSION_WALLET = "0x1234567890123456789012345678901234567890";
 
 function buildApp() {
-  const app = express();
-  app.use(express.json());
-  app.use("/paymaster", paymasterRoutes());
-  return app;
+  return mountRoutes("/paymaster", paymasterRoutes());
 }
 
 function sessionHeader(address = SESSION_WALLET) {

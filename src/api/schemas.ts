@@ -314,7 +314,7 @@ const CAD_MAX_PARAMETERS = 40;
 
 /**
  * Absolute ceiling on one image's base64 payload.
- * @remarks This is a MEMORY bound, not a policy one: express.json parses the
+ * @remarks This is a MEMORY bound, not a policy one: the validator parses the
  *   whole body into strings before any route runs, so an unbounded field is a
  *   hole an anonymous-in-effect request can push a heap through. The policy cap
  *   is CAD_MAX_IMAGE_BYTES, checked in the route where it can answer 413.
