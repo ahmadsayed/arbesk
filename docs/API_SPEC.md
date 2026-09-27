@@ -1,6 +1,6 @@
 # Arbesk API Specification
 
-> Version: 0.8.0 — aligned with the current Express implementation
+> Version: 0.8.0 — aligned with the current Hono implementation
 > Base URL: `/api`
 > Content-Type: `application/json` unless noted
 

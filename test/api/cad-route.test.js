@@ -7,7 +7,7 @@
  */
 import { jest } from "@jest/globals";
 import request from "supertest";
-import express from "express";
+import { mountRoutes } from "../helpers/hono.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -59,9 +59,7 @@ let statePath;
 let generate;
 
 function buildApp(overrides = {}) {
-  const app = express();
-  app.use(express.json({ limit: "50mb" }));
-  app.use("/cad", cadRoutes({ quotaStatePath: statePath, generator: { generate }, ...overrides }));
+  const app = mountRoutes("/cad", cadRoutes({ quotaStatePath: statePath, generator: { generate }, ...overrides }));
   return app;
 }
 
@@ -280,9 +278,7 @@ describe("POST /cad/generations - admission", () => {
 describe("POST /cad/generations - configuration", () => {
   test("503 when DEEPSEEK_API_KEY is unset and no generator is injected", async () => {
     delete process.env.DEEPSEEK_API_KEY;
-    const app = express();
-    app.use(express.json());
-    app.use("/cad", cadRoutes({ quotaStatePath: statePath }));
+    const app = mountRoutes("/cad", cadRoutes({ quotaStatePath: statePath }));
     const res = await request(app)
       .post("/cad/generations").set("Authorization", sessionHeader()).send({ prompt: "a box" });
 
@@ -413,9 +409,7 @@ describe("the real generator, with only the transport stubbed", () => {
   }
 
   function appWithTransport(fetchImpl) {
-    const app = express();
-    app.use(express.json({ limit: "50mb" }));
-    app.use("/cad", cadRoutes({ quotaStatePath: statePath, fetchImpl }));
+    const app = mountRoutes("/cad", cadRoutes({ quotaStatePath: statePath, fetchImpl }));
     return app;
   }
 

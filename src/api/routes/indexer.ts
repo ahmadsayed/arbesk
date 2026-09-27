@@ -1,11 +1,10 @@
-import express from "express";
+import { Hono } from "hono";
+import type { Context } from "hono";
 import { getIndexer } from "../token-indexer.ts";
 import type { StorageAdapter } from "../storage/index.ts";
 import { validateQuery } from "../validation.ts";
 import { ownedQuerySchema, sharedQuerySchema } from "../schemas.ts";
 import { sendError } from "../errors.ts";
-
-const Router = express.Router;
 
 function ts(): string {
   return new Date().toLocaleTimeString();
@@ -59,36 +58,38 @@ async function withFreshIndexer(
  * Returns token IDs where the address is an editor but not the current owner.
  */
 export default function indexerRoutes(storage: StorageAdapter) {
-  const router = Router();
+  const app = new Hono();
 
-  const listHandler =
-    (kind: "owned" | "shared") =>
-    async (req: any, res: any) => {
-      const { address, chainId, force } = req.query as unknown as {
-        address: string;
-        chainId: number;
-        force: boolean;
-      };
+  const respond = async (
+    c: Context,
+    kind: "owned" | "shared",
+    query: { address: string; chainId: number; force?: boolean },
+  ) => {
+    const { address, chainId, force = false } = query;
 
-      try {
-        const indexer = await withFreshIndexer(chainId, force, storage);
-        res.json({
-          chainId,
-          address: address.toLowerCase(),
-          [kind]:
-            kind === "owned"
-              ? indexer.getOwnedTokens(address)
-              : indexer.getSharedTokens(address),
-          lastScannedBlock: indexer.lastScannedBlock,
-        });
-      } catch (err) {
-        console.error(`[${ts()}] [INDEXER-API] failed to get ${kind} tokens:`, String((err as Error).message));
-        sendError(res, 500, "INDEXER_READ_FAILED", "failed to read indexer state");
-      }
-    };
+    try {
+      const indexer = await withFreshIndexer(chainId, force, storage);
+      return c.json({
+        chainId,
+        address: address.toLowerCase(),
+        [kind]:
+          kind === "owned"
+            ? indexer.getOwnedTokens(address)
+            : indexer.getSharedTokens(address),
+        lastScannedBlock: indexer.lastScannedBlock,
+      });
+    } catch (err) {
+      console.error(`[${ts()}] [INDEXER-API] failed to get ${kind} tokens:`, String((err as Error).message));
+      return sendError(c, 500, "INDEXER_READ_FAILED", "failed to read indexer state");
+    }
+  };
 
-  router.get("/owned", validateQuery(ownedQuerySchema), listHandler("owned"));
-  router.get("/shared", validateQuery(sharedQuerySchema), listHandler("shared"));
+  app.get("/owned", validateQuery(ownedQuerySchema), (c) =>
+    respond(c, "owned", c.req.valid("query")),
+  );
+  app.get("/shared", validateQuery(sharedQuerySchema), (c) =>
+    respond(c, "shared", c.req.valid("query")),
+  );
 
-  return router;
+  return app;
 }

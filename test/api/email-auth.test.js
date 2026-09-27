@@ -2,7 +2,7 @@
  * Email OTP auth route tests (P1).
  */
 import { jest } from "@jest/globals";
-import express from "express";
+import { mountRoutes } from "../helpers/hono.js";
 import request from "supertest";
 import emailAuthRoutes, { _resetOtpStoreForTesting } from "../../src/api/routes/email-auth.ts";
 import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
@@ -12,10 +12,7 @@ import { _resetCdpClientForTesting } from "../../src/api/cdp.ts";
 const DEV_ADDR = "0x0000000000000000000000000000000000000abc";
 
 function makeApp(fakeCdp, sendEmail) {
-  const app = express();
-  app.use(express.json());
-  app.use("/auth/email", emailAuthRoutes({ getCdpClientFn: async () => fakeCdp, sendEmail }));
-  return app;
+  return mountRoutes("/auth/email", emailAuthRoutes({ getCdpClientFn: async () => fakeCdp, sendEmail }));
 }
 
 function fakeCdp({ users = [], createdUserId = "user-1", smartAddress = DEV_ADDR } = {}) {

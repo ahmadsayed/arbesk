@@ -2,20 +2,17 @@
  * Wallet relay route tests (P2d).
  */
 import { jest } from "@jest/globals";
-import express from "express";
+import { mountRoutes } from "../helpers/hono.js";
 import request from "supertest";
 import walletRelayRoutes from "../../src/api/routes/wallet-relay.ts";
 import { createSession, sessions } from "../../src/api/sessions.ts";
 import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
 
 function makeApp(cdp, authz) {
-  const app = express();
-  app.use(express.json());
-  app.use("/wallet/relay", walletRelayRoutes({
+  return mountRoutes("/wallet/relay", walletRelayRoutes({
     getCdpClientFn: async () => cdp,
     getAuthz: () => authz,
   }));
-  return app;
 }
 
 function fakeAuthz(allowed = true) {

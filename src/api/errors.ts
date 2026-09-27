@@ -1,10 +1,13 @@
-import type { Response } from "express";
+import type { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 /**
  * Standardized error response helper.
+ * @remarks Emits `{ error: { code, message, details? } }`. `status` is a plain
+ *   number because several callers forward an upstream or computed status.
  */
 export function sendError(
-  res: Response,
+  c: Context,
   status: number,
   code: string,
   message: string,
@@ -14,5 +17,5 @@ export function sendError(
     error: { code, message },
   };
   if (details) body.error.details = details;
-  return res.status(status).json(body);
+  return c.json(body, status as ContentfulStatusCode);
 }

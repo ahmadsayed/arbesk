@@ -1,25 +1,43 @@
-import express from "express";
-import abiRouter from "../abi-router.ts";
+import { Hono } from "hono";
+import fs from "fs";
+import path from "path";
+import { PROJECT_ROOT } from "../project-root.ts";
 
-const Router = express.Router;
-
-// Constructed once at module level: the ABI router is stateless (it only
-// resolves artifact paths per request), so there is no reason to rebuild it
-// on every call.
-const abiRouterInstance = abiRouter();
+// Contract name → compiled Hardhat artifact, relative to the project root.
+const ABI_MAP: Record<string, string> = {
+  ArbeskAsset: "blockchain/artifacts/contracts/ArbeskAsset.sol/ArbeskAsset.json",
+  ArbeskAssetFree:
+    "blockchain/artifacts/contracts/ArbeskAssetFree.sol/ArbeskAssetFree.json",
+};
 
 /**
  * Serve contract ABI by name.
  * GET /api/v1/contracts/:name/abi
  */
 export default function contractsRoutes() {
-  const router = Router();
+  const app = new Hono();
 
-  router.get("/:name/abi", (req, res, next) => {
-    // Forward to the shared ABI router logic, which routes on `/<name>.json`.
-    req.url = `/${req.params.name}.json`;
-    abiRouterInstance(req, res, next);
+  app.get("/:name/abi", async (c) => {
+    const name = c.req.param("name");
+    // Object.hasOwn: a name like "constructor" must not resolve through the
+    // prototype chain.
+    if (!Object.hasOwn(ABI_MAP, name)) return c.notFound();
+    const abiPath = path.resolve(PROJECT_ROOT, ABI_MAP[name]);
+    if (!fs.existsSync(abiPath)) {
+      console.log(`[ABI] not found at ${abiPath}`);
+      return c.json(
+        {
+          error:
+            "ABI not found. Run: docker compose run --rm hardhat npx hardhat compile",
+        },
+        404,
+      );
+    }
+    console.log(`[ABI] serving ${abiPath}`);
+    return c.body(await fs.promises.readFile(abiPath, "utf8"), 200, {
+      "Content-Type": "application/json",
+    });
   });
 
-  return router;
+  return app;
 }

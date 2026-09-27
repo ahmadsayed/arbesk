@@ -6,8 +6,8 @@
  *   (spec section 7). Both endpoints share one admission sequence, so a repair
  *   cannot reach the provider by a cheaper path than a generation can.
  */
-import express from "express";
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { Hono } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import type { z } from "zod";
 import type { CadDesign } from "@arbesk/cad-gen";
 import { createCadGenerator } from "@arbesk/cad-gen/backend/index.js";
@@ -23,15 +23,26 @@ import { cadGenerateSchema, cadRepairSchema } from "../schemas.ts";
 import { validateBody } from "../validation.ts";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
+import type { AuthVariables } from "../authentication.ts";
 import { cadRateLimit } from "../rate-limiter.ts";
-
-const Router = express.Router;
 
 /** Environment the route reads; injectable so a test needs no process globals. */
 type Env = Record<string, string | undefined>;
 
 type CadGenerateBody = z.infer<typeof cadGenerateSchema>;
 type CadRepairBody = z.infer<typeof cadRepairSchema>;
+
+/** The admitted request's slot, set by admitCad for the handler. */
+interface AdmittedCad {
+  config: CadRuntimeConfig;
+  wallet: string;
+  token: string;
+}
+
+/** Hono env for the CAD routes: the session wallet plus the admitted slot. */
+interface CadEnv {
+  Variables: AuthVariables & { cad: AdmittedCad };
+}
 
 /**
  * Shipped default for CAD_DAILY_REQUEST_LIMIT.
@@ -60,7 +71,7 @@ export interface CadRouteDeps {
    */
   generator?: CadGenerator;
   /** Injected session middleware, so a test needs no real session store. */
-  authenticateOverride?: RequestHandler;
+  authenticateOverride?: MiddlewareHandler;
   /** Redirects the persisted quota counter; unset in production. */
   quotaStatePath?: string;
   /** Provider transport, injected by tests. */
@@ -206,50 +217,58 @@ function base64Bytes(data: string): number {
  * @remarks A request the server was never going to serve must not cost a round.
  *   Charging for one is the single metering bug a user notices immediately and
  *   cannot work around, so these checks run ahead of the quota.
- * @returns true when the request may proceed.
+ * @returns the refusal response, or null when the request may proceed.
  */
-function precheck(body: CadGenerateBody | CadRepairBody, maxImageBytes: number, res: Response): boolean {
+function precheck(
+  c: Context,
+  body: CadGenerateBody | CadRepairBody,
+  maxImageBytes: number,
+): Response | null {
   if ("sourceRef" in body && body.sourceRef) {
     // Deliberately 501, not the 400 the plan first specified. A 400 tells a
     // client "fix your request", and there is nothing to fix: the resolution
     // path does not exist yet. 501 says do not retry until this ships.
-    sendError(
-      res, 501, "SOURCE_ASSET_RESOLUTION_UNAVAILABLE",
+    return sendError(
+      c, 501, "SOURCE_ASSET_RESOLUTION_UNAVAILABLE",
       "sourceRef is part of this contract but CID/asset resolution is not wired yet; " +
         "send the full priorDesign instead",
     );
-    return false;
   }
 
   const images = "images" in body ? body.images ?? [] : [];
   const oversized = images.find((image) => base64Bytes(image.data) > maxImageBytes);
   if (oversized) {
-    sendError(res, 413, "IMAGE_TOO_LARGE", "Attached image exceeds CAD_MAX_IMAGE_BYTES", {
+    return sendError(c, 413, "IMAGE_TOO_LARGE", "Attached image exceeds CAD_MAX_IMAGE_BYTES", {
       limit: maxImageBytes,
       actual: base64Bytes(oversized.data),
     });
-    return false;
   }
-  return true;
+  return null;
+}
+
+/** Sets the quota headers on the response being built. */
+function setQuotaHeaders(c: Context, wallet: string, config: CadRuntimeConfig): void {
+  for (const [name, value] of Object.entries(cadQuotaHeaders(wallet, config.quota))) {
+    c.header(name, value);
+  }
 }
 
 /** Refuses a request the quota or the in-flight lock turned away. */
 function refuseAdmission(
-  res: Response,
+  c: Context,
   wallet: string,
   config: CadRuntimeConfig,
   decision: Extract<QuotaDecision, { ok: false }>,
-): void {
+): Response {
   if (decision.reason === "IN_PROGRESS") {
     const heldMs = Date.now() - decision.startedAt;
     const retryAfter = Math.max(1, Math.ceil((config.quota.lockTtlMs - heldMs) / 1000));
-    res.set("Retry-After", String(retryAfter));
-    sendError(res, 409, "GENERATION_IN_PROGRESS",
+    c.header("Retry-After", String(retryAfter));
+    return sendError(c, 409, "GENERATION_IN_PROGRESS",
       "This wallet already has a CAD request in flight", { startedAt: decision.startedAt });
-    return;
   }
-  res.set(cadQuotaHeaders(wallet, config.quota));
-  sendError(res, 429, "DAILY_QUOTA_EXCEEDED", "Daily CAD request limit reached", {
+  setQuotaHeaders(c, wallet, config);
+  return sendError(c, 429, "DAILY_QUOTA_EXCEEDED", "Daily CAD request limit reached", {
     limit: decision.limit,
     used: decision.used,
     resetsAt: decision.resetsAt,
@@ -261,35 +280,37 @@ function refuseAdmission(
  * @remarks The quota check and the lock acquire happen in ONE synchronous call,
  *   so nothing can slip between them and a quota rejection therefore never
  *   takes the lock. The hourly limiter runs after this, as its own middleware -
- *   which is why the slot is also freed from res close: a limiter rejection and
- *   a client that hangs up must both release it.
+ *   which is why the slot is freed in a finally around the rest of the chain:
+ *   a limiter rejection, a handler failure and a normal response must all
+ *   release it.
  */
-function admitCad(deps: CadRouteDeps) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+function admitCad(
+  deps: CadRouteDeps,
+): MiddlewareHandler<CadEnv, string, { out: { json: CadGenerateBody | CadRepairBody } }> {
+  return async (c, next) => {
     const outcome = cadConfigFromEnv(process.env, deps);
     if (!outcome.ok) {
-      sendError(res, outcome.status, outcome.code, outcome.message);
-      return;
+      return sendError(c, outcome.status, outcome.code, outcome.message);
     }
 
     const { config } = outcome;
-    if (!precheck(req.body, config.maxImageBytes, res)) return;
+    const refused = precheck(c, c.req.valid("json"), config.maxImageBytes);
+    if (refused) return refused;
 
-    const wallet = res.locals.userAddress as string;
+    const wallet = c.get("userAddress");
     const decision = acquireCadSlot(wallet, config.quota);
     if (!decision.ok) {
-      refuseAdmission(res, wallet, config, decision);
-      return;
+      return refuseAdmission(c, wallet, config, decision);
     }
 
-    // A slot is freed however the request ends: the finally in runAdmitted
-    // covers the handler, and this covers everything in between - the limiter,
-    // an abort, a socket that dies. Releasing twice is a no-op by design.
-    res.once("close", () => releaseCadSlot(wallet, decision.token));
-    res.locals.cad = { config, wallet, token: decision.token };
-    res.set(cadQuotaHeaders(wallet, config.quota));
+    c.set("cad", { config, wallet, token: decision.token });
+    setQuotaHeaders(c, wallet, config);
     console.log("[CAD] admit wallet=" + wallet + " used=" + decision.used + "/" + decision.limit);
-    next();
+    try {
+      await next();
+    } finally {
+      releaseCadSlot(wallet, decision.token);
+    }
   };
 }
 
@@ -322,27 +343,23 @@ function toWireResult(result: CadGenerateResult) {
  *   passing a provider 401 through would read as "your session is invalid"
  *   when the session is perfectly good.
  */
-function respondWithFailure(res: Response, err: unknown): void {
+function respondWithFailure(c: Context, err: unknown): Response {
   const e = err as Error & { code?: string; diagnostics?: unknown };
   if (e.name === "CadGenerationFailed") {
     console.error("[CAD] generation failed: " + e.message);
-    sendError(res, 500, "CAD_GENERATION_FAILED", e.message, e.diagnostics ?? null);
-    return;
+    return sendError(c, 500, "CAD_GENERATION_FAILED", e.message, e.diagnostics ?? null);
   }
   if (e.name === "ProviderError") {
     console.error("[CAD] provider error: " + e.message);
-    sendError(res, 502, e.code ?? "PROVIDER_ERROR", "The CAD provider request failed");
-    return;
+    return sendError(c, 502, e.code ?? "PROVIDER_ERROR", "The CAD provider request failed");
   }
   console.error("[CAD] unexpected error: " + e.message);
-  sendError(res, 500, "CAD_GENERATION_FAILED", "CAD generation failed");
+  return sendError(c, 500, "CAD_GENERATION_FAILED", "CAD generation failed");
 }
 
-/** Runs one admitted request and always frees its slot. */
-async function runAdmitted(res: Response, input: CadGenerateInput): Promise<void> {
-  const { config, wallet, token } = res.locals.cad as {
-    config: CadRuntimeConfig; wallet: string; token: string;
-  };
+/** Runs one admitted request; admitCad frees its slot once this returns. */
+async function runAdmitted(c: Context<CadEnv>, input: CadGenerateInput): Promise<Response> {
+  const { config, wallet } = c.get("cad");
   try {
     const result = await config.generator.generate(input);
     console.log(
@@ -351,11 +368,9 @@ async function runAdmitted(res: Response, input: CadGenerateInput): Promise<void
       " attribution=" + result.attribution.length +
       " in " + result.diagnostics.durationMs + "ms",
     );
-    res.json(toWireResult(result));
+    return c.json(toWireResult(result));
   } catch (err) {
-    respondWithFailure(res, err);
-  } finally {
-    releaseCadSlot(wallet, token);
+    return respondWithFailure(c, err);
   }
 }
 
@@ -387,26 +402,26 @@ function repairInput(body: CadRepairBody): CadGenerateInput {
  *   instead of failing at boot.
  */
 export default function cadRoutes(deps: CadRouteDeps = {}) {
-  const router = Router();
-  const auth: RequestHandler = deps.authenticateOverride ?? authenticate;
+  const app = new Hono<CadEnv>();
+  const auth: MiddlewareHandler = deps.authenticateOverride ?? authenticate;
 
-  router.post(
+  app.post(
     "/generations",
     auth,
     validateBody(cadGenerateSchema),
     admitCad(deps),
     cadRateLimit,
-    (req: Request, res: Response) => runAdmitted(res, generateInput(req.body as CadGenerateBody)),
+    (c) => runAdmitted(c, generateInput(c.req.valid("json"))),
   );
 
-  router.post(
+  app.post(
     "/repairs",
     auth,
     validateBody(cadRepairSchema),
     admitCad(deps),
     cadRateLimit,
-    (req: Request, res: Response) => runAdmitted(res, repairInput(req.body as CadRepairBody)),
+    (c) => runAdmitted(c, repairInput(c.req.valid("json"))),
   );
 
-  return router;
+  return app;
 }

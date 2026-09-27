@@ -1,13 +1,12 @@
-import express from "express";
+import { Hono } from "hono";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
+import type { AuthEnv } from "../authentication.ts";
 import { archiveCommentsForAsset } from "../comments-archive.ts";
 import type { StorageAdapter } from "../storage/index.ts";
 import { validateBody } from "../validation.ts";
 import { snapshotCommentsSchema } from "../schemas.ts";
 import { buildAssetTag } from "../asset-tag.ts";
-
-const Router = express.Router;
 
 /**
  * POST /api/v1/assets/snapshot-comments
@@ -29,26 +28,26 @@ export default function commentsRoutes({
   getContractAddress: (chainId: number | null) => string | null;
   storage: StorageAdapter;
 }) {
-  const router = Router();
+  const app = new Hono<AuthEnv>();
 
-  router.post(
+  app.post(
     "/snapshot-comments",
     authenticate,
     validateBody(snapshotCommentsSchema),
-    async (req, res) => {
+    async (c) => {
       try {
         const {
           tokenId,
           chainId,
           contractAddress: reqContract,
           assetId,
-        } = req.body;
+        } = c.req.valid("json");
 
         const chainIdNum = chainId ?? null;
         const contractAddr = reqContract || getContractAddress(chainIdNum);
         if (!contractAddr) {
           return sendError(
-            res,
+            c,
             503,
             "CONTRACT_NOT_CONFIGURED",
             "Contract address not configured",
@@ -66,14 +65,14 @@ export default function commentsRoutes({
           `[ARCHIVE] snapshot complete - ${eventCount} events → ${archiveCid}`,
         );
 
-        res.json({ cid: archiveCid, eventCount });
+        return c.json({ cid: archiveCid, eventCount });
       } catch (error) {
         const err = error as Error;
         console.error("[ARCHIVE] snapshot error:", err.message);
-        sendError(res, 500, "ARCHIVE_FAILED", err.message);
+        return sendError(c, 500, "ARCHIVE_FAILED", err.message);
       }
     },
   );
 
-  return router;
+  return app;
 }

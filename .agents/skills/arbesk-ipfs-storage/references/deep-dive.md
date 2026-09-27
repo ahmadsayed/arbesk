@@ -11,7 +11,7 @@ Arbesk uses a **private, isolated Kubo IPFS node** running in Docker. All conten
 │  Docker Compose                                 │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
 │  │  Kubo    │  │ Hardhat  │  │  Backend     │  │
-│  │  IPFS    │  │  EVM     │  │  (Express)   │  │
+│  │  IPFS    │  │  EVM     │  │  (Hono)      │  │
 │  │          │  │          │  │              │  │
 │  │  API:5001│  │ RPC:8545 │  │  Port:9090   │  │
 │  │  GW:8080 │  │          │  │              │  │

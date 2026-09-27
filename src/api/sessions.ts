@@ -6,14 +6,11 @@
  *   eliminating the per-generation MetaMask pop-up.
  */
 
-import express from "express";
+import { Hono } from "hono";
 import crypto from "crypto";
 import { verifyProof } from "./identity.ts";
 import { validateBody } from "./validation.ts";
 import { createSessionSchema } from "./schemas.ts";
-import type { Request, Response } from "express";
-
-const Router = express.Router;
 
 // ─── Session Store ──────────────────────────────────────────────────────────
 
@@ -117,7 +114,7 @@ function invalidateSession(token: string): void {
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
 export default function sessionRouter() {
-  const router = Router();
+  const app = new Hono();
 
   /**
    * POST /api/v1/sessions
@@ -128,25 +125,25 @@ export default function sessionRouter() {
    *              | { kind: "oidc", provider, idToken, nonce? } }
    * Returns: { token: string, expiresAt: number }
    */
-  router.post(
-    "/",
-    validateBody(createSessionSchema),
-    async (req: Request, res: Response) => {
+  app.post("/", validateBody(createSessionSchema), async (c) => {
     try {
-      const { proof } = req.body;
+      const { proof } = c.req.valid("json");
 
       const result = await verifyProof(proof, {
-        expectedDomain: req.headers.host,
+        expectedDomain: c.req.header("host"),
       });
 
       if (!result.valid) {
         console.log(`[SESSION] rejected proof - ${result.error}`);
-        return res.status(400).json({
-          error: {
-            code: "INVALID_PROOF",
-            message: result.error,
+        return c.json(
+          {
+            error: {
+              code: "INVALID_PROOF",
+              message: result.error,
+            },
           },
-        });
+          400,
+        );
       }
 
       console.log(`[SESSION] verified proof - address=${result.address}`);
@@ -159,16 +156,19 @@ export default function sessionRouter() {
       const token = createSession(result.address);
       const expiresAt = sessions.get(token)!.expiresAt;
 
-      res.status(201).json({ token, expiresAt });
+      return c.json({ token, expiresAt }, 201);
     } catch (error) {
       const err = error as Error;
       console.error("[SESSION] error:", err.message);
-      res.status(500).json({
-        error: {
-          code: "SESSION_CREATION_FAILED",
-          message: err.message,
+      return c.json(
+        {
+          error: {
+            code: "SESSION_CREATION_FAILED",
+            message: err.message,
+          },
         },
-      });
+        500,
+      );
     }
   });
 
@@ -178,23 +178,26 @@ export default function sessionRouter() {
    *
    * Header: Authorization: Session <token>
    */
-  router.delete("/", (req: Request, res: Response) => {
-    const authHeader = req.headers["authorization"];
+  app.delete("/", (c) => {
+    const authHeader = c.req.header("authorization");
     if (!authHeader || !authHeader.startsWith("Session ")) {
-      return res.status(401).json({
-        error: {
-          code: "MISSING_SESSION",
-          message: "Session token required to delete session",
+      return c.json(
+        {
+          error: {
+            code: "MISSING_SESSION",
+            message: "Session token required to delete session",
+          },
         },
-      });
+        401,
+      );
     }
 
     const token = authHeader.slice(8); // remove "Session " prefix
     invalidateSession(token);
-    res.json({ invalidated: true });
+    return c.json({ invalidated: true });
   });
 
-  return router;
+  return app;
 }
 
 // Export helpers for use by authentication middleware and tests

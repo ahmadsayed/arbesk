@@ -1,15 +1,15 @@
-import express from "express";
-import type { Response } from "express";
-import fs from "fs";
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { compress } from "hono/compress";
+import { createAdaptorServer } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import path from "path";
-import http from "http";
-import type { IncomingMessage, ServerResponse } from "http";
-import morgan from "morgan";
-import type { TokenIndexer } from "morgan";
-import helmet from "helmet";
-import compression from "compression";
+import type { Server } from "http";
 import { PROJECT_ROOT } from "./api/project-root.ts";
-import { buildCspDirectives } from "./shared/csp.ts";
+import { requestLog } from "./api/request-log.ts";
+import { secureHeaders } from "./api/secure-headers.ts";
+import { sendError } from "./api/errors.ts";
 
 // Load .env files BEFORE any module that reads process.env (config.ts).
 // process.loadEnvFile is the Node 20.12+ built-in (also supported by Bun);
@@ -39,135 +39,77 @@ const { createBackendCore } = await import("./api/asset-core-adapters.ts");
 const storage = createStorageAdapter();
 const core = createBackendCore(storage);
 
-export const app = express();
-const port = process.env.PORT || 9090;
-export const server = http.createServer(app);
+// strict: false — "/path" and "/path/" match the same route, as they did
+// under Express.
+export const app = new Hono({ strict: false });
+const port = Number(process.env.PORT || 9090);
+// A plain node:http server (Node and Bun alike), so the WebSocket chat proxy
+// can attach to its upgrade event.
+export const server = createAdaptorServer({ fetch: app.fetch }) as Server;
 const staticRoot = path.resolve(PROJECT_ROOT, "frontend/dist");
 
-/* ─── Verbose request logger ─── */
-app.use(
-  morgan(
-    (
-      tokens: TokenIndexer<IncomingMessage, ServerResponse>,
-      req: IncomingMessage,
-      res: ServerResponse,
-    ): string => {
-      const status = Number.parseInt(tokens.status(req, res) || "0", 10);
-      const tag =
-        status >= 400 ? "[ERR]" : status >= 300 ? "[RDR]" : "[OK]";
-      const client =
-        req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
-      const ms = tokens["response-time"](req, res) || "0";
-      return `${tag} ${tokens.method(req, res)} ${tokens.url(req, res)} → ${status} (${ms}ms) | client=${client}`;
-    },
-    {
-      stream: {
-        write: (message: string) => {
-          console.log(message.trim());
-        },
-      },
-    },
-  ),
-);
+/** Largest request body the API accepts (generation uploads carry base64 images). */
+const MAX_BODY_BYTES = 50 * 1024 * 1024;
+
+/* ─── Request log: [OK]/[ERR]/[RDR] METHOD url → status (ms) | client=… ─── */
+app.use(requestLog());
 
 /* ─── Response compression ───
  * gzip/deflate negotiated by Accept-Encoding. The bundled frontend
  * (dist/js/app.js) is ~2.4 MB minified; compression shrinks it to ~780 KB
- * on the wire. Placed before express.static so static assets are compressed.
+ * on the wire. Responses already carrying Content-Encoding (the precompressed
+ * brotli assets below) pass through untouched.
  */
-app.use(compression());
+app.use(compress());
 
-/* ─── Content-Security-Policy (report-only) ───
- * Delivered via HTTP header because <meta> does not support
- * the "Report-Only" suffix. Monitor violations in browser
- * console before promoting to enforcing mode.
- */
+/* ─── Security headers (report-only CSP, COOP, nosniff, HSTS, …) ─── */
+app.use(secureHeaders());
+
+/* ─── API ─── */
 app.use(
-  helmet({
-    // Allow the DeepSeek Harness side-viewer to embed the Studio in an iframe
-    // on a different origin (localhost:3080). Local dev only — remove this if
-    // you disable the side-viewer or harden a public deployment.
-    frameguard: false,
-    contentSecurityPolicy: {
-      // ONE copy of the policy, in src/shared/csp.ts. The Hono server reads
-      // the same map, so the two stacks cannot enforce different CSPs while
-      // the migration is in flight.
-      directives: {
-        ...buildCspDirectives(),
-        // Helmet adds this by default, but browsers ignore it in Report-Only
-        // mode and log a console warning on every page load. Re-add it when
-        // the policy is promoted to enforcing mode.
-        upgradeInsecureRequests: null,
-      },
-      reportOnly: true,
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  "/api/*",
+  bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) =>
+      sendError(c, 413, "PAYLOAD_TOO_LARGE", "Request body exceeds 50 MB"),
   }),
 );
+app.route("/api", api({ storage, core }));
 
 // Workers, their pool, and the vendored libraries they import must never be
 // cached. A stale module that predates a method registration (e.g. "ping")
 // causes the pool to fall back to the main thread and makes save/publish very
 // slow.
-function setStaticCacheHeaders(res: Response, filePath: string): void {
+function setStaticCacheHeaders(c: Context, filePath: string): void {
   if (
     filePath.includes("/workers/") ||
-    filePath.endsWith("gltf-worker-pool.js") ||
+    filePath.includes("gltf-worker-pool.js") ||
     filePath.includes("/vendor/workerpool") ||
     filePath.includes("/vendor/gltf-transform-core") ||
     filePath.includes("/vendor/node-buffer-polyfill")
   ) {
-    res.setHeader(
+    c.header(
       "Cache-Control",
       "no-store, no-cache, must-revalidate, proxy-revalidate",
     );
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
+    c.header("Pragma", "no-cache");
+    c.header("Expires", "0");
   }
 }
 
-/* ─── Pre-compressed brotli assets ───
- * frontend/scripts/compress.js emits .br siblings at build time. Express has
- * no built-in precompressed-static support (and express-static-gzip style
- * packages duplicate our cache rules), so serve .br here before the static
- * middleware; clients without brotli fall through to on-the-fly gzip.
+/* ─── Static frontend ───
+ * precompressed: frontend/scripts/compress.js emits .br siblings at build
+ * time; clients that accept brotli get those, the rest fall through to
+ * on-the-fly gzip.
  */
-const PRECOMPRESSED_TYPES: Record<string, string> = {
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".json": "application/json",
-  ".wasm": "application/wasm",
-};
-
-app.use((req, res, next) => {
-  if (req.method !== "GET" && req.method !== "HEAD") return next();
-  if (!(req.headers["accept-encoding"] ?? "").includes("br")) return next();
-  const rel = path.normalize(req.path).replace(/^[/\\]+/, "");
-  if (rel.startsWith("..")) return next();
-  const contentType = PRECOMPRESSED_TYPES[path.extname(rel)];
-  if (!contentType) return next();
-  const brFile = path.join(staticRoot, rel + ".br");
-  if (!fs.existsSync(brFile)) return next();
-  res.setHeader("Content-Encoding", "br");
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Vary", "Accept-Encoding");
-  setStaticCacheHeaders(res, rel);
-  res.sendFile(brFile);
-});
-
 app.use(
-  express.static(staticRoot, {
-    setHeaders: (res: Response, filePath: string) => {
-      setStaticCacheHeaders(res, filePath);
-    },
+  "*",
+  serveStatic({
+    root: staticRoot,
+    precompressed: true,
+    onFound: (filePath, c) => setStaticCacheHeaders(c, filePath),
   }),
 );
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use("/api", api({ storage, core }));
 
 // ─── SPA fallback ───
 // Studio and Library are served from a single document (app.html) with a
@@ -175,9 +117,15 @@ app.use("/api", api({ storage, core }));
 // and history.pushState() paths resolve — including public profile paths
 // (/library/<base58>, /studio/<base58>). Kept narrow so static assets and
 // /api are untouched. Query strings pass through untouched.
-app.get(/^\/(studio|library)(\/.*)?$/, (_req, res) => {
-  res.sendFile(path.join(staticRoot, "app.html"));
+const spaShell = serveStatic({
+  root: staticRoot,
+  path: "app.html",
+  precompressed: true,
 });
+for (const section of ["studio", "library"]) {
+  app.get(`/${section}`, spaShell);
+  app.get(`/${section}/*`, spaShell);
+}
 
 // Attach WebSocket chat proxy to the same HTTP server
 createChatProxy(server);

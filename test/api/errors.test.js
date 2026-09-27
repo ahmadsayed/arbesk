@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { sendError } from "../../src/hono/json-error.ts";
+import { sendError } from "../../src/api/errors.ts";
 
-describe("hono json-error sendError", () => {
+describe("sendError", () => {
   it("emits the standard envelope without details", async () => {
     const app = new Hono();
     app.get("/err", (c) => sendError(c, 400, "BAD_THING", "Something failed"));
@@ -13,7 +13,7 @@ describe("hono json-error sendError", () => {
     expect(JSON.parse(text)).toEqual({
       error: { code: "BAD_THING", message: "Something failed" },
     });
-    // Byte-identical to the Express sendError serialization (no details key).
+    // Byte-identical envelope serialization (no details key).
     expect(text).toBe(
       JSON.stringify({ error: { code: "BAD_THING", message: "Something failed" } }),
     );
@@ -36,7 +36,7 @@ describe("hono json-error sendError", () => {
     });
   });
 
-  it("omits details for falsy values (matches Express sendError)", async () => {
+  it("omits details for falsy values", async () => {
     const app = new Hono();
     app.get("/err", (c) => sendError(c, 500, "OOPS", "nope", 0));
 

@@ -1,9 +1,9 @@
-import express from "express";
+import { Hono } from "hono";
 import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
+import type { AuthEnv } from "../authentication.ts";
 import { paymasterRateLimit } from "../rate-limiter.ts";
-
-const Router = express.Router;
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 /**
  * Paymaster proxy routes: forwards bundler/paymaster JSON-RPC calls to
@@ -13,7 +13,7 @@ const Router = express.Router;
  *   rejected with PAYMASTER_METHOD_NOT_ALLOWED).
  */
 export default function paymasterRoutes() {
-  const router = Router();
+  const app = new Hono<AuthEnv>();
 
   /**
    * POST /api/v1/paymaster
@@ -22,21 +22,26 @@ export default function paymasterRoutes() {
    * @remarks Returns CDP's response body and status code unchanged; 503 when
    *   CDP_PAYMASTER_URL is not configured.
    */
-  router.post("/", authenticate, paymasterRateLimit, async (req, res) => {
+  app.post("/", authenticate, paymasterRateLimit, async (c) => {
     const paymasterUrl = process.env.CDP_PAYMASTER_URL;
 
     if (!paymasterUrl) {
       console.warn("[PAYMASTER] CDP_PAYMASTER_URL not configured — returning 503");
-      return sendError(res, 503, "PAYMASTER_NOT_CONFIGURED", "CDP Paymaster URL is not set");
+      return sendError(c, 503, "PAYMASTER_NOT_CONFIGURED", "CDP Paymaster URL is not set");
     }
 
-    const method = req.body?.method ?? "(unknown)";
-    const id = req.body?.id ?? null;
+    // Proxied verbatim, so the body is read as-is rather than validated; a body
+    // that will not parse is rejected below as a non-pm_* method.
+    const body: { method?: unknown; id?: unknown } | null = await c.req
+      .json()
+      .catch(() => null);
+    const method = body?.method ?? "(unknown)";
+    const id = body?.id ?? null;
 
     if (typeof method !== "string" || !method.startsWith("pm_")) {
       console.warn(`[PAYMASTER] rejected non-paymaster method=${method}`);
       return sendError(
-        res,
+        c,
         400,
         "PAYMASTER_METHOD_NOT_ALLOWED",
         `Only pm_* paymaster JSON-RPC methods are proxied (got: ${method})`,
@@ -49,18 +54,20 @@ export default function paymasterRoutes() {
       const upstream = await fetch(paymasterUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(body),
       });
 
       const text = await upstream.text();
       console.log(`[PAYMASTER] response status=${upstream.status} method=${method}`);
 
-      res.status(upstream.status).set("Content-Type", "application/json").send(text);
+      return c.body(text, upstream.status as ContentfulStatusCode, {
+        "Content-Type": "application/json",
+      });
     } catch (error) {
       console.error("[PAYMASTER] upstream fetch failed:", (error as Error).message);
-      sendError(res, 502, "PAYMASTER_UPSTREAM_ERROR", (error as Error).message);
+      return sendError(c, 502, "PAYMASTER_UPSTREAM_ERROR", (error as Error).message);
     }
   });
 
-  return router;
+  return app;
 }

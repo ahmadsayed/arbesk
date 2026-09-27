@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import request from "supertest";
+import { toListener } from "./helpers/hono.js";
 import zlib from "zlib";
 import { _resetRateLimiters } from "../src/api/rate-limiter.ts";
 import {
@@ -219,7 +220,7 @@ describe("Arbesk API", () => {
     createSession = sessions.createSession;
 
     const { app: importedApp } = await import("../src/index.ts");
-    app = importedApp;
+    app = toListener(importedApp);
   });
 
   beforeEach(() => {

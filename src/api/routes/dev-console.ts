@@ -1,5 +1,4 @@
-import express from "express";
-import type { Request, Response } from "express";
+import { Hono } from "hono";
 
 /**
  * Dev-only browser console bridge (diagnostics sink).
@@ -8,25 +7,31 @@ import type { Request, Response } from "express";
  *   browser-side logs alongside Node logs. Fire-and-forget: always succeeds.
  */
 export default () => {
-  const router = express.Router();
+  const app = new Hono();
 
-  router.post("/console", (req: Request, res: Response) => {
-    const body = req.body;
-    const entries = Array.isArray(body?.entries) ? body.entries : [body];
+  app.post("/console", async (c) => {
+    // Express handed an unparseable or non-JSON body through as {}; keep that.
+    const body: unknown = await c.req.json().catch(() => ({}));
+    const entries = Array.isArray((body as { entries?: unknown })?.entries)
+      ? (body as { entries: unknown[] }).entries
+      : [body];
 
     for (const entry of entries) {
       if (!entry || typeof entry !== "object") continue;
-      const level = typeof entry.level === "string" ? entry.level : "log";
-      const raw =
-        typeof entry.text === "string" ? entry.text : JSON.stringify(entry);
+      const { level: rawLevel, text: rawText } = entry as {
+        level?: unknown;
+        text?: unknown;
+      };
+      const level = typeof rawLevel === "string" ? rawLevel : "log";
+      const raw = typeof rawText === "string" ? rawText : JSON.stringify(entry);
       // Keep each entry on one line so the [BROWSER] prefix stays line-anchored
       // for the side-viewer's log splitter.
       const text = raw.replace(/\n/g, " ").replace(/\r/g, "");
       console.log(`[BROWSER] ${level} ${text}`);
     }
 
-    res.status(204).end();
+    return c.body(null, 204);
   });
 
-  return router;
+  return app;
 };

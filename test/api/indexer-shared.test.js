@@ -3,7 +3,7 @@
  */
 import { jest } from "@jest/globals";
 import request from "supertest";
-import express from "express";
+import { mountRoutes } from "../helpers/hono.js";
 
 async function buildApp() {
   const mockIndexer = {
@@ -19,8 +19,7 @@ async function buildApp() {
 
   const { default: indexerRoutes } = await import("../../src/api/routes/indexer.ts");
 
-  const app = express();
-  app.use("/indexer", indexerRoutes({}));
+  const app = mountRoutes("/indexer", indexerRoutes({}));
   return { app, mockIndexer };
 }
 

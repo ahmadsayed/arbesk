@@ -130,7 +130,7 @@ CLI-only capabilities (not in Studio): shell scriptability/pipelining, idempoten
 
 ```text
 arbesk/
-├── src/                          # Express backend (TypeScript, Node type-stripping)
+├── src/                          # Hono backend (TypeScript, Node type-stripping)
 │   ├── index.ts                  # Server entry point
 │   ├── config.ts                 # Multi-network Web3 config
 │   └── api/
@@ -195,7 +195,7 @@ arbesk/
 
 | Layer | Technology |
 |---|---|
-| Backend | Bun 1.4 runtime + Express (TypeScript, no emit step) |
+| Backend | Bun 1.4 runtime + Hono on @hono/node-server (TypeScript, no emit step) |
 | Frontend templates | Pug |
 | Styling | Custom SCSS design system (no Bootstrap) |
 | 3D renderer | Babylon.js |

@@ -1,7 +1,4 @@
-import express from "express";
-import type { Request, Response } from "express";
-
-const Router = express.Router;
+import { Hono } from "hono";
 
 // Dynamic import to ensure process.env is populated before config.ts reads it.
 // api/index.ts is loaded via dynamic import() from index.ts after process.loadEnvFile runs.
@@ -39,15 +36,15 @@ interface ApiDeps {
 
 export default (deps: ApiDeps) => {
   const { storage, core } = deps;
-  const v1 = Router();
+  const v1 = new Hono();
 
-  // JSON body parsing is handled by the express.json() middleware applied in
-  // src/index.ts before /api is mounted.
+  // Request bodies are parsed per route by the validators (src/api/validation.ts);
+  // the size cap is the bodyLimit applied in src/index.ts.
 
   // ─── Config ───────────────────────────────────────────────────────────────
 
-  v1.get("/config", (req: Request, res: Response) => {
-    res.json({
+  v1.get("/config", (c) =>
+    c.json({
       contractAddress: CONTRACT_ADDRESS,
       networkConfigs: NETWORK_CONFIGS,
       defaultChainId: DEFAULT_CHAIN_ID,
@@ -57,77 +54,77 @@ export default (deps: ApiDeps) => {
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
       cdpProjectId: process.env.CDP_PROJECT_ID || null,
       nostrPublicUrl: process.env.PUBLIC_NOSTR_URL || null,
-    });
-  });
+    }),
+  );
 
   // ─── Sessions ────────────────────────────────────────────────────────────
 
-  v1.use("/sessions", sessionRouter());
+  v1.route("/sessions", sessionRouter());
 
   // ─── Generations ──────────────────────────────────────────────────────────
 
-  v1.use("/generations", generateAssetNode(core, storage));
+  v1.route("/generations", generateAssetNode(core, storage));
 
   // ─── CAD generation (code only; the client runs the kernel) ────────────────
 
-  v1.use("/cad", cadRoutes());
+  v1.route("/cad", cadRoutes());
 
   // ─── Comments Archive ─────────────────────────────────────────────────────
 
-  v1.use("/assets", commentsRoutes({ getContractAddress, storage }));
+  v1.route("/assets", commentsRoutes({ getContractAddress, storage }));
 
   // ─── IPFS Upload Credential / Unpin ────────────────────────────────────────
 
-  v1.use("/ipfs", ipfsRoutes(storage));
+  v1.route("/ipfs", ipfsRoutes(storage));
 
   // ─── Contracts ────────────────────────────────────────────────────────────
 
-  v1.use("/contracts", contractsRoutes());
+  v1.route("/contracts", contractsRoutes());
 
   // ─── Token Ownership Indexer ───────────────────────────────────────────────
 
-  v1.use("/indexer", indexerRoutes(storage));
+  v1.route("/indexer", indexerRoutes(storage));
 
   // ─── CDP Paymaster Proxy ───────────────────────────────────────────────────
 
-  v1.use("/paymaster", paymasterRoutes());
+  v1.route("/paymaster", paymasterRoutes());
 
   // ─── Users (CDP email → smart account resolution) ──────────────────────────
 
-  v1.use("/users", usersRoutes());
+  v1.route("/users", usersRoutes());
 
   // ─── Email OTP Auth ────────────────────────────────────────────────────────
 
-  v1.use("/auth/email", emailAuthRoutes());
+  v1.route("/auth/email", emailAuthRoutes());
 
   // ─── Wallet Relay (server-wallet on-chain writes) ─────────────────────────
 
-  v1.use("/wallet/relay", walletRelayRoutes());
+  v1.route("/wallet/relay", walletRelayRoutes());
 
   // ─── CLI browser-assisted login page ──────────────────────────────────────
 
-  v1.use("/cli-auth", cliAuthRoutes());
+  v1.route("/cli-auth", cliAuthRoutes());
 
   // ─── Dev console bridge (browser → stdout, diagnostics sink) ───────────────
 
   if (process.env.NODE_ENV !== "production") {
-    v1.use("/dev", devConsoleRoutes());
+    v1.route("/dev", devConsoleRoutes());
   }
 
   // ─── OpenAPI Specification ─────────────────────────────────────────────────
 
-  v1.use("/", openapiRoutes());
+  v1.route("/", openapiRoutes());
 
   // ─── Test-only utilities ───────────────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {
-    v1.use("/test", testUtilsRoutes());
+    v1.route("/test", testUtilsRoutes());
   }
 
   // ─── Mount under /api/v1 ──────────────────────────────────────────────────
 
-  const api = Router();
-  api.use("/v1", v1);
+  const api = new Hono();
+  api.route("/v1", v1);
 
   return api;
 };

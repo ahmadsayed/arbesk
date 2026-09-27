@@ -1,9 +1,9 @@
 import { jest } from "@jest/globals";
 import { Hono } from "hono";
 import { z } from "zod";
-import { validateBody, validateQuery } from "../../src/hono/validate.ts";
+import { validateBody, validateQuery } from "../../src/api/validation.ts";
 
-describe("hono validate wrappers", () => {
+describe("validation middleware", () => {
   let logSpy;
   beforeEach(() => {
     logSpy = jest.spyOn(console, "log").mockImplementation(() => {});

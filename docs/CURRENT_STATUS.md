@@ -40,7 +40,7 @@
 
 ```
 src/
-├── index.ts                    # Express bootstrap, CSP, request logging
+├── index.ts                    # Hono bootstrap, CSP, request logging
 ├── config.ts                   # Multi-network Web3 config (Hardhat local, Base Sepolia Testnet)
 └── api/
     ├── index.ts                # Main router — all v1 routes
