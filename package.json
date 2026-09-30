@@ -27,7 +27,7 @@
     "pretypecheck:frontend": "bun run build:packages",
     "prebuild:frontend": "bun run build:packages",
     "test": "IPFS_BACKEND=kubo NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest",
-    "test:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat test",
+    "test:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat ./node_modules/.bin/hardhat test",
     "build:frontend": "cd frontend && bun run build",
     "start": "bun src/index.ts",
     "nodemon": "bun run build:frontend && bun --watch src/index.ts",
@@ -50,7 +50,7 @@
     "test:coverage": "bun run test:coverage:js && bun run test:coverage:contracts",
     "test:coverage:js": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 jest --coverage --coverageDirectory=coverage/js",
     "test:coverage:all": "bun run test:coverage:js && bun run test:e2e:coverage && bun scripts/merge-all-coverage.mjs",
-    "test:coverage:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat npx hardhat coverage && docker run --rm -v $(pwd)/blockchain/coverage:/cov alpine sh -c 'chown -R $(stat -c \"%u:%g\" /cov) /cov'",
+    "test:coverage:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat ./node_modules/.bin/hardhat coverage && docker run --rm -v $(pwd)/blockchain/coverage:/cov alpine sh -c 'chown -R $(stat -c \"%u:%g\" /cov) /cov'",
     "worktree:create": "./scripts/create-worktree.sh",
     "prepare": "git config core.hooksPath .githooks || true",
     "audit": "bunx fallow@3.20.0 audit --changed-since HEAD"
