@@ -1,7 +1,7 @@
+import { beforeEach, describe, expect, it, jest } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { jest } from "@jest/globals";
 import {
   acquireCadSlot, releaseCadSlot, cadQuotaHeaders, _resetCadQuota,
   lockTtlFor, cadLockTtlMs, CAD_DEFAULT_REQUEST_LIMITS, dailyLimitOf,

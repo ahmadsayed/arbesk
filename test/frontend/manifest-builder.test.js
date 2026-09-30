@@ -1,12 +1,11 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function load() {
-  jest.resetModules();
+  resetModules();
 
-  jest.unstable_mockModule(
+  mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
@@ -19,26 +18,26 @@ async function load() {
       isIpfsCidReachable: jest.fn(),
     })
   );
-  jest.unstable_mockModule(
+  mock.module(
     "../../frontend/src/js/ipfs/write-to-ipfs.js",
     () => ({
       writeToIPFS: jest.fn(),
       writeJSONToIPFS: jest.fn(),
     })
   );
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     // Imported (unused) by asset-core/executor/inline.ts — the mock must
     // satisfy the full link-time surface of the decomposer module.
     decompose: jest.fn(),
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
     composeAsync: jest.fn(),
     decomposeAsync: jest.fn(),
     editSourceColorsAsync: jest.fn(),
     isComposite: jest.fn(),
   }));
-  jest.unstable_mockModule(
+  mock.module(
     "../../frontend/src/js/formats/handlers/gltf-handler.js",
     () => ({
       gltfHandler: {
@@ -53,7 +52,7 @@ async function load() {
       },
     })
   );
-  jest.unstable_mockModule(
+  mock.module(
     "../../frontend/src/js/formats/handlers/glb-handler.js",
     () => ({
       glbHandler: {
@@ -68,15 +67,13 @@ async function load() {
       },
     })
   );
-  jest.unstable_mockModule("../../frontend/src/js/utils/log.js", () => ({
+  mock.module("../../frontend/src/js/utils/log.js", () => ({
     log: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
   }));
 
-  const mod = await import(
-    "../../frontend/src/js/services/asset-save/manifest-builder.js"
-  );
+  const mod = await import("../../frontend/src/js/services/asset-save/manifest-builder.js");
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
   const asyncGltf = await import("@arbesk/asset-core/formats/gltf/async-gltf.js");
   const decomposer = await import("@arbesk/asset-core/formats/gltf/decomposer.js");
@@ -321,9 +318,7 @@ describe("prepareManifestForWrite", () => {
   });
 
   it("records sent pending generations as version-scoped metadata.chat", async () => {
-    const pg = await import(
-      "../../frontend/src/js/state/pending-generations.js"
-    );
+    const pg = await import("../../frontend/src/js/state/pending-generations.js");
     pg._resetPendingGenerations();
     const sentId = pg.addPendingGeneration({
       assetManifestCid: "bafyManifest",
@@ -381,9 +376,7 @@ describe("prepareManifestForWrite", () => {
   });
 
   it("omits metadata when no prompts were consumed", async () => {
-    const pg = await import(
-      "../../frontend/src/js/state/pending-generations.js"
-    );
+    const pg = await import("../../frontend/src/js/state/pending-generations.js");
     pg._resetPendingGenerations();
 
     const manifest = makeManifest([
@@ -409,9 +402,9 @@ describe("prepareManifestForWrite", () => {
   // color edits must stay post_processor overlays, not be sent to the bake
   // branch where the null result silently drops them.
   // NOTE: keep this test LAST in the describe — the scene-graph mock below
-  // survives jest.resetModules() and would leak into later tests.
+  // survives resetModules() and would leak into later tests.
   it("keeps color edits as overlays for stored-form 3MF nodes", async () => {
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue([]),
@@ -470,7 +463,7 @@ describe("prepareManifestForWrite", () => {
   // "link a child → Save" on an otherwise unedited (e.g. auto-saved) draft
   // was wrongly reported as "no changes" and the child was never written.
   // NOTE: keep this test LAST in the describe — the scene-graph mock below
-  // survives jest.resetModules() and would leak into later tests.
+  // survives resetModules() and would leak into later tests.
   it("treats a pending linked child as a change on an otherwise unedited draft", async () => {
     const childRefNode = {
       node_id: "linked_child_1",
@@ -485,7 +478,7 @@ describe("prepareManifestForWrite", () => {
       },
       transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
     };
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue([childRefNode]),
@@ -544,13 +537,13 @@ describe("prepareManifestForWrite", () => {
   // save must be detected as a change, not a no-op — the override bake happens
   // after the prevManifest no-op baseline snapshot, same as pending child refs.
   // NOTE: keep the scene-graph-mocking tests at the END of this describe —
-  // the mock survives jest.resetModules() and would leak into earlier tests.
+  // the mock survives resetModules() and would leak into earlier tests.
   it("bakes a source override into an existing node and resets its post_processor", async () => {
     const override = {
       source: { cid: "bafyDropped", path: "composite.gltf", format: "gltf" },
       name: "dropped-model",
     };
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue([]),
@@ -619,7 +612,7 @@ describe("prepareManifestForWrite", () => {
       source: { cid: "bafyDropped", path: "composite.gltf", format: "gltf" },
       name: "dropped-model",
     };
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue([]),
@@ -685,7 +678,7 @@ describe("prepareManifestForWrite", () => {
       },
       transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
     };
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue([]),
@@ -744,7 +737,7 @@ describe("prepareManifestForWrite", () => {
 //
 // Characterization for the source-color / post-processor / transform edit
 // branches the earlier tests do not reach. These MUST stay at the END of the
-// file: jest.unstable_mockModule registrations survive jest.resetModules() and
+// file: jest.unstable_mockModule registrations survive resetModules() and
 // would leak into earlier tests.
 // =====================================================================
 describe("prepareManifestForWrite — edit-baking branches", () => {
@@ -761,7 +754,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
     pendingOverrides = new Map(),
     pendingRemovals = new Set(),
   } = {}) {
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn().mockReturnValue(pendingChildRefs),
@@ -785,7 +778,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
         state: { selectedNodeIds: new Set() },
       })
     );
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/parametric-preview.js",
       () => ({
         getPendingSourceColorEdits: jest.fn().mockReturnValue(pendingColors),
@@ -793,7 +786,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
         clearPendingSourceColorEdit: jest.fn(),
       })
     );
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/services/asset-file-drop.js",
       () => ({
         handleAssetFileDropped: jest.fn(),
@@ -998,7 +991,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
     };
     const childB = { ...childA, node_id: "linked_child_B" };
     const livePending = [childA];
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
       () => ({
         getPendingChildRefs: jest.fn(() => livePending),

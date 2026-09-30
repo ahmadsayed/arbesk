@@ -5,7 +5,7 @@
  * hourly limiter), the quota headers, the error table, per-round metering, and
  * the attribution block the UI renders.
  */
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import request from "supertest";
 import { mountRoutes } from "../helpers/hono.js";
 import fs from "node:fs";

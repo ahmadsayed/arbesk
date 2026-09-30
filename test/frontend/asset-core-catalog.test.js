@@ -5,6 +5,7 @@
  * asset-core-facade.test.js: the catalog walks the injected CollectionReadPort
  * + memory IPFS, no DOM required.
  */
+import { afterEach, expect, test } from "bun:test";
 import { createArbeskCore } from "@arbesk/asset-core/facade.js";
 import { createMemoryIpfs } from "@arbesk/asset-core/storage/memory-ipfs.js";
 import { _resetRuntimeForTesting } from "@arbesk/asset-core/runtime.js";

@@ -1,7 +1,8 @@
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, it } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function load() {
-  jest.resetModules();
+  resetModules();
   // The editor now consumes the IPFS ports via getRuntime(); the pure
   // applyMeshOverrideColors paths under test never touch the runtime, so no
   // port fakes are needed here.

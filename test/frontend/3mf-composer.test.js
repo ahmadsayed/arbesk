@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { afterAll, describe, expect, it, jest } from "bun:test";
 import fs from "fs";
 import path from "path";
 import zlib from "zlib";

@@ -1,8 +1,6 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, beforeAll, beforeEach, describe } from "@jest/globals";
+// @test-env dom
 
+import { beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 const soliditySha3 = jest.fn((...args) => {
   const payload = args.map((a) => JSON.stringify(a)).join("");
   const hex = Array.from(payload)
@@ -32,7 +30,7 @@ class FakeSimpleMerkleTree {
   }
 }
 
-jest.unstable_mockModule("@openzeppelin/merkle-tree", () => ({
+mock.module("@openzeppelin/merkle-tree", () => ({
   SimpleMerkleTree: FakeSimpleMerkleTree,
 }));
 

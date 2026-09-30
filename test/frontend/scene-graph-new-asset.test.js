@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { expect, test, describe } from "@jest/globals";
+// @test-env dom
+import { describe, expect, test } from "bun:test";
 import { getStateForNewAsset } from "../../frontend/src/js/utils/new-asset.js";
 
 describe("getStateForNewAsset", () => {

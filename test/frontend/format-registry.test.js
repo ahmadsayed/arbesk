@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { afterEach, describe, expect, it, jest } from "bun:test";
 import {
   registerFormatHandler,
   getFormatHandler,

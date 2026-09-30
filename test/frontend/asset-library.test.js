@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, beforeEach, describe } from "@jest/globals";
+// @test-env dom
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { assetStore, _resetForTesting as resetAssetState } from "@arbesk/asset-core/domain/asset-store.js";
 import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 
@@ -72,7 +70,7 @@ beforeEach(() => {
 });
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -88,7 +86,7 @@ async function loadModule() {
 
   // The read-only contract fallback: serves the same fake contract regardless
   // of chain (tokenURI is driven by _tokenURIs).
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/read-contract.js",
     () => ({
       __esModule: true,
@@ -97,7 +95,7 @@ async function loadModule() {
   );
 
   // The indexer/shared-token backend boundary.
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/api.js",
     () => ({
       __esModule: true,
@@ -109,7 +107,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
@@ -127,7 +125,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/domain/asset.js",
     () => ({
       closeAsset: closeAssetSpy,

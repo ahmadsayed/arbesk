@@ -1,16 +1,17 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import { gzipSync, gunzipSync } from "fflate";
 
 const BIG_BYTES = 65 * 1024;
 
 async function load({ cacheHits = new Map() } = {}) {
-  jest.resetModules();
+  resetModules();
 
   const cacheGet = jest.fn(async (hash) => cacheHits.get(hash) || null);
   const cachePut = jest.fn(async () => true);
 
-  jest.unstable_mockModule("@arbesk/asset-core/utils/content-cache.js", () => ({
+  mock.module("@arbesk/asset-core/utils/content-cache.js", () => ({
     __esModule: true,
     ContentCache: class {},
     BIG_CONTENT_THRESHOLD_BYTES: 64 * 1024,

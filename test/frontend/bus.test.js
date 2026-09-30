@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Event bus contract tests.
  *
@@ -8,10 +9,9 @@
  * not wrapped in a CustomEvent - this is the main behavioural difference
  * from the old registry.js which used document.dispatchEvent.
  *
- * @jest-environment jsdom
  */
 
-import { expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, test } from "bun:test";
 import { on, off, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 // ─── Setup ───────────────────────────────────────────────────────────────────

@@ -13,8 +13,8 @@
  * for every component (images first, then buffers, then the composite glTF)
  * and expects a CID back. No IPFS involved.
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 const { decompose, parseGLB, isGLB } = await import(
   "../packages/asset-core/src/formats/gltf/glb-parser.ts"
 );

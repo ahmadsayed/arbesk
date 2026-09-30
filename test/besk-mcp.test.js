@@ -4,7 +4,7 @@
  * uses — session guard, name resolution, argument validation, and dispatch.
  * Transport (stdio JSON-RPC) is not covered here; this tests the tool core.
  */
-import { jest } from "@jest/globals";
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -12,12 +12,12 @@ import path from "path";
 process.env.ARBESK_CACHE_PATH = path.join(os.tmpdir(), "besk-mcp-test-cache-" + process.pid + ".json");
 
 const relayMock = jest.fn(async () => ({}));
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const runGenerationMock = jest.fn();
 const cancelGenerationMock = jest.fn(async () => ({ status: "cancelled" }));
 const getProviderBalanceMock = jest.fn(async () => ({ balance: 42, frozen: 3 }));
-jest.unstable_mockModule("../packages/besk/src/generate.ts", () => ({
+mock.module("../packages/besk/src/generate.ts", () => ({
   runGeneration: runGenerationMock,
   cancelGeneration: cancelGenerationMock,
   getProviderBalance: getProviderBalanceMock,
@@ -31,7 +31,7 @@ const setActiveMock = jest.fn((id) => {
 const clearSessionMock = jest.fn(() => {
   currentSession = null;
 });
-jest.unstable_mockModule("../packages/besk/src/session.ts", () => ({
+mock.module("../packages/besk/src/session.ts", () => ({
   loadSession: jest.fn(() => currentSession),
   saveSession: jest.fn(),
   clearSession: clearSessionMock,
@@ -67,7 +67,7 @@ function resetStore() {
   manifests.bafyTreeSrc = { asset: { version: "2.0" }, nodes: [] };
 }
 
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({
     contractAddress: "0x0",
     ipfsGatewayUrl: "http://gw",

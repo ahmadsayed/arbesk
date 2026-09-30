@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
 import { Hono } from "hono";
 import { requestLog } from "../../src/api/request-log.ts";
 

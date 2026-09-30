@@ -4,21 +4,21 @@
  * hangs after "Logged in as …" until the socket times out. And a missing email
  * argument prompts interactively on a TTY instead of just printing usage.
  */
-import { jest } from "@jest/globals";
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import http from "http";
 
 const openBrowserMock = jest.fn();
-jest.unstable_mockModule("../packages/besk/src/helpers.ts", () => ({
+mock.module("../packages/besk/src/helpers.ts", () => ({
   openBrowser: openBrowserMock,
 }));
 
 const questionMock = jest.fn(async () => "Prompted@Example.com ");
-jest.unstable_mockModule("readline/promises", () => ({
+mock.module("readline/promises", () => ({
   createInterface: jest.fn(() => ({ question: questionMock, close: jest.fn() })),
 }));
 
 const saveSessionMock = jest.fn();
-jest.unstable_mockModule("../packages/besk/src/session.ts", () => ({
+mock.module("../packages/besk/src/session.ts", () => ({
   saveSession: saveSessionMock,
 }));
 
@@ -124,7 +124,7 @@ describe("besk login", () => {
       expect(errorSpy.mock.calls.flat().join(" ")).toMatch(/Usage: besk login/);
     } finally {
       process.stdin.isTTY = wasTTY;
-      process.exitCode = undefined;
+      process.exitCode = 0; // Bun ignores an undefined assignment
       errorSpy.mockRestore();
     }
   });

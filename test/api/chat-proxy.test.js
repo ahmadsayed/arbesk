@@ -1,7 +1,8 @@
-import { jest } from "@jest/globals";
 
 // ─── Mocks for ws ────────────────────────────────────────────────────────────
 
+import { afterEach, beforeAll, beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const connectedClients = [];
 
 function createMockClient() {
@@ -54,14 +55,14 @@ MockWebSocket.CLOSED = 3;
 
 const MockWebSocketServer = jest.fn(() => createMockWss());
 
-jest.unstable_mockModule("ws", () => ({
+mock.module("ws", () => ({
   WebSocketServer: MockWebSocketServer,
   WebSocket: MockWebSocket,
 }));
 
 // ─── Mocks for nostr-tools ───────────────────────────────────────────────────
 
-jest.unstable_mockModule("nostr-tools", () => ({
+mock.module("nostr-tools", () => ({
   finalizeEvent: jest.fn((eventTemplate, _privkey) => ({
     ...eventTemplate,
     id: "event-id",
@@ -81,7 +82,7 @@ const safeClose = jest.fn((ws, code, reason) => {
   if (ws && typeof ws.close === "function") ws.close(code, reason);
 });
 
-jest.unstable_mockModule("../../src/api/nostr-relay.ts", () => ({
+mock.module("../../src/api/nostr-relay.ts", () => ({
   KIND_CHAT: 1,
   TAG_ASSET: "asset",
   createRelay,
@@ -90,11 +91,11 @@ jest.unstable_mockModule("../../src/api/nostr-relay.ts", () => ({
 
 const authorizeAssetAccess = jest.fn();
 
-jest.unstable_mockModule("../../src/api/authorization.ts", () => ({
+mock.module("../../src/api/authorization.ts", () => ({
   authorizeAssetAccess,
 }));
 
-jest.unstable_mockModule("../../src/config.ts", () => ({
+mock.module("../../src/config.ts", () => ({
   NOSTR_SERVICE_PRIVATE_KEY: "a".repeat(64),
   NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
   getContractAddress: jest.fn(() => "0xContractAddress"),
@@ -586,31 +587,31 @@ describe("chat-proxy", () => {
 
 describe("chat-proxy service key", () => {
   it("returns null and warns when the service private key is missing", async () => {
-    jest.resetModules();
+    resetModules();
 
-    jest.unstable_mockModule("ws", () => ({
+    mock.module("ws", () => ({
       WebSocketServer: jest.fn(() => ({ on: jest.fn() })),
       WebSocket: jest.fn(),
     }));
 
-    jest.unstable_mockModule("nostr-tools", () => ({
+    mock.module("nostr-tools", () => ({
       finalizeEvent: jest.fn(),
       getPublicKey: jest.fn(),
       utils: { hexToBytes: jest.fn() },
     }));
 
-    jest.unstable_mockModule("../../src/api/nostr-relay.ts", () => ({
+    mock.module("../../src/api/nostr-relay.ts", () => ({
       KIND_CHAT: 1,
       TAG_ASSET: "asset",
       createRelay: jest.fn(),
       safeClose: jest.fn(),
     }));
 
-    jest.unstable_mockModule("../../src/api/authorization.ts", () => ({
+    mock.module("../../src/api/authorization.ts", () => ({
       authorizeAssetAccess: jest.fn(),
     }));
 
-    jest.unstable_mockModule("../../src/config.ts", () => ({
+    mock.module("../../src/config.ts", () => ({
       NOSTR_SERVICE_PRIVATE_KEY: undefined,
       NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
       getContractAddress: jest.fn(),

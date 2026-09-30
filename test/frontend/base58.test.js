@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { describe, expect, test } from "@jest/globals";
+// @test-env dom
+import { describe, expect, test } from "bun:test";
 import {
   addressToBase58,
   base58ToAddress,

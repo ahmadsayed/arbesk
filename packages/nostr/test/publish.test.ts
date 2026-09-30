@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "bun:test";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import type { NostrEvent } from "nostr-tools";
 import { buildBinding } from "@arbesk/nostr/identity.js";

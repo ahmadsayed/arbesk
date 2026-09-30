@@ -4,6 +4,7 @@
  * Tests the shared pure functions in packages/asset-core/src/utils/collections.ts.
  */
 
+import { describe, expect, it } from "bun:test";
 import {
   mergeAssetIntoCollection,
   deriveDefaultAssetId,

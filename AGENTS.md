@@ -6,7 +6,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 
 ## 1. Identity & Key Constraints
 
-**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, run under Bun 1.4 — no emit step; Node ≥ 22.18 still required for jest/Hardhat), JS browser frontend, Solidity, Pug/SCSS. See `docs/CURRENT_STATUS.md` for the definitive status.
+**Arbesk** — cloud-native 4D fractal version-controlled 3D asset platform. TypeScript backend (`src/`, run under Bun 1.4 — no emit step; unit tests run under `bun test`; Node ≥ 22.18 still required for the E2E harness and Hardhat), JS browser frontend, Solidity, Pug/SCSS. See `docs/CURRENT_STATUS.md` for the definitive status.
 
 - **Chains**: Hardhat local + Base Sepolia. IDs, `DEPLOYMENT_BLOCKS`, `LOG_CHUNK_SIZES` in `constants/chains.js` — no magic numbers.
 - **Wallets**: EOA (MetaMask/Rabby) via SIWE everywhere; CDP email-login smart accounts on **Base Sepolia only** (`smart-wallet-support.ts`).
@@ -44,8 +44,9 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 ./scripts/start-dev.sh --testnet       # Base Sepolia + Pinata + local Nostr
 docker compose up -d                   # IPFS + Hardhat + Nostr; logs: docker compose logs -f ipfs
 
-# Dependencies (Bun ≥1.4 is the package manager for root + frontend; Node is
-# still required for jest and the Hardhat Docker flow — see §1)
+# Dependencies (Bun ≥1.4 is the package manager, backend runtime and unit-test
+# runner for root + frontend; Node is still required for the E2E harness and
+# the Hardhat Docker flow — see §1)
 bun install && (cd frontend && bun install)   # + (cd blockchain && npm install) — IDE intellisense only
 # Shared deps (viem, zod, fflate, …) are pinned once in the root `catalog`
 # (package.json `workspaces.catalog`) and referenced as "catalog:" — add with
@@ -71,7 +72,8 @@ bun run deploy:k3s                     # one-command deploy to promptscad.com: r
 # (src/api/project-root.ts).
 
 # Testing
-bun run test                           # Jest unit (excludes Hardhat & E2E)
+bun run test                           # unit suites via bun test, one process per file (excludes Hardhat & E2E)
+bun run test -- test/api/ --bail       # filter by path substring; --jobs N, --coverage (→ coverage/js)
 bun run test:all                       # lint → typecheck → frontend → api → contracts
 bun run test:api                       # test/api.test.js alone
 bun run test:frontend                  # test/frontend/ + deployment integrity
@@ -98,7 +100,7 @@ bun run test:frontend                  # always verify last
 ## 5. Coding Conventions
 
 - **Out-of-the-box first**: always prefer the library/framework's built-in feature (Babylon, Zod, Alpine, Hono…) over hand-rolled code. Hand-roll only when the built-in genuinely cannot do the job — verify that against the library's source/docs first, and leave a comment recording why the custom path is necessary. (Lesson from the ortho-camera saga: custom input/projection code doubles the test surface and hides state the framework can't see.)
-- **JS/TS**: backend `src/` is TypeScript run under Bun (`bun src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; neither Bun nor Node elides imports), and relative imports inside `src/` carry explicit `.ts` extensions (Node ≥22.18 type-stripping, jest, and swc all rely on this convention). The **entire frontend `frontend/src/js/` is TypeScript** (only `vendor/` stays plain JS), bundled by **Bun.build** (`frontend/scripts/bundle.js`: single-file `app.js` + importmap vendor bundles + self-contained worker; `define` sets `NODE_ENV=production`, `debugger` statements dropped; dist assets are brotli-precompressed by `frontend/scripts/compress.js`) — **import specifiers always match the on-disk file** (`.ts` for frontend/backend modules, `.js` only for plain-JS files like `constants/chains.js` and `vendor/`; the bundler resolves `.ts` specifiers directly, and jest maps `.js`→source via `moduleNameMapper`). SDK packages are consumed by bare specifier as workspace packages (`@arbesk/asset-core`, `@arbesk/wallet`, `@arbesk/authz`; subpaths end in `.js`, e.g. `@arbesk/asset-core/formats/gltf/gltf-core.js`) — treat them as black boxes, see `packages/*/AGENTS.md`. CJS only in `blockchain/scripts/` + `frontend/scripts/` + `e2e/`. CDN globals `BABYLON`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
+- **JS/TS**: backend `src/` is TypeScript run under Bun (`bun src/index.ts`, no build step) — erasable syntax only (`erasableSyntaxOnly`: no enums/namespaces/parameter properties), type-only imports MUST use `import type` (eslint-enforced; neither Bun nor Node elides imports), and relative imports inside `src/` carry explicit `.ts` extensions (Node ≥22.18 type-stripping, bun test, and swc all rely on this convention). The **entire frontend `frontend/src/js/` is TypeScript** (only `vendor/` stays plain JS), bundled by **Bun.build** (`frontend/scripts/bundle.js`: single-file `app.js` + importmap vendor bundles + self-contained worker; `define` sets `NODE_ENV=production`, `debugger` statements dropped; dist assets are brotli-precompressed by `frontend/scripts/compress.js`) — **import specifiers always match the on-disk file** (`.ts` for frontend/backend modules, `.js` only for plain-JS files like `constants/chains.js` and `vendor/`; the bundler resolves `.ts` specifiers directly, and bun test resolves `.js`→`.ts` source itself, with the `test/bun.setup.js` preload mapping `@arbesk/*` subpaths). SDK packages are consumed by bare specifier as workspace packages (`@arbesk/asset-core`, `@arbesk/wallet`, `@arbesk/authz`; subpaths end in `.js`, e.g. `@arbesk/asset-core/formats/gltf/gltf-core.js`) — treat them as black boxes, see `packages/*/AGENTS.md`. CJS only in `blockchain/scripts/` + `frontend/scripts/` + `e2e/`. CDN globals `BABYLON`, `IpfsHttpClient` — never import. camelCase vars/functions, PascalCase classes, UPPER_SNAKE module constants.
 - **Type-checking**: `allowJs`/`checkJs`, `strict: true` (`bun run typecheck[:frontend]`). JSDoc on new public functions; cast catch vars to `Error` before logging; `// @ts-nocheck` + TODO only when unavoidable. Ambient globals: `src/types/modules.d.ts`, `frontend/src/js/types/globals.d.ts`.
 - **LSP tools (cclsp MCP)**: if `mcp__cclsp__*` tools are available (user-level `~/.kimi-code/mcp.json`, TypeScript via `typescript-language-server`), prefer `find_definition`/`find_references` over Grep for symbol navigation and cross-file renames — results are exact, not text matches. The **first LSP call in a session is slow** (tsserver loads the whole project, 1-3 min cold); subsequent calls are fast. Keep using Grep for strings/comments/CSS selectors — LSP only sees code symbols. `rename_symbol` edits files and leaves `.bak` backups — always call with `dry_run: true` first, and prefer plain `Edit` for single-file renames; delete `.bak` files after applying. Verify type-level results with `bun run typecheck`. Note: the global `cclsp` install carries local patches (init-timeout + references retry fix) — reinstalling/upgrading it overwrites them.
 - **Lint**: `bun run lint[:fix]`; part of `test:all`.
@@ -162,12 +164,18 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 
 | Type | Framework | Key files |
 |------|-----------|-----------|
-| Backend API | Jest + Supertest | `test/api.test.js` |
-| Deployment integrity | Jest | `test/frontend/deployment-integrity.test.js` |
+| Backend API | bun test + Supertest | `test/api.test.js` |
+| Deployment integrity | bun test | `test/frontend/deployment-integrity.test.js` |
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E | Playwright | `e2e/specs/*.spec.js` |
 
-~2000 Jest tests / 195 suites; E2E 27 specs / 55 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks); `jest.config.js` excludes `/e2e/`. Coverage: `bun run test:e2e:coverage`, `bun run test:coverage:all`.
+~2370 unit tests / 217 files; E2E 27 specs / 55 tests, 1 worker default (`E2E_WORKERS=N` for parallel isolated stacks). Coverage: `bun run test:coverage:js` (Bun lcov → Istanbul `coverage/js`), `bun run test:e2e:coverage`, `bun run test:coverage:all`.
+
+**Unit-test conventions (`bun test`)** — `scripts/run-tests.mjs` runs each file in its own `bun test` process, because `mock.module()` is process-global:
+- Import test APIs from `bun:test` (`describe`, `test`, `expect`, `jest`, `mock`, …); mock ESM modules with `mock.module(path, factory)`. `test/bun.setup.js` (bunfig preload) maps `@arbesk/*` to package sources, so no package build is needed.
+- A file needing a browser DOM starts with `// @test-env dom` as its **first line**; the runner then preloads jsdom (`test/helpers/dom.js`, where `window === globalThis`). Not happy-dom: it misparses Alpine's `:class` attributes.
+- Re-evaluate modules against new mocks with `resetModules()` from `test/helpers/module-registry.js`, then a dynamic `import()`. Unlike Jest, `mock.module()` also rewrites live bindings in modules already imported, so a test that re-mocks must restore the mock (and re-import) for later tests.
+- Bun ignores `process.exitCode = undefined` (use `0`), defines a global `Worker`, and its `jest.fn()` has no `.prototype` (use a plain constructor for class mocks).
 
 **Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child assets · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `bun run test` is **not enough** for these.
 

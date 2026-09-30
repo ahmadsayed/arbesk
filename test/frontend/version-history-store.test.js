@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, describe, beforeEach, beforeAll } from "@jest/globals";
+// @test-env dom
+import { beforeAll, beforeEach, describe, expect, jest, test } from "bun:test";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   assetStore,

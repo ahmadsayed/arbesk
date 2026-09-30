@@ -6,10 +6,10 @@
  * implementation.
  */
 
-import { jest } from "@jest/globals";
-
 // Force the cache module to see no global IndexedDB so it falls back to
 // the in-memory store. We set this before importing the module under test.
+import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 globalThis.indexedDB = undefined;
 globalThis.IDBKeyRange = undefined;
 
@@ -324,7 +324,7 @@ describe("ContentCache._openDb", () => {
   });
 
   it("returns null when indexedDB is not available", async () => {
-    jest.resetModules();
+    resetModules();
     globalThis.indexedDB = undefined;
     const mod = await import("@arbesk/asset-core/utils/content-cache.js");
     const cache = new mod.ContentCache({ memory: new Map() });
@@ -349,7 +349,7 @@ describe("ContentCache._openDb", () => {
       open: jest.fn(() => request),
     };
 
-    jest.resetModules();
+    resetModules();
     const mod = await import("@arbesk/asset-core/utils/content-cache.js");
     const cache = new mod.ContentCache({ memory: new Map() });
 
@@ -378,7 +378,7 @@ describe("ContentCache._openDb", () => {
       open: jest.fn(() => request),
     };
 
-    jest.resetModules();
+    resetModules();
     const mod = await import("@arbesk/asset-core/utils/content-cache.js");
     const cache = new mod.ContentCache({ memory: new Map() });
 

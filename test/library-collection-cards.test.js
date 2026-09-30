@@ -1,4 +1,5 @@
 /** Inline copy of buildCollectionCardSummary from frontend/src/js/ui/asset-library.js */
+import { describe, expect, it } from "bun:test";
 function buildCollectionCardSummary(manifest, tokenId) {
   const assetCount = manifest?.assets
     ? Object.keys(manifest.assets).length

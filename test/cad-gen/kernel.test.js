@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { createCadKernel } from "@arbesk/cad-gen/core/kernel.js";
 import { CadKernelError } from "@arbesk/cad-gen/errors.js";
 

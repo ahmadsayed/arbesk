@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Wallet popover contract tests.
  *
@@ -5,11 +6,11 @@
  * app.pug (same ids/classes/directives). blockchain/wallet.js and
  * services/api.js are mocked — their real modules pull in CDN globals.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeEach, afterEach } from "@jest/globals";
 
+import { afterEach, beforeEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const ADDRESS_A = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B = "0x2222222222222222222222222222222222222222";
 const BASE_SEPOLIA = 84532;
@@ -39,11 +40,11 @@ function flush() {
 const mockDisconnectWallet = jest.fn();
 const mockGetCachedSession = jest.fn(() => null);
 
-jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
   disconnectWallet: mockDisconnectWallet,
   switchNetwork: jest.fn(),
 }));
-jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+mock.module("../../frontend/src/js/services/api.js", () => ({
   getCachedSession: mockGetCachedSession,
   getOrCreateSession: jest.fn(),
 }));
@@ -54,7 +55,7 @@ let walletStateMod;
 let popoverMod;
 
 async function setup(statePatch = {}) {
-  jest.resetModules();
+  resetModules();
   document.body.innerHTML = FRAGMENT;
   Object.defineProperty(window.navigator, "clipboard", {
     value: { writeText: jest.fn(() => Promise.resolve()) },
@@ -80,7 +81,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  // Each setup() gets a fresh Alpine instance via jest.resetModules(); tear
+  // Each setup() gets a fresh Alpine instance via resetModules(); tear
   // down the one that just ran so its MutationObserver can't initialize the
   // next test's DOM before its own instance starts.
   const { Alpine } = await import("../../frontend/src/js/ui/alpine.js");

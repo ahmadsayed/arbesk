@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Chat message builder tests (Alpine store-backed).
  *
@@ -5,11 +6,9 @@
  * template renders it. These tests assert the store mutations the imperative
  * entry points perform (the DOM rendering is covered by E2E + the Pug build).
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
-
+import { afterEach, beforeAll, beforeEach, expect, jest, test } from "bun:test";
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 let chat;

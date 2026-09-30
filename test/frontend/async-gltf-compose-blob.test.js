@@ -1,6 +1,5 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * composeAsync tests
  *
  * The executor path must return UTF-8 bytes stringified/encoded by the
@@ -11,10 +10,11 @@
  *
  * Seam: the ExecutorPort is injected via initRuntime (fake executor below).
  */
-import { jest } from "@jest/globals";
 
+import { describe, expect, it, jest } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function load({ executorAvailable, execImpl } = {}) {
-  jest.resetModules();
+  resetModules();
 
   const { initRuntime } = await import(
     "@arbesk/asset-core/runtime.js"

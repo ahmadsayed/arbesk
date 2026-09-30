@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { CONTRACT_VERSION, PRELUDE_VERSION } from "@arbesk/cad-gen";
 import { CadDesignError } from "@arbesk/cad-gen/errors.js";
 

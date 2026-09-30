@@ -1,12 +1,11 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * importFromBlob must surface the GLB's animation groups and loadAsset must
  * store them per nodeId so the inspector can offer animation previews.
  * disposeNode / clearScene must dispose the groups with the node.
  */
-import { jest, expect, test, beforeAll } from "@jest/globals";
 
+import { beforeAll, expect, jest, mock, test } from "bun:test";
 let sceneLoader, cleanup, state, registerFormatHandler;
 const fakeGroups = [
   { name: "spin", stop: jest.fn(), reset: jest.fn(), isDisposed: () => false, dispose: jest.fn() },
@@ -26,7 +25,7 @@ beforeAll(async () => {
     },
   };
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/events/bus.js",
     () => ({
       emit: jest.fn(),
@@ -34,19 +33,19 @@ beforeAll(async () => {
       EVENTS: new Proxy({}, { get: (_t, key) => String(key) }),
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/domain/asset-store.js",
     () => ({ assetStore: { get: jest.fn(() => ({})), set: jest.fn() }, tagManifestCid: jest.fn() })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({ walletState: { get: jest.fn(() => ({})) } })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/ui-state.js",
     () => ({ uiState: { set: jest.fn() } })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/transforms.js",
     () => ({
       extractCid: (src) => (src && src.cid ? src.cid : src),
@@ -57,15 +56,15 @@ beforeAll(async () => {
       centerImportedAsset: jest.fn(),
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/placeholders.js",
     () => ({ createPlaceholder: jest.fn(), disposePlaceholder: jest.fn() })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/time-travel.js",
     () => ({ applyColor: jest.fn(), applyScale: jest.fn() })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/anchor-node.js",
     () => ({ createAnchorNode: jest.fn(() => ({ parent: null, metadata: {} })) })
   );

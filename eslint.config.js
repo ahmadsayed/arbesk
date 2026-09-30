@@ -349,7 +349,7 @@ export default [
       // Comment convention (see docs): summary + @remarks (why) + @throws (contract),
       // no invented tags, no type-duplicating @param/@returns. Warn-only so it
       // documents drift without failing the build yet.
-      "jsdoc/check-tag-names": ["warn", { definedTags: ["remarks", "internal", "jest-environment", "jest-globals"] }],
+      "jsdoc/check-tag-names": ["warn", { definedTags: ["remarks", "internal"] }],
       "jsdoc/check-param-names": ["warn", { disableMissingParamChecks: true }],
       "jsdoc/check-syntax": "warn",
       "jsdoc/no-undefined-types": "off",
@@ -366,7 +366,6 @@ export default [
     files: ["test/**/*.js", "e2e/**/*.mjs", "**/*.test.js", "**/*.spec.js"],
     languageOptions: {
       globals: {
-        ...globals.jest,
         ...globals.browser,
         ...globals.node,
       },

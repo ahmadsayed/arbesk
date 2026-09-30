@@ -8,6 +8,7 @@
  * decomposeGlb stores a composite whose buffers/images are ipfs:// refs, and
  * compose resolves them back to self-contained data URIs.
  */
+import { afterEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   initRuntime,

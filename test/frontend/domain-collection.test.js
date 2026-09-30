@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, beforeEach } from "@jest/globals";
+// @test-env dom
+import { beforeEach, expect, jest, test } from "bun:test";
 import {
   adoptOpenedCollection,
   selectCollection,

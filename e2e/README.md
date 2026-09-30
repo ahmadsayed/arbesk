@@ -188,7 +188,7 @@ Validates that every ERC-721 token is a collection manifest containing one or mo
 
 **Why it matters:** This is the only spec that exercises the collection manifest shape end-to-end, the `activeAssetId` → collection `assets` map, and the gallery asset-card deep-link into the Studio. Changes to `asset-save.ts`, `collection-publish.ts`, the collection selector, or the gallery card rendering can break it.
 
-### 7b. Material editor: multi-primitive mesh color override (Jest, not E2E)
+### 7b. Material editor: multi-primitive mesh color override (unit test, not E2E)
 
 Regression coverage for issue #25 lives in `test/frontend/material-editor.test.js` (a Playwright spec once existed and was retired): `applyMeshOverrideColors()` must update **all** primitives of a mesh, not just the first matching one.
 
@@ -433,7 +433,7 @@ Run the E2E suite **before merging** any PR that changes:
 - **IPFS integration:** storage format, CID encoding, pin/unpin behavior.
 - **Asset-level comments:** `comments-panel.ts`, `comment-thread.ts`, chat proxy, comments archive.
 
-Running `bun run test` (unit/Jest) and `bun run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
+Running `bun run test` (unit, bun test) and `bun run test:contracts` is **not enough** for these areas. The E2E specs are the only automated coverage that validates the full browser → wallet → backend → blockchain → IPFS chain.
 
 ---
 

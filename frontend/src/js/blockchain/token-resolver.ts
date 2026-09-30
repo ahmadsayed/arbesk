@@ -135,7 +135,7 @@ export function invalidateResolution(
   resolutionCache.delete(key);
 }
 
-/** Test-only seam: writes a cache entry directly (jest reaches the internal map). */
+/** Test-only seam: writes a cache entry directly (tests reach the internal map). */
 export function _setCachedForTest(
   chainId: number,
   contractAddress: string,
@@ -145,7 +145,7 @@ export function _setCachedForTest(
   setCachedResolution({ chainId, contractAddress, tokenId }, cid);
 }
 
-/** Test-only seam: reads the cached CID directly (jest reaches the internal map). */
+/** Test-only seam: reads the cached CID directly (tests reach the internal map). */
 export function _getCachedForTest(
   chainId: number,
   contractAddress: string,

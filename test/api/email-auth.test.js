@@ -1,7 +1,7 @@
 /**
  * Email OTP auth route tests (P1).
  */
-import { jest } from "@jest/globals";
+import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "bun:test";
 import { mountRoutes } from "../helpers/hono.js";
 import request from "supertest";
 import emailAuthRoutes, { _resetOtpStoreForTesting } from "../../src/api/routes/email-auth.ts";

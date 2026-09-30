@@ -1,8 +1,9 @@
-/** @jest-environment jsdom */
-import { jest, describe, beforeEach, afterEach, test, expect } from "@jest/globals";
+// @test-env dom
 
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function loadThreadModule(wallet = {}, asset = {}) {
-  jest.resetModules();
+  resetModules();
 
   const emitMock = jest.fn();
   const EVENTS_MOCK = {
@@ -10,30 +11,30 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     COMMENT_THREAD_STATUS: "commentThread:status",
   };
 
-  jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  mock.module("@arbesk/asset-core/events/bus.js", () => ({
     __esModule: true,
     emit: emitMock,
     EVENTS: EVENTS_MOCK,
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
+  mock.module("../../frontend/src/js/state/wallet-state.js", () => ({
     __esModule: true,
     walletState: { get: () => wallet },
   }));
 
-  jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
+  mock.module("@arbesk/asset-core/domain/asset.js", () => ({
     __esModule: true,
     getActiveAssetId: () => asset.activeAssetId,
     getActiveAssetManifestCid: () => asset.activeAssetManifestCid,
     getCurrentManifest: () => asset.currentManifest,
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     __esModule: true,
     getFromRemoteIPFS: jest.fn(),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+  mock.module("../../frontend/src/js/services/api.js", () => ({
     __esModule: true,
     getCachedSession: jest.fn(() => null),
     clearSession: jest.fn(),
@@ -41,19 +42,19 @@ async function loadThreadModule(wallet = {}, asset = {}) {
     getConfig: jest.fn(() => ({ ipfs: { gateway: "http://127.0.0.1:8080" } })),
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+  mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
     __esModule: true,
     getActiveContract: jest.fn(),
     CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
   }));
 
-  jest.unstable_mockModule("../../frontend/src/js/services/team.js", () => ({
+  mock.module("../../frontend/src/js/services/team.js", () => ({
     __esModule: true,
     fetchEditors: jest.fn().mockResolvedValue([]),
     getEditorSetVersion: jest.fn().mockResolvedValue(1),
   }));
 
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/merkle-editors.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/merkle-editors.js", () => ({
     __esModule: true,
     getProof: jest.fn(() => null),
   }));

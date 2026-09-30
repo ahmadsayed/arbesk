@@ -1,7 +1,6 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import fs from "fs";
 import path from "path";
 
@@ -18,13 +17,11 @@ function blobText(blob) {
 
 describe("3mf format handler", () => {
   beforeEach(() => {
-    jest.resetModules();
+    resetModules();
   });
 
   it("is registered by formats/index.js", async () => {
-    const { listFormatHandlers } = await import(
-      "../../frontend/src/js/formats/index.js"
-    );
+    const { listFormatHandlers } = await import("../../frontend/src/js/formats/index.js");
     const formats = listFormatHandlers().map((h) => h.format);
     expect(formats).toContain("gltf");
     expect(formats).toContain("glb");
@@ -32,9 +29,7 @@ describe("3mf format handler", () => {
   });
 
   it("isStoredForm only accepts the composite path", async () => {
-    const { threeMfHandler } = await import(
-      "../../frontend/src/js/formats/handlers/3mf-handler.js"
-    );
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
     expect(
       threeMfHandler.isStoredForm({
         source: { format: "3mf", path: "composite.3mf.json" },
@@ -48,9 +43,7 @@ describe("3mf format handler", () => {
   });
 
   it("sniff accepts 3MF packages and rejects other bytes", async () => {
-    const { threeMfHandler } = await import(
-      "../../frontend/src/js/formats/handlers/3mf-handler.js"
-    );
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));
     expect(threeMfHandler.sniff(box)).toBe(true);
     expect(threeMfHandler.sniff(new TextEncoder().encode("{}"))).toBe(false);
@@ -64,17 +57,11 @@ describe("3mf format handler", () => {
     // Import manifest-builder FIRST: it registers the built-in handlers as a
     // side effect of formats/index.js. Resetting afterwards gives us a clean
     // registry where only our spy handler exists.
-    const { decomposeManifestNodes } = await import(
-      "../../frontend/src/js/services/asset-save/manifest-builder.js"
-    );
-    const { registerFormatHandler, _resetFormatRegistry } = await import(
-      "../../frontend/src/js/formats/registry.js"
-    );
+    const { decomposeManifestNodes } = await import("../../frontend/src/js/services/asset-save/manifest-builder.js");
+    const { registerFormatHandler, _resetFormatRegistry } = await import("../../frontend/src/js/formats/registry.js");
     _resetFormatRegistry();
 
-    const { threeMfHandler } = await import(
-      "../../frontend/src/js/formats/handlers/3mf-handler.js"
-    );
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
     const spy = jest.fn().mockResolvedValue({
       cid: "bafyComposite3mf",
       path: "composite.3mf.json",
@@ -105,7 +92,7 @@ describe("3mf format handler", () => {
 
   it("load converts a raw 3MF CID into a glTF blob", async () => {
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/ipfs/remote-ipfs.js",
       () => ({
         getArrayBufferFromRemoteIPFS: jest.fn(async () =>
@@ -113,9 +100,7 @@ describe("3mf format handler", () => {
         ),
       })
     );
-    const { threeMfHandler } = await import(
-      "../../frontend/src/js/formats/handlers/3mf-handler.js"
-    );
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
     const importFromBlob = jest
       .fn()
       .mockResolvedValue({ meshes: [], transformNodes: [] });
@@ -142,7 +127,7 @@ describe("3mf format handler", () => {
       parts: {},
     };
     const compositeBytes = new TextEncoder().encode(JSON.stringify(composite));
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/ipfs/remote-ipfs.js",
       () => ({
         getArrayBufferFromRemoteIPFS: jest.fn(async () =>
@@ -153,9 +138,7 @@ describe("3mf format handler", () => {
         ),
       })
     );
-    const { threeMfHandler } = await import(
-      "../../frontend/src/js/formats/handlers/3mf-handler.js"
-    );
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
     const result = await threeMfHandler.decomposeForSave(
       { source: { cid: "bafyComposite", path: "asset.3mf", format: "3mf" } },
       { assetName: "Box", assetId: "asset_box", dedupMap: new Map() }
@@ -170,7 +153,7 @@ describe("3mf format handler", () => {
 
   it("decomposeForSave throws on an unrecognized non-ZIP source", async () => {
     const garbage = new TextEncoder().encode("definitely not zip or json\x00\x01");
-    jest.unstable_mockModule(
+    mock.module(
       "../../frontend/src/js/ipfs/remote-ipfs.js",
       () => ({
         getArrayBufferFromRemoteIPFS: jest.fn(async () =>
@@ -181,9 +164,7 @@ describe("3mf format handler", () => {
         ),
       })
     );
-    const { threeMfHandler } = await import(
-      "../../frontend/src/js/formats/handlers/3mf-handler.js"
-    );
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
     await expect(
       threeMfHandler.decomposeForSave(
         { source: { cid: "bafyGarbage", path: "asset.3mf", format: "3mf" } },

@@ -3,6 +3,7 @@
  * collection-manifest literal, the version-chain mutation (version bump +
  * prev link), and the composite-source sniff used by Studio and the besk CLI.
  */
+import { describe, expect, test } from "bun:test";
 import {
   buildCollectionManifest,
   applyCollectionMutation,

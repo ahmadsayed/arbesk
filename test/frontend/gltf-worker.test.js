@@ -9,12 +9,12 @@
  * images with magic-byte sniffing, ipfs:// skip entries, external URIs, and
  * the warn-and-skip edge cases.
  */
-import { jest } from "@jest/globals";
+import { describe, expect, jest, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 let registered = null;
 
-jest.unstable_mockModule(
+mock.module(
   "../../frontend/src/js/vendor/workerpool-10.0.2.mjs",
   () => ({
     __esModule: true,

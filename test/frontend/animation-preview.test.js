@@ -1,12 +1,11 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Inspector animation preview: the Animations section appears only for a
  * single selected node that has animation groups; choosing a clip plays it
  * looped, "None" / deselect / multi-select stop playback.
  */
-import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 
+import { beforeAll, beforeEach, expect, jest, test } from "bun:test";
 let emit, EVENTS, state;
 
 function makeGroup(name) {

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import {
   SYSTEM_PROMPT, buildTurnMessages, buildRepairMessages,
 } from "@arbesk/cad-gen/backend/prompt.js";

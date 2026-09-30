@@ -1,15 +1,15 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * testnet-banner: reveals #testnetBanner only when the backend reports
  * Base Sepolia (84532) as the default chain — public testnet deployments
  * show it, local dev (Hardhat) does not.
  */
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function loadModule(config) {
-  jest.resetModules();
-  await jest.unstable_mockModule(
+  resetModules();
+  await mock.module(
     "../../frontend/src/js/services/backend-client.js",
     () => ({ getConfig: jest.fn().mockResolvedValue(config) })
   );

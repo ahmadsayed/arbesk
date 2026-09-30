@@ -2,7 +2,7 @@
  * Pending-generation store tests.
  */
 
-import { expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, test } from "bun:test";
 import {
   addPendingGeneration,
   getPendingGeneration,

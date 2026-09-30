@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 const { setAnnotations, unsetAnnotations, getComputed, getAnnotations, parseJsonValue, patchFromPairs } =
   await import("../packages/besk/src/metadata.ts");
 

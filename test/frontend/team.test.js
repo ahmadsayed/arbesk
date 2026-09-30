@@ -1,6 +1,7 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const contractMock = {
   read: {
     editorListURI: jest.fn(),
@@ -18,40 +19,44 @@ const requireWalletMock = jest.fn();
 const resolveUserEmailMock = jest.fn();
 const walletStateGetMock = jest.fn(() => ({ walletAddress: "0xOwnerAddress" }));
 
-jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
-  contract: contractMock,
-  getActiveContract: () => contractMock ?? walletStateGetMock()?.contract ?? null,
-  updateEditors: updateEditorsMock,
-  CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
-}));
+/** The wallet module every test runs against, unless one re-mocks it. */
+function mockWalletModule() {
+  mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
+    contract: contractMock,
+    getActiveContract: () => contractMock ?? walletStateGetMock()?.contract ?? null,
+    updateEditors: updateEditorsMock,
+    CollaboratorRole: { None: 0, Viewer: 1, Editor: 2 },
+  }));
+}
+mockWalletModule();
 
-jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
+mock.module("../../frontend/src/js/state/wallet-state.js", () => ({
   walletState: { get: walletStateGetMock },
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
   getFromRemoteIPFS: getFromRemoteIPFSMock,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
+mock.module("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
   writeJSONToIPFS: writeJSONToIPFSMock,
 }));
 
-jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/merkle-editors.js", () => ({
+mock.module("@arbesk/asset-core/formats/gltf/merkle-editors.js", () => ({
   computeRoot: computeRootMock,
   getProof: getProofMock,
   MAX_EDITORS_PER_TOKEN: 5000,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-guard.js", () => ({
+mock.module("../../frontend/src/js/blockchain/wallet-guard.js", () => ({
   requireWallet: requireWalletMock,
 }));
 
-jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+mock.module("../../frontend/src/js/services/api.js", () => ({
   resolveUserEmail: resolveUserEmailMock,
 }));
 
-const team = await import("../../frontend/src/js/services/team.js");
+let team = await import("../../frontend/src/js/services/team.js");
 
 // asset-core runtime seam: editor ops in domain/editors.ts read their
 // Hash/Storage/Chain/IPFS ports from here (previously window.Web3 +
@@ -150,7 +155,7 @@ describe("team service", () => {
       const read = {
         editorListURI: jest.fn().mockResolvedValue("bafyFromState"),
       };
-      jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+      mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
         contract: null,
         getActiveContract: () => walletStateGetMock()?.contract ?? null,
         updateEditors: updateEditorsMock,
@@ -159,12 +164,23 @@ describe("team service", () => {
       walletStateGetMock.mockReturnValue({ contract: { read }, walletAddress: "0xOwnerAddress" });
       getFromRemoteIPFSMock.mockResolvedValue(editorList);
 
-      jest.resetModules();
-      await wireAssetCoreRuntime();
-      const fresh = await import("../../frontend/src/js/services/team.js");
-      const result = await fresh.fetchEditors("42");
-      expect(result).toEqual(editorList);
-      expect(read.editorListURI).toHaveBeenCalledWith([42n]);
+      try {
+        resetModules();
+        await wireAssetCoreRuntime();
+        const fresh = await import("../../frontend/src/js/services/team.js");
+        const result = await fresh.fetchEditors("42");
+        expect(result).toEqual(editorList);
+        expect(read.editorListURI).toHaveBeenCalledWith([42n]);
+      } finally {
+        // Bun's mock.module() rewrites live bindings in modules that are
+        // already loaded (Jest's only reached later imports), and the shared
+        // `team` import was evicted by resetModules() above. Restore the
+        // standard mock and re-import, so later tests see what they did
+        // under Jest.
+        mockWalletModule();
+        resetModules();
+        team = await import("../../frontend/src/js/services/team.js");
+      }
     });
   });
 

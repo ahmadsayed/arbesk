@@ -1,14 +1,14 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Public profile / visitor mode (ui/library-controller.ts): anonymous
  * visitors with a `/library/<base58>` subject load the subject's owned
  * collections only (no shared), skip the sign-in gate, and get read-only
  * chrome; a subject equal to the connected wallet stays owner mode.
  * Network (asset-library), IPFS, and wallet state are mocked.
  */
-import { jest, expect, test, describe, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const SUBJECT = "0xccc626354a2ea985d4abdc1173597a46afc63595";
 const OTHER_WALLET = "0x8f3c00000000000000000000000000000000009b2e";
 
@@ -34,11 +34,11 @@ async function load({
   failOnChains = [],
   noRealNetworks = false,
 } = {}) {
-  jest.resetModules();
+  resetModules();
 
   if (noRealNetworks) {
     // Simulate a pure local dev backend: no chain has a deployment block.
-    await jest.unstable_mockModule("../../constants/chains.js", () => ({
+    await mock.module("../../constants/chains.js", () => ({
       __esModule: true,
       CHAIN_IDS: { HARDHAT_LOCAL: 31415822, BASE_TESTNET: 84532 },
       SUPPORTED_CHAIN_IDS: [31415822, 84532],
@@ -64,7 +64,7 @@ async function load({
   }));
   const getFromRemoteIPFS = jest.fn(async () => ({ name: "Props Pack" }));
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       __esModule: true,
@@ -78,7 +78,7 @@ async function load({
       _resetForTesting: jest.fn(),
     }),
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ui/asset-library.js",
     () => ({
       __esModule: true,
@@ -87,7 +87,7 @@ async function load({
       getReadableContract,
     }),
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       __esModule: true,
@@ -97,9 +97,7 @@ async function load({
   );
 
   const stateMod = await import("../../frontend/src/js/state/library-state.js");
-  const controller = await import(
-    "../../frontend/src/js/ui/library-controller.js"
-  );
+  const controller = await import("../../frontend/src/js/ui/library-controller.js");
   return {
     ...controller,
     libraryState: stateMod.libraryState,
@@ -434,7 +432,7 @@ describe("subject chain resolution", () => {
     expect(libraryState.get().collections).toHaveLength(1);
   });
   // NOTE: keep LAST — the constants/chains.js mock it registers leaks across
-  // jest.resetModules() into later imports in this file.
+  // resetModules() into later imports in this file.
   test("no real network configured at all falls back to Hardhat local", async () => {
     const { libraryState, setLibrarySubject, refreshLibraryData } = await load({
       walletAddress: null,

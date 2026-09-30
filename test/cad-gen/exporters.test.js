@@ -5,6 +5,7 @@
  * readable by Arbesk's own 3MF parser, the closest available proxy for
  * third-party slicer validity.
  */
+import { describe, expect, it } from "bun:test";
 import { unzipSync, strFromU8 } from "fflate";
 import {
   meshToGlb, meshTo3mf, readDesignFrom3mf, serializeDesign, parseEmbeddedDesign,

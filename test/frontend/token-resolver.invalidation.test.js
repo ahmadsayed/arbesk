@@ -1,5 +1,5 @@
 // test/frontend/token-resolver.invalidation.test.js
-import { describe, it, expect } from "@jest/globals";
+import { describe, expect, it } from "bun:test";
 import {
   invalidateResolution,
   _setCachedForTest,

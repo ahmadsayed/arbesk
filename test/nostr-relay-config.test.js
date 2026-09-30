@@ -13,6 +13,7 @@
  * deployment can re-bind it to loopback without editing the compose file.
  */
 
+import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 
 const relayToml = fs.readFileSync("docker/nostr-relay.toml", "utf8");

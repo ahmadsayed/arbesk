@@ -1,4 +1,5 @@
-/** @jest-environment jsdom */
+// @test-env dom
+import { describe, expect, it } from "bun:test";
 import { createConcurrencyLimiter } from "@arbesk/asset-core/utils/concurrency.js";
 
 describe("createConcurrencyLimiter", () => {

@@ -1,11 +1,11 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * wallet-send.ts — wallet-agnostic contract sending via the injected Signer,
  * with calldata encoded by viem `encodeFunctionData` and gas resolved through
  * the viem read client (real wallet-gas, mocked viem-clients).
  */
-import { jest } from "@jest/globals";
+import { beforeEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import { encodeFunctionData } from "viem";
 
 const CONTRACT = "0x0000000000000000000000000000000000000001";
@@ -66,14 +66,14 @@ async function loadModule() {
     sendTransaction: _signerSend,
   };
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet-core.ts",
     () => ({
       getSigner: () => signer,
       getActiveConnectionSource: () => "injected",
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/viem-clients.ts",
     () => ({
       getReadClient: jest.fn(() => ({ estimateGas: _estimateGas })),
@@ -82,7 +82,7 @@ async function loadModule() {
   );
 
   const emit = jest.fn();
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/events/bus.js",
     () => ({
       emit,
@@ -95,7 +95,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
 });
 
 test("encodes calldata with viem and routes the send through the injected signer", async () => {
@@ -171,14 +171,14 @@ test("emits ASSET_PUBLISH_PENDING with the broadcast hash when pendingPayload is
 });
 
 test("throws when no signer is connected", async () => {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet-core.ts",
     () => ({
       getSigner: () => null,
       getActiveConnectionSource: () => "injected",
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/viem-clients.ts",
     () => ({
       getReadClient: jest.fn(() => ({ estimateGas: _estimateGas })),

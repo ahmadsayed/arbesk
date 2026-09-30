@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "bun:test";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { keccak256 } from "viem";
 import { buildBinding, deriveSecretKey } from "@arbesk/nostr/identity.js";

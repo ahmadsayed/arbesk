@@ -1,10 +1,11 @@
 /**
  * Contract tests for the IpfsReadPort/IpfsWritePort adapters.
  *
- * Deliberately run in the default node environment (no @jest-environment
- * jsdom docblock): jsdom's realm-mismatched Uint8Array breaks the
+ * Deliberately run in the default node environment (no DOM helper
+ * import): a DOM's realm-mismatched Uint8Array breaks the
  * `instanceof` checks in asset-core/utils/compression.ts.
  */
+import { describe, expect, test } from "bun:test";
 import { createMemoryIpfs } from "@arbesk/asset-core/storage/memory-ipfs.js";
 import { isGzipped, isBrotliFramed } from "@arbesk/asset-core/utils/compression.js";
 

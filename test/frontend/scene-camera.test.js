@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * updateCameraRangeForScene (jsdom) with a mocked Babylon runtime.
  *
@@ -7,13 +8,12 @@
  * far the user zoomed out. The restored behavior scales the zoom range and
  * the viewport chrome (grid/axes) from the model's largest dimension.
  *
- * @jest-environment jsdom
  */
 
-import { expect, test, beforeAll, beforeEach } from "@jest/globals";
 
 // ─── Babylon mock ───
 
+import { beforeAll, beforeEach, expect, test } from "bun:test";
 class V3 {
   constructor(x = 0, y = 0, z = 0) {
     this.x = x;

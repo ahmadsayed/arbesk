@@ -1,8 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const SG = "../../frontend/src/js/engine/scene-graph.js";
 const LC = "../../frontend/src/js/ui/library-controller.js";
 const AL = "../../frontend/src/js/ui/asset-library.js";
@@ -10,33 +9,31 @@ const WS = "../../frontend/src/js/state/wallet-state.js";
 
 // Mock the heavy engine + data deps so we can unit-test the router in isolation.
 async function loadRouter({ walletAddress = null } = {}) {
-  await jest.unstable_mockModule(SG, () => ({
+  await mock.module(SG, () => ({
     initEngine: jest.fn(),
     loadFromParams: jest.fn(),
     pauseRenderLoop: jest.fn(),
     resumeRenderLoop: jest.fn(),
   }));
-  await jest.unstable_mockModule(LC, () => ({
+  await mock.module(LC, () => ({
     refreshLibraryData: jest.fn(),
     resolveSubjectChain: jest.fn(async () => 84532),
     setLibrarySubject: jest.fn(() => false),
   }));
-  await jest.unstable_mockModule(AL, () => ({
+  await mock.module(AL, () => ({
     refreshAssetLibrary: jest.fn(),
   }));
-  await jest.unstable_mockModule(WS, () => ({
+  await mock.module(WS, () => ({
     walletState: { get: jest.fn(() => ({ walletAddress })) },
   }));
   const router = await import("../../frontend/src/js/app/router.js");
   // The real library-state store (router consults it for the profile subject).
-  const { libraryState } = await import(
-    "../../frontend/src/js/state/library-state.js"
-  );
+  const { libraryState } = await import("../../frontend/src/js/state/library-state.js");
   return { ...router, libraryState };
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   window.history.replaceState({}, "", "/studio");
   document.body.innerHTML = `
     <main id="studioView" class="app-view"></main>

@@ -1,8 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const OWNER = "0xOwner";
 const TOKEN_ID = "42";
 const TARGET_TOKEN_ID = "43";
@@ -26,7 +25,7 @@ let _wroteCollection = null;
 let _unpinResult = { count: 1, errors: [] };
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _walletAddress = OWNER;
   _activeAssetTokenId = null;
   _activeAssetId = null;
@@ -78,7 +77,7 @@ function _getProof() {
 }
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -93,7 +92,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/domain/asset.js",
     () => ({
       getActiveAssetTokenId: jest.fn(() => _activeAssetTokenId),
@@ -101,7 +100,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet.js",
     () => ({
       contract: _mockContract(),
@@ -112,7 +111,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet-guard.js",
     () => ({
       requireWallet: jest.fn().mockReturnValue({
@@ -122,14 +121,14 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/formats/gltf/merkle-editors.js",
     () => ({
       getProof: jest.fn((_list, _address, _tokenId, _version) => _getProof()),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       getFromRemoteIPFS: jest.fn().mockImplementation((cid) => {
@@ -140,7 +139,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/write-to-ipfs.js",
     () => ({
       writeJSONToIPFS: jest
@@ -152,7 +151,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/api.js",
     () => ({
       unpinAssetCids: jest.fn().mockResolvedValue(_unpinResult),
@@ -160,7 +159,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ui/dialog.js",
     () => ({
       showConfirmDialog: jest.fn().mockResolvedValue(_dialogResult),
@@ -168,7 +167,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ui/toasts.js",
     () => ({
       showToast: jest.fn(),
@@ -177,7 +176,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/events/bus.js",
     () => ({
       emit: jest.fn(),

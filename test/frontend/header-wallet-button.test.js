@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Header wallet button contract tests.
  *
@@ -5,11 +6,11 @@
  * functions keep their signatures (app-init.js calls them); the Alpine
  * migration adds reactive sync from walletState + auth bus events.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, afterEach } from "@jest/globals";
 
+import { afterEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 const TRUNCATED = "0x1234…5678";
 
@@ -28,7 +29,7 @@ function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+mock.module("../../frontend/src/js/services/api.js", () => ({
   getCachedSession: jest.fn(() => null),
 }));
 
@@ -44,7 +45,7 @@ let bus;
  *   the module loads (simulates the auto-connect-on-page-load race)
  */
 async function setup(preState) {
-  jest.resetModules();
+  resetModules();
   document.body.innerHTML = FRAGMENT;
   walletStateMod = await import("../../frontend/src/js/state/wallet-state.js");
   bus = await import("@arbesk/asset-core/events/bus.js");

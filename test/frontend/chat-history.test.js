@@ -1,27 +1,27 @@
+// @test-env dom
 /**
  * Chat provenance history view tests (Alpine store-backed).
  *
  * chat-history.js renders manifest-chain metadata.chat records as history
  * messages in the reactive chat store, prepended above live messages.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, afterEach } from "@jest/globals";
 
+import { afterEach, beforeAll, expect, jest, mock, test } from "bun:test";
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 const walkManifestChain = jest.fn();
 const emit = jest.fn();
 const addPendingGeneration = jest.fn(() => "gen-1");
 
-jest.unstable_mockModule("../../frontend/src/js/engine/time-travel.js", () => ({
+mock.module("../../frontend/src/js/engine/time-travel.js", () => ({
   walkManifestChain,
 }));
-jest.unstable_mockModule("../../frontend/src/js/state/pending-generations.js", () => ({
+mock.module("../../frontend/src/js/state/pending-generations.js", () => ({
   addPendingGeneration,
 }));
-jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+mock.module("@arbesk/asset-core/events/bus.js", () => ({
   emit,
   EVENTS: {
     HISTORY_VERSION_SELECTED: "asset:historyVersionSelected",

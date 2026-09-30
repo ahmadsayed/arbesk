@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 const { computeModelStats } = await import(
   "../packages/asset-core/src/formats/gltf/model-stats.ts"
 );

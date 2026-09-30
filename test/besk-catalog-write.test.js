@@ -3,13 +3,13 @@
  * goes through applyCollectionMutation — version bumps and prev links, or the
  * on-chain collection history chain silently breaks.
  */
-import { jest } from "@jest/globals";
 
+import { describe, expect, jest, mock, test } from "bun:test";
 const relayMock = jest.fn(async () => ({}));
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const written = [];
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({ contractAddress: "0x0", ipfsGatewayUrl: "http://gw", networkConfigs: {} })),
   createCollectionReadPort: jest.fn(() => ({
     tokenURI: jest.fn(async () => "bafyCurrentCollection"),

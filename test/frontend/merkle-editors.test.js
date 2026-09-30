@@ -1,9 +1,7 @@
-/**
- * @jest-environment jsdom
- */
+// @test-env dom
 
-import { jest } from "@jest/globals";
 
+import { beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 const ZERO_ROOT =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 const FAKE_ROOT =
@@ -43,7 +41,7 @@ class FakeSimpleMerkleTree {
   }
 }
 
-jest.unstable_mockModule("@openzeppelin/merkle-tree", () => ({
+mock.module("@openzeppelin/merkle-tree", () => ({
   SimpleMerkleTree: FakeSimpleMerkleTree,
 }));
 

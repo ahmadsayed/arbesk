@@ -5,7 +5,7 @@
  * exact-match semantics (no partial/autocomplete), minimal response shape,
  * pagination, SDK failure, and the per-wallet rate limit.
  */
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, expect, jest, mock, test } from "bun:test";
 import request from "supertest";
 import { mountRoutes } from "../helpers/hono.js";
 
@@ -14,7 +14,7 @@ import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
 
 const listEndUsers = jest.fn();
 
-jest.unstable_mockModule("@coinbase/cdp-sdk", () => ({
+mock.module("@coinbase/cdp-sdk", () => ({
   CdpClient: jest.fn(() => ({ endUser: { listEndUsers } })),
 }));
 

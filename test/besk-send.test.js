@@ -4,10 +4,10 @@
  * with a child_ref back to the source collection so future edits propagate
  * (mirrors frontend/src/js/services/asset-delete.ts sendAssetToCollection).
  */
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 const relayMock = jest.fn(async () => ({}));
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const written = [];
 const TARGET_COLLECTION = {
@@ -18,7 +18,7 @@ const SOURCE_ASSET = {
   type: "asset", name: "robot", asset_id: "asset_1", version: 3,
   thumbnail: { type: "snapshot", cid: "bafyThumb" },
 };
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({
     contractAddress: "0xContract",
     ipfsGatewayUrl: "http://gw",

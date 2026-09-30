@@ -1,6 +1,7 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 function flush(rounds = 12) {
   return Promise.all(
     Array.from({ length: rounds }, () => new Promise((r) => setTimeout(r, 0)))
@@ -8,7 +9,7 @@ function flush(rounds = 12) {
 }
 
 async function load({ config = { cdpProjectId: "proj-1" }, cdp = {} } = {}) {
-  jest.resetModules();
+  resetModules();
   document.body.innerHTML = "";
   global.requestAnimationFrame = (cb) => { cb(0); return 0; };
   // jsdom focus() re-fires focusin synchronously, which the modal's focus trap
@@ -20,17 +21,17 @@ async function load({ config = { cdpProjectId: "proj-1" }, cdp = {} } = {}) {
   const onWalletsUpdated = jest.fn(() => () => {});
   const escapeHtml = jest.fn((s) => s);
 
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-discovery.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-discovery.js", () => ({
     requestWallets,
     onWalletsUpdated,
     getWallets,
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/utils/html.js", () => ({
+  await mock.module("../../frontend/src/js/utils/html.js", () => ({
     escapeHtml,
   }));
 
   const getConfig = jest.fn(async () => config);
-  await jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
+  await mock.module("../../frontend/src/js/services/backend-client.js", () => ({
     getConfig,
   }));
 
@@ -42,7 +43,7 @@ async function load({ config = { cdpProjectId: "proj-1" }, cdp = {} } = {}) {
     smartAccountAddress: "0xSmart",
     eoaAddress: "0xEoa",
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-cdp.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-cdp.js", () => ({
     initCdpClient,
     resetCdpStorage,
     requestEmailOtp,

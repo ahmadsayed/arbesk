@@ -1,8 +1,9 @@
 /**
  * Shared token indexing tests.
  */
-import { jest } from "@jest/globals";
 
+import { beforeEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "./helpers/module-registry.js";
 const TEST_CHAIN = 999901;
 
 let _getBlockNumber;
@@ -22,7 +23,7 @@ async function loadModule() {
     readContract: _editorListURI,
   };
 
-  await jest.unstable_mockModule("../src/config.ts", () => ({
+  await mock.module("../src/config.ts", () => ({
     getPublicClient: jest.fn(() => fakeClient),
     getContractAddress: jest.fn(() => "0x0000000000000000000000000000000000000001"),
     NETWORK_CONFIGS: {},
@@ -32,7 +33,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
 });
 
 test("indexes editor-shared tokens from EditorSetChanged events", async () => {

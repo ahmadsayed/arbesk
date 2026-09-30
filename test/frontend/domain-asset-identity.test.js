@@ -1,11 +1,10 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Domain asset identity/CID commands: the only writers of
  * activeAssetManifestCid / latestAssetManifestCid / activeAssetTokenId /
  * activeAssetId / currentManifest.
  */
-import { expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, test } from "bun:test";
 import {
   adoptOpenedAsset,
   activateAssetManifest,

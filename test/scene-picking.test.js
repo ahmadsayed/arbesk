@@ -1,4 +1,5 @@
-/** @jest-environment jsdom */
+// @test-env dom
+import { describe, expect, test } from "bun:test";
 import { resolvePickedNodeId } from "../frontend/src/js/engine/scene-picking.js";
 
 describe("resolvePickedNodeId", () => {

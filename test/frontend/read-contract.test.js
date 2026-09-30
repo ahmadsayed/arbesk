@@ -1,22 +1,22 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * getReadableContract chain selection: anonymous sessions (no connected
  * wallet) must read from the deployment's default chain as reported by the
  * backend (/api/v1/config → defaultChainId), not from a hardcoded local
  * chain — otherwise a guest on a testnet deployment hits 127.0.0.1:8545.
  */
-import { jest, expect, test, describe } from "@jest/globals";
+import { describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import { CHAIN_IDS } from "../../constants/chains.js";
 
 let _config = null;
 let _readClientChains = [];
 
 async function loadModule() {
-  jest.resetModules();
+  resetModules();
   _readClientChains = [];
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       __esModule: true,
@@ -27,7 +27,7 @@ async function loadModule() {
       _resetForTesting: jest.fn(),
     }),
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/backend-client.js",
     () => ({
       __esModule: true,
@@ -35,7 +35,7 @@ async function loadModule() {
       getContractArtifact: jest.fn(async () => ({ abi: [] })),
     }),
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/viem-clients.js",
     () => ({
       __esModule: true,

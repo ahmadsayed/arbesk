@@ -1,4 +1,4 @@
-/** @jest-environment node */
+import { describe, expect, it } from "bun:test";
 import {
   hashBytes,
   murmur3_128,

@@ -1,14 +1,14 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Library details pane metadata row (ui/library-details.ts): flattens a
  * manifest's metadata.annotations into a "key: value · key: value" string,
  * renders "—" when there are no annotations, and toggles the collection-only
  * "Edit metadata…" affordance. IPFS, the contract, Babylon, and the
  * chat-preview service are all mocked — no network, no WebGL.
  */
-import { jest, expect, test, describe, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const OWNER = `0x8f3C${"0".repeat(30)}9b2E`;
 const MODIFIED = new Date(2026, 7, 17, 12).getTime();
 
@@ -106,7 +106,7 @@ async function flush(rounds = 8) {
 }
 
 async function load({ manifest = null, manifests = null } = {}) {
-  jest.resetModules();
+  resetModules();
 
   const getFromRemoteIPFS = jest.fn(async (cid) =>
     manifests && manifests[cid] ? manifests[cid] : manifest
@@ -131,39 +131,37 @@ async function load({ manifest = null, manifests = null } = {}) {
   const loadEditorList = jest.fn(async () => []);
   const openItem = jest.fn();
 
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     __esModule: true,
     getFromRemoteIPFS,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+  mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
     __esModule: true,
     getActiveContract,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/engine/babylon-loader.js", () => ({
+  mock.module("../../frontend/src/js/engine/babylon-loader.js", () => ({
     __esModule: true,
     ensureBabylon,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/services/chat-preview.js", () => ({
+  mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
     __esModule: true,
     createChatPreview,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/utils/thumbnail.js", () => ({
+  mock.module("../../frontend/src/js/utils/thumbnail.js", () => ({
     __esModule: true,
     loadThumbnailInto,
     extractThumbnailCid,
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/domain/editors.js", () => ({
+  mock.module("@arbesk/asset-core/domain/editors.js", () => ({
     __esModule: true,
     loadEditorList,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/ui/library-grid.js", () => ({
+  mock.module("../../frontend/src/js/ui/library-grid.js", () => ({
     __esModule: true,
     openItem,
   }));
 
-  const { libraryState } = await import(
-    "../../frontend/src/js/state/library-state.js"
-  );
+  const { libraryState } = await import("../../frontend/src/js/state/library-state.js");
   const mod = await import("../../frontend/src/js/ui/library-details.js");
   return { libraryState, initLibraryDetails: mod.initLibraryDetails };
 }

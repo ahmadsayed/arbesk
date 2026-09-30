@@ -4,7 +4,7 @@
  * canonical ordering, and non-mutation of inputs.
  */
 
-import { expect, test } from "@jest/globals";
+import { expect, test } from "bun:test";
 import {
   VIEW_ORDER,
   MAX_ATTACH_IMAGES,

@@ -10,8 +10,8 @@
  * extractDataURI, arrayBufferToBase64) are tested directly.
  */
 
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
 jest.setTimeout(15000);
 
 

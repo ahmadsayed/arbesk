@@ -5,9 +5,8 @@
  * with a fake ipfsWrite port so no network/IPFS node is required.
  */
 
-import { jest } from "@jest/globals";
-
 // Provide browser globals used by the modules under test.
+import { afterAll, beforeEach, describe, expect, it, jest } from "bun:test";
 globalThis.crypto = {
   subtle: {
     digest: jest.fn().mockResolvedValue(new ArrayBuffer(32)),

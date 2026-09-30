@@ -1,17 +1,15 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, describe, beforeAll } from "@jest/globals";
+// @test-env dom
 
 // time-travel.js statically imports scene-graph (engine-heavy) and remote-ipfs;
 // mock both before the dynamic import.
-jest.unstable_mockModule(
+import { beforeAll, describe, expect, jest, mock, test } from "bun:test";
+mock.module(
   "../../frontend/src/js/engine/scene-graph.js",
   () => ({ getNodeMeshes: () => [] })
 );
 
 const getFromRemoteIPFS = jest.fn();
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
   getFromRemoteIPFS,
 }));
 

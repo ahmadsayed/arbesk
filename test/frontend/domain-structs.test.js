@@ -1,10 +1,9 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Domain structs: AssetRef normalization/keys/resolution and manifest→Node
  * mapping. Pure data, no engine, no network (resolver injected).
  */
-import { jest, expect, test, describe } from "@jest/globals";
+import { describe, expect, jest, test } from "bun:test";
 import {
   normalizeAssetRef,
   assetRefKey,

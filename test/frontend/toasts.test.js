@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Toast notification contract tests.
  *
@@ -5,10 +6,9 @@
  * by MockNotyf - a minimal in-memory stand-in that mirrors the subset of
  * Notyf's API the wrapper depends on, so the CDN script is not required.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
+import { afterEach, beforeAll, beforeEach, expect, jest, test } from "bun:test";
 import { showToast, dismissToast, dismissAllToasts } from "../../frontend/src/js/ui/toasts.js";
 
 // ─── MockNotyf ───────────────────────────────────────────────────────────────

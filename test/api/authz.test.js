@@ -1,7 +1,7 @@
 /**
  * Backend authz wiring tests (P2c).
  */
-import { jest } from "@jest/globals";
+import { describe, expect, jest, test } from "bun:test";
 import { makeChainReadPort } from "../../src/api/authz.ts";
 
 describe("authz wiring", () => {

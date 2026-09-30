@@ -6,6 +6,7 @@
  * `instanceof` checks in asset-core/utils/compression.ts (same reason as
  * asset-core-ipfs-ports.test.js). Blob is a Node ≥ 18 global.
  */
+import { afterEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { encodePacked, keccak256 } from "viem/utils";
 import { createArbeskCore } from "@arbesk/asset-core/facade.js";

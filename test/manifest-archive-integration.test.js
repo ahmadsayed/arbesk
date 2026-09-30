@@ -9,7 +9,7 @@
  * the comments archive is a standalone server-side operation.
  */
 
-import { jest } from "@jest/globals";
+import { beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import request from "supertest";
 import { Hono } from "hono";
 import { mountRoutes } from "./helpers/hono.js";
@@ -40,11 +40,11 @@ describe("Manifest comments archive integration", () => {
       },
     };
 
-    jest.unstable_mockModule("ipfs-http-client", () => ({
+    mock.module("ipfs-http-client", () => ({
       create: jest.fn(() => mockIPFS),
     }));
 
-    jest.unstable_mockModule("ws", () => {
+    mock.module("ws", () => {
       function MockWebSocket() {
         this.readyState = 0;
         setTimeout(() => {
@@ -85,10 +85,19 @@ describe("Manifest comments archive integration", () => {
       };
       MockWebSocket.OPEN = 1;
       MockWebSocket.CONNECTING = 0;
-      const MockedWebSocket = jest.fn(function () {
+      // Bun's jest.fn() has no .prototype, so `new` on it cannot reach the
+      // WebSocket methods above. A real constructor delegates to the mock
+      // (keeping mockImplementationOnce for the relay-failure test) and
+      // shares MockWebSocket's prototype.
+      const constructWebSocket = jest.fn(function () {
         MockWebSocket.call(this);
       });
+      function MockedWebSocket(...args) {
+        constructWebSocket.apply(this, args);
+      }
       MockedWebSocket.prototype = MockWebSocket.prototype;
+      MockedWebSocket.mockImplementationOnce = (impl) =>
+        constructWebSocket.mockImplementationOnce(impl);
       MockedWebSocket.OPEN = 1;
       MockedWebSocket.CONNECTING = 0;
       return {
@@ -97,12 +106,12 @@ describe("Manifest comments archive integration", () => {
       };
     });
 
-    jest.unstable_mockModule("../src/api/sessions.ts", () => ({
+    mock.module("../src/api/sessions.ts", () => ({
       default: jest.fn(() => new Hono()),
       validateSession: jest.fn(() => "0xTestAddress"),
     }));
 
-    jest.unstable_mockModule("../src/config.ts", () => ({
+    mock.module("../src/config.ts", () => ({
       CONTRACT_ADDRESS: "0xArbeskContractAddress",
       PAID_CONTRACT_ADDRESS: "0xPaidContractAddress",
       HARDHAT_RPC_URL: "http://127.0.0.1:8545",

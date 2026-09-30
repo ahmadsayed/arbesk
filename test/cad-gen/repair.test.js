@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { parseDesign } from "@arbesk/cad-gen";
 import { generateWithRepair } from "@arbesk/cad-gen/backend/repair.js";
 import { buildRepairMessages } from "@arbesk/cad-gen/backend/prompt.js";

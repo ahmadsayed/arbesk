@@ -1,13 +1,13 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Child-asset unlink (TODO #18): removing a selected child_ref node stages the
  * removal (pendingChildRefRemovals for saved children, a pendingChildRefs
  * splice for unsaved ones), disposes the subtree, and pushes a "child_ref"
  * undo entry. Non-child selections are ignored.
  */
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const CHILD_A = {
   node_id: "childA",
   child_ref: { collection: { chainId: 31337, contractAddress: "0x1", tokenId: "1" }, assetID: "a" },
@@ -30,45 +30,45 @@ function setManifestNodes(nodes) {
 }
 
 async function loadModule() {
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     emit: jest.fn(),
     on: jest.fn(),
     EVENTS: new Proxy({}, { get: (_t, key) => String(key) }),
   }));
-  await jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
+  await mock.module("@arbesk/asset-core/domain/asset.js", () => ({
     getCurrentManifest: _getCurrentManifest,
   }));
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/transforms.js",
     () => ({
       getManifestNodes: (m) => m?.scene?.nodes || [],
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/cleanup.js",
     () => ({
       disposeNodeSubtree: _disposeNodeSubtree,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/scene-loader.js",
     () => ({
       loadNode: _loadNode,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/scene-selection.js",
     () => ({
       deselectNodes: _deselectNodes,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/undo-stack.js",
     () => ({
       pushUndoEntry: _pushUndoEntry,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/undo-controller.js",
     () => ({
       registerUndoApplier: _registerUndoApplier,
@@ -81,7 +81,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _pushUndoEntry.mockReset();
   _registerUndoApplier.mockReset();
   _disposeNodeSubtree.mockReset();

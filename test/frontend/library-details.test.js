@@ -1,13 +1,13 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Library details pane (ui/library-details.ts): selection-driven metadata
  * rows, empty/multi states, owner truncation + cache, 3D preview lifecycle,
  * and the static-thumbnail fallbacks. IPFS, the contract, Babylon, and the
  * chat-preview service are all mocked — no network, no WebGL.
  */
-import { jest, expect, test, describe, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const OWNER = `0x8f3C${"0".repeat(30)}9b2E`;
 const MODIFIED = new Date(2026, 7, 17, 12).getTime(); // Aug 17, 2026, local noon
 
@@ -122,7 +122,7 @@ async function load({
   previewHandles = [],
   editors = [],
 } = {}) {
-  jest.resetModules();
+  resetModules();
 
   const getFromRemoteIPFS = jest.fn(async (cid) =>
     manifests && manifests[cid] ? manifests[cid] : manifest
@@ -152,39 +152,37 @@ async function load({
   const loadEditorList = jest.fn(async () => editors);
   const openItem = jest.fn();
 
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     __esModule: true,
     getFromRemoteIPFS,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+  mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
     __esModule: true,
     getActiveContract,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/engine/babylon-loader.js", () => ({
+  mock.module("../../frontend/src/js/engine/babylon-loader.js", () => ({
     __esModule: true,
     ensureBabylon,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/services/chat-preview.js", () => ({
+  mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
     __esModule: true,
     createChatPreview,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/utils/thumbnail.js", () => ({
+  mock.module("../../frontend/src/js/utils/thumbnail.js", () => ({
     __esModule: true,
     loadThumbnailInto,
     extractThumbnailCid,
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/domain/editors.js", () => ({
+  mock.module("@arbesk/asset-core/domain/editors.js", () => ({
     __esModule: true,
     loadEditorList,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/ui/library-grid.js", () => ({
+  mock.module("../../frontend/src/js/ui/library-grid.js", () => ({
     __esModule: true,
     openItem,
   }));
 
-  const { libraryState } = await import(
-    "../../frontend/src/js/state/library-state.js"
-  );
+  const { libraryState } = await import("../../frontend/src/js/state/library-state.js");
   const mod = await import("../../frontend/src/js/ui/library-details.js");
   return {
     libraryState,
@@ -349,9 +347,7 @@ describe("library-details pane", () => {
     const { libraryState, initLibraryDetails } = await load({
       previewHandles: [handle],
     });
-    const { walletState } = await import(
-      "../../frontend/src/js/state/wallet-state.js"
-    );
+    const { walletState } = await import("../../frontend/src/js/state/wallet-state.js");
     walletState.set({
       walletSource: "cdp",
       walletAddress: OWNER,
@@ -373,9 +369,7 @@ describe("library-details pane", () => {
     const { libraryState, initLibraryDetails } = await load({
       previewHandles: [handle],
     });
-    const { walletState } = await import(
-      "../../frontend/src/js/state/wallet-state.js"
-    );
+    const { walletState } = await import("../../frontend/src/js/state/wallet-state.js");
     // CDP session, but the token belongs to someone else.
     walletState.set({
       walletSource: "cdp",
@@ -551,9 +545,7 @@ describe("library-details pane", () => {
     const { libraryState, initLibraryDetails } = await load({
       editors: [{ address: "0x1" }, { address: "0x2" }, { address: "0x3" }],
     });
-    const { walletState } = await import(
-      "../../frontend/src/js/state/wallet-state.js"
-    );
+    const { walletState } = await import("../../frontend/src/js/state/wallet-state.js");
     walletState.set({ chainId: 84532 });
     initLibraryDetails();
     libraryState.set({ assets: [ASSET], selectedIds: [ASSET.id] });

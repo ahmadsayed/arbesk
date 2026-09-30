@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { evaluateStaticGates, evaluateKernelGates } from "@arbesk/cad-gen/core/gates.js";
 import { validateDesign } from "@arbesk/cad-gen/backend/validate.js";
 

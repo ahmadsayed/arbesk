@@ -3,7 +3,7 @@
  * implementation used by both the main thread (composer.js/decomposer.js)
  * and the glTF Web Worker (workers/gltf-worker.js).
  */
-import { jest } from "@jest/globals";
+import { describe, expect, it, jest } from "bun:test";
 import {
   IPFS_URI_PREFIX,
   isComposite,

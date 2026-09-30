@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Dialog contract tests.
  *
@@ -11,10 +12,9 @@
  * the DOM. window.focusTrap is provided by MockFocusTrap, so the CDN script
  * is not required at test time.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
+import { afterEach, beforeAll, expect, test } from "bun:test";
 import { DIALOG_HOST_FRAGMENT as HOST_FRAGMENT } from "../helpers/dialog-host.js";
 
 // ─── MockFocusTrap ────────────────────────────────────────────────────────────
@@ -52,25 +52,27 @@ let showDialog, showConfirmDialog, showInfoDialog, showForkOrLiveRefDialog,
   showCustomDialog, showBurnCollectionDialog, showCheckboxDialog;
 
 /**
- * Flush Alpine's render queue and the focus-trap rAF. With fake timers both
- * queueMicrotask (Alpine's scheduler) and requestAnimationFrame are faked, so
- * jest.runAllTimers() drives them; Promise.resolve() drains real microtasks
- * (promise continuations).
+ * Flush Alpine's render queue and the focus-trap rAF.
+ * @remarks Real ticks, not fake timers: Bun's fake timers do not cover
+ *   queueMicrotask or requestAnimationFrame, which Alpine's scheduler and the
+ *   focus trap use. A macrotask turn drains Alpine's microtask queue, and the
+ *   rAF wait lets the focus-trap activation run.
  */
 async function flush() {
-  jest.runAllTimers();
-  await Promise.resolve();
-  jest.runAllTimers();
-  await Promise.resolve();
+  for (let i = 0; i < 2; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
 }
 
 async function setup() {
-  jest.resetModules();
   document.body.innerHTML = HOST_FRAGMENT;
   global.focusTrap = { createFocusTrap: (el, opts) => new MockTrap(el, opts) };
-  // Importing dialog.js registers the "dialog" component and starts Alpine
-  // (document.readyState is already "complete" under jsdom).
-  dialogMod = await import("../../frontend/src/js/ui/dialog.js");
+  // dialog.js registers the "dialog" component and starts Alpine once per
+  // process: alpinejs is a cached CommonJS module under Bun, so re-importing it
+  // per test would start the same Alpine instance again. Alpine's own mutation
+  // observer initialises each test's fresh #appDialogHost.
+  dialogMod ??= await import("../../frontend/src/js/ui/dialog.js");
   ({
     showDialog,
     showConfirmDialog,
@@ -87,20 +89,17 @@ beforeAll(() => {
   global.focusTrap = { createFocusTrap: (el, opts) => new MockTrap(el, opts) };
 });
 
-beforeEach(() => {
-  jest.useFakeTimers();
-});
-
 afterEach(async () => {
-  // Each setup() gets a fresh Alpine instance via jest.resetModules(); tear
-  // down the one that just ran so its MutationObserver can't initialize the
-  // next test's DOM before its own instance starts.
   const { Alpine } = await import("../../frontend/src/js/ui/alpine.js");
+  // dialog.js keeps its open state and FIFO queue at module level, and the
+  // module is imported once per file, so close whatever a test left open
+  // (Escape closes the current dialog and drains the next queued one).
+  for (let i = 0; i < 10 && Alpine.store("dialog")?.open; i += 1) {
+    pressKey(document, "Escape");
+    await flush();
+  }
   Alpine.destroyTree(document.body);
-  Alpine.stopObservingMutations();
   document.body.innerHTML = "";
-  jest.runAllTimers();
-  jest.useRealTimers();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -300,7 +299,7 @@ test("showInfoDialog resolves when Close is clicked", async () => {
   const p = showInfoDialog("Info", "<p>Done</p>");
   await flush();
   document.querySelector(".dialog-close-btn").click();
-  await expect(p).resolves.not.toThrow();
+  await p; // resolves (the value is not part of the contract)
 });
 
 test("showInfoDialog resolves when Escape is pressed", async () => {
@@ -308,7 +307,7 @@ test("showInfoDialog resolves when Escape is pressed", async () => {
   const p = showInfoDialog("Info", "<p>Done</p>");
   await flush();
   pressKey(document, "Escape");
-  await expect(p).resolves.not.toThrow();
+  await p; // resolves (the value is not part of the contract)
 });
 
 // ─── showForkOrLiveRefDialog ──────────────────────────────────────────────────

@@ -1,10 +1,9 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Multi-select semantics in scene-selection.js: the selection set, primary
  * (highlightedNodeId) tracking, highlight fan-out, and event emission.
  */
-import { jest, expect, test, describe, beforeEach, afterEach } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {

@@ -46,6 +46,6 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 - Read `references/checklists.md` when adding a panel or keyboard shortcut (4-question bar, shared guard, dispatcher, Escape stack).
 - Read `references/patterns.md` when you need an empty state, drop zone, or spinner.
 - Read `references/pitfalls.md` when something feels off (ortho frustum, HighlightLayer stencil, mesh disposal, form guards).
-- Read `references/alpine.md` when converting an imperative panel to Alpine.js (store/getter/template pattern, dynamic components, async render timing, jest testing).
+- Read `references/alpine.md` when converting an imperative panel to Alpine.js (store/getter/template pattern, dynamic components, async render timing, bun test + jsdom testing).
 - Read `references/e2e-sync.md` when changing any button/id/label/flow/status text.
 - Read `references/deep-dive.md` for architecture, shell, HIG principles, state, events, Babylon, and SCSS internals.

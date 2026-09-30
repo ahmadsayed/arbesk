@@ -1,7 +1,7 @@
 /**
  * Wallet relay route tests (P2d).
  */
-import { jest } from "@jest/globals";
+import { beforeEach, describe, expect, jest, test } from "bun:test";
 import { mountRoutes } from "../helpers/hono.js";
 import request from "supertest";
 import walletRelayRoutes from "../../src/api/routes/wallet-relay.ts";

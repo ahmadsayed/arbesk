@@ -4,17 +4,17 @@
  * version) and opens it in the system browser — or just returns the URL when
  * open is false (MCP agents, scripts, headless boxes).
  */
-import { jest } from "@jest/globals";
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import os from "os";
 import path from "path";
 
 process.env.ARBESK_CACHE_PATH = path.join(os.tmpdir(), "besk-show-test-cache-" + process.pid + ".json");
 
 const spawnMock = jest.fn(() => ({ unref: jest.fn() }));
-jest.unstable_mockModule("child_process", () => ({ spawn: spawnMock }));
+mock.module("child_process", () => ({ spawn: spawnMock }));
 
 const relayMock = jest.fn(async () => ({}));
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const manifests = {};
@@ -37,7 +37,7 @@ function resetManifests() {
   manifests.bafyWorldSrc = { asset: { version: "2.0" }, nodes: [] };
 }
 
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({ contractAddress: "0x0", ipfsGatewayUrl: "http://gw", networkConfigs: {} })),
   createCollectionReadPort: jest.fn(() => ({
     tokenURI: jest.fn(async () => "bafyCol1"),

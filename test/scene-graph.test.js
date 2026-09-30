@@ -6,8 +6,8 @@
  * to avoid ESM import issues with the frontend directory.
  */
 
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, it, jest } from "bun:test";
 jest.setTimeout(15000);
 
 // ─── Inline copies of functions from scene-graph.js ─────────────────────────

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, expect, it } from "bun:test";
 import { verifyEvent, getPublicKey } from "nostr-tools";
 import { buildAssetUpdateEvent, KIND_ASSET_UPDATE, TAG_TOKEN } from "../src/api/nostr-relay.ts";
 

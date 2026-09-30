@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals";
 
 /**
  * Reference test for the "example" dummy format engine in asset-core.
@@ -11,6 +10,7 @@ import { jest } from "@jest/globals";
  */
 
 // In-memory IPFS: cid → Uint8Array
+import { afterAll, describe, expect, it, jest } from "bun:test";
 const store = new Map();
 let seq = 0;
 

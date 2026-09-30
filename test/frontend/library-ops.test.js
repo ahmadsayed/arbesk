@@ -1,9 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
 // Mutable mock state so tests can override behavior without re-importing ESM modules.
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 let _publishAsset = jest.fn().mockResolvedValue("0xTx");
 let _writeToIPFS = jest.fn().mockResolvedValue("bafySource");
 let _writeJSONToIPFS = jest.fn().mockResolvedValue("bafyJson");
@@ -60,7 +58,7 @@ beforeEach(() => {
 });
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -72,7 +70,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/write-to-ipfs.js",
     () => ({
       writeToIPFS: jest.fn((...args) => _writeToIPFS(...args)),
@@ -80,14 +78,14 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       getFromRemoteIPFS: jest.fn((...args) => _getFromRemoteIPFS(...args)),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet.js",
     () => ({
       publishAsset: jest.fn((...args) => _publishAsset(...args)),
@@ -97,7 +95,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/formats/gltf/merkle-editors.js",
     () => ({
       computeRoot: jest.fn((...args) => _computeRoot(...args)),
@@ -105,14 +103,14 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/asset-delete.js",
     () => ({
       updateCollectionManifest: jest.fn((...args) => _updateCollectionManifest(...args)),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/formats/index.js",
     () => ({
       resolveFormatHandler: jest.fn(() => ({
@@ -122,7 +120,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/api.js",
     () => ({
       resolveUserEmail: jest.fn(),

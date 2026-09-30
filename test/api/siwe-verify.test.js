@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { beforeAll, beforeEach, describe, expect, it, jest } from "bun:test";
 import { SUPPORTED_CHAIN_IDS } from "../../constants/chains.js";
 
 const verifyMessageMock = jest.fn();

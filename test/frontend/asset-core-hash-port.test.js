@@ -1,17 +1,16 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Hash-port equivalence: the viem-backed browser HashPort must produce
  * byte-identical output to Web3's soliditySha3 for the editor Merkle leaf
  * argument shape ({type, value} pairs), or on-chain proof verification
  * breaks.
  */
-import { jest } from "@jest/globals";
 
-jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+import { describe, expect, jest, mock, test } from "bun:test";
+mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
   getActiveContract: jest.fn(() => null),
 }));
-jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
+mock.module("../../frontend/src/js/services/backend-client.js", () => ({
   resolveUserEmail: jest.fn(),
 }));
 

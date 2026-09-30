@@ -1,9 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, describe, beforeEach, beforeAll } from "@jest/globals";
+// @test-env dom
 
 // Mock the store: capture the subscriber, drive renders manually.
+import { beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 let subscriber = null;
 const storeMock = {
   getState: jest.fn(() => ({
@@ -20,7 +18,7 @@ const storeMock = {
   loadVersion: jest.fn(async () => {}),
   _deps: {},
 };
-jest.unstable_mockModule(
+mock.module(
   "@arbesk/asset-core/domain/version-history-store.js",
   () => storeMock
 );

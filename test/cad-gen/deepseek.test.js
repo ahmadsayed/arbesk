@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import {
   createDeepSeekClient, ProviderError,
 } from "@arbesk/cad-gen/backend/deepseek.js";

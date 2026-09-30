@@ -1,7 +1,6 @@
-/**
- * @jest-environment jsdom
- */
+// @test-env dom
 
+import { describe, expect, test } from "bun:test";
 const { computeAssetStats } = await import(
   "../../frontend/src/js/services/asset-save/metadata-extract.js"
 );

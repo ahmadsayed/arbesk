@@ -1,12 +1,12 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * wallet-gas.ts — shared gas resolution for contract sends.
  * CDP smart accounts skip estimation (sponsored UserOperations, bundler
  * re-estimates); EOA wallets estimate via the viem read client and pad by 20%.
  */
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 let _connectionSource = "injected";
 let _estimateGas;
 let _getReadClient;
@@ -14,13 +14,13 @@ let _getReadClient;
 async function loadModule() {
   _estimateGas = jest.fn();
   _getReadClient = jest.fn(() => ({ estimateGas: _estimateGas }));
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet-core.ts",
     () => ({
       getActiveConnectionSource: () => _connectionSource,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/viem-clients.ts",
     () => ({
       getReadClient: _getReadClient,
@@ -31,7 +31,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _connectionSource = "injected";
 });
 
