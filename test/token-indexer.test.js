@@ -15,9 +15,9 @@ const TEST_CHAIN_FAIL = 999901;
 const TEST_CHAIN_OK = 999902;
 const BASE_SEPOLIA = 84532;
 
-// sepolia.base.org rejects eth_getLogs spanning more than 2000 blocks
-// ("Returned error: query exceeds max block range 2000", seen 2026-07-04).
-const BASE_SEPOLIA_MAX_GETLOGS_RANGE = 2000;
+// sepolia.base.org rejects eth_getLogs spanning more than 1000 blocks
+// ("eth_getLogs is limited to a 1,000 range", seen 2026-10-01; previously 2000).
+const BASE_SEPOLIA_MAX_GETLOGS_RANGE = 1000;
 
 let _getBlockNumber;
 let _getLogs;
@@ -72,15 +72,15 @@ test("boot-time catchUp failure still schedules the background poll (self-heals)
   }
 });
 
-test("Base Sepolia backfill chunks never exceed the RPC's 2000-block getLogs range", async () => {
+test("Base Sepolia backfill chunks never exceed the RPC's 1000-block getLogs range", async () => {
   const { getIndexer } = await loadModule();
 
-  // Simulate sepolia.base.org: reject any getLogs span wider than 2000 blocks.
+  // Simulate sepolia.base.org: reject any getLogs span wider than 1000 blocks.
   // viem getLogs takes bigint block bounds.
   _getLogs.mockImplementation(({ fromBlock, toBlock }) => {
     if (Number(toBlock - fromBlock) + 1 > BASE_SEPOLIA_MAX_GETLOGS_RANGE) {
       return Promise.reject(
-        new Error("Returned error: query exceeds max block range 2000")
+        new Error("eth_getLogs is limited to a 1,000 range")
       );
     }
     return Promise.resolve([]);

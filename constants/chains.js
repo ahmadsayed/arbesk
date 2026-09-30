@@ -39,7 +39,8 @@ export const DEPLOYMENT_BLOCKS = {
  */
 export const LOG_CHUNK_SIZES = {
   [CHAIN_IDS.HARDHAT_LOCAL]: 10000,
-  // sepolia.base.org rejects eth_getLogs spanning more than 2000 blocks
-  // ("query exceeds max block range 2000").
-  [CHAIN_IDS.BASE_TESTNET]: 2000,
+  // sepolia.base.org rejects eth_getLogs spanning more than 1000 blocks
+  // ("eth_getLogs is limited to a 1,000 range", seen 2026-10-01; the
+  // previous 2000-block limit was tightened by the RPC provider).
+  [CHAIN_IDS.BASE_TESTNET]: 1000,
 };
