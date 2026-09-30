@@ -26,7 +26,7 @@ Update + run the suite before merging any change that touches:
 - **Comments panel**: `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount`.
 - **Library view**: inside the unified SPA (`app.html`), wallet gate, collection grid, toolbar buttons, context menu, breadcrumb. Navigation is handled by `app/router.ts`; Studio and Library share one document.
 
-`bun run test` (Jest) is **not** enough for any of the above.
+`bun run test` (unit, bun test) is **not** enough for any of the above.
 
 ## UI area → spec → selectors map
 

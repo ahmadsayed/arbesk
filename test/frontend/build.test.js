@@ -19,6 +19,7 @@
  *   - app.html has no web3/importmap; loads app.js as the single entry
  */
 
+import { describe, expect, test } from "bun:test";
 import fs from "fs";
 import path from "path";
 import url from "url";

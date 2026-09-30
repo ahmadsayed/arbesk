@@ -1,6 +1,5 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * saveAssetDraftCore flow tests
  *
  * Covers the save-flow parallelism contract:
@@ -10,10 +9,11 @@
  *     and re-written)
  *   - archive snapshot failures never block the save
  */
-import { jest } from "@jest/globals";
 
+import { describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function load() {
-  jest.resetModules();
+  resetModules();
 
   const mocks = {
     getFromRemoteIPFS: jest.fn(),
@@ -27,7 +27,7 @@ async function load() {
     getPendingSourceColorEdits: jest.fn().mockReturnValue(new Map()),
   };
 
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
     getFromRemoteIPFS: mocks.getFromRemoteIPFS,
     getBase64FromRemoteIPFS: jest.fn(),
@@ -37,17 +37,17 @@ async function load() {
     getManifestChain: jest.fn(),
     isIpfsCidReachable: jest.fn(),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
     writeToIPFS: jest.fn(),
     writeJSONToIPFS: mocks.writeJSONToIPFS,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+  mock.module("../../frontend/src/js/services/api.js", () => ({
     snapshotCommentsArchive: mocks.snapshotCommentsArchive,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/services/token.js", () => ({
+  mock.module("../../frontend/src/js/services/token.js", () => ({
     getTokenURI: mocks.getTokenURI,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/engine/scene-graph.js", () => ({
+  mock.module("../../frontend/src/js/engine/scene-graph.js", () => ({
     getPendingChildRefs: mocks.getPendingChildRefs,
     waitForPendingLinkedDrops: jest.fn().mockResolvedValue(undefined),
     getPendingPostProcessorEdits: mocks.getPendingPostProcessorEdits,
@@ -61,7 +61,7 @@ async function load() {
     clearPendingSourceOverrides: jest.fn(),
     captureAssetThumbnail: mocks.captureAssetThumbnail,
   }));
-  jest.unstable_mockModule(
+  mock.module(
     "../../frontend/src/js/engine/parametric-preview.js",
     () => ({
       getPendingSourceColorEdits: mocks.getPendingSourceColorEdits,
@@ -69,33 +69,31 @@ async function load() {
       clearPendingSourceColorEdit: jest.fn(),
     })
   );
-  jest.unstable_mockModule(
+  mock.module(
     "@arbesk/asset-core/formats/gltf/material-editor.js",
     () => ({
       editCompositeColors: jest.fn(),
     })
   );
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     // Imported (unused) by asset-core/executor/inline.ts — the mock must
     // satisfy the full link-time surface of the decomposer module.
     decompose: jest.fn(),
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
     composeAsync: jest.fn(),
     decomposeAsync: jest.fn(),
     editSourceColorsAsync: jest.fn(),
     isComposite: jest.fn(),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/utils/log.js", () => ({
+  mock.module("../../frontend/src/js/utils/log.js", () => ({
     log: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
   }));
 
-  const mod = await import(
-    "../../frontend/src/js/services/asset-save/manifest-builder.js"
-  );
+  const mod = await import("../../frontend/src/js/services/asset-save/manifest-builder.js");
   const stateMod = await import("@arbesk/asset-core/domain/asset-store.js");
   stateMod._resetForTesting();
   return { mod, mocks, assetStore: stateMod.assetStore };
@@ -233,9 +231,7 @@ describe("saveAssetDraftCore", () => {
 
   it("writes a new version when a new sent prompt exists even with no other edits", async () => {
     const ctx = await load();
-    const pg = await import(
-      "../../frontend/src/js/state/pending-generations.js"
-    );
+    const pg = await import("../../frontend/src/js/state/pending-generations.js");
     const sentId = pg.addPendingGeneration({
       assetManifestCid: "bafyActive",
       sourceAssetCid: "src-gen",

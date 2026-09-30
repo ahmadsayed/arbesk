@@ -3,7 +3,7 @@
  * always on stderr (stdout stays pipeable for the CLI and is the JSON-RPC
  * channel under `besk mcp`). Enabled by --verbose/-v or ARBESK_VERBOSE=1.
  */
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import os from "os";
 import path from "path";
 
@@ -11,10 +11,10 @@ delete process.env.ARBESK_VERBOSE;
 process.env.ARBESK_CACHE_PATH = path.join(os.tmpdir(), "besk-debug-test-cache-" + process.pid + ".json");
 
 const relayMock = jest.fn(async () => ({}));
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const written = [];
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({ contractAddress: "0x0", ipfsGatewayUrl: "http://gw", networkConfigs: {} })),
   createCollectionReadPort: jest.fn(() => ({
     tokenURI: jest.fn(async () => "bafyCurrentCollection"),

@@ -1,6 +1,7 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const TEST_ADDRESS = "0xTestAddress000000000000000000000000000000";
 const TEST_TOKEN = "test-token-abc";
 
@@ -23,7 +24,7 @@ function buildResponse(overrides) {
 }
 
 async function loadApi(options = {}) {
-  jest.resetModules();
+  resetModules();
   jest.clearAllMocks();
   localStorage.clear();
 
@@ -36,7 +37,7 @@ async function loadApi(options = {}) {
   const fetchMock = options.fetchMock || jest.fn();
   global.fetch = fetchMock;
 
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     on: jest.fn(),
     EVENTS: { WALLET_DISCONNECTED: "wallet:disconnected" },
   }));
@@ -45,7 +46,7 @@ async function loadApi(options = {}) {
   // mockResolvedValue/mockRejectedValueOnce.
   const personalSign = jest.fn().mockResolvedValue(_signResult);
 
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
     getReadClient: jest.fn(() => ({
       getChainId: jest.fn().mockResolvedValue(_chainIdResult),
     })),
@@ -56,7 +57,7 @@ async function loadApi(options = {}) {
     getActiveConnectionSource: jest.fn(() => options.connectionSource || "injected"),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
+  await mock.module("../../frontend/src/js/state/wallet-state.js", () => ({
     walletState: {
       get: jest.fn(() => ({
         walletAddress: _walletAddress,
@@ -67,7 +68,7 @@ async function loadApi(options = {}) {
     _resetForTesting: jest.fn(),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/network-config.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/network-config.js", () => ({
     getContractAddress: jest.fn((chainId) =>
       Number(chainId) === Number(_chainIdResult) ? _networkAddress : null
     ),
@@ -77,13 +78,13 @@ async function loadApi(options = {}) {
   // backend-client.ts (the wallet-free leaf api.ts delegates to) reads the
   // chain id via viem-clients directly — mock it here so getContractAddress
   // never hits a real RPC endpoint.
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/viem-clients.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/viem-clients.js", () => ({
     getReadClient: jest.fn(() => ({
       getChainId: jest.fn().mockResolvedValue(_chainIdResult),
     })),
   }));
 
-  await jest.unstable_mockModule("@arbesk/wallet/siwe.js", () => ({
+  await mock.module("@arbesk/wallet/siwe.js", () => ({
     buildSiweMessage: jest.fn(
       (domain, address, nonce, chainId) =>
         `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to Arbesk Studio\n\nURI: ${window.location.origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: 2024-01-01T00:00:00.000Z`
@@ -91,17 +92,17 @@ async function loadApi(options = {}) {
     generateNonce: jest.fn(() => "nonce1234567890abcdef"),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
+  await mock.module("../../frontend/src/js/ipfs/write-to-ipfs.js", () => ({
     writeToIPFS: jest.fn().mockResolvedValue("bafySourceAsset"),
     writeJSONToIPFS: jest.fn().mockResolvedValue("bafyAssetManifest"),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  await mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     getFromRemoteIPFS: jest.fn().mockResolvedValue({}),
     getArrayBufferFromRemoteIPFS: jest.fn().mockRejectedValue(new Error("unmocked")),
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/utils/log.js", () => ({
+  await mock.module("../../frontend/src/js/utils/log.js", () => ({
     log: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),

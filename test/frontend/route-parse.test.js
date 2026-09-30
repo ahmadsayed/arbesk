@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { describe, expect, test } from "@jest/globals";
+// @test-env dom
+import { describe, expect, test } from "bun:test";
 import { parseAppPath } from "../../frontend/src/js/app/route-parse.js";
 
 const ADDRESS = "0xccc626354a2ea985d4abdc1173597a46afc63595";

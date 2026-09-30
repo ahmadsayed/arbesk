@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Chat preview service tests (jsdom) with a mocked Babylon runtime.
  *
@@ -5,13 +6,12 @@
  * pipeline, the live-preview cap with auto-collapse of the oldest preview,
  * snapshot capture on dispose, and the failure path.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 
 // ─── Babylon mock ───
 
+import { beforeAll, beforeEach, expect, jest, test } from "bun:test";
 class V3 {
   constructor(x = 0, y = 0, z = 0) {
     this.x = x;

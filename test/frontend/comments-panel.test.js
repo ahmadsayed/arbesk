@@ -1,9 +1,10 @@
+// @test-env dom
 /**
  * Comments Panel - unit tests for helpers
  *
- * @jest-environment jsdom
  */
 
+import { describe, expect, test } from "bun:test";
 import {
   formatRelativeTime,
   getInitials,

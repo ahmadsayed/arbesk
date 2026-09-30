@@ -3,8 +3,8 @@
  * (POST /api/v1/ipfs/upload-url, session-gated) instead of a hard-coded local
  * Kubo — this is what makes the CLI work on testnet (Pinata presigned-put).
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, describe, expect, jest, mock, test } from "bun:test";
 const SESSION = {
   token: "tok123",
   expiresAt: Date.now() + 3600_000,
@@ -13,7 +13,7 @@ const SESSION = {
   authMethod: "siwe",
 };
 
-jest.unstable_mockModule("../packages/besk/src/session.ts", () => ({
+mock.module("../packages/besk/src/session.ts", () => ({
   loadSession: jest.fn(() => SESSION),
 }));
 

@@ -1,7 +1,6 @@
-/**
- * @jest-environment jsdom
- */
+// @test-env dom
 
+import { beforeEach, describe, expect, test } from "bun:test";
 const { getPendingAnnotations, setPendingAnnotations, clearPendingAnnotations } =
   await import("../../frontend/src/js/services/asset-save/annotations.js");
 

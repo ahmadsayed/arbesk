@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest, test } from "bun:test";
 import {
   createTask,
   createImageTask,
@@ -687,19 +687,19 @@ describe("tripo3d adapter", () => {
     const original = process.env.TRIPO_3D_MODEL;
     process.env.TRIPO_3D_MODEL = "v9.9-custom";
     try {
-      await jest.isolateModulesAsync(async () => {
-        const { createTask, TRIPO_MODEL_VERSION } = await import(
-          "@arbesk/ai-asset-gen/providers/tripo.js"
-        );
-        expect(TRIPO_MODEL_VERSION).toBe("v9.9-custom");
-        global.fetch = jest.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({ code: 0, data: { task_id: "task_xyz" } }),
-        });
-        await createTask("override test", key);
-        const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-        expect(body.model).toBe("v9.9-custom");
+      // A query on the specifier evaluates a fresh copy of the module, which
+      // reads the env override at load time (Jest used isolateModulesAsync).
+      const { createTask, TRIPO_MODEL_VERSION } = await import(
+        "../../packages/ai-asset-gen/src/providers/tripo.ts?env-override"
+      );
+      expect(TRIPO_MODEL_VERSION).toBe("v9.9-custom");
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ code: 0, data: { task_id: "task_xyz" } }),
       });
+      await createTask("override test", key);
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body.model).toBe("v9.9-custom");
     } finally {
       if (original === undefined) {
         delete process.env.TRIPO_3D_MODEL;

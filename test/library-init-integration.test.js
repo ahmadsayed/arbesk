@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, beforeEach, afterEach } from "@jest/globals";
+// @test-env dom
+import { afterEach, beforeEach, expect, jest, mock, test } from "bun:test";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
 
 let _expandTokenToAssets = jest.fn().mockResolvedValue([]);
@@ -24,7 +22,7 @@ afterEach(() => {
 });
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../frontend/src/js/ui/asset-library.js",
     () => ({
       expandTokenToAssets: jest.fn((...args) => _expandTokenToAssets(...args)),
@@ -34,7 +32,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {

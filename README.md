@@ -173,7 +173,7 @@ arbesk/
 │   └── test/ArbeskAsset.test.js
 ├── docker/                       # Private IPFS + Hardhat Dockerfiles
 ├── docs/                         # Architecture, API, current status
-├── test/                         # Jest + Supertest backend tests
+├── test/                         # bun test + Supertest unit/integration tests
 └── AGENTS.md                     # AI agent coding guide
 ```
 
@@ -208,7 +208,7 @@ arbesk/
 | Storage | Private Dockerized Kubo/IPFS (local); Pinata (testnet) |
 | Comments | Local Nostr relay (dev) via WebSocket chat proxy |
 | Runtime cache | Browser memory cache + IndexedDB |
-| Testing | Jest + Supertest, Hardhat contract tests, Playwright E2E |
+| Testing | bun test + Supertest, Hardhat contract tests, Playwright E2E |
 | Build | Custom scripts (Pug/SCSS/assets) + Bun.build JS bundles; prod backend compiled with `bun build --compile` |
 | Agent setup | `AGENTS.md` |
 
@@ -216,7 +216,7 @@ arbesk/
 
 ## Quick Start
 
-All commands run from the project root. **Bun ≥1.4 is the package manager and backend runtime** (root + frontend); Node ≥22.18 is still used under the hood by jest and the Dockerized Hardhat flow, and `blockchain/` keeps its own npm install.
+All commands run from the project root. **Bun ≥1.4 is the package manager, backend runtime and unit-test runner** (root + frontend); Node ≥22.18 is still used by the E2E harness and the Dockerized Hardhat flow, and `blockchain/` keeps its own npm install.
 
 ```bash
 # 1. Install dependencies
@@ -252,7 +252,7 @@ http://localhost:9090/library     # Collection/asset browser
 ### Tests
 
 ```bash
-# All Jest unit tests
+# All unit tests (bun test, one process per file)
 bun run test
 
 # Current focused API regression suite

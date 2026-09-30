@@ -1,17 +1,14 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, it, jest } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 describe("example format handler extension point", () => {
   beforeEach(() => {
-    jest.resetModules();
+    resetModules();
   });
 
   it("is not registered by formats/index.js", async () => {
-    const { listFormatHandlers } = await import(
-      "../../frontend/src/js/formats/index.js"
-    );
+    const { listFormatHandlers } = await import("../../frontend/src/js/formats/index.js");
     const formats = listFormatHandlers().map((h) => h.format);
     expect(formats).toContain("gltf");
     expect(formats).toContain("glb");
@@ -25,9 +22,7 @@ describe("example format handler extension point", () => {
     } = await import("../../frontend/src/js/formats/registry.js");
     _resetFormatRegistry();
 
-    const { createExampleFormatHandler } = await import(
-      "./fixtures/example-format.js"
-    );
+    const { createExampleFormatHandler } = await import("./fixtures/example-format.js");
     const handler = createExampleFormatHandler();
     handler.decomposeForSave = jest.fn().mockResolvedValue({
       cid: "bafyExample",
@@ -36,9 +31,7 @@ describe("example format handler extension point", () => {
     });
     registerFormatHandler(handler);
 
-    const { decomposeManifestNodes } = await import(
-      "../../frontend/src/js/services/asset-save/manifest-builder.js"
-    );
+    const { decomposeManifestNodes } = await import("../../frontend/src/js/services/asset-save/manifest-builder.js");
 
     const manifest = {
       name: "Test",

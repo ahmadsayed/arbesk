@@ -5,10 +5,10 @@
  * transform_matrix. Writes a new parent manifest version (prev-linked) and
  * points the collection entry at it.
  */
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 const relayMock = jest.fn(async () => ({}));
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
@@ -28,7 +28,7 @@ function resetManifests() {
   manifests.bafySceneless = { asset: { version: "2.0" }, meshes: [], buffers: [] };
 }
 
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({
     contractAddress: "0x0",
     ipfsGatewayUrl: "http://gw",

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 import { sendError } from "../../src/api/errors.ts";
 

@@ -5,6 +5,7 @@
  * Runs in the default node environment: jsdom's realm-mismatched Uint8Array
  * breaks the instanceof checks in utils/compression.ts.
  */
+import { describe, expect, test } from "bun:test";
 import {
   compress,
   decompress,

@@ -1,6 +1,7 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const WALLET = "0xWallet";
 const CONTRACT_ADDRESS = "0xContract";
 const USDC = "0xUsdc";
@@ -17,7 +18,7 @@ async function loadUsdcModule({
   getUsdcToken = null,
   sendImpl = null,
 } = {}) {
-  jest.resetModules();
+  resetModules();
   _allowance = allowance;
   _getUsdcToken = getUsdcToken;
 
@@ -42,22 +43,22 @@ async function loadUsdcModule({
     return { transactionHash: TX_HASH, blockNumber: 1 };
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-core.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-core.js", () => ({
     getActiveContract: () => contract,
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/viem-clients.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/viem-clients.js", () => ({
     getReadClient: jest.fn(() => ({
       getChainId: jest.fn(async () => 1337),
       readContract,
     })),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/network-config.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/network-config.js", () => ({
     getUsdcToken: jest.fn(() => _getUsdcToken),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-send.js", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-send.js", () => ({
     sendContractCall,
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
+  await mock.module("../../frontend/src/js/state/wallet-state.js", () => ({
     walletState: {
       get: jest.fn(() => ({
         walletAddress: WALLET,
@@ -65,11 +66,11 @@ async function loadUsdcModule({
       })),
     },
   }));
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     emit: jest.fn(),
     EVENTS: { WALLET_GENERATION_PAID: "walletGenerationPaid" },
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/ui/toasts.js", () => ({
+  await mock.module("../../frontend/src/js/ui/toasts.js", () => ({
     showToast: jest.fn(),
   }));
 

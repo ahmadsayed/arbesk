@@ -1,5 +1,5 @@
+import { describe, expect, it, jest } from "bun:test";
 import zlib from "zlib";
-import { jest } from "@jest/globals";
 import { maybeDecompress, catManifest, catBytes } from "../../src/api/ipfs-utils.ts";
 
 describe("maybeDecompress", () => {

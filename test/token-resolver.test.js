@@ -11,6 +11,7 @@
 /**
  * Inline copy of normalizeTokenURI from frontend/src/js/blockchain/uri-utils.js
  */
+import { describe, expect, it } from "bun:test";
 function normalizeTokenURI(uri) {
   if (!uri || typeof uri !== "string") return "";
 

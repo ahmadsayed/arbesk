@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Collaborator panel (ui/collaborators-panel.js) Alpine conversion contract.
  *
@@ -8,11 +9,10 @@
  * mocks: the real team service has no contract in jsdom (isOwner=false,
  * fetchEditors fails), which exercises the empty-list path deterministically.
  *
- * @jest-environment jsdom
  */
 
-import { expect, test, beforeAll, afterEach } from "@jest/globals";
 
+import { afterEach, beforeAll, expect, test } from "bun:test";
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 let initCollaboratorPanel;

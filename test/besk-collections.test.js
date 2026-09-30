@@ -3,7 +3,7 @@
  * asset-core helper (HashPort-backed). This pins that derivation against raw
  * viem (the contract's expectation) so the two can never drift apart.
  */
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { encodePacked, keccak256 } from "viem/utils";
 import { createHashPort } from "../packages/besk/src/adapters.ts";
 

@@ -1,6 +1,5 @@
-/**
- * @jest-environment jsdom
- */
+// @test-env dom
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
   assetStore,
   _resetForTesting,

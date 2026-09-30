@@ -1,19 +1,18 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Merkle parity: @arbesk/wallet (canonical — matches ArbeskAssetBase._requireEditor)
  * and @arbesk/asset-core (HashPort-backed) MUST stay byte-identical for leaf, root,
  * proof, and verify, or on-chain editor proofs silently break. This is the lockstep
  * guard for the intentional duplication documented in packages/AGENTS.md.
  */
-import { jest } from "@jest/globals";
 
 // Keep the frontend adapter import graph out of the test — same pattern as
 // asset-core-hash-port.test.js.
-jest.unstable_mockModule("../frontend/src/js/blockchain/wallet.js", () => ({
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
+mock.module("../frontend/src/js/blockchain/wallet.js", () => ({
   getActiveContract: jest.fn(() => null),
 }));
-jest.unstable_mockModule("../frontend/src/js/services/api.js", () => ({
+mock.module("../frontend/src/js/services/api.js", () => ({
   resolveUserEmail: jest.fn(),
 }));
 

@@ -40,6 +40,6 @@ See the full playbook in `references/alpine.md`. The sharp edges:
 - **Alpine renders on the next microtask.** A synchronous `querySelector` right after a store write returns nothing — `await Alpine.nextTick()` before imperative DOM work (Babylon canvas mount, focus, measuring).
 - **`x-for` needs a single root element** per iteration. When items must be direct flex children (CSS `gap`/`align-self`), make the root the item and compute `:class`; nest `<template x-if>` for per-kind content.
 - **`:class` string replaces, object toggles.** `:class="'a b'"` wipes the static class; `:class="{ active: cond }"` preserves it.
-- **`Alpine.initTree()` only works after `Alpine.start()`.** In jest, `readyState === "complete"` schedules start on a microtask — `await` a flush after importing before calling `initTree`.
+- **`Alpine.initTree()` only works after `Alpine.start()`.** In unit tests (jsdom), `readyState === "complete"` schedules start on a microtask — `await` a flush after importing before calling `initTree`.
 - **`Alpine.store(name, value)` is a setter** (returns undefined) — read the store back with `Alpine.store(name)`.
 - **Don't put DOM nodes in the reactive store** — they get proxied and fail DOM brand checks (`appendChild`). Keep canvases, focus traps, and promise queues module-level.

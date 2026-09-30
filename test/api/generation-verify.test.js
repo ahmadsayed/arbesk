@@ -1,12 +1,12 @@
 /**
  * On-chain generation verification (#48) — event decoding + replay guard.
  */
-import { jest } from "@jest/globals";
+import { beforeEach, expect, jest, mock, test } from "bun:test";
 import { encodeEventTopics, stringToHex, pad } from "viem";
 
 const mockGetReceipt = jest.fn();
 
-jest.unstable_mockModule("../../src/config.ts", () => ({
+mock.module("../../src/config.ts", () => ({
   getPublicClient: () => ({
     getTransactionReceipt: mockGetReceipt,
   }),

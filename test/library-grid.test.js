@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   createItemElement,
   renderItems,

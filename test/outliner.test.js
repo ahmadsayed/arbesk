@@ -1,8 +1,7 @@
-/**
- * @jest-environment jsdom
- */
+// @test-env dom
 
 // We import the pure helpers we can test without bootstrapping the full app.
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   createNodeElement,
   selectNode,

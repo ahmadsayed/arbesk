@@ -1,6 +1,6 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeAll, beforeEach, expect, jest, mock, test } from "bun:test";
 const getFromRemoteIPFS = jest.fn();
 const getBlobFromRemoteIPFS = jest.fn();
 const composeAsync = jest.fn();
@@ -21,7 +21,7 @@ function manifestWithSource(source) {
 }
 
 beforeAll(async () => {
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     getFromRemoteIPFS,
     getBlobFromRemoteIPFS,
     // Extra names referenced (but never called here) by the facade proof-site
@@ -30,20 +30,20 @@ beforeAll(async () => {
     getRawArrayBufferFromRemoteIPFS: jest.fn(),
     gatewayBase: jest.fn(),
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
     composeAsync,
   }));
-  jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
+  mock.module("@arbesk/asset-core/domain/asset.js", () => ({
     getAssetState: jest.fn(() => _assetState),
   }));
-  jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+  mock.module("../../frontend/src/js/services/api.js", () => ({
     announceStatus: jest.fn(),
     // Referenced (never called) by ipfs/write-to-ipfs.ts via the adapter.
     getUploadCredential: jest.fn(),
     // Referenced by asset-core-init.ts (frontend composition root).
     getUploadCredentials: jest.fn(),
   }));
-  jest.unstable_mockModule(
+  mock.module(
     "../../frontend/src/js/blockchain/asset-core-adapter.js",
     () => ({
       // asset-core-init.ts imports this adapter for the browser platform

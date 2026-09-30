@@ -5,7 +5,7 @@
  * failures never block the burn. Burning the active collection clears it from
  * the session file.
  */
-import { jest } from "@jest/globals";
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -19,13 +19,13 @@ const relayMock = jest.fn(async () => {
   callOrder.push("relay");
   return { transactionHash: "0xtx" };
 });
-jest.unstable_mockModule("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
+mock.module("../packages/besk/src/relay.ts", () => ({ relay: relayMock }));
 
 const unpinMock = jest.fn(async () => {
   callOrder.push("unpin");
   return { count: 3 };
 });
-jest.unstable_mockModule("../packages/besk/src/adapters.ts", () => ({
+mock.module("../packages/besk/src/adapters.ts", () => ({
   getBackendConfig: jest.fn(async () => ({
     contractAddress: "0x0",
     ipfsGatewayUrl: "http://gw",

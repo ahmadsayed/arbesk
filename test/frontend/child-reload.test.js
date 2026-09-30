@@ -1,6 +1,5 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * child-reload matches ASSET_URI_UPDATED payloads against the scene's
  * child_ref anchors by (chainId, contract, tokenId). Publish events carry the
  * token id in hex ("0x2a") while refs store it decimal ("42") — the match
@@ -9,8 +8,9 @@
  * the referenced child's manifest), so matching must go through the anchor
  * registry, not the root manifest.
  */
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const reloadChildRefNode = jest.fn();
 
 let bus;
@@ -23,18 +23,16 @@ function anchorWith(childRef, extra = {}) {
 
 beforeEach(async () => {
   jest.clearAllMocks();
-  jest.resetModules();
+  resetModules();
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/scene-loader.js",
     () => ({ reloadChildRefNode })
   );
 
   bus = await import("@arbesk/asset-core/events/bus.js");
   ({ state } = await import("../../frontend/src/js/engine/state.js"));
-  ({ initChildReload } = await import(
-    "../../frontend/src/js/engine/child-reload.js"
-  ));
+  ({ initChildReload } = await import("../../frontend/src/js/engine/child-reload.js"));
 
   state.nodeAnchors.clear();
   state.nodeAnchors.set(

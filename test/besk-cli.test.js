@@ -9,8 +9,9 @@
  * fallbacks: pickProvider errors out, requireProviderKey requires --key/env,
  * pickCollection falls back to the active/default collection.
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "./helpers/module-registry.js";
 const SESSION = {
   token: "t",
   expiresAt: Date.now() + 3600_000,
@@ -61,17 +62,17 @@ const mockResolveVersionCid = jest.fn();
 
 const mockResolveCompositeSourceCid = jest.fn();
 
-jest.unstable_mockModule("../packages/besk/src/auth.ts", () => ({ login: mockLogin }));
-jest.unstable_mockModule("../packages/besk/src/session.ts", () => ({
+mock.module("../packages/besk/src/auth.ts", () => ({ login: mockLogin }));
+mock.module("../packages/besk/src/session.ts", () => ({
   whoami: mockWhoami,
   logout: mockLogout,
   loadSession: mockLoadSession,
   setActiveCollection: mockSetActiveCollection,
 }));
-jest.unstable_mockModule("@arbesk/asset-core/catalog/index.js", () => ({
+mock.module("@arbesk/asset-core/catalog/index.js", () => ({
   resolveCompositeSourceCid: mockResolveCompositeSourceCid,
 }));
-jest.unstable_mockModule("../packages/besk/src/catalog.ts", () => ({
+mock.module("../packages/besk/src/catalog.ts", () => ({
   listCollections: mockListCollections,
   getCollectionAssets: mockGetCollectionAssets,
   resolveCollectionByName: mockResolveCollectionByName,
@@ -85,28 +86,28 @@ jest.unstable_mockModule("../packages/besk/src/catalog.ts", () => ({
   downloadAsset: mockDownloadAsset,
   detectFormat: mockDetectFormat,
 }));
-jest.unstable_mockModule("../packages/besk/src/collections.ts", () => ({
+mock.module("../packages/besk/src/collections.ts", () => ({
   createCollection: mockCreateCollection,
 }));
-jest.unstable_mockModule("../packages/besk/src/burn.ts", () => ({
+mock.module("../packages/besk/src/burn.ts", () => ({
   burnCollection: mockBurnCollection,
 }));
-jest.unstable_mockModule("../packages/besk/src/link.ts", () => ({
+mock.module("../packages/besk/src/link.ts", () => ({
   linkChildAsset: mockLinkChildAsset,
 }));
-jest.unstable_mockModule("../packages/besk/src/send.ts", () => ({
+mock.module("../packages/besk/src/send.ts", () => ({
   sendAssetToCollection: mockSendAssetToCollection,
 }));
-jest.unstable_mockModule("../packages/besk/src/show.ts", () => ({
+mock.module("../packages/besk/src/show.ts", () => ({
   showAsset: mockShowAsset,
 }));
-jest.unstable_mockModule("../packages/besk/src/generate.ts", () => ({
+mock.module("../packages/besk/src/generate.ts", () => ({
   runGeneration: mockRunGeneration,
   cancelGeneration: mockCancelGeneration,
   getProviderBalance: mockGetProviderBalance,
   resolveSourceCid: mockResolveSourceCid,
 }));
-jest.unstable_mockModule("../packages/besk/src/helpers.ts", () => ({
+mock.module("../packages/besk/src/helpers.ts", () => ({
   displayName: mockDisplayName,
   currentCollectionTokenId: mockCurrentCollectionTokenId,
   makeNodeId: mockMakeNodeId,
@@ -160,17 +161,24 @@ afterEach(() => {
     if (savedEnv[k] === undefined) delete process.env[k];
     else process.env[k] = savedEnv[k];
   }
-  process.exitCode = undefined;
+  process.exitCode = 0;
 });
 
 /** Import cli.ts fresh with the given argv and let main() run to completion. */
 async function runCli(argv) {
-  jest.resetModules();
+  resetModules();
   process.argv = ["node", "besk", ...argv];
-  process.exitCode = undefined;
+  // 0, not undefined: Bun ignores an undefined assignment.
+  process.exitCode = 0;
   await import("../packages/besk/src/cli.ts");
-  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
-  return { exitCode: process.exitCode };
+  // main() is fire-and-forget inside cli.ts; let it settle. Bun schedules
+  // setImmediate callbacks differently from Node, so wait on real timer turns
+  // too, or a run's late exitCode lands in the next test.
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  return { exitCode: process.exitCode || undefined };
 }
 
 // ─── main() dispatch ───

@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { libraryState, _resetForTesting } from "../frontend/src/js/state/library-state.js";
 import { DIALOG_HOST_FRAGMENT, flushDialog } from "./helpers/dialog-host.js";
 
@@ -62,7 +60,7 @@ beforeEach(() => {
 });
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../frontend/src/js/services/library-ops.js",
     () => ({
       createNamedCollection: jest.fn((...args) => _createNamedCollection(...args)),
@@ -70,7 +68,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../frontend/src/js/ui/library-controller.js",
     () => ({
       refreshLibraryData: jest.fn((...args) => _refreshLibraryData(...args)),

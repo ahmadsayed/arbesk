@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { normalizeTokenURI } from "../frontend/src/js/blockchain/uri-utils.js";
 
 const CIDV1 = "bafkreid7qoywk77r7rj3slobqfekdvs57qwuwh5d2z3sqsw52iabe3mqne";

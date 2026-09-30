@@ -1,7 +1,8 @@
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function load() {
-  jest.resetModules();
+  resetModules();
   // The editor now consumes IPFS through the asset-core runtime ports; the
   // remote/write fakes are wired into the ports instead of mocking
   // remote-ipfs.js / write-to-ipfs.js.
@@ -10,7 +11,7 @@ async function load() {
     getArrayBufferFromRemoteIPFS: jest.fn(),
   };
   const write = { writeJSONToIPFS: jest.fn() };
-  jest.unstable_mockModule(
+  mock.module(
     "@arbesk/asset-core/formats/gltf/glb-parser.js",
     () => ({
       isGLB: jest.fn(),

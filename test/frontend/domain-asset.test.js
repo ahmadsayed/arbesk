@@ -1,10 +1,9 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Domain asset facade: snapshot immutability, subscribe/notify, and the
  * naming rules (rename, loaded-manifest adoption, new-asset reset, close).
  */
-import { expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, test } from "bun:test";
 import {
   getAssetSnapshot,
   subscribeAsset,

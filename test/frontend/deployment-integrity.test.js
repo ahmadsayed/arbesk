@@ -8,6 +8,7 @@
  * Run: bun run test:frontend
  */
 
+import { beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { expect, test, describe, beforeEach, afterEach } from "@jest/globals";
+// @test-env dom
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";

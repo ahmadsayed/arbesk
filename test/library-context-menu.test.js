@@ -1,7 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import { jest, expect, test, beforeEach, afterEach, describe } from "@jest/globals";
+// @test-env dom
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   openContextMenu,
   closeContextMenu,

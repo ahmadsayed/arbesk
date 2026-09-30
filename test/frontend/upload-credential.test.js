@@ -1,9 +1,10 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 describe("getUploadCredential", () => {
   beforeEach(() => {
-    jest.resetModules();
+    resetModules();
     jest.clearAllMocks();
     localStorage.clear();
   });

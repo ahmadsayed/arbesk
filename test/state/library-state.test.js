@@ -1,6 +1,5 @@
-/**
- * @jest-environment jsdom
- */
+// @test-env dom
+import { beforeEach, describe, expect, test } from "bun:test";
 import { libraryState, _resetForTesting } from "../../frontend/src/js/state/library-state.js";
 import { on, off, EVENTS } from "@arbesk/asset-core/events/bus.js";
 

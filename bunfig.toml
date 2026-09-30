@@ -1,0 +1,3 @@
+[test]
+# Workspace-package resolution (no build step needed) and the Node-env shims.
+preload = ["./test/bun.setup.js"]

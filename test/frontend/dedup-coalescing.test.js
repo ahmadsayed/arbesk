@@ -1,9 +1,10 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { afterEach, describe, expect, it, jest } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 describe("uploadWithDedup - concurrent coalescing", () => {
   async function loadModule() {
-    jest.resetModules();
+    resetModules();
     // dedup.js now writes via getRuntime().ipfsWrite.write — the fake keeps the
     // old writeToIPFS name so the assertions below read unchanged.
     const writeToIPFS = jest.fn();

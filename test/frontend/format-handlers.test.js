@@ -1,12 +1,11 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function load() {
-  jest.resetModules();
+  resetModules();
 
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
     getFromRemoteIPFS: jest.fn(),
     getBase64FromRemoteIPFS: jest.fn(),
@@ -17,24 +16,20 @@ async function load() {
     isIpfsCidReachable: jest.fn(),
   }));
 
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/async-gltf.js", () => ({
     composeAsync: jest.fn(),
     decomposeAsync: jest.fn(),
     editSourceColorsAsync: jest.fn(),
     isComposite: jest.fn(),
   }));
 
-  jest.unstable_mockModule("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
+  mock.module("@arbesk/asset-core/formats/gltf/decomposer.js", () => ({
     isComposite: jest.fn(),
     decompose: jest.fn(),
   }));
 
-  const gltf = await import(
-    "../../frontend/src/js/formats/handlers/gltf-handler.js"
-  );
-  const glb = await import(
-    "../../frontend/src/js/formats/handlers/glb-handler.js"
-  );
+  const gltf = await import("../../frontend/src/js/formats/handlers/gltf-handler.js");
+  const glb = await import("../../frontend/src/js/formats/handlers/glb-handler.js");
   const remote = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
   const asyncGltf = await import("@arbesk/asset-core/formats/gltf/async-gltf.js");
   const decomposer = await import("@arbesk/asset-core/formats/gltf/decomposer.js");

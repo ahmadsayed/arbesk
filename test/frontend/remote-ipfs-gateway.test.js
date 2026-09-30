@@ -1,5 +1,6 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { afterEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import { TextEncoder, TextDecoder } from "util";
 import { compress } from "@arbesk/asset-core/utils/compression.js";
 
@@ -7,8 +8,8 @@ if (!global.TextEncoder) global.TextEncoder = TextEncoder;
 if (!global.TextDecoder) global.TextDecoder = TextDecoder;
 
 async function load(gateway) {
-  jest.resetModules();
-  jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
+  resetModules();
+  mock.module("../../frontend/src/js/services/backend-client.js", () => ({
     __esModule: true,
     getConfig: jest.fn(async () => ({ ipfsGatewayUrl: gateway })),
   }));
@@ -80,8 +81,8 @@ describe("raw vs decompressed fetch", () => {
 
 describe("gateway error paths", () => {
   async function loadWithFetch(fetchMock, gateway = "http://127.0.0.1:8080/ipfs/") {
-    jest.resetModules();
-    jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
+    resetModules();
+    mock.module("../../frontend/src/js/services/backend-client.js", () => ({
       __esModule: true,
       getConfig: jest.fn(async () => ({ ipfsGatewayUrl: gateway })),
     }));
@@ -111,8 +112,8 @@ describe("gateway error paths", () => {
   });
 
   it("falls back to the default gateway when /config rejects", async () => {
-    jest.resetModules();
-    jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
+    resetModules();
+    mock.module("../../frontend/src/js/services/backend-client.js", () => ({
       __esModule: true,
       getConfig: jest.fn(async () => {
         throw new Error("config unavailable");

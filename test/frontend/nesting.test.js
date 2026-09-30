@@ -1,10 +1,9 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Nesting dive/ascend: the asset name must be written through the domain
  * facade (renameAsset), and CID/tokenId identity through adoptOpenedAsset.
  */
-import { jest, expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, jest, mock, test } from "bun:test";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   assetStore,
@@ -34,7 +33,7 @@ let _childManifest = { name: "Child Hub" };
 let _mod = null;
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/domain/asset.js",
     () => ({
       renameAsset: renameAssetSpy,
@@ -42,14 +41,14 @@ async function loadModule() {
       getAssetState: () => assetStore.get(),
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/scene-graph.js",
     () => ({
       clearScene: clearSceneMock,
       loadAssetManifest: loadAssetManifestMock,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       getFromRemoteIPFS: jest.fn((cid) =>
@@ -59,7 +58,7 @@ async function loadModule() {
       ),
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/token-resolver.js",
     () => ({
       resolveChildRef: jest.fn(() =>

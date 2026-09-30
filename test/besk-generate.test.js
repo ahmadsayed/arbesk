@@ -5,10 +5,10 @@
  * CLI sends for each op, the poll/timeout/error behavior, and the source-CID
  * resolution for follow-up ops (retexture/retopo/rig/animate).
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, describe, expect, jest, mock, test } from "bun:test";
 const manifests = {};
-jest.unstable_mockModule("../packages/besk/src/catalog.ts", () => ({
+mock.module("../packages/besk/src/catalog.ts", () => ({
   getManifest: jest.fn(async (cid) => {
     if (!(cid in manifests)) throw new Error("unknown cid " + cid);
     return structuredClone(manifests[cid]);

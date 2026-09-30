@@ -1,8 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 let _saveResult = { ok: true, cid: "bafyAsset", manifest: { asset_id: "asset_1" } };
 let _publishResult = { tokenId: "123", isNew: false };
 let _walletAddress = "0xOwner";
@@ -10,7 +9,7 @@ let _activeAssetName = "My Hat";
 let _activeAssetTokenId = null;
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _saveResult = { ok: true, cid: "bafyAsset", manifest: { asset_id: "asset_1" } };
   _publishResult = { tokenId: "123", isNew: false };
   _walletAddress = "0xOwner";
@@ -19,7 +18,7 @@ beforeEach(() => {
 });
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/asset-save/manifest-builder.js",
     () => ({
       saveAssetDraftCore: jest.fn().mockResolvedValue(_saveResult),
@@ -27,21 +26,21 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/asset-save/collection-publish.js",
     () => ({
       publishCollectionForAsset: jest.fn().mockResolvedValue(_publishResult),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/asset-save/editor-publish.js",
     () => ({
       verifyCanEdit: jest.fn().mockResolvedValue(undefined),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -50,7 +49,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/domain/asset-store.js",
     () => ({
       assetStore: {
@@ -65,7 +64,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ui/toasts.js",
     () => ({
       showToast: jest.fn(),
@@ -74,14 +73,14 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ui/dialog.js",
     () => ({
       showDialog: jest.fn().mockResolvedValue("Named Hat"),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/url-utils.js",
     () => ({
       updateUrlAsset: jest.fn(),

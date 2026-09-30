@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Characterization tests for onGenerate (ui/create-panel.ts).
  *
@@ -11,11 +12,10 @@
  * mocked; ApiError is re-created in the api mock so instanceof checks in the
  * module under test behave exactly as in production.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeAll, beforeEach, afterEach } from "@jest/globals";
 
+import { afterEach, beforeAll, beforeEach, expect, jest, mock, test } from "bun:test";
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 
 // ─── Mock handles ───
@@ -60,19 +60,19 @@ const assetDomainState = {
   tokenId: null,
 };
 
-jest.unstable_mockModule("../../frontend/src/js/engine/scene-graph.js", () => ({
+mock.module("../../frontend/src/js/engine/scene-graph.js", () => ({
   loadAssetManifest: mockLoadAssetManifest,
   clearScene: mockClearScene,
   dismissCreatePulse: mockDismissCreatePulse,
 }));
-jest.unstable_mockModule("../../frontend/src/js/ui/toasts.js", () => ({
+mock.module("../../frontend/src/js/ui/toasts.js", () => ({
   showToast: mockShowToast,
 }));
-jest.unstable_mockModule("../../frontend/src/js/ui/dialog.js", () => ({
+mock.module("../../frontend/src/js/ui/dialog.js", () => ({
   showCustomDialog: mockShowCustomDialog,
   showCheckboxDialog: mockShowCheckboxDialog,
 }));
-jest.unstable_mockModule("../../frontend/src/js/ui/chat-messages.js", () => ({
+mock.module("../../frontend/src/js/ui/chat-messages.js", () => ({
   addChatMessage: mockAddChatMessage,
   addAssetMessage: mockAddAssetMessage,
   addWorkingMessage: mockAddWorkingMessage,
@@ -82,14 +82,14 @@ jest.unstable_mockModule("../../frontend/src/js/ui/chat-messages.js", () => ({
   addChoiceMessage: mockAddChoiceMessage,
   registerAssetSendHandler: mockRegisterAssetSendHandler,
 }));
-jest.unstable_mockModule("../../frontend/src/js/ui/alpine.js", () => ({
+mock.module("../../frontend/src/js/ui/alpine.js", () => ({
   Alpine: { nextTick: async () => {}, store: () => ({}) },
 }));
-jest.unstable_mockModule("../../frontend/src/js/ui/chat-history.js", () => ({
+mock.module("../../frontend/src/js/ui/chat-history.js", () => ({
   renderChatProvenance: mockRenderChatProvenance,
   clearHistoryBubbles: mockClearHistoryBubbles,
 }));
-jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
+mock.module("../../frontend/src/js/services/api.js", () => ({
   ApiError: class ApiError extends Error {
     constructor(message, status, code = null) {
       super(message);
@@ -103,15 +103,15 @@ jest.unstable_mockModule("../../frontend/src/js/services/api.js", () => ({
   getOrCreateSession: mockGetOrCreateSession,
   getProviderBalance: mockGetProviderBalance,
 }));
-jest.unstable_mockModule("../../frontend/src/js/services/chat-preview.js", () => ({
+mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
   createChatPreview: mockCreateChatPreview,
   disposeChatPreview: mockDisposeChatPreview,
   disposeAllChatPreviews: mockDisposeAllChatPreviews,
 }));
-jest.unstable_mockModule("../../frontend/src/js/ui/asset-save.js", () => ({
+mock.module("../../frontend/src/js/ui/asset-save.js", () => ({
   onSaveAssetDraft: mockOnSaveAssetDraft,
 }));
-jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
+mock.module("@arbesk/asset-core/domain/asset.js", () => ({
   adoptManifestName: jest.fn(),
   adoptOpenedAsset: jest.fn(),
   setActiveManifestCid: jest.fn((cid) => { assetDomainState.activeCid = cid; }),
@@ -121,7 +121,7 @@ jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
   getActiveAssetTokenId: () => assetDomainState.tokenId,
   getActiveAssetName: () => assetDomainState.name,
 }));
-jest.unstable_mockModule("@arbesk/asset-core/domain/collection.js", () => ({
+mock.module("@arbesk/asset-core/domain/collection.js", () => ({
   selectCollection: mockSelectCollection,
 }));
 

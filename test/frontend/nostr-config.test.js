@@ -1,16 +1,16 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * nostr-config: the browser relay URL prefers the backend-advertised
  * nostrPublicUrl (k3s deployment proxies the relay through the ingress) and
  * falls back to the local-dev ws(s)://<hostname>:7777 derivation when the
  * config field is null or the config fetch fails.
  */
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function loadModule(config) {
-  jest.resetModules();
-  await jest.unstable_mockModule(
+  resetModules();
+  await mock.module(
     "../../frontend/src/js/services/backend-client.js",
     () => ({ getConfig: jest.fn().mockResolvedValue(config) })
   );
@@ -19,7 +19,7 @@ async function loadModule(config) {
 
 describe("getNostrRelayUrl", () => {
   beforeEach(() => {
-    jest.resetModules();
+    resetModules();
   });
 
   test("prefers the backend-advertised public relay URL", async () => {

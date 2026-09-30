@@ -7,8 +7,10 @@
  * sepolia.base.org blipped at backend start and chain 84532 never polled
  * again).
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, expect, jest, mock, test } from "bun:test";
+import { advanceTimersByTimeAsync } from "./helpers/timers.js";
+import { resetModules } from "./helpers/module-registry.js";
 const TEST_CHAIN_FAIL = 999901;
 const TEST_CHAIN_OK = 999902;
 const BASE_SEPOLIA = 84532;
@@ -30,7 +32,7 @@ async function loadModule() {
     readContract: jest.fn().mockResolvedValue(""),
   };
 
-  await jest.unstable_mockModule("../src/config.ts", () => ({
+  await mock.module("../src/config.ts", () => ({
     getPublicClient: jest.fn(() => fakeClient),
     getContractAddress: jest.fn(() => "0x0000000000000000000000000000000000000001"),
     NETWORK_CONFIGS: {},
@@ -40,7 +42,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   jest.useFakeTimers();
 });
 
@@ -63,7 +65,7 @@ test("boot-time catchUp failure still schedules the background poll (self-heals)
     expect(indexer.pollTimer).not.toBeNull();
 
     // ...and the next tick must retry against the RPC and succeed.
-    await jest.advanceTimersByTimeAsync(15000);
+    await advanceTimersByTimeAsync(15000);
     expect(_getBlockNumber).toHaveBeenCalledTimes(2);
   } finally {
     indexer.stop();
@@ -101,7 +103,7 @@ test("successful init schedules the background poll", async () => {
 
   try {
     expect(indexer.pollTimer).not.toBeNull();
-    await jest.advanceTimersByTimeAsync(15000);
+    await advanceTimersByTimeAsync(15000);
     expect(_getBlockNumber).toHaveBeenCalledTimes(2);
   } finally {
     indexer.stop();

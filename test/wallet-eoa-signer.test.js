@@ -4,7 +4,7 @@
  * sendTransaction resolves the hash at broadcast with wait() polling the
  * receipt.
  */
-import { jest } from "@jest/globals";
+import { describe, expect, jest, test } from "bun:test";
 import { createEoaSigner } from "@arbesk/wallet/adapters/eoa.js";
 
 function fakeProvider(handler) {

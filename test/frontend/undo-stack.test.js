@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "@jest/globals";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
   pushUndoEntry,
   popUndoEntry,

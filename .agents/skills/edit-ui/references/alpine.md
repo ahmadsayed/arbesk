@@ -144,8 +144,13 @@ why:
 - **The message/list state** goes in the store; **raw engine DOM** stays a
   post-render imperative mount.
 
-## Testing Alpine components in jest
+## Testing Alpine components (bun test + jsdom)
 
+- Start the test file with `// @test-env dom` on its **first line**: the runner
+  (scripts/run-tests.mjs) then preloads jsdom. It must be a preload, because
+  alpinejs is CommonJS and is evaluated while the module graph links, before
+  any in-file import could register the DOM. Not happy-dom: it misparses
+  `:class` attributes, so class bindings read stale.
 - jsdom reports document.readyState === "complete", so registerAlpineComponent
   schedules Alpine.start() on a microtask. **await a flush before calling
   Alpine.initTree** in beforeAll:
@@ -164,12 +169,16 @@ why:
   });
   ~~~
 
+- **Flush with real ticks, not fake timers.** Bun's fake timers do not cover
+  queueMicrotask or requestAnimationFrame, which Alpine's scheduler and focus
+  traps use (see test/frontend/dialog.test.js `flush()`).
 - **Assert on the store** (the source of truth), not synchronous DOM.
   Alpine.store("chat").messages is where addChatMessage writes; the x-for
   render is async and belongs to E2E/build coverage.
-- **Use jest.unstable_mockModule(path, () => ({...}))** for ESM deps (the repo
-  is "type": "module"); jest.mock does not reliably intercept .ts ESM imports.
-  Match the emitted specifier convention (.js paths).
+- **Use mock.module(path, () => ({...}))** from `bun:test` for ESM deps. Match
+  the emitted specifier convention (.js paths). A module holding state across
+  tests (e.g. dialog.ts's FIFO queue) is imported once per file under Bun, so
+  reset that state in afterEach rather than re-importing per test.
 
 ## E2E contract
 

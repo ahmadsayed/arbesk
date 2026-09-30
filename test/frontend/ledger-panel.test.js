@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Ledger (Activity) panel contract tests.
  *
@@ -6,11 +7,11 @@
  * ipfs/remote-ipfs.js and domain/asset.js are mocked — the real modules pull
  * in IPFS/chain machinery.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, beforeEach, afterEach } from "@jest/globals";
 
+import { afterEach, beforeEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 const CID_A = "bafyManifestAaa";
 const CID_B = "bafyManifestBbb";
@@ -59,13 +60,13 @@ const mockGetActiveAssetManifestCid = jest.fn();
 const mockWalkManifestChain = jest.fn();
 const mockGetFromRemoteIPFS = jest.fn();
 
-jest.unstable_mockModule("@arbesk/asset-core/domain/asset.js", () => ({
+mock.module("@arbesk/asset-core/domain/asset.js", () => ({
   getActiveAssetManifestCid: mockGetActiveAssetManifestCid,
 }));
-jest.unstable_mockModule("../../frontend/src/js/engine/time-travel.js", () => ({
+mock.module("../../frontend/src/js/engine/time-travel.js", () => ({
   walkManifestChain: mockWalkManifestChain,
 }));
-jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
   getFromRemoteIPFS: mockGetFromRemoteIPFS,
 }));
 
@@ -103,7 +104,7 @@ let walletStateMod;
 let busMod;
 
 async function setup() {
-  jest.resetModules();
+  resetModules();
   document.body.innerHTML = FRAGMENT;
   walletStateMod = await import("../../frontend/src/js/state/wallet-state.js");
   walletStateMod.walletState.set({ walletAddress: ADDRESS });
@@ -133,7 +134,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  // Each setup() gets a fresh Alpine instance via jest.resetModules(); tear
+  // Each setup() gets a fresh Alpine instance via resetModules(); tear
   // down the one that just ran so its MutationObserver can't initialize the
   // next test's DOM before its own instance starts.
   const { Alpine } = await import("../../frontend/src/js/ui/alpine.js");

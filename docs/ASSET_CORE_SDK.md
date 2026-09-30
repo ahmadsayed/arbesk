@@ -38,8 +38,8 @@ import { composeGltfJson } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
   import { initAssetCoreBrowser } from "./asset-core-init.ts";
   const core = initAssetCoreBrowser(); // singleton, already wired at boot
   ```
-- **Tests** — jest maps `@arbesk/asset-core/*.js` to the package's `.ts` source
-  (`jest.config.js` moduleNameMapper), so tests exercise source with no build
+- **Tests** — the `bun test` preload (`test/bun.setup.js`) maps `@arbesk/asset-core/*.js`
+  to the package's `.ts` source, so tests exercise source with no build
   step.
 
 The package's only runtime npm dependencies are `zod`, `fflate`,

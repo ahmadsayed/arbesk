@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Characterization tests for autoConnectWallet() branch selection.
  *
@@ -8,10 +9,10 @@
  * setWeb3Provider, walletState.set (the first thing _finishWalletSetup does),
  * localStorage, and the warn/error log seam.
  *
- * @jest-environment jsdom
  */
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const LAST_WALLET_KEY = "arbesk-last-wallet";
 const SMART_ADDR = "0xSmartAccount";
 const EOA_ADDR = "0xEoaAccount";
@@ -36,7 +37,7 @@ const error = jest.fn();
 const log = jest.fn();
 
 async function loadWalletCore() {
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     emit,
     EVENTS: {
       WALLET_CONNECTED: "WALLET_CONNECTED",
@@ -44,48 +45,48 @@ async function loadWalletCore() {
       USER_AUTH_REQUIRED: "USER_AUTH_REQUIRED",
     },
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.ts", () => ({ walletState }));
-  await jest.unstable_mockModule("../../frontend/src/js/services/backend-client.ts", () => ({
+  await mock.module("../../frontend/src/js/state/wallet-state.ts", () => ({ walletState }));
+  await mock.module("../../frontend/src/js/services/backend-client.ts", () => ({
     getContractAddress: jest.fn().mockResolvedValue("0xContract"),
     getContractArtifact: jest.fn().mockResolvedValue([]),
     getOrCreateSession: jest.fn().mockResolvedValue("session-token"),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/ui/toasts.ts", () => ({
+  await mock.module("../../frontend/src/js/ui/toasts.ts", () => ({
     showToast: jest.fn(),
     dismissToast: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/utils/log.ts", () => ({ log, warn, error }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-discovery.ts", () => ({
+  await mock.module("../../frontend/src/js/utils/log.ts", () => ({ log, warn, error }));
+  await mock.module("../../frontend/src/js/blockchain/wallet-discovery.ts", () => ({
     startDiscovery: jest.fn(),
     requestWallets: jest.fn(),
     getWalletByRdns: jest.fn(() => discovery.rdnsWallet),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/ui/wallet-modal.ts", () => ({
+  await mock.module("../../frontend/src/js/ui/wallet-modal.ts", () => ({
     showWalletModal: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/network-config.ts", () => ({
+  await mock.module("../../frontend/src/js/blockchain/network-config.ts", () => ({
     getContractAddress: jest.fn(() => "0xContract"),
     getNetworkConfig: jest.fn(() => ({ name: "baseSepolia", usdcToken: "0xUSDC" })),
   }));
-  await jest.unstable_mockModule("@arbesk/wallet/adapters/eoa.js", () => ({
+  await mock.module("@arbesk/wallet/adapters/eoa.js", () => ({
     createEoaSigner: jest.fn(() => ({})),
   }));
-  await jest.unstable_mockModule("@arbesk/wallet/facade.js", () => ({
+  await mock.module("@arbesk/wallet/facade.js", () => ({
     buildUserIdentity: jest.fn(() => ({})),
   }));
-  await jest.unstable_mockModule("viem", () => ({
+  await mock.module("viem", () => ({
     getContract: jest.fn(() => ({})),
     formatEther: jest.fn(() => "0"),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/viem-clients.ts", () => ({
+  await mock.module("../../frontend/src/js/blockchain/viem-clients.ts", () => ({
     getReadClient: jest.fn(() => ({})),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-provider.ts", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-provider.ts", () => ({
     web3Provider: { request: jest.fn(async () => providerRpc.chainId), on: jest.fn() },
     setWeb3Provider,
     NETWORKS: { baseSepolia: {} },
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-cdp.ts", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-cdp.ts", () => ({
     warmupCdpClient: jest.fn(async () => {
       if (cdp.warmupError) throw cdp.warmupError;
       return cdp.warmup;
@@ -95,7 +96,7 @@ async function loadWalletCore() {
     getCdpSigner: jest.fn(() => ({})),
     grantDelegation: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet-network.ts", () => ({
+  await mock.module("../../frontend/src/js/blockchain/wallet-network.ts", () => ({
     switchNetwork: jest.fn(async () => {}),
   }));
   return import("../../frontend/src/js/blockchain/wallet-core.js");
@@ -110,7 +111,7 @@ function connectedAddress() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   emit.mockClear();
   walletState.get.mockClear();
   walletState.get.mockReturnValue({ walletAddress: null });

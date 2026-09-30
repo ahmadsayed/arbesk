@@ -1,10 +1,11 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 async function loadModule(credential, uploadResponse) {
-  jest.resetModules();
+  resetModules();
   const getUploadCredential = jest.fn(async () => credential);
-  jest.unstable_mockModule("../../frontend/src/js/services/backend-client.js", () => ({
+  mock.module("../../frontend/src/js/services/backend-client.js", () => ({
     __esModule: true,
     getUploadCredential,
   }));

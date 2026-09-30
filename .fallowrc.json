@@ -16,7 +16,12 @@
     "blockchain/hardhat.config.js",
     "blockchain/scripts/*.js",
     "scripts/*.mjs",
-    "test/frontend/*.bench.mjs"
+    "test/frontend/*.bench.mjs",
+    // bun test preloads: test/bun.setup.js via bunfig.toml, test/helpers/dom.js
+    // via scripts/run-tests.mjs --preload for `// @test-env dom` suites.
+    // Neither is imported, so the graph cannot see them.
+    "test/bun.setup.js",
+    "test/helpers/dom.js"
   ],
   "ignorePatterns": [
     "frontend/src/js/vendor/**",
@@ -155,7 +160,7 @@
       "exports": ["uploadUrlRateLimit", "unpinRateLimit", "gcRateLimit", "paymasterRateLimit", "userResolveRateLimit", "emailOtpRequestRateLimit", "emailOtpVerifyRateLimit", "walletRelayRateLimit", "cadRateLimit"]
     },
 
-    // Test-only public surface: consumed via dynamic import() in Jest specs
+    // Test-only public surface: consumed via dynamic import() in test specs
     // (fallow's syntactic graph cannot resolve dynamic imports).
     {
       "file": "frontend/src/js/services/chat-preview.ts",

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { guardScript } from "@arbesk/cad-gen/core/guard.js";
 
 const PRELUDE = ["box", "cylinder", "hole", "roundedBox", "filletEdges", "bbox", "volume"];

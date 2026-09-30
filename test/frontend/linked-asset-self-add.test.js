@@ -1,13 +1,13 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Dropping the currently open asset into its own scene ("self-add") must not
  * create a live reference: a published child_ref pointing back at the same
  * collection token + assetID is a guaranteed cycle. The drop handler offers
  * fork-only in that case and refuses a live-ref choice outright.
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const CHAIN_ID = 31337;
 const CONTRACT = "0xCollectionContract";
 const TOKEN_ID = "42";
@@ -21,7 +21,7 @@ let _resolveResult = { resolved: true, manifestCid: RESOLVED_CID };
 async function loadModule() {
   _dialogCalls = [];
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
@@ -38,7 +38,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/formats/gltf/async-gltf.js",
     () => ({
       composeAsync: jest.fn().mockResolvedValue(new TextEncoder().encode("gltf")),
@@ -48,7 +48,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/token-resolver.js",
     () => ({
       resolveChildRef: jest.fn().mockResolvedValue(_resolveResult),
@@ -57,13 +57,13 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     emit: jest.fn(),
     on: jest.fn(),
     EVENTS: new Proxy({}, { get: (_t, key) => String(key) }),
   }));
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/domain/asset-store.js",
     () => ({
       assetStore: {
@@ -74,7 +74,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -86,7 +86,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/transforms.js",
     () => ({
       extractCid: (src) => (src && src.cid ? src.cid : src),
@@ -98,7 +98,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/placeholders.js",
     () => ({
       createPlaceholder: jest.fn(() => ({ dispose: jest.fn() })),
@@ -106,12 +106,12 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/time-travel.js",
     () => ({ applyColor: jest.fn(), applyScale: jest.fn() })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/cleanup.js",
     () => ({
       disposeNode: jest.fn(),
@@ -121,23 +121,21 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/anchor-node.js",
     () => ({
       createAnchorNode: jest.fn(() => ({ parent: null, metadata: {} })),
     })
   );
 
-  await jest.unstable_mockModule("../../frontend/src/js/ui/dialog.js", () => ({
+  await mock.module("../../frontend/src/js/ui/dialog.js", () => ({
     showForkOrLiveRefDialog: jest.fn((assetID, options) => {
       _dialogCalls.push({ assetID, options });
       return Promise.resolve(_dialogChoice);
     }),
   }));
 
-  const sceneLoader = await import(
-    "../../frontend/src/js/engine/scene-loader.js"
-  );
+  const sceneLoader = await import("../../frontend/src/js/engine/scene-loader.js");
   const { state } = await import("../../frontend/src/js/engine/state.js");
   return { sceneLoader, state };
 }
@@ -165,7 +163,7 @@ function makeDrop(overrides = {}) {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _dialogChoice = "fork";
   _resolveResult = { resolved: true, manifestCid: RESOLVED_CID };
 

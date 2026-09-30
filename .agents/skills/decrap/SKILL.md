@@ -40,7 +40,7 @@ Read the whole function and its callees. List decision points, group them into c
 
 ### 5. Verify at every level
 ```bash
-bunx jest <affected-suites> && bun run lint
+bun run test -- <affected-suites> && bun run lint
 bun run typecheck / typecheck:frontend   # whichever covers the change
 bun run test                             # full suite before "done"
 bunx fallow health                        # the number must move — no "looks better"
@@ -58,7 +58,7 @@ fallow audit --max-crap 30   # CI gate, so CRAP can't grow back
 |--------|---------|
 | "Refactor first, tests after — faster" | Tests against new code can't catch parity bugs. You verify by luck. |
 | "The function is obviously correct" | Baseline agents introduce drift on 'obvious' functions every time. |
-| "Coverage tool says 0% but tests exist" | Static estimates guess; measure with real Jest coverage after step 3. |
+| "Coverage tool says 0% but tests exist" | Static estimates guess; measure with real coverage (`bun run test:coverage:js`) after step 3. |
 | "Just a small move, skip a test run" | Small moves are where drift hides. One move, one run. |
 | "Fix the bug I found while I'm here" | Pin it as KNOWN GAP. Behavior change + structure change in one commit = unreviewable. |
 

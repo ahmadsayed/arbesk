@@ -1,11 +1,10 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * The glTF loader plugin must be configured with animationStartMode = NONE so
  * imported animated assets stay static until the user previews a clip.
  */
-import { expect, test, beforeAll } from "@jest/globals";
 
+import { beforeAll, expect, test } from "bun:test";
 let registerGltfLoaderDefaults;
 
 beforeAll(async () => {

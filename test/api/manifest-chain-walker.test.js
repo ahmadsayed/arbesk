@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { beforeAll, beforeEach, describe, expect, it, jest, mock } from "bun:test";
 import zlib from "zlib";
 
 jest.setTimeout(30000);
@@ -42,7 +42,7 @@ describe("walkManifestChain", () => {
       },
     };
 
-    jest.unstable_mockModule("ipfs-http-client", () => ({
+    mock.module("ipfs-http-client", () => ({
       create: jest.fn(() => mockIPFS),
     }));
 

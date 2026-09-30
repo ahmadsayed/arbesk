@@ -1,8 +1,8 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { advanceTimersByTimeAsync } from "../helpers/timers.js";
+import { resetModules } from "../helpers/module-registry.js";
 const SMART_ACCOUNT_ADDRESS = "0xSmartAccount";
 const EOA_ADDRESS = "0xEoaAccount";
 const USER_OP_HASH = "0xUserOpHash";
@@ -11,7 +11,7 @@ const TX_HASH = "0xTxHash";
 let _getUserOperationImpl;
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "@coinbase/cdp-core",
     () => ({
       initialize: jest.fn(),
@@ -32,7 +32,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   jest.useFakeTimers();
 });
 
@@ -69,7 +69,7 @@ describe("createCdpSigner sendTransaction — UserOperation confirmation", () =>
     expect(result.hash).toBe(USER_OP_HASH);
 
     const waitPromise = result.wait();
-    await jest.advanceTimersByTimeAsync(1000);
+    await advanceTimersByTimeAsync(1000);
     await expect(waitPromise).resolves.toEqual({
       transactionHash: TX_HASH,
       status: true,
@@ -89,7 +89,7 @@ describe("createCdpSigner sendTransaction — UserOperation confirmation", () =>
     const waitPromise = result.wait();
     waitPromise.catch(() => {});
 
-    await jest.advanceTimersByTimeAsync(1000);
+    await advanceTimersByTimeAsync(1000);
     await expect(waitPromise).rejects.toThrow(
       "execution reverted: insufficient balance"
     );
@@ -105,7 +105,7 @@ describe("createCdpSigner sendTransaction — UserOperation confirmation", () =>
     const waitPromise = result.wait();
     waitPromise.catch(() => {});
 
-    await jest.advanceTimersByTimeAsync(1000);
+    await advanceTimersByTimeAsync(1000);
     await expect(waitPromise).rejects.toThrow("UserOperation dropped");
   });
 });

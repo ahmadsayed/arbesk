@@ -4,6 +4,7 @@
  * viem's http transport uses undici fetch, which keeps connections alive by
  * default; the behavior this suite now pins is per-chain caching.)
  */
+import { describe, expect, test } from "bun:test";
 import { CHAIN_IDS } from "../constants/chains.js";
 const { getPublicClient } = await import("../src/config.ts");
 

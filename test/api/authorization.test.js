@@ -1,25 +1,22 @@
-/**
- * @jest-environment node
- */
 
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
 const mockValidateSession = jest.fn();
 const mockGetContractAddress = jest.fn();
 const mockGetPublicClient = jest.fn();
 const mockMakeLeaf = jest.fn();
 const mockVerifyProof = jest.fn();
 
-jest.unstable_mockModule("../../src/api/sessions.ts", () => ({
+mock.module("../../src/api/sessions.ts", () => ({
   validateSession: mockValidateSession,
 }));
 
-jest.unstable_mockModule("../../src/config.ts", () => ({
+mock.module("../../src/config.ts", () => ({
   getContractAddress: mockGetContractAddress,
   getPublicClient: mockGetPublicClient,
 }));
 
-jest.unstable_mockModule("@arbesk/wallet/merkle.js", () => ({
+mock.module("@arbesk/wallet/merkle.js", () => ({
   makeLeaf: mockMakeLeaf,
   verifyEditorProof: mockVerifyProof,
 }));

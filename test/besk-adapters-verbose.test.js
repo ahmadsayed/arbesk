@@ -5,8 +5,8 @@
  * touching the SDK. This is what makes `besk history <name> --verbose` show
  * the manifest exploration tree.
  */
-import { jest } from "@jest/globals";
 
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 delete process.env.ARBESK_VERBOSE;
 
 const { setVerbose } = await import("../packages/besk/src/debug.ts");

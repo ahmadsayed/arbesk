@@ -1,5 +1,5 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   startTaskProgress,
   setTaskProgress,

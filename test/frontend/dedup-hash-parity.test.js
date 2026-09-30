@@ -1,5 +1,4 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
 /**
  * Finding A regression: the worker path (native CompressionStream) and the
@@ -8,9 +7,11 @@ import { jest } from "@jest/globals";
  * paths would never share a dedup map and the content cache would double-store
  * identical content. Both paths must therefore key on the RAW content hash.
  */
+import { afterEach, describe, expect, it, jest } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 describe("uploadWithDedup - raw-content hash parity (Finding A)", () => {
   async function loadModule() {
-    jest.resetModules();
+    resetModules();
     // dedup.js writes via getRuntime().ipfsWrite.write; the fake keeps the old
     // writeToIPFS name so the assertions below read unchanged.
     const writeToIPFS = jest.fn().mockResolvedValue("bafyCid");

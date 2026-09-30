@@ -1,6 +1,5 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Live-updates token-collection guard: the relay event's #token tag is
  * "<chainId>:<contract>:<tokenId>" (see @arbesk/nostr tokenTag: lower-cased
  * contract, canonical decimal token id), so collectTokens must carry
@@ -8,13 +7,14 @@
  * Tokens are collected from the scene's child_ref anchors so nested
  * (grandchild) refs — invisible in the root manifest — still match.
  */
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import { tokenTag } from "@arbesk/nostr";
 
 async function loadCollectTokens() {
-  jest.resetModules();
+  resetModules();
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/nostr-browser.js",
     () => ({
       getNostrFacade: jest.fn(),
@@ -22,13 +22,13 @@ async function loadCollectTokens() {
       getTokenOwner: jest.fn(),
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/network-config.js",
     // getRpcUrl is re-exported through viem-clients, pulled in transitively
     // via nostr-config → backend-client since the relay URL became config-driven.
     () => ({ getContractAddress: jest.fn(), getRpcUrl: jest.fn() })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/token-resolver.js",
     () => ({
       invalidateResolution: jest.fn(),

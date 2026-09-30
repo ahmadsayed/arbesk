@@ -1,12 +1,11 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Group-pivot drag math: with 2+ nodes selected the gizmo moves a synthetic
  * pivot at the selection centroid and every anchor follows via its drag-start
  * relative matrix. A translation drag must move every anchor by the SAME
  * world-space offset regardless of each anchor's own scale.
  */
-import { expect, test, describe, beforeEach, afterEach } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";

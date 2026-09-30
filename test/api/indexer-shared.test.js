@@ -1,7 +1,8 @@
 /**
  * API route tests for GET /api/v1/indexer/shared.
  */
-import { jest } from "@jest/globals";
+import { beforeEach, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import request from "supertest";
 import { mountRoutes } from "../helpers/hono.js";
 
@@ -13,7 +14,7 @@ async function buildApp() {
     getSharedTokens: jest.fn().mockReturnValue(["7", "42"]),
   };
 
-  await jest.unstable_mockModule("../../src/api/token-indexer.ts", () => ({
+  await mock.module("../../src/api/token-indexer.ts", () => ({
     getIndexer: jest.fn(() => mockIndexer),
   }));
 
@@ -24,7 +25,7 @@ async function buildApp() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
 });
 
 test("GET /indexer/shared returns shared token IDs", async () => {

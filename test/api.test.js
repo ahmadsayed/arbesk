@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest, mock } from "bun:test";
 import request from "supertest";
 import { toListener } from "./helpers/hono.js";
 import zlib from "zlib";
@@ -86,7 +86,7 @@ describe("Arbesk API", () => {
       },
     };
 
-    jest.unstable_mockModule("ipfs-http-client", () => ({
+    mock.module("ipfs-http-client", () => ({
       create: jest.fn(() => mockIPFS),
     }));
 
@@ -164,7 +164,7 @@ describe("Arbesk API", () => {
       rpcUrl: "http://127.0.0.1:8545",
     };
 
-    jest.unstable_mockModule("../src/config.ts", () => ({
+    mock.module("../src/config.ts", () => ({
       CONTRACT_ADDRESS: FREE_CONTRACT,
       PAID_CONTRACT_ADDRESS: PAID_CONTRACT,
       HARDHAT_RPC_URL: "http://127.0.0.1:8545",

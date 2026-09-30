@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
 import { Hono } from "hono";
 import { z } from "zod";
 import { validateBody, validateQuery } from "../../src/api/validation.ts";

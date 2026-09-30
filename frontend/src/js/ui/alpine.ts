@@ -6,7 +6,7 @@
 
 import AlpineModule from "alpinejs";
 
-// CJS/ESM interop: jest resolves the CommonJS build ({ default: Alpine }),
+// CJS/ESM interop: bun test resolves the CommonJS build ({ default: Alpine }),
 // the browser importmap serves a true ESM build with a default export.
 const Alpine = (AlpineModule as any).default || AlpineModule;
 

@@ -11,6 +11,7 @@
  * exist in the correct sub-module sources.
  */
 
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

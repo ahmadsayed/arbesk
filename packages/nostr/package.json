@@ -21,8 +21,5 @@
     "nostr-tools": "^2.23.5",
     "viem": "catalog:"
   },
-  "devDependencies": {
-    "@jest/globals": "^30.4.1"
-  },
   "license": "ISC"
 }

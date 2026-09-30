@@ -2,8 +2,8 @@
  * Comments Archive Service tests
  */
 
-import { jest } from "@jest/globals";
 
+import { beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 jest.setTimeout(10000);
 
 describe("Comments Archive Service", () => {
@@ -16,7 +16,9 @@ describe("Comments Archive Service", () => {
   beforeAll(async () => {
     relayMessages = [];
 
-    MockWebSocket = jest.fn(function () {
+    // A plain constructor, not jest.fn(): Bun's mock functions have no
+    // .prototype, and the prototype methods below are the WebSocket API.
+    MockWebSocket = function () {
       this.readyState = 0; // CONNECTING
       this.sent = [];
       this.actualSubId = null;
@@ -33,7 +35,7 @@ describe("Comments Archive Service", () => {
         this.readyState = 1; // OPEN
         if (this.onopen) this.onopen();
       }, 0);
-    });
+    };
     MockWebSocket.prototype.send = jest.fn(function (data) {
       this.sent.push(data);
       try {
@@ -72,11 +74,11 @@ describe("Comments Archive Service", () => {
     MockWebSocket.OPEN = 1;
     MockWebSocket.CONNECTING = 0;
 
-    jest.unstable_mockModule("ws", () => ({
+    mock.module("ws", () => ({
       WebSocket: MockWebSocket,
     }));
 
-    jest.unstable_mockModule("../src/config.ts", () => ({
+    mock.module("../src/config.ts", () => ({
       NOSTR_RELAY_URL: "ws://127.0.0.1:7777",
     }));
 

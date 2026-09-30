@@ -1,8 +1,7 @@
-/**
- * @jest-environment jsdom
- */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const OWNER = "0xOwner";
 const OTHER = "0xOther";
 const TOKEN_ID = "42";
@@ -18,7 +17,7 @@ let _updateAssetURIResult = "0xTx";
 let _connectedWallet = OWNER;
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _editorList = [];
   _ownerOfResult = null;
   _editorRootResult = EDITOR_ROOT;
@@ -27,7 +26,7 @@ beforeEach(() => {
 });
 
 async function loadModule() {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -40,7 +39,7 @@ async function loadModule() {
   );
 
   const walletContract = _mockContract();
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet.js",
     () => ({
       contract: walletContract,
@@ -65,14 +64,14 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       getFromRemoteIPFS: jest.fn().mockResolvedValue(_editorList),
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/ipfs/write-to-ipfs.js",
     () => ({
       writeToIPFS: jest.fn().mockResolvedValue("bafySource"),
@@ -80,7 +79,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "@arbesk/asset-core/formats/gltf/merkle-editors.js",
     () => ({
       MAX_EDITORS_PER_TOKEN: 5000,
@@ -106,7 +105,7 @@ async function loadModule() {
     })
   );
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/services/api.js",
     () => ({
       resolveUserEmail: jest.fn(),

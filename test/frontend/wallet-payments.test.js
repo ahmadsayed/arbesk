@@ -1,12 +1,12 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * wallet-payments.ts — gas handling per wallet type.
  * CDP smart accounts must skip eth_estimateGas (sponsored UserOperations);
  * EOA wallets estimate and pad.
  */
-import { jest } from "@jest/globals";
 
+import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const WALLET = "0xWallet";
 const CONTRACT_ADDRESS = "0xContract";
 const TX_HASH = "0xTxHash";
@@ -49,7 +49,7 @@ async function loadModule() {
     sendTransaction: _signerSend,
   };
 
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/wallet-core.js",
     () => ({
       getActiveContract: () => contract,
@@ -57,14 +57,14 @@ async function loadModule() {
       getSigner: () => signer,
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/blockchain/viem-clients.js",
     () => ({
       getReadClient: jest.fn(() => ({ estimateGas: _estimateGas })),
       getWalletClient: jest.fn(),
     })
   );
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
       walletState: {
@@ -75,11 +75,11 @@ async function loadModule() {
       },
     })
   );
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     emit: jest.fn(),
     EVENTS: { WALLET_GENERATION_PAID: "walletGenerationPaid" },
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/ui/toasts.js", () => ({
+  await mock.module("../../frontend/src/js/ui/toasts.js", () => ({
     showToast: jest.fn(),
   }));
 
@@ -87,7 +87,7 @@ async function loadModule() {
 }
 
 beforeEach(() => {
-  jest.resetModules();
+  resetModules();
   _connectionSource = "injected";
 });
 

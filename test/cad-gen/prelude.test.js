@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { runValidation } from "@arbesk/cad-gen/backend/validate-runner.js";
 
 // These assert the prelude's GEOMETRY PRECISION, so they run at delivery

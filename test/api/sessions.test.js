@@ -1,4 +1,5 @@
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 import request from "supertest";
 import { validator } from "hono/validator";
 import { mountRoutes } from "../helpers/hono.js";
@@ -7,11 +8,11 @@ const VALID_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
 const EOA_ADDRESS = "0xEOA000000000000000000000000000000000000A";
 
 async function loadModule(verifySiweResult) {
-  jest.resetModules();
-  jest.unstable_mockModule("../../src/api/identity.ts", () => ({
+  resetModules();
+  mock.module("../../src/api/identity.ts", () => ({
     verifyProof: jest.fn(async () => verifySiweResult),
   }));
-  jest.unstable_mockModule("../../src/api/validation.ts", () => ({
+  mock.module("../../src/api/validation.ts", () => ({
     validateBody: jest.fn(() => validator("json", (value) => value)),
   }));
   return await import("../../src/api/sessions.ts");
@@ -118,13 +119,13 @@ describe("session routes", () => {
   });
 
   it("POST /sessions returns 500 when verification throws", async () => {
-    jest.resetModules();
-    jest.unstable_mockModule("../../src/api/identity.ts", () => ({
+    resetModules();
+    mock.module("../../src/api/identity.ts", () => ({
       verifyProof: jest.fn(async () => {
         throw new Error("verify exploded");
       }),
     }));
-    jest.unstable_mockModule("../../src/api/validation.ts", () => ({
+    mock.module("../../src/api/validation.ts", () => ({
       validateBody: jest.fn(() => validator("json", (value) => value)),
     }));
     mod = await import("../../src/api/sessions.ts");
@@ -139,15 +140,15 @@ describe("session routes", () => {
 
   it("POST /sessions creates a session for a valid SIWE signature from a smart account", async () => {
     // CDP smart accounts: SIWE message address = smart account, eoaAddress = embedded EOA
-    jest.resetModules();
-    jest.unstable_mockModule("../../src/api/identity.ts", () => ({
+    resetModules();
+    mock.module("../../src/api/identity.ts", () => ({
       verifyProof: jest.fn(async (proof) =>
         proof && proof.eoaAddress
           ? { valid: true, address: VALID_ADDRESS }
           : { valid: false, error: "no eoaAddress" },
       ),
     }));
-    jest.unstable_mockModule("../../src/api/validation.ts", () => ({
+    mock.module("../../src/api/validation.ts", () => ({
       validateBody: jest.fn(() => validator("json", (value) => value)),
     }));
     mod = await import("../../src/api/sessions.ts");

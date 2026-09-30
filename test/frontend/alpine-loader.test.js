@@ -1,3 +1,4 @@
+// @test-env dom
 /**
  * Alpine loader (ui/alpine.js) contract tests.
  *
@@ -6,11 +7,11 @@
  * NOT "loading". The loader must not call Alpine.start() until
  * DOMContentLoaded, or components registered by later modules never initialize.
  *
- * @jest-environment jsdom
  */
 
-import { jest, expect, test, afterEach } from "@jest/globals";
 
+import { afterEach, expect, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 afterEach(async () => {
@@ -24,7 +25,7 @@ afterEach(async () => {
 });
 
 test("components registering while readyState is 'interactive' all initialize at DOMContentLoaded", async () => {
-  jest.resetModules();
+  resetModules();
   // Browser truth: during deferred module evaluation readyState is "interactive".
   Object.defineProperty(document, "readyState", { value: "interactive", configurable: true });
   document.body.innerHTML = `
@@ -44,7 +45,7 @@ test("components registering while readyState is 'interactive' all initialize at
 });
 
 test("readyState 'complete' (tests, late imports) starts Alpine on a microtask", async () => {
-  jest.resetModules();
+  resetModules();
   // jsdom default is "complete" — assert it to keep this test honest
   expect(document.readyState).toBe("complete");
   document.body.innerHTML = `<div x-data="probeC"><span id="c" x-text="label"></span></div>`;

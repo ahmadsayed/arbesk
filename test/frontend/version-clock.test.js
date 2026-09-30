@@ -1,14 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import {
-  jest,
-  expect,
-  test,
-  describe,
-  beforeEach,
-  afterEach,
-} from "@jest/globals";
+// @test-env dom
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   createVersionClock,
   _angleForIndex,

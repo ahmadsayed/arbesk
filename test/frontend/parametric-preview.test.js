@@ -1,6 +1,7 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { describe, expect, jest, mock, test } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 function setupDom() {
   document.body.innerHTML = [
     '<div id="inspector"></div>',
@@ -22,10 +23,10 @@ function setupDom() {
 }
 
 async function load(getNodeChildRef) {
-  jest.resetModules();
+  resetModules();
   setupDom();
 
-  await jest.unstable_mockModule("@arbesk/asset-core/events/bus.js", () => ({
+  await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     on: jest.fn(),
     emit: jest.fn(),
     EVENTS: {
@@ -42,21 +43,21 @@ async function load(getNodeChildRef) {
     },
   }));
 
-  await jest.unstable_mockModule("../../frontend/src/js/engine/time-travel.js", () => ({
+  await mock.module("../../frontend/src/js/engine/time-travel.js", () => ({
     applyColor: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/engine/transforms.js", () => ({
+  await mock.module("../../frontend/src/js/engine/transforms.js", () => ({
     stageNodeTransform: jest.fn(),
     readNodeTransformMatrix: jest.fn(),
     matricesEqual: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/engine/undo-stack.js", () => ({
+  await mock.module("../../frontend/src/js/engine/undo-stack.js", () => ({
     pushUndoEntry: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/engine/undo-controller.js", () => ({
+  await mock.module("../../frontend/src/js/engine/undo-controller.js", () => ({
     registerUndoApplier: jest.fn(),
   }));
-  await jest.unstable_mockModule("../../frontend/src/js/engine/scene-graph.js", () => ({
+  await mock.module("../../frontend/src/js/engine/scene-graph.js", () => ({
     getNodeMeshes: jest.fn(),
     getNodeSubMeshes: jest.fn().mockReturnValue([]),
     getNodeChildRef,

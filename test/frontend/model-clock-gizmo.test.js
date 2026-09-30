@@ -1,14 +1,5 @@
-/**
- * @jest-environment jsdom
- */
-import {
-  jest,
-  expect,
-  test,
-  describe,
-  beforeEach,
-  afterEach,
-} from "@jest/globals";
+// @test-env dom
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { state } from "../../frontend/src/js/engine/state.js";
 
@@ -34,7 +25,7 @@ const storeMock = {
   _deps: {},
 };
 
-jest.unstable_mockModule(
+mock.module(
   "@arbesk/asset-core/domain/version-history-store.js",
   () => storeMock
 );

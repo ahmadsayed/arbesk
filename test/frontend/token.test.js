@@ -1,6 +1,7 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
 
+import { describe, expect, it, jest, mock } from "bun:test";
+import { resetModules } from "../helpers/module-registry.js";
 const CID = "bafyTokenCid";
 const OWNER = "0x0000000000000000000000000000000000000001";
 const TOKEN_ID = 42;
@@ -21,7 +22,7 @@ function makeContract(overrides = {}) {
 }
 
 async function loadModule({ contract = null, walletStateValue = null, remoteIPFS = null } = {}) {
-  jest.resetModules();
+  resetModules();
 
   const walletModule = {
     contract,
@@ -36,15 +37,15 @@ async function loadModule({ contract = null, walletStateValue = null, remoteIPFS
     getFromRemoteIPFS: remoteIPFS ?? jest.fn(async () => ({ name: "Mock Asset", assets: {} })),
   };
 
-  jest.unstable_mockModule("../../frontend/src/js/blockchain/wallet.js", () => ({
+  mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
     __esModule: true,
     ...walletModule,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/state/wallet-state.js", () => ({
+  mock.module("../../frontend/src/js/state/wallet-state.js", () => ({
     __esModule: true,
     ...walletStateModule,
   }));
-  jest.unstable_mockModule("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
+  mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
     __esModule: true,
     ...remoteIPFSModule,
   }));

@@ -1,5 +1,5 @@
-/** @jest-environment jsdom */
-import { jest } from "@jest/globals";
+// @test-env dom
+import { beforeEach, describe, expect, it, jest } from "bun:test";
 import {
   uploadToIPFSWithCredential,
   uploadBatchToIPFSWithCredential,

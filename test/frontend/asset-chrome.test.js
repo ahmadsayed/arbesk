@@ -1,11 +1,10 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * Asset chrome: the single renderer for header title/meta and button
  * visibility. State-driven — no event-ordering assumptions.
  */
-import { jest, expect, test, beforeAll, beforeEach } from "@jest/globals";
 
+import { beforeAll, beforeEach, expect, mock, test } from "bun:test";
 let assetStore, _resetAssets, walletState, libraryState, emit, EVENTS;
 let renameAsset, resetForNewAsset, closeAsset;
 
@@ -20,7 +19,7 @@ function hidden(id) {
 }
 
 beforeAll(async () => {
-  await jest.unstable_mockModule(
+  await mock.module(
     "../../frontend/src/js/engine/cleanup.js",
     () => ({
       getPendingChildRefs: () => [],

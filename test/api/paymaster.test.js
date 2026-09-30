@@ -4,7 +4,7 @@
  * Covers: session auth gate, pm_* method allowlist, wallet-keyed rate limit,
  * unconfigured upstream, and the proxied success path.
  */
-import { jest } from "@jest/globals";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import request from "supertest";
 import { mountRoutes } from "../helpers/hono.js";
 

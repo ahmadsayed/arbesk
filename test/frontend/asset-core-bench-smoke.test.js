@@ -1,3 +1,4 @@
+import { expect, test } from "bun:test";
 import { runBench } from "@arbesk/asset-core/bench/run.js";
 
 test("bench returns timing rows for the smallest fixture", async () => {

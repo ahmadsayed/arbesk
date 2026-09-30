@@ -1,10 +1,9 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * saveDraftAsset: name resolution, URL update ordering, ASSET_DRAFT_SAVED
  * emission. IO deps injected; real assetStore + real event bus.
  */
-import { jest, expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, jest, test } from "bun:test";
 import { saveDraftAsset } from "@arbesk/asset-core/domain/asset.js";
 import { assetStore, _resetForTesting } from "@arbesk/asset-core/domain/asset-store.js";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";

@@ -1,11 +1,10 @@
+// @test-env dom
 /**
- * @jest-environment jsdom
- *
  * publishAsset: republish auth fail-fast, publishContext, no-changes still
  * anchors, assetID derivation, identity adoption, ASSET_PUBLISHED emission,
  * progress/status hook sequencing. IO deps injected; real assetStore + bus.
  */
-import { jest, expect, test, beforeEach } from "@jest/globals";
+import { beforeEach, expect, jest, test } from "bun:test";
 import { publishAsset } from "@arbesk/asset-core/domain/asset.js";
 import { assetStore, _resetForTesting } from "@arbesk/asset-core/domain/asset-store.js";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";

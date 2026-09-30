@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { createCadGenerator } from "@arbesk/cad-gen/backend/facade.js";
 
 const body = (code, summary = "x") => JSON.stringify({

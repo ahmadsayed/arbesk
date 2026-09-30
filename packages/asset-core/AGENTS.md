@@ -116,7 +116,7 @@ self-describing `ARB\x01` magic (`BROTLI_MAGIC`); `compress: "gzip"` forces the
 legacy fflate gzip, `false` stores raw. Reads (`decompressAuto`) sniff frame →
 gzip magic → raw passthrough, so all historical CIDs stay readable. Tiered
 quality: q11 for JSON/manifests, q5 for binary buffers. Environment notes:
-plain Node (jest) uses the package's CJS build via
+plain Node (the E2E harness) uses the package's CJS build via
 createRequire — its ESM web entry fetches the .wasm over file://, which Node
 rejects; the dev backend runs under Bun and takes the ESM branch; the browser bundles get the web build
 with the WASM staged next to `app.js`/`gltf-worker.js` by
@@ -154,7 +154,7 @@ bundles — never duplicate the magic.
 ```bash
 bun run build:packages    # tsc → dist/ (ESM + .d.ts)
 bun run typecheck         # after build (resolves @arbesk/* via workspace)
-bun run test              # jest maps @arbesk/asset-core/*.js → .ts source (no build step)
+bun run test              # bun test preload maps @arbesk/asset-core/*.js → .ts source (no build step)
 bun run bench:asset-core  # pipeline benchmark → test-results/asset-core-bench.json
 ```
 
