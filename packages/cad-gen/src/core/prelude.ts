@@ -8,13 +8,14 @@ import type { ManifoldModule } from "../types.ts";
 import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
 import { spoolHolder } from "./library/spool-holder.ts";
 import { gridfinityCup } from "./library/gridfinity-cup.ts";
+import { wallHook } from "./library/wall-hook.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -932,6 +933,15 @@ export function buildPrelude(
      *   OpenSCAD's render: scripts/cad-reference.mjs, cases gf-cup-*.
      */
     gridfinityCup: (opts: any = {}) => gridfinityCup(module, opts ?? {}),
+
+    /**
+     * A screw-mounted J-shaped wall hook with two countersunk holes.
+     * @remarks PORT of wall_hook() from parametrized_wall_hook.scad, Unlicense
+     *   (public domain), by AaronVerDow (github.com/AaronVerDow) - credited
+     *   through ATTRIBUTED_HELPERS anyway. Matches OpenSCAD's render:
+     *   scripts/cad-reference.mjs, cases wall-hook-*.
+     */
+    wallHook: (opts: any = {}) => wallHook(module, opts ?? {}),
 
     /**
      * A rack of cup pockets on a stable base.

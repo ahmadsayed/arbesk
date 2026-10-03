@@ -125,6 +125,17 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "MIT",
     url: "https://github.com/vector76/gridfinity_openscad",
   },
+  // Unlicense (public domain): no notice is required, and the author is
+  // credited anyway. Licence gated by scripts/cad-candidates.mjs and read by
+  // hand. Matches OpenSCAD: scripts/cad-reference.mjs wall-hook-*.
+  wallHook: {
+    helper: "wallHook",
+    work: "parametrized_wall_hook.scad",
+    author: "AaronVerDow",
+    authorGithub: ["https://github.com/AaronVerDow"],
+    licence: "Unlicense",
+    url: "https://github.com/AaronVerDow/cad",
+  },
   phoneStand: {
     helper: "phoneStand",
     work: "SmartPhoneHolder",

@@ -593,3 +593,23 @@ describe("ported Gridfinity bin", () => {
     expect(r.error).toContain("depth is whole grid units");
   });
 });
+
+// OpenSCAD's render of AaronVerDow's parametrized_wall_hook.scad (Unlicense) -
+// see scripts/cad-reference.mjs wall-hook-*.
+describe("ported wall hook", () => {
+  it("matches OpenSCAD's render with the defaults", async () => {
+    const r = await run("P.s; return wallHook({});");
+    expect(r.ok).toBe(true);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(57.0, 1);
+    expect(size[1]).toBeCloseTo(104.28, 1);
+    expect(size[2]).toBeCloseTo(12.0, 1);
+    expect(Math.abs(r.stats.volumeMm3 - 25480.3) / 25480.3).toBeLessThan(0.001);
+    expect(r.stats.bodies.count).toBe(1);
+  });
+
+  it("matches OpenSCAD's render resized for a coat", async () => {
+    const r = await run("P.s; return wallHook({ width: 16, d: 60, height: 95, theight: 40 });");
+    expect(Math.abs(r.stats.volumeMm3 - 61111.2) / 61111.2).toBeLessThan(0.001);
+  });
+});

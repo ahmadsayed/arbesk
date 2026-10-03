@@ -69,6 +69,14 @@ const CASES = {
     repo: "vector76/gridfinity_openscad", file: "gridfinity_basic_cup.scad", defines,
     code: "return gridfinityCup(" + args + ");",
   }])),
+  "wall-hook-default": {
+    repo: "AaronVerDow/cad", file: "parametrized_wall_hook.scad", code: "return wallHook({});",
+  },
+  "wall-hook-big": {
+    repo: "AaronVerDow/cad", file: "parametrized_wall_hook.scad",
+    defines: { width: "16", d: "60", height: "95", theight: "40" },
+    code: "return wallHook({ width: 16, d: 60, height: 95, theight: 40 });",
+  },
   "knuckle-bare": {
     scad: "knuckle-bare.scad",
     code: "return knuckleHinge({ length: 35, segs: 6, offset: 5, inner: true, armHeight: 2, armAngle: 60, clip: 1 });",

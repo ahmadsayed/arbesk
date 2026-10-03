@@ -279,6 +279,27 @@ export const CATALOG: CatalogEntry[] = [
     ],
   },
   {
+    id: "wall-hook",
+    helpers: ["wallHook"],
+    summary: "wall hooks, coat hooks, towel, bag and key hooks screwed to a wall or door",
+    helperRows: [
+      "wallHook({ width?, d?, height?, theight?, thick? })   screw-mounted J hook",
+    ],
+    guidance: [
+      "A hook screwed to a wall or a door - a coat hook, towel hook, bag or key hook - is",
+      "ALWAYS wallHook({...}). This is not a suggestion: it is a port of AaronVerDow's",
+      "parametric wall hook, verified against OpenSCAD's own render, with the J-curve,",
+      "the tip that stops a load sliding off and two countersunk screw holes. A",
+      "hand-drawn coat hook came back as a block with holes in it.",
+      "  width: extrusion width, default 12 (a sturdy coat hook is 14-18). d: the curve's",
+      "  centre-line diameter, default 33 + width (a coat or bag needs 40-60). height: the",
+      "  wall plate, default 70; theight: the tip, default 30. thick defaults to width.",
+      "  Its frame: the curve is centred on the origin, the plate runs up +y, and it lies",
+      "  flat on z = 0 to z = width - print orientation, screw holes along x.",
+      "For a hook that hangs OVER a rail or a door top instead of screwing on, use railHook.",
+    ],
+  },
+  {
     id: "household",
     helpers: [],
     summary: "kitchen, bathroom and household items - drainage, hooks that hold, clearance, stability, typical sizes",
