@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Arbesk app image (backend + frontend statics) for the k3s deployment.
-# Multi-stage: the builder compiles frontend assets (needs Node AND Bun —
-# frontend/scripts call both) and the single-file server binary; the runtime
+# Multi-stage: the Bun builder compiles frontend assets and the single-file
+# server binary (no Node toolchain anywhere in the build); the runtime
 # stage carries only what src/index.ts reads at runtime via PROJECT_ROOT
 # (ARBESK_ROOT): frontend/dist, blockchain/artifacts, src/api/*.html, the mock
 # generation fixtures (mock-gltf-assets), plus a writable .data/
@@ -12,8 +12,7 @@
 # Build for the Pi cluster:  docker buildx build --platform linux/arm64 \
 #   -f docker/app.Dockerfile -t ahmadsayed/arbesk:<tag> --push .
 
-FROM node:22-bookworm AS builder
-RUN npm install -g bun@1
+FROM oven/bun:1-debian AS builder
 WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile \

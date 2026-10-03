@@ -29,16 +29,27 @@ No manual `bun src/index.ts` is required.
 
 ### Parallel workers
 
-By default the suite runs with **1 worker / 1 stack** (lightest — matches CI and
-low-RAM machines). Opt into parallel isolated stacks with `E2E_WORKERS=N`:
+By default the suite renders WebGL on the **host GPU with 4 workers / 4 isolated
+stacks** when a GPU is present (a `/dev/dri/renderD*` node on Linux), and falls
+back to **SwiftShader with 1 worker** otherwise (CI, GPU-less machines).
+SwiftShader renders WebGL on the CPU and saturates every core, so it cannot
+sustain parallel browsers. On a 12-core laptop the full suite takes ~2.5 min on
+the GPU vs ~14 min under SwiftShader.
 
 ```bash
-# Default: 1 worker, 1 stack
-bunx playwright test --config=e2e/playwright.config.js --project=chromium
+# Default: GPU + 4 workers if a GPU is present, else SwiftShader + 1 worker
+bun run test:e2e -- --project=chromium
 
-# Opt into parallel isolated stacks (e.g. 4 workers = 4 full stacks)
-E2E_WORKERS=4 bunx playwright test --config=e2e/playwright.config.js --project=chromium
+# Force SwiftShader (e.g. to reproduce CI) / force GPU
+E2E_GPU=0 bun run test:e2e -- --project=chromium
+E2E_GPU=1 bun run test:e2e -- --project=chromium
+
+# Override the worker count
+E2E_WORKERS=2 bun run test:e2e -- --project=chromium
 ```
+
+GPU mode launches the full Chromium build (`channel: "chromium"`); install it
+once with `npx playwright install chromium`.
 
 Per-worker port scheme (worker index `i`):
 
@@ -53,7 +64,7 @@ Per-worker port scheme (worker index `i`):
 
 Requirements and caveats:
 
-- **RAM:** the default single worker is lightest. `E2E_WORKERS=4` spins up 4 full stacks (12 containers + 4 backends) and typically needs **6–8 GB** peak — use fewer workers on machines with less than 8 GB.
+- **RAM:** `E2E_WORKERS=4` (the GPU default) spins up 4 full stacks (12 containers + 4 backends) and typically needs **6–8 GB** peak — use fewer workers on machines with less than 8 GB.
 - **Port availability:** the host ports above must be free for each worker index. If they are already in use, the run will fail during global setup.
 - **Coverage:** `E2E_COVERAGE=1` is not yet validated with `E2E_WORKERS > 1`.
 

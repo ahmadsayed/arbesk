@@ -112,7 +112,7 @@ echo "🔨 Compiling Solidity contracts..."
 docker compose -p "${COMPOSE_PROJECT}" run --rm hardhat npx hardhat compile
 
 # ─── 6. Report worktree identity ──────────────────────────────────────────────
-BACKEND_PORT="$(cd "${WORKTREE_PATH}" && node -e "import('./e2e/lib/infra.mjs').then(m => console.log(m.BACKEND_PORT))")"
+BACKEND_PORT="$(cd "${WORKTREE_PATH}" && bun -e "import('./e2e/lib/infra.mjs').then(m => console.log(m.BACKEND_PORT))")"
 
 echo ""
 echo "═══════════════════════════════════════════"

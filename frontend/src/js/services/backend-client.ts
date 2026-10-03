@@ -10,6 +10,7 @@ import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { log, warn } from "../utils/log.ts";
 import { getReadClient } from "../blockchain/viem-clients.ts";
+import { getConfig } from "./app-config.ts";
 import { getContractAddress as getNetworkContractAddress } from "../blockchain/network-config.ts";
 import type { UploadCredential } from "@arbesk/asset-core/storage/ipfs/upload-with-credential.js";
 
@@ -247,27 +248,7 @@ export async function fetchJsonOrThrow(
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
-let _configPromise: Promise<any> | null = null;
-
-/**
- * GET /api/v1/config
- * @remarks Config is immutable for the page lifetime, so the result is
- *   memoized; a failed fetch clears the cache so the next call can retry.
- * @returns { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
- */
-export async function getConfig(): Promise<any> {
-  if (_configPromise) return _configPromise;
-  _configPromise = (async () => {
-    try {
-      const res = await fetch(`${API_BASE}/config`);
-      return await res.json();
-    } catch {
-      _configPromise = null;
-      return null;
-    }
-  })();
-  return _configPromise;
-}
+export { getConfig };
 
 /**
  * GET /api/v1/config → contractAddress only

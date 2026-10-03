@@ -141,11 +141,11 @@ describe("refreshLibraryData in visitor mode", () => {
     setLibrarySubject(SUBJECT);
     await refreshLibraryData();
 
-    // Owner mode on a profile URL still probes real networks first — the
-    // default mock answers on 84532, so the shared fetch runs there.
+    // The owner's own profile resolves to the wallet chain without probing,
+    // so the shared fetch runs there.
     expect(mocks.fetchAssetLibrary).toHaveBeenCalledWith(SUBJECT, false, {
       includeShared: true,
-      chainId: 84532,
+      chainId: 31337,
     });
     const { collections } = libraryState.get();
     expect(collections).toHaveLength(2);
@@ -411,7 +411,7 @@ describe("subject chain resolution", () => {
     expect(libraryState.get().collections).toEqual([]);
   });
 
-  test("owner on their own profile URL finds local tokens past the real-network probe", async () => {
+  test("owner on their own profile URL reads the wallet chain without probing", async () => {
     const { libraryState, setLibrarySubject, refreshLibraryData, mocks } =
       await load({
         walletAddress: SUBJECT,
@@ -422,12 +422,10 @@ describe("subject chain resolution", () => {
     setLibrarySubject(SUBJECT);
     await refreshLibraryData();
 
-    // 84532 (real, empty) falls through to the wallet/local chain (hit).
-    expect(calledChains(mocks.fetchAssetLibrary)).toEqual([
-      BASE_SEPOLIA,
-      HARDHAT,
-      HARDHAT,
-    ]);
+    // No real-network probe: a fresh mint may not be indexed yet, and the
+    // empty-profile fallback would pick the wrong chain. Only the library
+    // fetch itself runs, on the wallet chain.
+    expect(calledChains(mocks.fetchAssetLibrary)).toEqual([HARDHAT]);
     expect(libraryState.get().subjectChainId).toBe(HARDHAT);
     expect(libraryState.get().collections).toHaveLength(1);
   });

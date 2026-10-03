@@ -44,6 +44,7 @@ import {
   clearStoredCameraPose,
 } from "./camera-persistence.ts";
 import { resolvePickedNodeId } from "./scene-picking.ts";
+import { createRenderScheduler } from "./render-scheduler.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Re-exports — backward compatibility
@@ -69,7 +70,6 @@ export {
   disposeNodeContent,
   disposeNodeSubtree,
   clearScene,
-  clearPendingChildRefs,
   getPendingChildRefs,
   getPendingChildRefRemovals,
   clearPendingChildRefRemovals,
@@ -315,8 +315,17 @@ export function initEngine() {
   // size with the old projection matrix and show stretching.
   // Stored on state so the router can pause/resume the exact same callback when
   // toggling between the Studio and Library views.
+  //
+  // The resize runs every frame, but rendering is gated by the scheduler: an
+  // unchanged scene is not re-rendered at full rate (the dominant CPU cost
+  // under software WebGL). Any app event may change the scene (color edits,
+  // undo, version time-travel), so every bus event also wakes the scheduler.
+  const scheduler = createRenderScheduler(state.scene, camera);
+  state.renderScheduler = scheduler;
+  on("*", () => scheduler.invalidate());
   state.renderLoopFn = () => {
     state.engine.resize();
+    if (!scheduler.shouldRender()) return;
     _updatePanSensibility();
     updateGridCoverage();
     state.scene.render();
@@ -700,6 +709,7 @@ export function pauseRenderLoop() {
 export function resumeRenderLoop() {
   if (!state.engine || !state.renderLoopFn) return;
   state.engine.stopRenderLoop();
+  state.renderScheduler?.invalidate();
   state.engine.runRenderLoop(state.renderLoopFn);
   state.engine.resize();
 }
@@ -743,7 +753,12 @@ export async function loadFromParams() {
           assetId: assetId || null,
         });
       }
-    } catch {}
+    } catch (err) {
+      console.warn(
+        `[SCENE] loadFromParams: tokenURI(${assetTokenId}) failed:`,
+        (err as Error)?.message
+      );
+    }
   } else if (manifestCid) {
     adoptOpenedAsset(manifestCid);
     loadAssetManifest(manifestCid);

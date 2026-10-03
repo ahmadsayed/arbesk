@@ -8,6 +8,7 @@
  */
 
 import { resolveFormatHandler } from "../formats/index.ts";
+import { createRenderScheduler } from "../engine/render-scheduler.ts";
 
 /** Maximum simultaneously live previews; the oldest is auto-collapsed beyond this. */
 const MAX_LIVE_PREVIEWS = 3;
@@ -170,8 +171,12 @@ export async function createChatPreview(
     });
     frameCameraOnMeshes(camera, result.meshes || []);
 
+    // Idle previews skip rendering (see render-scheduler.ts); a chat can hold
+    // several live previews, each with its own engine.
+    const scheduler = createRenderScheduler(scene, camera);
     const renderLoop = () => {
       engine.resize();
+      if (!scheduler.shouldRender()) return;
       // Viewport-relative panning. Babylon's pan step is a CONSTANT world
       // distance per pixel (pixels / panningSensibility — no radius factor
       // anywhere in the input→movement→camera chain, verified against
@@ -214,6 +219,7 @@ export async function createChatPreview(
         }
         engine.stopRenderLoop(renderLoop);
         observer?.disconnect();
+        scheduler.dispose();
         scene.dispose();
         engine.dispose();
         return snapshot;
