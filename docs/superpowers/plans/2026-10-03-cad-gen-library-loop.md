@@ -46,7 +46,7 @@ local `blockchain/deployments/*.json` changes are never committed. The full meth
 | 4 | `0215808` | vector76's Gridfinity bin (`gridfinityCup`), 5 configs vs OpenSCAD |
 | 5 | `fb8a09c` | Jev `piece_count` replaces yes/no; `bodyAllowance` + `MULTI_BODY_HELPERS` |
 | 6 | `158bf71` | AaronVerDow's wall hook; no portable pipe clamp found |
-| 7 | `e96529c` | Maciej Małecki's knob (`knob`), exact vs OpenSCAD in 3 configs |
+| 7 | `dc5a7d8` | Maciej Małecki's knob (`knob`), exact vs OpenSCAD in 3 configs |
 
 Library today: `knob`, `knuckleHinge`, `printInPlaceHinge`, `spoolHolder`,
 `gridfinityCup`, `wallHook` (ported), plus the earlier `phoneStand`, `boardCase`,
