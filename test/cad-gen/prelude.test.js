@@ -533,3 +533,30 @@ describe("body count", () => {
     expect(r.stats.bodies.count).toBe(1);
   });
 });
+
+// OpenSCAD's render of Matthew Burke's filament_spool_holder.scad (MIT), part
+// by part, with its default parameters - see scripts/cad-reference.mjs spool-*.
+describe("ported spool holder", () => {
+  const cases = [
+    ["side_frame", [175.0, 177.31, 8.0], 80718.9],
+    ["crossbar", [133.0, 20.0, 18.0], 45095.9],
+    ["axle", [163.0, 17.91, 17.91], 41212.4],
+    ["axle_cap", [27.0, 27.0, 11.0], 4208.7],
+  ];
+  for (const [part, size, volume] of cases) {
+    it(part + " matches OpenSCAD's render", async () => {
+      const r = await run("P.s; return spoolHolder({ part: '" + part + "' });");
+      expect(r.ok).toBe(true);
+      const got = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+      for (const a of [0, 1, 2]) expect(got[a]).toBeCloseTo(size[a], 1);
+      expect(Math.abs(r.stats.volumeMm3 - volume) / volume).toBeLessThan(0.001);
+      expect(r.stats.bodies.count).toBe(1);
+    });
+  }
+
+  it("refuses a bore bigger than the spool, with the SCAD's own message", async () => {
+    const r = await run("P.s; return spoolHolder({ spoolMaxDiameter: 60, spoolMaxBoreDiameter: 58 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("4 mm of spool flange");
+  });
+});

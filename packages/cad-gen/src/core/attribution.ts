@@ -103,6 +103,17 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "BSD-2-Clause",
     url: "https://github.com/BelfrySCAD/BOSL2",
   },
+  // MIT. Licence gated by scripts/cad-candidates.mjs (GitHub SPDX MIT, Jev
+  // "permissive", no third-party code in the file) and read by hand. Every
+  // print part matches OpenSCAD's render: scripts/cad-reference.mjs spool-*.
+  spoolHolder: {
+    helper: "spoolHolder",
+    work: "3dthings-filament-spool-holder (filament_spool_holder.scad)",
+    author: "Matthew Burke",
+    authorGithub: ["https://github.com/Burke9077"],
+    licence: "MIT",
+    url: "https://github.com/Burke9077/3dthings-filament-spool-holder",
+  },
   phoneStand: {
     helper: "phoneStand",
     work: "SmartPhoneHolder",

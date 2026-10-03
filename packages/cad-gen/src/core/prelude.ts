@@ -6,13 +6,14 @@
  */
 import type { ManifoldModule } from "../types.ts";
 import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
+import { spoolHolder } from "./library/spool-holder.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -913,6 +914,15 @@ export function buildPrelude(
      */
     printInPlaceHinge: (opts: any = {}) =>
       printInPlaceHinge(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * One print part of a multipart filament spool holder.
+     * @remarks PORT of filament_spool_holder.scad from
+     *   3dthings-filament-spool-holder, MIT, by Matthew Burke
+     *   (github.com/Burke9077) - credited through ATTRIBUTED_HELPERS. Matches
+     *   OpenSCAD's render of every part: scripts/cad-reference.mjs.
+     */
+    spoolHolder: (opts: any = {}) => spoolHolder(module, opts ?? {}),
 
     /**
      * A rack of cup pockets on a stable base.

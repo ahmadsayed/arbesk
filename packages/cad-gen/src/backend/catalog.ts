@@ -30,6 +30,7 @@
  *   - Gridfinity: the published specification's grid and base profile.
  *   - BOSL2 gear proportions and hinges: BSD-2-Clause. Credited in
  *     ATTRIBUTED_HELPERS.
+ *   - Matthew Burke's spool holder: MIT. Credited in ATTRIBUTED_HELPERS.
  */
 
 /** One selectable block of prompt documentation. */
@@ -231,6 +232,34 @@ export const CATALOG: CatalogEntry[] = [
       "produced a 6mm-thick plate with four holes: the right footprint, one valid",
       "solid, every check passed, and it cannot hold a mug that is 95mm tall. The",
       "pockets are deep by construction, so a cup sits down inside the rack.",
+    ],
+  },
+  {
+    id: "spool-holder",
+    helpers: ["spoolHolder"],
+    summary: "filament spool holders, spool stands and spool frames - a free-standing frame that holds a spool on an axle",
+    helperRows: [
+      "spoolHolder({ part, spoolMaxDiameter?, spoolMaxBoreDiameter?, spoolMaxWidth?, ... })",
+      "                                      one print part of a free-standing spool stand",
+    ],
+    guidance: [
+      "A filament spool holder or spool stand is ALWAYS spoolHolder({...}). This is not a",
+      "suggestion: it is a port of Matthew Burke's parametric spool holder, verified",
+      "against OpenSCAD's own render. A hand-drawn spool holder came back as a plain",
+      "bracket that could not hold a spool. The frame is several printed parts; ONE call",
+      "returns ONE part, in print orientation, lying on z = 0. Return the part the user",
+      "asked for; when they asked for 'a spool holder', return part 'side_frame' and say",
+      "in the summary that the full set is side_frame x2, crossbar x2, axle x1,",
+      "axle_cap x2, plus four M3 x 10 screws and four M3 nuts.",
+      "  part: 'side_frame' (A-frame side with the axle cradle), 'crossbar' (rail with",
+      "  tenons and nut traps), 'axle' (faceted, prints on its flat), 'axle_cap'.",
+      "  Size it from the spool: spoolMaxDiameter (default 220, a 1 kg spool is about",
+      "  200), spoolMaxBoreDiameter (default 60, the centre hole, about 52-57 on most",
+      "  spools) and spoolMaxWidth (default 115, about 65-70 for a 1 kg spool). Pass the",
+      "  SAME values for every part so they fit together. Leave the other options unset.",
+      "  It refuses impossible sizes with a message naming the fix.",
+      "spoolHolder is a STAND. For an arm that bolts to a printer frame or to aluminium",
+      "extrusion, it does not apply - build that part yourself.",
     ],
   },
   {

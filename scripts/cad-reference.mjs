@@ -28,8 +28,27 @@ const OUT = path.join(PROJECT_ROOT, "test-results", "reference");
 const SCAD_DIR = path.join(PROJECT_ROOT, "scripts", "cad-reference");
 
 /** Port cases: the reference .scad and the prelude call that should match it. */
+/**
+ * @typedef {{ scad?: string, repo?: string, file?: string,
+ *   defines?: Record<string, string>, code: string }} RefCase
+ * `scad` is a file under scripts/cad-reference/; `repo` + `file` render a
+ * cloned repository's OWN file, unmodified, with OpenSCAD -D overrides - so a
+ * permissively licensed reference never has to be copied into this repo.
+ */
+/** @type {Record<string, RefCase>} */
 const CASES = {
   "hinge-pip": { scad: "hinge-pip.scad", code: "return printInPlaceHinge({});" },
+  ...Object.fromEntries(["side_frame", "crossbar", "axle", "axle_cap"].map((part) => [
+    "spool-" + part.replace("_", "-"), {
+      repo: "Burke9077/3dthings-filament-spool-holder", file: "filament_spool_holder.scad",
+      defines: { part: JSON.stringify(part) },
+      code: "return spoolHolder({ part: " + JSON.stringify(part) + " });",
+    }])),
+  "spool-side-frame-big": {
+    repo: "Burke9077/3dthings-filament-spool-holder", file: "filament_spool_holder.scad",
+    defines: { part: "\"side_frame\"", spool_max_diameter: "300", spool_max_width: "70", base_depth: "220" },
+    code: "return spoolHolder({ part: 'side_frame', spoolMaxDiameter: 300, spoolMaxWidth: 70, baseDepth: 220 });",
+  },
   "knuckle-bare": {
     scad: "knuckle-bare.scad",
     code: "return knuckleHinge({ length: 35, segs: 6, offset: 5, inner: true, armHeight: 2, armAngle: 60, clip: 1 });",
@@ -110,16 +129,31 @@ const fmt = (m) => "size " + m.size.map((s) => s.toFixed(2)).join(" x ") +
   "  volume " + m.volume.toFixed(1) + "  bodies " + m.bodies;
 
 /**
+ * The .scad to render for a case, cloning its repository on first use.
+ * @param {RefCase} c The case.
+ * @returns {string} An absolute path.
+ */
+function scadPathOf(c) {
+  if (c.scad) return path.join(SCAD_DIR, c.scad);
+  const dir = path.join(OUT, /** @type {string} */ (c.repo).replace("/", "__"));
+  if (!fs.existsSync(dir)) {
+    execFileSync("git", ["clone", "-q", "--depth", "1", "https://github.com/" + c.repo, dir]);
+  }
+  return path.join(dir, /** @type {string} */ (c.file));
+}
+
+/**
  * Renders the reference, builds the port, and prints how far apart they are.
  * @param {string} name A key of CASES. @param {any} module Loaded manifold-3d.
  */
 async function runCase(name, module) {
-  const c = /** @type {Record<string, { scad: string, code: string }>} */ (CASES)[name];
+  const c = CASES[name];
   if (!c) throw new Error("unknown case " + name + "; known: " + Object.keys(CASES).join(", "));
   const refStl = path.join(OUT, name + ".ref.stl");
   const portStl = path.join(OUT, name + ".port.stl");
   if (!fs.existsSync(refStl)) {
-    execFileSync("openscad", ["-o", refStl, path.join(SCAD_DIR, c.scad)], {
+    const defines = Object.entries(c.defines ?? {}).flatMap(([k, v]) => ["-D", k + "=" + v]);
+    execFileSync("openscad", ["-o", refStl, ...defines, scadPathOf(c)], {
       env: { ...process.env, OPENSCADPATH: OUT }, stdio: "ignore",
     });
   }
