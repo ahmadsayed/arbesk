@@ -11,13 +11,14 @@ import { gridfinityCup } from "./library/gridfinity-cup.ts";
 import { wallHook } from "./library/wall-hook.ts";
 import { extrusionSpoolArm } from "./library/extrusion-spool-arm.ts";
 import { knob } from "./library/knob.ts";
+import { pipeClamp } from "./library/pipe-clamp.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -1120,6 +1121,14 @@ export function buildPrelude(
      *   sizes) - no portable OpenSCAD source exists; see the module.
      */
     extrusionSpoolArm: (opts: any = {}) => extrusionSpoolArm(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * A split pipe clamp: two bolted half-rings, laid out side by side to print.
+     * @remarks First-party, from published facts (ISO socket heads, hex nuts and
+     *   clearance holes; the pipe's diameter is the user's) - no portable
+     *   OpenSCAD source exists; see the module. Returns TWO bodies by design.
+     */
+    pipeClamp: (opts: any = {}) => pipeClamp(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
 
     /**
      * A rack of cup pockets on a stable base.
