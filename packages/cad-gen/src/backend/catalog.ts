@@ -32,6 +32,10 @@
  *     ATTRIBUTED_HELPERS.
  *   - Matthew Burke's spool holder: MIT. Credited in ATTRIBUTED_HELPERS.
  *   - Maciej Małecki's knobs: MIT. Credited in ATTRIBUTED_HELPERS.
+ *   - GT2 pulley dimensions (2mm pitch, 0.254mm pitch factor, 0.76mm groove):
+ *     Gates PowerGrip GT standard, cross-checked against a Gates-licensee
+ *     catalog (CMT 2MR: pitch dia - outside dia = 0.020" at every size).
+ *     Dimensions are facts and carry no credit, as Gridfinity's do.
  */
 
 /** One selectable block of prompt documentation. */
@@ -327,6 +331,30 @@ export const CATALOG: CatalogEntry[] = [
       "k.subtract(box(2, 8, h + 2).translate([3.1, 0, h / 2])) leaves exactly that flat.",
       "Both cutters must pass through the head and out the other side - a blind bore",
       "whose cutter stops inside the head fails the build.",
+    ],
+  },
+  {
+    id: "gt2-pulley",
+    helpers: ["gt2Pulley"],
+    summary: "GT2 timing pulleys, belt pulleys - 2mm-pitch toothed pulleys for 3D-printer and motion belts",
+    helperRows: [
+      "gt2Pulley({ teeth?, beltWidth?, bore?, flanges?, flangeDiameter?, flangeThickness?, setScrew? })",
+      "                                      GT2 timing pulley with flanges",
+    ],
+    guidance: [
+      "A GT2 timing pulley is ALWAYS gt2Pulley({...}). This is not a suggestion: it is",
+      "built from the Gates PowerGrip GT standard dimensions, and a hand-drawn one came",
+      "back toothless twice and as 21 detached teeth once. The sizes are NOT derivable:",
+      "a 20-tooth pulley is 12.73 mm pitch diameter but only 12.22 mm across the teeth,",
+      "with 0.76 mm grooves - three different numbers the model has never guessed.",
+      "  teeth: default 20 (10-40 common). beltWidth: default 6. bore: shaft diameter,",
+      "  default 5 (NEMA 17). flanges: belt-retaining discs, default on. setScrew:",
+      "  \"none\" (default), \"M3\" or \"M4\" - a radial clearance hole through the hub;",
+      "  pick M3 for a motor shaft and mention it in the summary. Lies on z = 0, axis",
+      "  on the origin, flange-to-flange - print orientation, no support.",
+      "The groove is the straight-flanked printable approximation of the curvilinear",
+      "Gates profile; it meshes with standard GT2 belts. For an idler on a smooth",
+      "bearing, still use gt2Pulley with a bore that clears the bearing.",
     ],
   },
   {

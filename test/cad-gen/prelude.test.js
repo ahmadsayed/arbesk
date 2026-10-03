@@ -323,6 +323,60 @@ describe("spurGear", () => {
   }, 40000);
 });
 
+// GT2 pulley: built from the published Gates PowerGrip GT dimensions (2mm
+// pitch, 0.254mm radial pitch factor, 0.76mm groove). The failure this owns:
+// every live attempt drew the pulley by hand - toothless discs and once 21
+// detached teeth - because the three diameters (pitch 12.73, outside 12.22,
+// root 10.70 for 20 teeth) are not guessable.
+describe("gt2Pulley", () => {
+  it("puts 20 teeth on a 12.22 mm circle, flange to flange on z = 0", async () => {
+    const r = await run("return gt2Pulley({});");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(7.112, 2); // flanges at OD + 2
+    expect(r.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(8, 4); // 6mm body + 2 x 1mm flange
+    expect(r.stats.bodies.count).toBe(1);
+  }, 40000);
+
+  it("sizes the tooth circle from the tooth count", async () => {
+    const a = await run("return gt2Pulley({ teeth: 20, flanges: false });");
+    const b = await run("return gt2Pulley({ teeth: 40, flanges: false });");
+    expect(a.stats.bboxMm.max[0]).toBeCloseTo(6.112, 2);
+    expect(b.stats.bboxMm.max[0]).toBeCloseTo(12.478, 2); // 40 x 2 / PI - 0.508
+  }, 40000);
+
+  it("has grooves, not a plain barrel", async () => {
+    const r = await run("return gt2Pulley({ teeth: 20, flanges: false });");
+    const barrel = await run("return cylinder(6.112, 6, { segments: 256 });");
+    expect(r.stats.volumeMm3).toBeLessThan(barrel.stats.volumeMm3 * 0.97);
+  }, 40000);
+
+  it("subtracts the bore and the set-screw hole", async () => {
+    const solid = await run("return gt2Pulley({ teeth: 20, setScrew: 'none' });");
+    const screwed = await run("return gt2Pulley({ teeth: 20, setScrew: 'M3' });");
+    expect(screwed.stats.volumeMm3).toBeLessThan(solid.stats.volumeMm3);
+    const bored = await run("return gt2Pulley({ teeth: 20, bore: 8 });");
+    expect(bored.stats.volumeMm3).toBeLessThan(solid.stats.volumeMm3);
+    // Widening the default 5mm bore to 8 removes one annulus through the 8mm height.
+    expect(solid.stats.volumeMm3 - bored.stats.volumeMm3)
+      .toBeCloseTo(Math.PI * (16 - 6.25) * 8, -1);
+  }, 40000);
+
+  it("refuses a spec it cannot build", async () => {
+    const big = await run("return gt2Pulley({ teeth: 20, bore: 12 });");
+    expect(big.ok).toBe(false);
+    expect(big.error).toMatch(/leaves no hub/);
+
+    const few = await run("return gt2Pulley({ teeth: 6 });");
+    expect(few.ok).toBe(false);
+    expect(few.error).toMatch(/at least 8 teeth/);
+
+    const badScrew = await run("return gt2Pulley({ teeth: 20, setScrew: 'M5' });");
+    expect(badScrew.ok).toBe(false);
+    expect(badScrew.error).toMatch(/"none", "M3" or "M4"/);
+  }, 40000);
+});
+
 // Regression, from the live timing pulley: the model assembled the teeth from
 // boxes placed around a cylinder, leaving them 0.75mm clear of the body and
 // reaching 7.5mm above it. Watertight, one connected solid, every gate passed,

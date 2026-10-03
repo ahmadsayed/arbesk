@@ -16,7 +16,7 @@ export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -209,6 +209,129 @@ function spurOutlinePoints(m: number, z: number, phi: number, steps: number): nu
   const points: number[][] = [];
   for (let i = 0; i < z; i++) {
     for (const p of toothPoints(i, z, phi, radii, steps)) points.push(p);
+  }
+  return points;
+}
+
+// Gates PowerGrip GT (GT2) 2mm-pitch dimensions. These are published
+// standard dimensions - facts, not creative work - quoted from the Gates
+// Light Power & Precision drive manual lineage (see backend/catalog.ts's
+// provenance note) and cross-checked against a Gates-licensee catalog (CMT
+// 2MR: pitch diameter minus outside diameter is 0.020" at every tooth count).
+/** Belt pitch: 2mm. */
+const GT2_PITCH = 2;
+/**
+ * Radial pitch factor: outside diameter = pitch diameter - 2 x 0.254.
+ * @remarks A 20-tooth pulley is 12.73mm pitch, 12.22mm across the teeth -
+ *   the "12.2mm GT2 pulley" every printer part is measured against.
+ */
+const GT2_PITCH_FACTOR = 0.254;
+/** Nominal groove depth (the belt tooth height), per the SDP/SI handbook. */
+const GT2_GROOVE_DEPTH = 0.76;
+/** Flat at the groove bottom, between the two flanks. */
+const GT2_VALLEY_FLAT = 0.45;
+/** Half the included groove angle: the flanks lean 20 deg off the radial. */
+const GT2_HALF_ANGLE = (20 * Math.PI) / 180;
+
+/**
+ * The radial clearance-hole diameter for a set-screw size, 0 for "none".
+ * @remarks Refuses a size the helper does not know, naming the allowed set.
+ */
+function gt2ScrewDiameter(screw: unknown): number {
+  const dia = ({ none: 0, M3: 3.4, M4: 4.5 } as Record<string, number>)[screw as string] ?? 0;
+  if (dia === 0 && screw !== "none") {
+    throw new Error('gt2Pulley: setScrew is "none", "M3" or "M4"');
+  }
+  return dia;
+}
+
+/**
+ * Rejects a pulley spec the kernel cannot build.
+ * @remarks A bore at or beyond the root circle minus 1mm would leave nothing
+ *   to hold the teeth, and flanges that touch the bore are not flanges - both
+ *   are refused by name rather than silently returned.
+ */
+function assertGt2Spec(z: number, width: number, bore: number, rRoot: number, flangeD: number): void {
+  if (!(z >= 8)) throw new Error("gt2Pulley needs at least 8 teeth");
+  if (!(width > 0)) throw new Error("gt2Pulley needs a positive beltWidth");
+  if (!(bore > 0) || bore / 2 >= rRoot - 1) {
+    throw new Error("gt2Pulley: a " + bore + " mm bore leaves no hub inside the " +
+      (2 * rRoot).toFixed(2) + " mm root diameter");
+  }
+  if (flangeD <= bore) throw new Error("gt2Pulley: flangeDiameter must clear the bore");
+}
+
+/**
+ * One resolved, validated GT2 pulley spec.
+ * @remarks Every dimension the build reads, so the helper body assembles
+ *   without re-deriving anything.
+ */
+interface Gt2Spec {
+  teeth: number;
+  beltWidth: number;
+  bore: number;
+  flanges: boolean;
+  flangeThickness: number;
+  flangeDiameter: number;
+  screwDiameter: number;
+  rOut: number;
+  rRoot: number;
+  total: number;
+}
+
+/** Defaults, the standard radii and the set-screw size for one option set. */
+function resolveGt2Spec(o: any): Gt2Spec {
+  const {
+    teeth = 20,
+    beltWidth = 6,
+    bore = 5,
+    flanges = true,
+    flangeThickness = 1,
+    setScrew = "none",
+  } = o ?? {};
+  const rOut = ((GT2_PITCH * teeth) / Math.PI - 2 * GT2_PITCH_FACTOR) / 2;
+  const rRoot = rOut - GT2_GROOVE_DEPTH;
+  const flangeDiameter = o.flangeDiameter ?? 2 * rOut + 2;
+  assertGt2Spec(teeth, beltWidth, bore, rRoot, flangeDiameter);
+  const screwDiameter = gt2ScrewDiameter(setScrew);
+  if (screwDiameter > 0 && screwDiameter >= bore) {
+    throw new Error("gt2Pulley: a set screw needs a bore bigger than " + screwDiameter + " mm");
+  }
+  return {
+    teeth, beltWidth, bore, flanges, flangeThickness, flangeDiameter,
+    screwDiameter, rOut, rRoot,
+    total: beltWidth + 2 * flangeThickness,
+  };
+}
+
+/**
+ * The closed 2D outline of a GT2 pulley, as [x, y] millimetre points.
+ * @remarks The Gates groove is a modified curvilinear profile; this is the
+ *   straight-flanked approximation every printable pulley uses - tip flat,
+ *   40 deg flanks, valley flat - with the dimensions above. Per tooth the
+ *   outline emits six points: tip centre, land edge, valley edge, valley
+ *   centre, and their mirrors, so consecutive points never span a groove.
+ */
+function gt2OutlinePoints(teeth: number): number[][] {
+  const z = teeth;
+  const pitchDia = (GT2_PITCH * z) / Math.PI;
+  const rOut = (pitchDia - 2 * GT2_PITCH_FACTOR) / 2;
+  const rRoot = rOut - GT2_GROOVE_DEPTH;
+  const flankArc = GT2_GROOVE_DEPTH * Math.tan(GT2_HALF_ANGLE);
+  const land = GT2_PITCH - 2 * flankArc - GT2_VALLEY_FLAT;
+  const at = (r: number, a: number): number[] => [r * Math.cos(a), r * Math.sin(a)];
+  const arc = (mm: number): number => mm / rOut;
+  const points: number[][] = [];
+  for (let i = 0; i < z; i++) {
+    const c = (i * 2 * Math.PI) / z;
+    points.push(
+      at(rOut, c),
+      at(rOut, c + arc(land / 2)),
+      at(rRoot, c + arc(land / 2 + flankArc)),
+      at(rRoot, c + arc(land / 2 + flankArc + GT2_VALLEY_FLAT / 2)),
+      at(rRoot, c + arc(land / 2 + flankArc + GT2_VALLEY_FLAT)),
+      at(rOut, c + arc(land / 2 + 2 * flankArc + GT2_VALLEY_FLAT)),
+    );
   }
   return points;
 }
@@ -637,6 +760,41 @@ export function buildPrelude(
       return solid.subtract(
         Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
       );
+    },
+
+    /**
+     * A GT2 (Gates PowerGrip GT, 2mm pitch) timing pulley with belt flanges,
+     * a shaft bore and an optional radial set-screw hole.
+     * @remarks Built from the published standard dimensions (see the constants
+     *   above): a 20-tooth pulley is 12.73mm pitch diameter, 12.22mm across
+     *   the teeth, grooves 0.76mm deep - the part every printer uses but no
+     *   model draws correctly by hand. The groove is the straight-flanked
+     *   printable approximation (40 deg included), not the curvilinear
+     *   molded profile. Lies on z = 0, axis on the origin: flange, toothed
+     *   body of beltWidth, flange. Dimensions are facts and carry no credit
+     *   (as Gridfinity's do).
+     */
+    gt2Pulley: (opts: any = {}) => {
+      const s = resolveGt2Spec(opts);
+      let part = Manifold.extrude(
+        CrossSection.ofPolygons([gt2OutlinePoints(s.teeth)]),
+        s.beltWidth, 0, 0, [1, 1], false,
+      ).translate([0, 0, s.flangeThickness]);
+      if (s.flanges) {
+        const flange = Manifold.cylinder(s.flangeThickness, s.flangeDiameter / 2, s.flangeDiameter / 2, segmentsFor(opts), false);
+        part = part.add(flange).add(flange.translate([0, 0, s.flangeThickness + s.beltWidth]));
+      }
+      part = part.subtract(
+        Manifold.cylinder(s.total + 2, s.bore / 2, s.bore / 2, segmentsFor(opts), true)
+          .translate([0, 0, s.total / 2]),
+      );
+      if (s.screwDiameter > 0) {
+        part = part.subtract(
+          Manifold.cylinder(2 * s.rRoot, s.screwDiameter / 2, s.screwDiameter / 2, segmentsFor(opts), true)
+            .rotate([0, 90, 0]).translate([0, 0, s.flangeThickness + s.beltWidth / 2]),
+        );
+      }
+      return part;
     },
 
     /**
