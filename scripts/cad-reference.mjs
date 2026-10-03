@@ -49,6 +49,26 @@ const CASES = {
     defines: { part: "\"side_frame\"", spool_max_diameter: "300", spool_max_width: "70", base_depth: "220" },
     code: "return spoolHolder({ part: 'side_frame', spoolMaxDiameter: 300, spoolMaxWidth: 70, baseDepth: 220 });",
   },
+  ...Object.fromEntries(Object.entries({
+    "gf-cup-default": [{}, "{}"],
+    "gf-cup-2x3x6": [{ width: "2", depth: "3", height: "6" }, "{ width: 2, depth: 3, height: 6 }"],
+    "gf-cup-full": [
+      { width: "3", depth: "2", height: "4", chambers: "3", withLabel: "\"left\"",
+        magnet_diameter: "6.5", screw_depth: "6" },
+      "{ width: 3, depth: 2, height: 4, chambers: 3, withLabel: 'left', magnetDiameter: 6.5, screwDepth: 6 }",
+    ],
+    "gf-cup-reduced": [
+      { width: "1", depth: "1", height: "2", lip_style: "\"reduced\"", fingerslide: "false" },
+      "{ width: 1, depth: 1, height: 2, lipStyle: 'reduced', fingerslide: false }",
+    ],
+    "gf-cup-half-nolip": [
+      { width: "0.5", depth: "2", height: "3", lip_style: "\"none\"", withLabel: "\"center\"" },
+      "{ width: 0.5, depth: 2, height: 3, lipStyle: 'none', withLabel: 'center' }",
+    ],
+  }).map(([name, [defines, args]]) => [name, {
+    repo: "vector76/gridfinity_openscad", file: "gridfinity_basic_cup.scad", defines,
+    code: "return gridfinityCup(" + args + ");",
+  }])),
   "knuckle-bare": {
     scad: "knuckle-bare.scad",
     code: "return knuckleHinge({ length: 35, segs: 6, offset: 5, inner: true, armHeight: 2, armAngle: 60, clip: 1 });",

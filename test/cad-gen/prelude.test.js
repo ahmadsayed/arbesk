@@ -560,3 +560,36 @@ describe("ported spool holder", () => {
     expect(r.error).toContain("4 mm of spool flange");
   });
 });
+
+// OpenSCAD's render of vector76's gridfinity_basic_cup.scad (MIT) with these
+// -D settings - see scripts/cad-reference.mjs gf-cup-*.
+describe("ported Gridfinity bin", () => {
+  const cases = [
+    ["{}", [83.5, 41.5, 24.75], 25985.7],
+    ["{ width: 2, depth: 3, height: 6 }", [83.5, 125.5, 45.75], 75384.2],
+    ["{ width: 1, depth: 1, height: 2, lipStyle: 'reduced', fingerslide: false }", [41.5, 41.5, 17.75], 10923.5],
+  ];
+  for (const [args, size, volume] of cases) {
+    it(args + " matches OpenSCAD's render", async () => {
+      const r = await run("P.s; return gridfinityCup(" + args + ");");
+      expect(r.ok).toBe(true);
+      const got = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+      for (const a of [0, 1, 2]) expect(got[a]).toBeCloseTo(size[a], 1);
+      expect(Math.abs(r.stats.volumeMm3 - volume) / volume).toBeLessThan(0.001);
+      expect(r.stats.bodies.count).toBe(1);
+    });
+  }
+
+  it("refuses a label style that is not a string, saying how to pass one", async () => {
+    // attempt#14: labelMap[P.idx] missed, and the port crashed on startsWith.
+    const r = await run("P.s; return gridfinityCup({ withLabel: undefined, chambers: 2 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("write the string literally");
+  });
+
+  it("refuses a fractional depth the port does not support", async () => {
+    const r = await run("P.s; return gridfinityCup({ depth: 1.5 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("depth is whole grid units");
+  });
+});

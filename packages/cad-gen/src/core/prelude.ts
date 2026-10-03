@@ -7,13 +7,14 @@
 import type { ManifoldModule } from "../types.ts";
 import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
 import { spoolHolder } from "./library/spool-holder.ts";
+import { gridfinityCup } from "./library/gridfinity-cup.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -923,6 +924,14 @@ export function buildPrelude(
      *   OpenSCAD's render of every part: scripts/cad-reference.mjs.
      */
     spoolHolder: (opts: any = {}) => spoolHolder(module, opts ?? {}),
+
+    /**
+     * A complete Gridfinity bin: feet, walls, stacking lip, chambers, label tab.
+     * @remarks PORT of basic_cup() from gridfinity_openscad, MIT, by Jamie (vector76)
+     *   (github.com/vector76) - credited through ATTRIBUTED_HELPERS. Matches
+     *   OpenSCAD's render: scripts/cad-reference.mjs, cases gf-cup-*.
+     */
+    gridfinityCup: (opts: any = {}) => gridfinityCup(module, opts ?? {}),
 
     /**
      * A rack of cup pockets on a stable base.

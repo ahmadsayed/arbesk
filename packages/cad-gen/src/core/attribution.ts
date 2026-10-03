@@ -114,6 +114,17 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "MIT",
     url: "https://github.com/Burke9077/3dthings-filament-spool-holder",
   },
+  // MIT. Licence gated by scripts/cad-candidates.mjs per file (GitHub SPDX MIT,
+  // Jev "permissive", each file the repository's own work) and read by hand.
+  // Five configurations match OpenSCAD: scripts/cad-reference.mjs gf-cup-*.
+  gridfinityCup: {
+    helper: "gridfinityCup",
+    work: "gridfinity_openscad (gridfinity_basic_cup.scad, basic_cup())",
+    author: "Jamie (vector76)",
+    authorGithub: ["https://github.com/vector76"],
+    licence: "MIT",
+    url: "https://github.com/vector76/gridfinity_openscad",
+  },
   phoneStand: {
     helper: "phoneStand",
     work: "SmartPhoneHolder",
