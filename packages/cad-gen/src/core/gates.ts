@@ -25,6 +25,25 @@ export interface KernelLimits {
 const EMPTY_MESH_ERROR = "mesh has no triangles - the operation removed the whole part" +
   " (check hole, boltCircle, fillet and chamfer sizes against the part dimensions)";
 
+/**
+ * Compiles the body with the kernel's exact signature, without calling it.
+ * @remarks Static gating used to stop at the guard, so a body that does not
+ *   even parse - attempt#1's hinge redeclared a const - passed every server
+ *   gate and failed only in the client, costing a repair round trip. The
+ *   parameter list must match `compileScript` in kernel.ts: redeclaring a
+ *   parameter name (`const P = ...`) is itself a syntax error.
+ * @returns The parser's message, or undefined when the body compiles.
+ */
+function parseError(code: string, preludeNames: Iterable<string>): string | undefined {
+  try {
+    // Compiled, never invoked: nothing in the body runs.
+    new Function("PARAMETERS", "P", "M", ...preludeNames, code);
+    return undefined;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
 /** Gates that need no execution. Cheap enough to run before every attempt. */
 export function evaluateStaticGates(
   design: CadDesign,
@@ -39,6 +58,11 @@ export function evaluateStaticGates(
       gate: "guard", ok: false,
       error: guard.reason + (guard.detail ? ": " + guard.detail : ""),
     });
+
+  const syntaxError = parseError(design.code, preludeNames);
+  gates.push(syntaxError === undefined
+    ? { gate: "syntax", ok: true }
+    : { gate: "syntax", ok: false, error: "script does not parse: " + syntaxError });
 
   const usesParameters = /\bPARAMETERS\b|\bP\./.test(design.code);
   gates.push(usesParameters

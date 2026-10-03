@@ -22,6 +22,21 @@ describe("evaluateStaticGates", () => {
     const gates = evaluateStaticGates(design("return box(1, 1, 1);"), PRELUDE);
     expect(gates.find((g) => g.gate === "parameters").ok).toBe(false);
   });
+
+  it("fails the syntax gate for a script that does not parse", () => {
+    // attempt#1 hinge: a live design redeclared a const and reached the client.
+    const gates = evaluateStaticGates(
+      design("const c = P.s; const c = 1; return box(c, c, c);"), PRELUDE);
+    const syntax = gates.find((g) => g.gate === "syntax");
+    expect(syntax.ok).toBe(false);
+    expect(syntax.error).toContain("does not parse");
+  });
+
+  it("checks syntax without running the script", () => {
+    const gates = evaluateStaticGates(
+      design("throw new Error('ran'); return box(P.s, P.s, P.s);"), PRELUDE);
+    expect(gates.find((g) => g.gate === "syntax").ok).toBe(true);
+  });
 });
 
 describe("evaluateKernelGates", () => {
