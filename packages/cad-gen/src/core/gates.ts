@@ -19,6 +19,11 @@ export interface KernelLimits {
    * for a print-in-place hinge or a clamp in two halves - see bodyAllowance.
    */
   maxBodies?: number;
+  /**
+   * Fewest bodies the part may have; 1 when absent. Above 1 only when the
+   * request needs separate pieces that would be wrong fused - see bodyFloor.
+   */
+  minBodies?: number;
 }
 
 /**
@@ -40,6 +45,28 @@ export function bodyAllowance(code: string, expectedPieces?: number): number {
   const floor = Math.max(1, ...Object.entries(MULTI_BODY_HELPERS)
     .filter(([name]) => called.has(name)).map(([, n]) => n));
   return Math.max(floor, expectedPieces ?? 1);
+}
+
+/**
+ * Jev's `pieces_separate` probability at or above which fewer bodies than its
+ * piece count is a defect.
+ * @remarks Measured live on 20 requests: fused-is-wrong 0.84-0.97 (two-half
+ *   clamp, coasters, sliding or snap-fit lid, spacers), fused-may-be-fine
+ *   0.05-0.65 (the highest a box with a hinged lid, which may be a living hinge).
+ */
+export const SEPARATE_THRESHOLD = 0.75;
+
+/**
+ * The fewest bodies a design may have: Jev's piece count, but only when Jev
+ * also judged that one fused solid would be wrong for the request.
+ * @remarks Fails open - with either answer missing, or a count of one, it is
+ *   1, so a Jev outage never fails a part. A count of 5 ("5 or more") asks for
+ *   at least 5.
+ * @param expectedPieces Jev's count. @param piecesSeparate Jev's probability.
+ */
+export function bodyFloor(expectedPieces?: number, piecesSeparate?: number): number {
+  if (expectedPieces === undefined || piecesSeparate === undefined) return 1;
+  return piecesSeparate >= SEPARATE_THRESHOLD ? Math.max(1, expectedPieces) : 1;
 }
 
 type Box = { min: [number, number, number]; max: [number, number, number] };
@@ -73,6 +100,22 @@ function disconnectedError(bodies: NonNullable<CadStats["bodies"]>, allowed: num
     "touch the body it belongs to. Bounding boxes, largest first:\n" + listed.join("\n") + "\n" +
     "Make every feature OVERLAP the main body (by 0.5mm or more), not merely meet it: " +
     "remember every builder is centred on the origin, and use stack() to put parts end to end.";
+}
+
+/**
+ * The pieces-gate failure: the request's separate pieces came out fused.
+ * @remarks attempt#4's two-half pipe clamp came back as one block and passed,
+ *   because the connected gate only caps bodies from above. The repair must
+ *   SEPARATE, the opposite of the connected gate's "overlap" advice.
+ */
+function fusedError(count: number, wanted: number): string {
+  const want = wanted >= 5 ? "5 or more" : String(wanted);
+  return "the part is " + count + " bod" + (count === 1 ? "y" : "ies") + ", but the request needs " +
+    want + " SEPARATE pieces that must not be fused (two clamp halves, a set of items, a lid that " +
+    "comes off or slides). Pieces that touch or overlap merge into one body. Build each piece as " +
+    "its own solid and lay them out apart on the print bed, at least 2mm between any two, then " +
+    "return them together - separate bodies are expected here. Do not join the pieces with a " +
+    "bridge, rib or pin; bolt holes that join them in use go through each piece.";
 }
 
 /**
@@ -135,6 +178,20 @@ export function evaluateStaticGates(
   return gates;
 }
 
+/** Caps bodies from above; passes when the kernel reported no body count. */
+function connectedGate(bodies: CadStats["bodies"], max: number): GateResult {
+  return bodies === undefined || bodies.count <= max
+    ? { gate: "connected", ok: true }
+    : { gate: "connected", ok: false, error: disconnectedError(bodies, max) };
+}
+
+/** Floors bodies from below; passes when the kernel reported no body count. */
+function piecesGate(bodies: CadStats["bodies"], min: number): GateResult {
+  return bodies === undefined || bodies.count >= min
+    ? { gate: "pieces", ok: true }
+    : { gate: "pieces", ok: false, error: fusedError(bodies.count, min) };
+}
+
 /** Gates evaluated against a successful kernel run. */
 export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): GateResult[] {
   return [
@@ -146,9 +203,8 @@ export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): Gate
       ? { gate: "volume", ok: true }
       : { gate: "volume", ok: false, error: "solid has no volume - the result is degenerate" },
 
-    stats.bodies === undefined || stats.bodies.count <= (limits.maxBodies ?? 1)
-      ? { gate: "connected", ok: true }
-      : { gate: "connected", ok: false, error: disconnectedError(stats.bodies, limits.maxBodies ?? 1) },
+    connectedGate(stats.bodies, limits.maxBodies ?? 1),
+    piecesGate(stats.bodies, limits.minBodies ?? 1),
 
     stats.triangles <= limits.maxTriangles
       ? { gate: "budget", ok: true }

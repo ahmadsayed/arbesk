@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { bodyAllowance, evaluateStaticGates, evaluateKernelGates } from "@arbesk/cad-gen/core/gates.js";
+import {
+  bodyAllowance, bodyFloor, evaluateStaticGates, evaluateKernelGates, SEPARATE_THRESHOLD,
+} from "@arbesk/cad-gen/core/gates.js";
 import { validateDesign } from "@arbesk/cad-gen/backend/validate.js";
 
 const PRELUDE = ["box", "hole"];
@@ -87,6 +89,31 @@ describe("evaluateKernelGates", () => {
     expect(bodyAllowance("return box(1, 1, 1);", undefined)).toBe(1);
     expect(bodyAllowance("return box(1, 1, 1);", 3)).toBe(3);
     expect(bodyAllowance("return box(1, 1, 1);", 5)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("fails the pieces gate when separate pieces came out fused", () => {
+    // attempt#4: a two-half pipe clamp came back as one block and passed.
+    const at = (count, minBodies) => evaluateKernelGates(
+      { ...stats, bodies: { count, boxes: [{ min: [0, 0, 0], max: [1, 1, 1] }] } },
+      { ...LIMITS, maxBodies: 2, minBodies },
+    ).find((g) => g.gate === "pieces");
+    expect(at(1, 2).ok).toBe(false);
+    expect(at(1, 2).error).toContain("1 body, but the request needs 2 SEPARATE pieces");
+    expect(at(1, 2).error).toContain("at least 2mm");
+    expect(at(2, 2).ok).toBe(true);
+    expect(at(1, undefined).ok).toBe(true);
+    expect(evaluateKernelGates(stats, { ...LIMITS, minBodies: 4 })
+      .find((g) => g.gate === "pieces").ok).toBe(true);
+  });
+
+  it("asks for a floor only when Jev judged fused pieces wrong, and fails open", () => {
+    expect(bodyFloor(2, 0.95)).toBe(2);
+    expect(bodyFloor(4, SEPARATE_THRESHOLD)).toBe(4);
+    // A hinged box can be one piece with a living hinge: Jev 0.65.
+    expect(bodyFloor(2, 0.65)).toBe(1);
+    expect(bodyFloor(1, 0.95)).toBe(1);
+    expect(bodyFloor(2, undefined)).toBe(1);
+    expect(bodyFloor(undefined, 0.95)).toBe(1);
   });
 
   it("fails on a degenerate volume", () => {

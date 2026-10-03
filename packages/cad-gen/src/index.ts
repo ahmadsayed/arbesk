@@ -19,7 +19,10 @@ export { ATTRIBUTED_HELPERS, attributionsFor } from "./core/attribution.ts";
 export type { Attribution } from "./core/attribution.ts";
 export { guardScript } from "./core/guard.ts";
 export type { GuardResult } from "./core/guard.ts";
-export { bodyAllowance, evaluateStaticGates, evaluateKernelGates, MULTI_BODY_HELPERS } from "./core/gates.ts";
+export {
+  bodyAllowance, bodyFloor, evaluateStaticGates, evaluateKernelGates, MULTI_BODY_HELPERS,
+  SEPARATE_THRESHOLD,
+} from "./core/gates.ts";
 export type { GateResult, KernelLimits } from "./core/gates.ts";
 export { meshToGlb } from "./core/export/glb.ts";
 export { meshTo3mf, readDesignFrom3mf } from "./core/export/three-mf.ts";

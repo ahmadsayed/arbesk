@@ -52,6 +52,7 @@ export interface JevClient {
   ): Promise<{
     fit: Record<string, LibraryFit>;
     expectedPieces?: number;
+    piecesSeparate?: number;
     suitability?: number;
     usage: TokenUsage;
   }>;
@@ -103,6 +104,31 @@ const PIECE_COUNT = {
     three: "3 pieces",
     four: "4 pieces",
     many: "5 or more pieces",
+  },
+};
+
+/**
+ * Question id for "would ONE fused solid be wrong for this request?".
+ * @remarks The piece count only caps bodies from above; this decides whether
+ *   FEWER bodies than the count is a defect (two clamp halves fused into one
+ *   block) or a legitimate reading (a hinged box with a living hinge). Asked in
+ *   the same call, so it costs a few dozen input tokens. Calibrated live on 20
+ *   requests, stable across two runs: fused-is-wrong 0.84-0.97 (clamp 0.95,
+ *   four coasters 0.95, sliding-lid box 0.95, three spacers 0.93, snap-fit lid
+ *   0.84); fused-may-be-fine 0.05-0.65 (hinged box 0.65, print-in-place chain
+ *   0.45, print-in-place hinge 0.34, Gridfinity bin with dividers 0.30, living
+ *   hinge 0.15, bracket 0.05). See SEPARATE_THRESHOLD in core/gates.ts.
+ */
+export const SEPARATE_QUESTION = "pieces_separate";
+
+const SEPARATE = {
+  type: "noul",
+  instructions: "Would printing this request as ONE fused, connected solid be wrong - for example " +
+    "two clamp halves that must close around something, a set of several items, or a lid that " +
+    "must come off or slide?",
+  criteria: {
+    true: "Fused into one solid it is wrong: the request needs separate loose pieces",
+    false: "A single connected solid is fine",
   },
 };
 
@@ -168,6 +194,22 @@ export async function askJev(
   }
 }
 
+/** A noul answer's probability, or undefined when Jev gave none. */
+const noulOf = (answer: any): number | undefined =>
+  typeof answer?.noul === "number" ? answer.noul : undefined;
+
+/** The request-level answers - piece count, separation, suitability - leaving out any missing. */
+function readJudgements(answers: any): {
+  expectedPieces?: number; piecesSeparate?: number; suitability?: number;
+} {
+  const judged = {
+    expectedPieces: PIECE_COUNTS[answers?.[PIECE_COUNT_QUESTION]?.choice],
+    piecesSeparate: noulOf(answers?.[SEPARATE_QUESTION]),
+    suitability: noulOf(answers?.[SUITABILITY_QUESTION]),
+  };
+  return Object.fromEntries(Object.entries(judged).filter(([, v]) => v !== undefined));
+}
+
 /** Jev's token usage, in this package's TokenUsage shape. */
 const usageOf = (body: any): TokenUsage => ({
   prompt: body?.usage?.input_tokens ?? 0,
@@ -181,14 +223,12 @@ export function createJevClient(config: JevConfig): JevClient {
         {
           ...fitQuestions(candidates),
           [PIECE_COUNT_QUESTION]: PIECE_COUNT,
+          [SEPARATE_QUESTION]: SEPARATE,
           [SUITABILITY_QUESTION]: SUITABILITY,
         }, signal);
-      const pieces = PIECE_COUNTS[body?.answers?.[PIECE_COUNT_QUESTION]?.choice];
-      const suitable = body?.answers?.[SUITABILITY_QUESTION]?.noul;
       return {
         fit: readFits(body, Object.keys(candidates)),
-        ...(pieces === undefined ? {} : { expectedPieces: pieces }),
-        ...(typeof suitable === "number" ? { suitability: suitable } : {}),
+        ...readJudgements(body?.answers),
         usage: usageOf(body),
       };
     },
