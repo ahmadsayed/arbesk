@@ -54,11 +54,15 @@ export function createCdpServerSigner(config: CdpServerSignerConfig): Signer {
       const wait = async (): Promise<MinedReceipt> => {
         for (let i = 0; i < 180; i++) {
           const op = await getOperation(userOpHash);
-          if (op.status === "complete") {
-            return { transactionHash: op.transactionHash ?? userOpHash, status: true };
-          }
           if (op.status === "failed" || op.status === "dropped") {
             return { transactionHash: op.transactionHash ?? userOpHash, status: false };
+          }
+          // transactionHash is set once the op is in a block, which can be
+          // well before CDP's status string reaches "complete" — return then
+          // rather than holding the relay response open (mirrors the browser
+          // poller in wallet-cdp.ts).
+          if (op.transactionHash || op.status === "complete") {
+            return { transactionHash: op.transactionHash ?? userOpHash, status: true };
           }
           await new Promise((r) => setTimeout(r, 1000));
         }

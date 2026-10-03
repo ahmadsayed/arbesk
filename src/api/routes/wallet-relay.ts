@@ -89,6 +89,19 @@ async function executeRelayOp(
 }
 
 /**
+ * address (lowercase) → resolved CDP end user.
+ * @remarks An address-scan pages through every CDP end user, so cache hits;
+ *   the address → userId mapping never changes. Misses are not cached (the
+ *   user may delegate later).
+ */
+const relayUserCache = new Map<string, { userId: string; address: string }>();
+
+/** Test hook: clears the address-scan cache. */
+export function _resetRelayUserCache(): void {
+  relayUserCache.clear();
+}
+
+/**
  * Resolves the CDP end-user id for a relay op.
  * @remarks Logs enough detail to diagnose "Smart account not found" failures:
  *   whether the userId came from the session or an address scan, and which
@@ -101,6 +114,12 @@ async function resolveRelayUserId(
   if (record.userId) {
     console.log("[RELAY] session userId=" + record.userId + " address=" + record.address);
     return { userId: record.userId, address: record.address };
+  }
+  const key = record.address.toLowerCase();
+  const cached = relayUserCache.get(key);
+  if (cached) {
+    console.log("[RELAY] cached userId=" + cached.userId + " address=" + cached.address);
+    return cached;
   }
   const u: { userId?: string; evmSmartAccounts?: string[] } | null =
     await findEndUserByAddress(cdp, record.address);
@@ -117,6 +136,7 @@ async function resolveRelayUserId(
     " | sessionAddress=" + record.address +
     " | canonicalAddress=" + canonical
   );
+  if (u.userId) relayUserCache.set(key, { userId: u.userId, address: canonical });
   return { userId: u.userId ?? null, address: canonical };
 }
 

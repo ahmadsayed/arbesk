@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, jest, test } from "bun:test";
 import { mountRoutes } from "../helpers/hono.js";
 import request from "supertest";
-import walletRelayRoutes from "../../src/api/routes/wallet-relay.ts";
+import walletRelayRoutes, { _resetRelayUserCache } from "../../src/api/routes/wallet-relay.ts";
 import { createSession, sessions } from "../../src/api/sessions.ts";
 import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
 
@@ -43,6 +43,7 @@ describe("wallet relay", () => {
   beforeEach(() => {
     _resetRateLimiters();
     sessions.clear();
+    _resetRelayUserCache();
   });
 
   test("relays an updateUri write for an email session", async () => {
@@ -91,6 +92,23 @@ describe("wallet relay", () => {
       .send({ op: "updateUri", tokenId: "1", contractAddress: "0xcont", params: { newUri: "ipfs://new", proof: [] } });
     expect(res.status).toBe(200);
     expect(cdp.endUser.sendUserOperation.mock.calls[0][0].userId).toBe("u-delegated");
+  });
+
+  test("caches the address-scan result so repeat relays skip listEndUsers", async () => {
+    const cdp = fakeCdp({
+      users: [{ userId: "u-delegated", evmSmartAccounts: ["0xAbC"], evmSmartAccountObjects: [{ address: "0xAbC" }] }],
+    });
+    const app = makeApp(cdp, fakeAuthz());
+    const token = createSession("0xabc");
+    const body = { op: "updateUri", tokenId: "1", contractAddress: "0xcont", params: { newUri: "ipfs://new", proof: [] } };
+    for (let i = 0; i < 2; i++) {
+      const res = await request(app).post("/wallet/relay").set("Authorization", "Session " + token).send(body);
+      expect(res.status).toBe(200);
+    }
+    expect(cdp.endUser.listEndUsers).toHaveBeenCalledTimes(1);
+    const second = cdp.endUser.sendUserOperation.mock.calls[1][0];
+    expect(second.userId).toBe("u-delegated");
+    expect(second.address).toBe("0xAbC");
   });
 
   test("rejects when authz denies", async () => {

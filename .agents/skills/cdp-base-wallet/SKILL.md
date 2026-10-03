@@ -5,7 +5,7 @@ description: Use for CDP/Base email-login smart wallet work — "CDP email login
 
 # CDP Base Wallet Integration
 
-CDP email-login smart wallets: sign-in failures, transaction submission, EIP-1193 shim, integration updates.
+CDP email-login smart wallets: sign-in failures, transaction submission (browser Signer + backend relay), integration updates.
 
 ## Quick Decision Table
 
@@ -14,7 +14,7 @@ CDP email-login smart wallets: sign-in failures, transaction submission, EIP-119
 | `EVM account not found` during SIWE signing | `signEvmMessage` expects an **address string**, not the account object | Pass `eoaAccount.address`, not `eoaAccount` |
 | `must be a valid HTTP or HTTPS URL with at least 11 characters` | `paymasterUrl` relative/malformed; must be absolute | `useCdpPaymaster: true` for local dev; production custom paymasters need the backend proxy on a public HTTPS URL |
 | `POST https://sepolia.base.org/ 403` | blocks browser-origin RPC requests | Use `https://base-sepolia-rpc.publicnode.com` for RPC passthrough (already in CSP) |
-| Transaction spinner never resolves after UserOperation submit | CDP returns a UserOperation hash; Web3.js expects an EVM txHash | Poll `getUserOperation()`; return `transactionHash` as soon as set — before `status` reaches `"complete"` |
+| Last "on-chain" step hangs long after the tx landed | Poller waits for `status === "complete"`, which lags block inclusion | Both pollers (browser `wallet-cdp.ts`, server `cdp-signer.ts`) return as soon as `transactionHash` is set |
 | UserOperation polling times out with no error | Prepared ops expire (`expiresAt`); status enum is `pending/signed/broadcast/complete/dropped/failed` | Our poller already treats `failed`/`dropped` as terminal. On timeout, re-check `getUserOperation()` before retrying — the op may still land; blind resubmission can double-execute |
 | OTP verification rejects the code | `otp_verification_expired` / `otp_verification_code_invalid` / `otp_verification_destination_mismatch` | Codes are single-use and flow-bound — restart with `signInWithEmail`; full OTP error list in `reference.md` |
 | `User is already authenticated` | Stale CDP session (localStorage/IndexedDB/cookies) | Clear CDP/coinbase keys + `disconnectCdpWallet()` before a new OTP flow |
@@ -28,17 +28,17 @@ CDP email-login smart wallets: sign-in failures, transaction submission, EIP-119
    await signEvmMessage({ evmAccount: eoaAccount.address, message });
    ```
 2. **Smart accounts are Base Sepolia only** — gate with `isSmartWalletSupported(chainId)` (`smart-wallet-support.js`).
-3. **Never return a UserOperation hash to Web3.js** — it polls `eth_getTransactionReceipt` with it. Return the real `transactionHash` from `getUserOperation()` (set once the op is in a block, independent of `status`).
+3. **Never surface a UserOperation hash as a tx hash, and don't wait on `status`** — return the real `transactionHash` from `getUserOperation()` as soon as it is set (once the op is in a block, independent of `status`). Applies to the browser poller and the server relay signer.
 4. **`useCdpPaymaster: true` for local dev** — CDP's bundler can't reach `localhost`.
 5. **Clear stale CDP state before a new OTP flow** — `wallet-modal.js` clears CDP/coinbase storage + `disconnectCdpWallet()` first; the SDK caches across localStorage, IndexedDB, and cookies.
 
 ## Key Files
 
-- `frontend/src/js/blockchain/wallet-cdp.ts` — CDP SDK wrapper + EIP-1193 shim
+- `frontend/src/js/blockchain/wallet-cdp.ts` — CDP SDK wrapper + native `Signer` (`createCdpSigner`)
 - `frontend/src/js/blockchain/wallet-core.ts` — orchestration; `localStorage` `arbesk-cdp-email` / `arbesk-last-wallet`; silent auto-restore on page load
 - `frontend/src/js/ui/wallet-modal.ts` — email OTP UI; clears stale CDP state first
 - `frontend/src/js/ui/header-wallet-button.ts` — shows CDP email; hides network selector for CDP sessions
-- `frontend/src/js/blockchain/wallet-publishing.ts` — publish/updateURI with smart-account gas skipping
+- `frontend/src/js/blockchain/wallet-publishing.ts` — CDP publish/updateUri/updateEditors/burn go through `_relayForCdp` → `src/api/routes/wallet-relay.ts` → `src/api/cdp-signer.ts`
 - `src/api/routes/paymaster.ts` — backend paymaster proxy (production custom paymasters)
 - `src/api/siwe-verify.ts` — SIWE verification with `eoaAddress` fallback
 

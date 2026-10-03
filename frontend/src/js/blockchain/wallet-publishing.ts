@@ -49,6 +49,9 @@ function _readyContract() {
 
 /**
  * Writes through the backend relay for CDP (email) sessions (no browser tx).
+ * @remarks The relay responds only once the op is mined, so pendingPayload is
+ *   emitted as ASSET_PUBLISH_PENDING up front (txHash null) — the relay
+ *   bypasses sendContractCall, which emits it on the EOA path.
  * @returns { handled, txHash }; when not CDP, handled=false and the caller
  *   falls through to the EOA browser-transaction path.
  */
@@ -56,8 +59,12 @@ async function _relayForCdp(
   op: "publish" | "updateUri" | "updateEditors" | "burn",
   tokenId: number | string,
   params: Record<string, unknown>,
+  pendingPayload?: Record<string, unknown>,
 ): Promise<{ handled: boolean; txHash: string | null }> {
   if (getActiveConnectionSource() !== "cdp") return { handled: false, txHash: null };
+  if (pendingPayload) {
+    emit(EVENTS.ASSET_PUBLISH_PENDING, { ...pendingPayload, txHash: null });
+  }
   try {
     const receipt = await relayWrite(op, tokenId, params);
     return { handled: true, txHash: (receipt as any)?.transactionHash ?? null };
@@ -82,11 +89,12 @@ async function publishAsset(
   const c = _readyContract();
   if (!c) return null;
 
-  const relayed = await _relayForCdp("publish", tokenId, {
-    uri: tokenURI,
-    editorRoot,
-    editorListUri,
-  });
+  const relayed = await _relayForCdp(
+    "publish",
+    tokenId,
+    { uri: tokenURI, editorRoot, editorListUri },
+    { tokenId, tokenURI }
+  );
   if (relayed.handled) {
     if (relayed.txHash) {
       emit(EVENTS.ASSET_PUBLISHED, { tokenId, tokenURI, txHash: relayed.txHash });
@@ -138,7 +146,12 @@ async function updateAssetURI(
   const c = _readyContract();
   if (!c) return null;
 
-  const relayed = await _relayForCdp("updateUri", tokenId, { newUri: newTokenURI, proof, assetScope, assetId });
+  const relayed = await _relayForCdp(
+    "updateUri",
+    tokenId,
+    { newUri: newTokenURI, proof, assetScope, assetId },
+    { tokenId, tokenURI: newTokenURI }
+  );
   if (relayed.handled) {
     _notifyUriChanged(tokenId, newTokenURI, relayed.txHash, assetId);
     return relayed.txHash;
