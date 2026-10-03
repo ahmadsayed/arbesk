@@ -3,6 +3,8 @@
  */
 export { createGenerationProvider } from "./facade.ts";
 export type { GenerationProvider, GenerationConfig } from "./facade.ts";
+export { createProviderRegistry } from "./registry.ts";
+export type { ProviderFactory, ProviderRegistry } from "./registry.ts";
 export { UnsupportedCapabilityError, requireCapability } from "./errors.ts";
 export type {
   GenerationCapability,

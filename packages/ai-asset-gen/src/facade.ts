@@ -13,6 +13,7 @@ import type {
 } from "./types.ts";
 import { createMockProvider } from "./providers/mock-provider.ts";
 import { createTripoProvider } from "./providers/tripo-provider.ts";
+import { createProviderRegistry } from "./registry.ts";
 
 export interface GenerationProvider {
   readonly id: string;
@@ -57,8 +58,11 @@ export interface GenerationConfig {
   capabilities: GenerationCapability[];
 }
 
+const defaultRegistry = createProviderRegistry({
+  mock: (config) => createMockProvider(config),
+  tripo3d: (config) => createTripoProvider(config),
+});
+
 export function createGenerationProvider(config: GenerationConfig): GenerationProvider {
-  if (config.id === "mock") return createMockProvider(config);
-  if (config.id === "tripo3d") return createTripoProvider(config);
-  throw new Error("unknown generation provider: " + config.id);
+  return defaultRegistry.resolve(config.id, config);
 }
