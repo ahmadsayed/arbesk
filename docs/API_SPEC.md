@@ -182,13 +182,14 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 - Requires Session auth (`Authorization: Session <token>`).
 - Applies rate limit: 10 requests/hour per wallet (1000/hr in mock mode).
 - Requires `nodeId` and **one of** `prompt`, `imageData`, `images`, or `sourceAssetCid` (refinement / retexture / retopo / animate).
-- Accepts optional `provider` (`"mock"` or `"tripo3d"`) and optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
+- Accepts optional `provider` (`"mock"`, `"tripo3d"`, or `"cad"`) and optional `providerKey` for BYOK (Bring Your Own Key) cloud providers.
 - Accepts optional `imageData` + `imageMime` (`tripo3d` only): a base64-encoded JPEG/PNG/WebP image (max ~10 MB raw) for image-to-3D. The backend uploads the image to Tripo (`POST /files`), starts an image-to-model task, and returns `202` — the polling flow is identical to text-to-3D. An image always starts a fresh model. The browser also pins the reference image to IPFS and records it in the manifest node as `reference_image: {cid, mime, name}` — the provenance chain keeps what the model was made from.
 - Accepts optional `images` (`tripo3d` only) for multiview-to-3D: an array of 2–4 `{ imageData, imageMime, view }` entries (`view` ∈ `front`/`left`/`back`/`right`; unique views, exactly one `front`; mutually exclusive with `imageData`). The backend uploads each view (`POST /files`) and starts a `generation/multiview-to-model` task with view-key `inputs` in canonical order; the `202` polling flow is identical. The browser pins every view to IPFS and records `reference_images: [{cid, mime, name, view}]` in the manifest node (plus `reference_image` = the front view for back-compat).
 - Accepts optional `sourceAssetCid` + `animate` + `animations` (`tripo3d` only): the IPFS CID of a previously generated GLB, plus 1–5 retarget presets (`preset:idle`, `preset:walk`, `preset:run`, `preset:dive`, `preset:climb`, `preset:jump`, `preset:slash`, `preset:shoot`, `preset:hurt`, `preset:fall`, `preset:turn`). The backend fetches the GLB from IPFS and uploads it to Tripo (`POST /files` → `file_token`), so the reference never expires. With `"rigOnly": true` instead of `animations`, the chain stops after the rig step and returns the rigged GLB (Tripo-native skeleton) with no baked animation. With optional `sourceTaskId` (backend registry id of a completed rig-only task), the chain takes the retarget-only path, skipping rig-check/rig — Tripo retarget requires a rig task id and cannot take a mesh input. The backend returns `202` with `"animating": true`. While polling, `GET /generations/:taskId` returns a `stage` label ("Checking rig compatibility" / "Rigging skeleton" / "Baking animations"); if Tripo reports the model is not riggable, the task fails with `MODEL_NOT_RIGGABLE`. The final success payload is the animated (or rigged) GLB.
 - Accepts optional `sourceAssetCid` + `retexture` (`tripo3d` only): re-textures the referenced GLB via Tripo's v3 re-texture endpoint (`POST /models/texture`; texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream). Requires `prompt` as the texture description; the `202` response includes `"refined": true`. Accepts optional `sourceAssetCid` + `retopo` for smart retopology (`mesh/decimate` v2.0, optional `faceLimit` 500–20000, adaptive when omitted); the `202` response includes `"retopo": true`. `sourceAssetCid` requires exactly one of `retexture`, `retopo`, or `animate`. A CID that cannot be fetched from IPFS → `400 SOURCE_ASSET_UNAVAILABLE`. Optional `textureQuality` (`standard`/`detailed`/`extreme`) applies to generation and retexture.
 - If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses the `@arbesk/ai-asset-gen` mock provider and returns the raw asset bytes immediately (`200`).
 - If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v3 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
+- If `provider` is `"cad"`, the backend runs the parametric-CAD pipeline (`@arbesk/cad-gen`) as a server-paid, design-on-the-wire task: it admits the request through the CAD quota (daily rounds + one in-flight per wallet), starts an in-process task, and returns a task ID (`202`). No `providerKey` is accepted — the server holds the model key. `prompt` is required. The browser polls `GET /api/v1/generations/:taskId` until the task completes.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
 - **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.ts` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
@@ -227,6 +228,18 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 
 (`refined` is present only when the request included `sourceAssetCid` + `retexture`; `retopo` and `animating` likewise mark their respective follow-up actions.)
 
+**Response `202` (`cad`)**
+
+```json
+{
+  "taskId": "b6f7c2d4-4a0e-4c2a-9f3d-2f1a0c8e5b7d",
+  "provider": "cad",
+  "status": "running"
+}
+```
+
+The CAD provider is server-paid, so `providerKey` is neither required nor accepted; the `202` carries no refinement markers.
+
 The browser (`api.ts` → `generateAsset()`) decodes the base64, uploads the asset to IPFS, constructs the manifest, uploads the manifest, and returns `{ assetManifestCid, sourceAssetCid }` to the UI.
 
 **Errors**
@@ -240,9 +253,12 @@ The browser (`api.ts` → `generateAsset()`) decodes the base64, uploads the ass
 | 401 | Missing, malformed, or invalid Session auth |
 | 401 | `PROVIDER_AUTH_FAILED` — provider rejected the supplied `providerKey` |
 | 402 | `PROVIDER_CREDITS_EXHAUSTED` — provider account has no generation credits left |
+| 409 | `GENERATION_IN_PROGRESS` — this wallet already has a CAD request in flight (`cad` only; `Retry-After` seconds) |
 | 429 | Generation rate limit exceeded |
+| 429 | `DAILY_QUOTA_EXCEEDED` — daily CAD request limit reached (`cad` only; quota headers set) |
 | 500 | Unhandled generation/IPFS error |
 | 502 | `PROVIDER_ERROR` — upstream provider returned an error or unreachable |
+| 503 | `CAD_NOT_CONFIGURED` — CAD provider disabled or misconfigured (e.g. `CAD_GENERATION_ENABLED=false`, missing `DEEPSEEK_API_KEY`) |
 
 ---
 
@@ -277,6 +293,23 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
 
 - `providerTaskId` — provider-side task ID (e.g. Tripo), present for `tripo3d` success responses. Stored in the manifest's `metadata.chat` for future cross-session enhance flows.
 
+**Response `200` — success (`cad`)**
+
+```json
+{
+  "status": "success",
+  "format": "cad-design",
+  "design": { "code": "function build(PARAMETERS, …, M) { … }", "parameters": {}, "summary": "A 10mm calibration cube", "turn": 1 },
+  "runtime": { "contractVersion": 1, "preludeVersion": "…" },
+  "provider": { "id": "deepseek", "model": "…" },
+  "attribution": [],
+  "diagnostics": { "selection": { "mode": "none" }, "attempts": [], "durationMs": 1234, "tokens": { "prompt": 0, "completion": 0 } },
+  "providerTaskId": "cad-…"
+}
+```
+
+- No `assetData`/`path` — `design` is the CAD design document the client executes (guard → kernel → `meshToGltf`). The server never runs the kernel, so there is deliberately no `validation` claim either: what the server guarantees is that the design passed every static gate, which is what `diagnostics.attempts` records. `attribution` is always present (possibly empty) and never model-authored.
+
 **Response `200` — failed**
 
 ```json
@@ -288,6 +321,22 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
   }
 }
 ```
+
+**Response `200` — failed (`cad` unsuitable)**
+
+```json
+{
+  "status": "failed",
+  "error": {
+    "code": "CAD_REQUEST_UNSUITABLE",
+    "message": "…",
+    "suitability": 0.42,
+    "alternative": { "kind": "organic-mesh", "provider": "tripo3d" }
+  }
+}
+```
+
+- `CAD_REQUEST_UNSUITABLE` (`cad` only) — the prompt is unsuitable for parametric CAD. `suitability` is the gate score and `alternative` points at a mesh provider instead. The quota unit is refunded (the server refused before any model call), so the task is evicted after this response.
 
 **Errors**
 
