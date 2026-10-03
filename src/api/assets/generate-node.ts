@@ -28,6 +28,15 @@ import {
 } from "../generation-tasks.ts";
 import type { TaskEntry } from "../generation-tasks.ts";
 import type { StorageAdapter } from "../storage/index.ts";
+import { resolveCadRuntime, createCadGenerationProvider } from "../generation-providers.ts";
+import type { GenerationProvidersDeps } from "../generation-providers.ts";
+import {
+  acquireCadSlot,
+  releaseCadSlot,
+  refundCadUnit,
+} from "../cad-quota.ts";
+import { refuseAdmission, setQuotaHeaders as setCadQuotaHeaders } from "../routes/cad.ts";
+import type { CadRuntimeConfig } from "../routes/cad.ts";
 import authenticate from "../authentication.ts";
 import type { AuthEnv } from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
@@ -51,6 +60,9 @@ const TRIPO_CAPABILITIES: GenerationCapability[] = [
   "animate",
   "balance",
 ];
+
+/** Capabilities the CAD provider declares (design-on-the-wire, text-only). */
+const CAD_CAPABILITIES: GenerationCapability[] = ["text-to-3d"];
 
 /** Tripo's file upload limit for source GLBs (file_token flow). */
 const TRIPO_SOURCE_GLB_LIMIT_BYTES = 150 * 1024 * 1024;
@@ -239,11 +251,13 @@ function sendGenerationError(c: Context, err: Error): Response {
 }
 
 /**
- * BYOK (Bring Your Own Key) gate: real providers require a user-supplied API
- * key.
+ * BYOK (Bring Your Own Key) gate: the Tripo3D provider requires a user-supplied
+ * API key.
  * @remarks The user pays the provider directly, so the on-chain quota/payment
  *   gate is bypassed entirely. The key is used transiently and never logged or
- *   persisted; the mock provider needs no key.
+ *   persisted. Server-paid providers (mock, cad) need no key; an unknown
+ *   provider never reaches a provider call, so it falls through to the 501 arm
+ *   regardless of the key.
  * @returns the 400 MISSING_PROVIDER_KEY response, or null when the key is fine
  */
 function rejectMissingProviderKey(
@@ -251,7 +265,7 @@ function rejectMissingProviderKey(
   effectiveProvider: string,
   providerKey: unknown,
 ): Response | null {
-  if (effectiveProvider !== "mock") {
+  if (effectiveProvider === "tripo3d") {
     if (
       typeof providerKey !== "string" ||
       providerKey.trim().length === 0
@@ -360,6 +374,7 @@ async function resolveSourceGlb(
 
 /** Request-body fields the Tripo3D generation flow consumes (Zod-validated). */
 interface TripoGenerationInput {
+  nodeId: string;
   prompt?: string;
   sourceAssetCid?: string;
   sourceTaskId?: string;
@@ -634,6 +649,38 @@ async function completeTask(
 }
 
 /**
+ * Terminal success for a CAD task: the design document IS the payload —
+ * no download, no geometry (the server never runs the kernel, cad-gen S11).
+ */
+async function completeCadTask(
+  c: Context,
+  entry: TaskEntry,
+  taskId: string,
+  userAddress: string,
+  poll: GenerationStatus,
+): Promise<Response> {
+  const result = poll.output as {
+    design: unknown;
+    runtime: unknown;
+    provider: unknown;
+    attribution: unknown;
+    diagnostics: unknown;
+  };
+  markTaskComplete(taskId, userAddress);
+  console.log(`[GEN] cad task complete taskId=${taskId}`);
+  return c.json({
+    status: "success",
+    format: "cad-design",
+    design: result.design,
+    runtime: result.runtime,
+    provider: result.provider,
+    attribution: result.attribution,
+    diagnostics: result.diagnostics,
+    providerTaskId: entry.tripoTaskId,
+  });
+}
+
+/**
  * Animate chain: a succeeded rig-check or rig task starts the next phase
  * instead of finishing.
  * @remarks rig-check → rig (failing fast when Tripo reports the model is not
@@ -720,6 +767,59 @@ function resolveProvider(provider: string | undefined): {
 }
 
 /**
+ * CAD dispatch: server-paid, design-on-the-wire. Admits through the cad
+ * quota (daily rounds + one in-flight per wallet), starts the in-process
+ * task, and wires settle-time metering (slot release; unsuitable refund).
+ * @remarks The provider is built AFTER admission so onSettle can close over
+ *   the admitted slot token; the route — not the provider — owns metering.
+ */
+async function handleCadRequest(
+  c: Context,
+  userAddress: string,
+  body: { prompt?: string; nodeId: string },
+  cadDeps: GenerationProvidersDeps,
+): Promise<Response> {
+  const prompt = body.prompt?.trim();
+  if (!prompt) {
+    return c.json({
+      error: { code: "VALIDATION_ERROR", message: "prompt is required for the cad provider" },
+    }, 400);
+  }
+
+  const runtime = resolveCadRuntime(cadDeps);
+  if (!runtime.ok) {
+    return c.json(
+      { error: { code: runtime.code, message: runtime.message } },
+      runtime.status as ContentfulStatusCode,
+    );
+  }
+  const config: CadRuntimeConfig = runtime.config;
+
+  const decision = acquireCadSlot(userAddress, config.quota);
+  if (!decision.ok) {
+    return refuseAdmission(c, userAddress, config, decision);
+  }
+
+  setCadQuotaHeaders(c, userAddress, config);
+  const provider = createCadGenerationProvider(config.generator, (taskId, outcome) => {
+    releaseCadSlot(userAddress, decision.token);
+    if (!outcome.ok && outcome.error.code === "CAD_REQUEST_UNSUITABLE") {
+      refundCadUnit(userAddress, config.quota);
+    }
+  }, CAD_CAPABILITIES);
+
+  console.log(`[GEN] cad generation started nodeId=${body.nodeId}`);
+  const cadTaskId = await provider.textToModel({ prompt });
+  const taskId = registerTask({
+    tripoTaskId: cadTaskId,
+    providerKey: "",
+    userAddress,
+    provider: "cad",
+  });
+  return c.json({ taskId, provider: "cad", status: "running" }, 202);
+}
+
+/**
  * Tripo3D dispatch: source follow-ups (retarget-only shortcut, then the
  * animate/retopo/retexture chain) when sourceAssetCid is set, fresh
  * generation otherwise.
@@ -750,9 +850,70 @@ async function handleTripoRequest(
 }
 
 /**
- * Respond to a task poll: progress while in flight, advance the animate
- * chain on intermediate successes, download the GLB on terminal success,
- * otherwise report the failure.
+ * Terminal success for a poll: advance the animate chain on intermediate
+ * successes, hand a CAD design payload to completeCadTask, download the GLB
+ * for a tripo success.
+ * @remarks Only called when poll.status === "success".
+ */
+async function completePollSuccess(
+  c: Context,
+  provider: GenerationProvider,
+  entry: TaskEntry,
+  taskId: string,
+  userAddress: string,
+  poll: GenerationStatus,
+): Promise<Response> {
+  // Animate chain: a succeeded rig-check or rig task starts the next phase
+  // instead of finishing. Terminal phases: retarget (animate), or rig when
+  // rigOnly was requested (rigged model, no animation).
+  const chainTerminal =
+    entry.phase === "retarget" || (entry.rigOnly && entry.phase === "rig");
+  if (entry.kind === "animate" && !chainTerminal) {
+    return await advanceAnimateChain(c, provider, entry, taskId, userAddress, poll);
+  }
+
+  if (poll.format === "cad-design") {
+    return await completeCadTask(c, entry, taskId, userAddress, poll);
+  }
+
+  return await completeTask(c, provider, entry, taskId, userAddress, poll);
+}
+
+/**
+ * Terminal failure for a poll: the CAD unsuitable arm (refunded at settle
+ * time, this is the report), then the generic provider failure.
+ */
+function respondToTaskFailure(
+  c: Context,
+  entry: TaskEntry,
+  taskId: string,
+  poll: GenerationStatus,
+): Response {
+  if (poll.status === "failed") {
+    const details = poll.output as { code?: string; suitability?: number; alternative?: unknown } | undefined;
+    if (details?.code === "CAD_REQUEST_UNSUITABLE") {
+      // Refunded at settle time (the POST branch's onSettle); this is the report.
+      evictTask(taskId);
+      console.log(`[GEN] cad task unsuitable taskId=${taskId} suitability=${details.suitability}`);
+      return c.json({
+        status: "failed",
+        error: {
+          code: "CAD_REQUEST_UNSUITABLE",
+          message: poll.error || "Request unsuitable for CAD generation",
+          suitability: details.suitability,
+          alternative: details.alternative,
+        },
+      });
+    }
+  }
+
+  // failed or cancelled
+  return sendTaskFailed(c, entry, taskId, poll);
+}
+
+/**
+ * Respond to a task poll: progress while in flight, complete on terminal
+ * success, otherwise report the failure.
  */
 async function respondToPoll(
   c: Context,
@@ -766,25 +927,11 @@ async function respondToPoll(
     return c.json(buildProgressBody(entry, poll));
   }
 
-  // Animate chain: a succeeded rig-check or rig task starts the next phase
-  // instead of finishing. Terminal phases: retarget (animate), or rig when
-  // rigOnly was requested (rigged model, no animation).
-  const chainTerminal =
-    entry.phase === "retarget" || (entry.rigOnly && entry.phase === "rig");
-  if (
-    entry.kind === "animate" &&
-    poll.status === "success" &&
-    !chainTerminal
-  ) {
-    return await advanceAnimateChain(c, provider, entry, taskId, userAddress, poll);
-  }
-
   if (poll.status === "success") {
-    return await completeTask(c, provider, entry, taskId, userAddress, poll);
+    return await completePollSuccess(c, provider, entry, taskId, userAddress, poll);
   }
 
-  // failed or cancelled
-  return sendTaskFailed(c, entry, taskId, poll);
+  return respondToTaskFailure(c, entry, taskId, poll);
 }
 
 /**
@@ -795,6 +942,7 @@ async function respondToPoll(
 export default function generateAssetNode(
   core: ArbeskCore,
   storage: StorageAdapter,
+  cadDeps: GenerationProvidersDeps = {},
 ) {
   const app = new Hono<AuthEnv>();
 
@@ -812,6 +960,44 @@ export default function generateAssetNode(
     });
 
   /**
+   * Dispatch on the resolved provider: mock (server samples), cad
+   * (server-paid design), tripo3d (BYOK), otherwise the 501 arm.
+   */
+  const dispatchGeneration = async (
+    c: Context,
+    effectiveProvider: string,
+    useMockAdapter: boolean,
+    providerKey: string | undefined,
+    body: TripoGenerationInput,
+  ): Promise<Response> => {
+    if (useMockAdapter) {
+      // await (not bare return) so a throw lands in the route's try/catch below.
+      return await runMockGeneration(c, body.prompt);
+    }
+
+    if (effectiveProvider === "cad") {
+      return await handleCadRequest(
+        c, c.get("userAddress"), body, cadDeps,
+      );
+    }
+
+    if (effectiveProvider === "tripo3d") {
+      // await (not bare return) so provider errors land in the try/catch.
+      return await handleTripoRequest(
+        c, buildTripoProvider, providerKey as string, c.get("userAddress"), body,
+      );
+    }
+
+    console.log("[GEN] cloud adapter not implemented - rejecting");
+    return c.json({
+      error: {
+        code: "NOT_IMPLEMENTED",
+        message: "Cloud adapters not yet implemented",
+      },
+    }, 501);
+  };
+
+  /**
    * POST /api/v1/generations
    *
    * Validates the session, checks the rate limit, calls the generation adapter
@@ -827,7 +1013,7 @@ export default function generateAssetNode(
     async (c) => {
       try {
         const body = c.req.valid("json");
-        const { prompt, nodeId, provider, providerKey } = body;
+        const { nodeId, provider, providerKey } = body;
 
         const { effectiveProvider, useMockAdapter } = resolveProvider(provider);
 
@@ -859,25 +1045,9 @@ export default function generateAssetNode(
           }
         }
 
-        if (useMockAdapter) {
-          // await (not bare return) so a throw lands in the try/catch below.
-          return await runMockGeneration(c, prompt);
-        }
-
-        if (effectiveProvider === "tripo3d") {
-          // await (not bare return) so provider errors land in the try/catch.
-          return await handleTripoRequest(
-            c, buildTripoProvider, providerKey as string, c.get("userAddress"), body,
-          );
-        }
-
-        console.log("[GEN] cloud adapter not implemented - rejecting");
-        return c.json({
-          error: {
-            code: "NOT_IMPLEMENTED",
-            message: "Cloud adapters not yet implemented",
-          },
-        }, 501);
+        return await dispatchGeneration(
+          c, effectiveProvider, useMockAdapter, providerKey, body,
+        );
       } catch (error) {
         return sendGenerationError(c, error as Error);
       }
@@ -933,6 +1103,14 @@ export default function generateAssetNode(
     }
     evictTask(taskId);
     console.log(`[GEN] task cancelled taskId=${taskId} tripo=${entry.tripoTaskId}`);
+    if (entry.provider === "cad") {
+      const runtime = resolveCadRuntime(cadDeps);
+      const upstreamCancelled = runtime.ok
+        ? await createCadGenerationProvider(runtime.config.generator).cancel(entry.tripoTaskId)
+        : false;
+      console.log(`[GEN] cad task cancelled taskId=${taskId}`);
+      return c.json({ status: "cancelled", upstreamCancelled });
+    }
     const provider = buildTripoProvider(entry.providerKey);
     const upstreamCancelled = await provider.cancel(entry.tripoTaskId);
     return c.json({ status: "cancelled", upstreamCancelled });
@@ -962,6 +1140,20 @@ export default function generateAssetNode(
       }
 
       console.log(`[GEN] polling taskId=${taskId} tripo=${entry.tripoTaskId}`);
+      if (entry.provider === "cad") {
+        const runtime = resolveCadRuntime(cadDeps);
+        if (!runtime.ok) {
+          return c.json(
+            { error: { code: runtime.code, message: runtime.message } },
+            runtime.status as ContentfulStatusCode,
+          );
+        }
+        const cadProvider = createCadGenerationProvider(runtime.config.generator);
+        const cadPoll = await cadProvider.poll(entry.tripoTaskId);
+        return await respondToPoll(
+          c, cadProvider, entry, taskId, c.get("userAddress"), cadPoll,
+        );
+      }
       const provider = buildTripoProvider(entry.providerKey);
       const poll = await provider.poll(entry.tripoTaskId);
 

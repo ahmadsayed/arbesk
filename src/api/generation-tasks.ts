@@ -8,6 +8,8 @@ export interface TaskEntry {
   userAddress: string;
   createdAt: number;
   status: "running" | "complete";
+  /** Provider that owns the task (absent = "tripo3d"). */
+  provider?: "tripo3d" | "cad";
   /** animate entries run a rig chain */
   kind?: "generate" | "animate";
   /** current chain phase */
@@ -28,6 +30,8 @@ export interface RegisterTaskInput {
   tripoTaskId: string;
   providerKey: string;
   userAddress: string;
+  /** Provider that owns the task (absent = "tripo3d"). */
+  provider?: "tripo3d" | "cad";
   kind?: "generate" | "animate";
   phase?: "rig-check" | "rig" | "retarget";
   animations?: string[];
@@ -56,6 +60,7 @@ export function registerTask({
   tripoTaskId,
   providerKey,
   userAddress,
+  provider,
   kind,
   phase,
   animations,
@@ -71,6 +76,7 @@ export function registerTask({
     userAddress,
     createdAt: Date.now(),
     status: "running",
+    ...(provider && { provider }),
     ...(kind && { kind }),
     ...(phase && { phase }),
     ...(animations && { animations }),
