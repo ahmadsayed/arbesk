@@ -74,7 +74,7 @@ bun run deploy:k3s                     # one-command deploy to promptscad.com: r
 # Testing
 bun run test                           # unit suites via bun test, one process per file (excludes Hardhat & E2E)
 bun run test -- test/api/ --bail       # filter by path substring; --jobs N, --coverage (→ coverage/js)
-bun run test:all                       # lint → typecheck → frontend → api → contracts
+bun run test:all                       # ensure-local-chain → lint → typecheck → frontend → api → contracts (redeploys via start-dev.sh --setup-only only if the local chain has no contracts)
 bun run test:api                       # test/api.test.js alone
 bun run test:frontend                  # test/frontend/ + deployment integrity
 bun run test:contracts                 # Hardhat tests in Docker

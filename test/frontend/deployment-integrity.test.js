@@ -586,10 +586,20 @@ describe("Deployment Pipeline Integrity", () => {
       expect(code.length).toBeGreaterThan(4);
     });
 
+    // Free and paid are ERC-1967 proxies (deploy.js → upgrades.deployProxy) whose
+    // proxy bytecode is identical, so compare the implementations they point to.
+    const implementationCode = async (address) => {
+      const slot = await client.getStorageAt({
+        address,
+        slot: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+      });
+      return client.getCode({ address: `0x${slot.slice(-40)}` });
+    };
+
     test("free, paid, and USDC have mutually different bytecode", async () => {
       if (!requireNode()) return;
-      const freeCode = await client.getCode({ address: freeAddr });
-      const paidCode = await client.getCode({ address: paidAddr });
+      const freeCode = await implementationCode(freeAddr);
+      const paidCode = await implementationCode(paidAddr);
       const usdcCode = await client.getCode({ address: usdcAddr });
       expect(freeCode).not.toBe(paidCode);
       expect(freeCode).not.toBe(usdcCode);
