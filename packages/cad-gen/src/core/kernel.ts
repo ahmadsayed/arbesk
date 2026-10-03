@@ -137,7 +137,23 @@ function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
     bboxMm: { min: [...box.min], max: [...box.max] },
     ...(helpers.lastFilletMode ? { filletMode: helpers.lastFilletMode } : {}),
     ...(helpers.lastFilletQuality ? { filletQuality: helpers.lastFilletQuality } : {}),
+    ...bodiesOf(result),
   };
+}
+
+/** Bodies listed in a repair message; past this the count says enough. */
+const MAX_BODY_BOXES = 8;
+
+/** The solid's separate bodies, largest first; nothing when the host cannot decompose. */
+function bodiesOf(result: any): Pick<CadStats, "bodies"> {
+  if (typeof result.decompose !== "function") return {};
+  const parts: any[] = result.decompose();
+  const boxes = parts
+    .map((p) => ({ volume: p.volume(), box: p.boundingBox() as ManifoldBox }))
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, MAX_BODY_BOXES)
+    .map(({ box }) => ({ min: [...box.min] as [number, number, number], max: [...box.max] as [number, number, number] }));
+  return { bodies: { count: parts.length, boxes } };
 }
 
 /**

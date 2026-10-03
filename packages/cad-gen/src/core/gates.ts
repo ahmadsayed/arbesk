@@ -13,6 +13,43 @@ export interface GateResult {
 
 export interface KernelLimits {
   maxTriangles: number;
+  /**
+   * The request asked for separate pieces - a print-in-place hinge, a clamp in
+   * two halves - so more than one body is the intent, not a defect.
+   */
+  allowSeparateBodies?: boolean;
+}
+
+type Box = { min: [number, number, number]; max: [number, number, number] };
+
+/**
+ * Says how a loose body sits relative to the main one.
+ * @remarks Two failures look identical in a body count and need opposite
+ *   fixes. A piece INSIDE the main body's bounds is touching it face to face -
+ *   attempt#10's Gridfinity base poked up into the bin's cavity and rested on
+ *   the floor - and faces that only touch never fuse; it must overlap. A piece
+ *   OUTSIDE is floating, and has to be moved, usually by a centring mistake.
+ *   Two live repair rounds failed on the first case until it was named.
+ */
+function whereLoose(b: Box, main: Box): string {
+  const inside = [0, 1, 2].every((a) => b.min[a] >= main.min[a] - 1e-6 && b.max[a] <= main.max[a] + 1e-6);
+  return inside
+    ? "INSIDE the main body's bounds: it sits in a cavity or on a face and only TOUCHES it. " +
+      "Faces that merely touch never fuse - extend it into the solid it rests on, or remove it"
+    : "OUTSIDE the main body: it floats clear of it - move it so it overlaps the main body";
+}
+
+/** The connected-gate failure, naming every loose piece so a repair can join it. */
+function disconnectedError(bodies: NonNullable<CadStats["bodies"]>): string {
+  const fmt = (v: number[]) => "[" + v.map((x) => x.toFixed(1)).join(", ") + "]";
+  const main = bodies.boxes[0];
+  const listed = bodies.boxes.map((b, i) =>
+    "  body " + (i + 1) + (i === 0 ? " (main)" : "") + ": " + fmt(b.min) + " to " + fmt(b.max) +
+    (i === 0 ? "" : " - " + whereLoose(b, main)));
+  return "the part is " + bodies.count + " separate bodies, not one - a feature does not touch " +
+    "the body it belongs to. Bounding boxes, largest first:\n" + listed.join("\n") + "\n" +
+    "Make every feature OVERLAP the main body (by 0.5mm or more), not merely meet it: " +
+    "remember every builder is centred on the origin, and use stack() to put parts end to end.";
 }
 
 /**
@@ -85,6 +122,10 @@ export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): Gate
     stats.volumeMm3 > 0
       ? { gate: "volume", ok: true }
       : { gate: "volume", ok: false, error: "solid has no volume - the result is degenerate" },
+
+    stats.bodies === undefined || stats.bodies.count <= 1 || limits.allowSeparateBodies === true
+      ? { gate: "connected", ok: true }
+      : { gate: "connected", ok: false, error: disconnectedError(stats.bodies) },
 
     stats.triangles <= limits.maxTriangles
       ? { gate: "budget", ok: true }

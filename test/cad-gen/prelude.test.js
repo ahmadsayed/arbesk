@@ -518,3 +518,18 @@ describe("printInPlaceHinge refusals", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("body count", () => {
+  it("reports two bodies for two boxes that do not touch, largest first", async () => {
+    const r = await run("P.s; return box(10, 10, 10).add(box(2, 2, 2).translate([20, 0, 0]));");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    expect(r.stats.bodies.boxes[0].max[0]).toBeCloseTo(5, 3);
+    expect(r.stats.bodies.boxes[1].min[0]).toBeCloseTo(19, 3);
+  });
+
+  it("reports one body when the pieces overlap", async () => {
+    const r = await run("P.s; return box(10, 10, 10).add(box(2, 2, 2).translate([5.5, 0, 0]));");
+    expect(r.stats.bodies.count).toBe(1);
+  });
+});

@@ -37,7 +37,16 @@ export interface LibrarySelection {
   tokens: TokenUsage;
   /** Why the fallback was taken, when it was. */
   error?: string;
+  /**
+   * Jev's probability that the request intends separate, unjoined pieces.
+   * @remarks The client's connected gate allows more than one body when this
+   *   is at least SEPARATE_PARTS_THRESHOLD. Absent when Jev was not asked.
+   */
+  separateParts?: number;
 }
+
+/** Jev's separate-parts probability above which several bodies are the intent. */
+export const SEPARATE_PARTS_THRESHOLD = 0.5;
 
 const NO_TOKENS: TokenUsage = { prompt: 0, completion: 0 };
 
@@ -80,11 +89,14 @@ export async function selectLibraries(
 
   try {
     const candidates = Object.fromEntries(CATALOG.map((e) => [e.id, e.summary]));
-    const { fit, usage } = await jev.scoreFit(requestText(input), candidates, signal);
+    const { fit, usage, separateParts } = await jev.scoreFit(requestText(input), candidates, signal);
     const chosen = Object.entries(fit).filter(([, f]) => f.score >= FIT_THRESHOLD).map(([id]) => id);
     const libraries = ordered([...chosen, ...prior]);
     const kept = Object.fromEntries(libraries.filter((id) => fit[id]).map((id) => [id, fit[id]]));
-    return { libraries, fit: kept, source: "jev", tokens: usage };
+    return {
+      libraries, fit: kept, source: "jev", tokens: usage,
+      ...(separateParts === undefined ? {} : { separateParts }),
+    };
   } catch (err) {
     if (signal?.aborted) throw err;
     return fallback((err as Error).message);

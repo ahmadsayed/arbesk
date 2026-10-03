@@ -49,8 +49,28 @@ export interface JevClient {
     request: string,
     candidates: Record<string, string>,
     signal?: AbortSignal,
-  ): Promise<{ fit: Record<string, LibraryFit>; usage: TokenUsage }>;
+  ): Promise<{ fit: Record<string, LibraryFit>; separateParts?: number; usage: TokenUsage }>;
 }
+
+/**
+ * Question id for "does the request intend separate, unjoined pieces?".
+ * @remarks Asked in the SAME call as the fit scores - one more question costs
+ *   a few dozen input tokens. Its answer decides whether a multi-body result is
+ *   the intent (a print-in-place hinge) or a defect (a hook arm floating off its
+ *   plate). Catalog ids are kebab-case, so this snake_case id cannot collide.
+ */
+export const SEPARATE_PARTS_QUESTION = "separate_parts";
+
+const SEPARATE_PARTS = {
+  type: "noul",
+  instructions: "Does the request ask for a part made of separate pieces that are deliberately " +
+    "NOT joined to each other - for example a print-in-place hinge, a box with a captive hinged " +
+    "lid, a clamp printed as two halves, or a set of several separate items?",
+  criteria: {
+    true: "Several separate, unjoined pieces are intended",
+    false: "One single connected part is intended",
+  },
+};
 
 /** One score question per candidate, keyed by the candidate's id. */
 function fitQuestions(candidates: Record<string, string>): Record<string, unknown> {
@@ -76,47 +96,61 @@ function readFits(body: any, ids: string[]): Record<string, LibraryFit> {
   return fit;
 }
 
-export function createJevClient(config: JevConfig): JevClient {
-  const doFetch = config.fetchImpl ?? fetch;
+/**
+ * One POST to /v1/systemone: any state, any typed questions.
+ * @remarks Exported for the offline tools (licence checks, candidate ranking)
+ *   that ask Jev other questions than library fit.
+ * @returns The raw reply body: `answers` keyed by question id, plus `usage`.
+ */
+export async function askJev(
+  config: JevConfig,
+  state: unknown,
+  questions: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<any> {
   const url = (config.baseUrl ?? "https://api.typesafe.ai").replace(/\/+$/, "") + "/v1/systemone";
-  const timeoutMs = config.timeoutMs ?? 10000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 10000);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const response = await (config.fetchImpl ?? fetch)(url, {
+      method: "POST",
+      headers: { authorization: "Bearer " + config.apiKey, "content-type": "application/json" },
+      body: JSON.stringify({ model: config.model ?? "jev-latest", state, questions }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new JevError("jev " + response.status + ": " + text.slice(0, 200), response.status);
+    }
+    return await response.json();
+  } catch (err) {
+    if (err instanceof JevError) throw err;
+    throw new JevError("jev request failed: " + (err as Error).message, 0);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}
 
+/** Jev's token usage, in this package's TokenUsage shape. */
+const usageOf = (body: any): TokenUsage => ({
+  prompt: body?.usage?.input_tokens ?? 0,
+  completion: body?.usage?.output_tokens ?? 0,
+});
+
+export function createJevClient(config: JevConfig): JevClient {
   return {
     async scoreFit(request, candidates, signal) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const onAbort = () => controller.abort();
-      signal?.addEventListener("abort", onAbort, { once: true });
-      try {
-        const response = await doFetch(url, {
-          method: "POST",
-          headers: { authorization: "Bearer " + config.apiKey, "content-type": "application/json" },
-          body: JSON.stringify({
-            model: config.model ?? "jev-latest",
-            state: "CAD part request: " + request,
-            questions: fitQuestions(candidates),
-          }),
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          const text = await response.text().catch(() => "");
-          throw new JevError("jev " + response.status + ": " + text.slice(0, 200), response.status);
-        }
-        const body: any = await response.json();
-        return {
-          fit: readFits(body, Object.keys(candidates)),
-          usage: {
-            prompt: body?.usage?.input_tokens ?? 0,
-            completion: body?.usage?.output_tokens ?? 0,
-          },
-        };
-      } catch (err) {
-        if (err instanceof JevError) throw err;
-        throw new JevError("jev request failed: " + (err as Error).message, 0);
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener("abort", onAbort);
-      }
+      const body = await askJev(config, "CAD part request: " + request,
+        { ...fitQuestions(candidates), [SEPARATE_PARTS_QUESTION]: SEPARATE_PARTS }, signal);
+      const separate = body?.answers?.[SEPARATE_PARTS_QUESTION]?.noul;
+      return {
+        fit: readFits(body, Object.keys(candidates)),
+        ...(typeof separate === "number" ? { separateParts: separate } : {}),
+        usage: usageOf(body),
+      };
     },
   };
 }

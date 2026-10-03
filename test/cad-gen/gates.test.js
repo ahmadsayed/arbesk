@@ -49,6 +49,35 @@ describe("evaluateKernelGates", () => {
     expect(evaluateKernelGates(stats, LIMITS).every((g) => g.ok)).toBe(true);
   });
 
+  it("fails the connected gate when the part came apart, naming each piece", () => {
+    const bodies = { count: 2, boxes: [
+      { min: [0, 0, 0], max: [10, 10, 2] }, { min: [0, 0, 5], max: [2, 2, 9] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.ok).toBe(false);
+    expect(connected.error).toContain("2 separate bodies");
+    expect(connected.error).toContain("[0.0, 0.0, 5.0] to [2.0, 2.0, 9.0]");
+    expect(connected.error).toContain("OUTSIDE the main body");
+  });
+
+  it("tells a piece resting inside a cavity apart from one floating away", () => {
+    // attempt#10 gf-bin: the base's top sat in the cavity, touching the floor.
+    const bodies = { count: 2, boxes: [
+      { min: [-41.8, -62.8, 0], max: [41.8, 62.8, 42] }, { min: [-40.3, -61.3, 1.5], max: [40.3, 61.3, 3.2] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.error).toContain("INSIDE the main body's bounds");
+    expect(connected.error).toContain("only TOUCHES");
+  });
+
+  it("passes several bodies when the request intends separate pieces", () => {
+    const bodies = { count: 2, boxes: [] };
+    const gates = evaluateKernelGates({ ...stats, bodies }, { ...LIMITS, allowSeparateBodies: true });
+    expect(gates.find((g) => g.gate === "connected").ok).toBe(true);
+  });
+
   it("fails on a degenerate volume", () => {
     const gates = evaluateKernelGates({ ...stats, volumeMm3: 0 }, LIMITS);
     expect(gates.find((g) => g.gate === "volume").ok).toBe(false);

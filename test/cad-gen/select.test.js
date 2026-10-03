@@ -41,7 +41,8 @@ describe("createJevClient", () => {
     expect(seen[0].auth).toBe("Bearer k");
     expect(seen[0].req.model).toBe("jev-latest");
     expect(seen[0].req.state).toContain("a hinged box");
-    expect(Object.keys(seen[0].req.questions)).toEqual(["hinge", "gear"]);
+    expect(Object.keys(seen[0].req.questions)).toEqual(["hinge", "gear", "separate_parts"]);
+    expect(seen[0].req.questions.separate_parts.type).toBe("noul");
     expect(seen[0].req.questions.hinge.type).toBe("score");
     expect(seen[0].req.questions.hinge.criteria).toHaveLength(3);
     expect(fit.hinge.score).toBe(1.9);
