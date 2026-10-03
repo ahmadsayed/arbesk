@@ -700,3 +700,70 @@ describe("extrusionSpoolArm", () => {
     expect(r.error).toContain("use at least");
   });
 });
+
+// First-party, from ISO fastener sizes - see packages/cad-gen/src/core/library/pipe-clamp.ts.
+// Defaults: 25mm pipe, bore 25.4, wall 5, M5 at x = +-19, halves split 5mm apart
+// with each bore centre 2mm from y = 0 (the 1mm pinch is 0.5mm a side).
+describe("pipeClamp", () => {
+  const tube = (r0, r1, y) =>
+    "M.cylinder(20, " + r1 + ", " + r1 + ", 64).subtract(M.cylinder(20, " + r0 + ", " + r0 + ", 64))" +
+    ".translate([0, " + y + ", 0])";
+
+  it("is two halves laid out flat, 5mm apart, standing on z = 0", async () => {
+    const r = await run("P.s; return pipeClamp({ pipeDiameter: 25, bolt: 'M5' });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    const [a, b] = [...r.stats.bodies.boxes].sort((p, q) => p.min[1] - q.min[1]);
+    // Bolt at 19 + the 4.73mm nut corner + 2.5mm of ear = 26.2 either side.
+    expectSameBbox(a, { min: [-26.23, -19.70, 0], max: [26.23, -2.5, 20] });
+    expectSameBbox(b, { min: [-26.23, 2.5, 0], max: [26.23, 19.70, 20] });
+  });
+
+  it("leaves a bore the pipe fits, and no more", async () => {
+    const fits = await run("P.s; const c = pipeClamp({});" +
+      "return c.intersect(M.cylinder(20, 12.5, 12.5, 64).translate([0, 2, 0]))" +
+      ".add(c.intersect(M.cylinder(20, 12.5, 12.5, 64).translate([0, -2, 0])))" +
+      ".add(box(1, 1, 1).translate([200, 0, 0]));");
+    expect(fits.stats.volumeMm3).toBeCloseTo(1, 1);
+    // A 0.4mm-larger probe bites the 12.7mm bore wall all round each half.
+    const tight = await run("P.s; return pipeClamp({}).intersect(M.cylinder(20, 13.1, 13.1, 64).translate([0, 2, 0]));");
+    expect(tight.stats.volumeMm3).toBeGreaterThan(100);
+  });
+
+  it("keeps the bolt holes clear of the bore: the ring next to it is whole", async () => {
+    // A 3.2mm band of ring just outside the bore, on the +y half only. The bolt
+    // holes start at 19 - 2.75 = 16.25 from the axis, so nothing is cut from it.
+    const upper = ".intersect(box(100, 100, 20).translate([0, 52.5, 10]))";
+    const whole = await run("P.s; return " + tube(12.75, 15.95, 2) + upper + ";");
+    const cut = await run("P.s; return pipeClamp({}).intersect(" + tube(12.75, 15.95, 2) + ")" + upper + ";");
+    // Within tessellation (0.1%); a hole breaking in would take tens of mm3.
+    expect(Math.abs(cut.stats.volumeMm3 - whole.stats.volumeMm3) / whole.stats.volumeMm3).toBeLessThan(0.001);
+  });
+
+  it("passes both bolt shanks straight through both halves", async () => {
+    const r = await run("P.s; const c = pipeClamp({});" +
+      "const shank = (x) => M.cylinder(60, 2.7, 2.7, 24).rotate([-90, 0, 0]).translate([x, -30, 10]);" +
+      "return c.intersect(shank(19)).add(c.intersect(shank(-19))).add(box(1, 1, 1).translate([200, 0, 0]));");
+    expect(r.stats.volumeMm3).toBeCloseTo(1, 1);
+  });
+
+  it("sizes a 32mm pipe on M6 with plain holes", async () => {
+    const r = await run("P.s; return pipeClamp({ pipeDiameter: 32, bolt: 6, nutTrap: false });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    // Bore 16.2 + counterbore 5.2 + 1.2 -> spacing ceil(45.2) = 46, ear to 23 + 5.2 + 2.5.
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(30.7, 1);
+  });
+
+  it("refuses a bolt spacing that breaks into the bore, naming one that works", async () => {
+    const r = await run("P.s; return pipeClamp({ boltSpacing: 30 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("into the 25.4mm bore; use at least 38mm");
+  });
+
+  it("refuses an unknown bolt, a fused layout and a width the head will not fit", async () => {
+    expect((await run("P.s; return pipeClamp({ bolt: 'M7' });")).error).toContain("not one of M3, M4, M5");
+    expect((await run("P.s; return pipeClamp({ gap: 0 });")).error).toContain("gap must be at least 1mm");
+    expect((await run("P.s; return pipeClamp({ width: 8 });")).error).toContain("use at least 13mm");
+  });
+});
