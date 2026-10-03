@@ -69,6 +69,17 @@ function subjectChainCandidates(): number[] {
  * all (pure local dev backend).
  */
 export async function resolveSubjectChain(address: string): Promise<number> {
+  // The owner's own profile lives on the wallet's chain. Probing would race
+  // a fresh mint (the owned-token lookup can still be empty) and fall back to
+  // the first real network, sending the owner's tokenURI reads elsewhere.
+  const { walletAddress, chainId: walletChain } = walletState.get();
+  if (
+    walletChain != null &&
+    walletAddress &&
+    walletAddress.toLowerCase() === address.toLowerCase()
+  ) {
+    return Number(walletChain);
+  }
   const candidates = subjectChainCandidates();
   for (const chainId of candidates) {
     try {

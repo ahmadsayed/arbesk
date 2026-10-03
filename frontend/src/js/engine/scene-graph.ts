@@ -753,7 +753,12 @@ export async function loadFromParams() {
           assetId: assetId || null,
         });
       }
-    } catch {}
+    } catch (err) {
+      console.warn(
+        `[SCENE] loadFromParams: tokenURI(${assetTokenId}) failed:`,
+        (err as Error)?.message
+      );
+    }
   } else if (manifestCid) {
     adoptOpenedAsset(manifestCid);
     loadAssetManifest(manifestCid);

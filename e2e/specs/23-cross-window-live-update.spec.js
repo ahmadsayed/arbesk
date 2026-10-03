@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures/coverage.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
+import { NOSTR_URL } from "../lib/infra.mjs";
 import { fetchTokenManifest, findAssetCidByName } from "../helpers/manifest.mjs";
 import {
   connectStudioAs,
@@ -29,7 +30,7 @@ test.describe("cross-window live scene update", () => {
   }) => {
     // ── 0. Watch the relay from the test process itself ─────────────────
     const relayEvents = [];
-    const ws = new WebSocket("ws://127.0.0.1:7777");
+    const ws = new WebSocket(NOSTR_URL);
     await new Promise((resolve, reject) => {
       ws.onopen = resolve;
       ws.onerror = () => reject(new Error("relay ws connect failed"));

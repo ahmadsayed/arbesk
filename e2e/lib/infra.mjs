@@ -50,9 +50,28 @@ export const COMPOSE_PROJECT = `arbesk-${WORKTREE_ID.toLowerCase().replace(/[^a-
 
 const BACKEND_PORT_BASE = deriveBackendPort(ROOT, WORKTREE_ID);
 
-// Default to a single worker / single stack (lightest, matches CI and low-RAM
-// machines). Opt into parallel isolated stacks with E2E_WORKERS=N.
-export const E2E_WORKERS = Number(process.env.E2E_WORKERS) || 1;
+/**
+ * Whether Chromium renders WebGL on the host GPU instead of SwiftShader.
+ * @remarks Default: on when a DRM render node exists (Linux). SwiftShader
+ *   (CPU WebGL) saturated every core and made the suite ~6x slower; GPU-less
+ *   machines/CI keep it, since there Chromium would lose WebGL entirely.
+ *   Override with E2E_GPU=1 / E2E_GPU=0.
+ */
+function hasGpuRenderNode() {
+  try {
+    return fs.readdirSync("/dev/dri").some((f) => f.startsWith("renderD"));
+  } catch {
+    return false;
+  }
+}
+export const E2E_GPU =
+  process.env.E2E_GPU === "1" ||
+  (process.env.E2E_GPU !== "0" && hasGpuRenderNode());
+
+// Parallel isolated stacks (one per worker) when rendering on the GPU; a single
+// worker under SwiftShader, which cannot sustain parallel browsers. Override
+// with E2E_WORKERS=N (each stack needs ~1.5-2 GB RAM).
+export const E2E_WORKERS = Number(process.env.E2E_WORKERS) || (E2E_GPU ? 4 : 1);
 
 /**
  * Return the host ports/URLs for a given Playwright worker index.
@@ -78,6 +97,7 @@ export const BACKEND_PORT = portsForWorker(CURRENT_WORKER_INDEX).backendPort;
 export const BACKEND_URL = portsForWorker(CURRENT_WORKER_INDEX).backendUrl;
 export const HARDHAT_RPC = portsForWorker(CURRENT_WORKER_INDEX).hardhatRpc;
 export const IPFS_GATEWAY = portsForWorker(CURRENT_WORKER_INDEX).ipfsGatewayUrl;
+export const NOSTR_URL = portsForWorker(CURRENT_WORKER_INDEX).nostrUrl;
 
 // Shared handoff between global setup and global teardown. Playwright loads the
 // setup and teardown modules in separate evaluations, so in-memory state (the

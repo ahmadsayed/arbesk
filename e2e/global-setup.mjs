@@ -288,6 +288,9 @@ async function startBackend(i) {
         IPFS_API_URL: ports.ipfsApiUrl,
         IPFS_GATEWAY_URL: `${ports.ipfsGatewayUrl}/ipfs/`,
         NOSTR_RELAY_URL: ports.nostrUrl,
+        // Browser-facing relay: without it the page falls back to host:7777,
+        // which is worker 0's relay on every parallel stack.
+        PUBLIC_NOSTR_URL: ports.nostrUrl,
         IPFS_BACKEND: "kubo",
         MOCK_3D_GENERATION: "true",
         // E2E repeatedly decomposes glTF nodes and mints upload credentials;

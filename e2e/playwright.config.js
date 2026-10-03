@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_WORKERS } from "./lib/infra.mjs";
+import { E2E_GPU, E2E_WORKERS } from "./lib/infra.mjs";
+
+// GPU rendering (see E2E_GPU in lib/infra.mjs) needs the full Chromium build
+// (channel "chromium"): the default headless shell has no GPU path.
+const USE_GPU = E2E_GPU;
 
 export default defineConfig({
   testDir: "./specs",
@@ -23,16 +27,20 @@ export default defineConfig({
     // Playwright worker navigates to its own backend stack.
     headless: true,
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
-    trace: "retain-on-failure",
-    launchOptions: {
-      args: ["--use-angle=swiftshader"],
-    },
+    // Record only on the retry of a failed test: "retain-on-failure" records
+    // every test and discards passing ones, burning CPU (video encoding) that
+    // swiftshader WebGL already saturates. retries >= 1, so every failure
+    // still gets a recording.
+    video: "on-first-retry",
+    trace: "on-first-retry",
+    launchOptions: USE_GPU
+      ? { args: ["--ignore-gpu-blocklist", "--enable-gpu"] }
+      : { args: ["--use-angle=swiftshader"] },
   },
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], ...(USE_GPU ? { channel: "chromium" } : {}) },
     },
   ],
   globalSetup: "./global-setup.mjs",
