@@ -9,6 +9,7 @@ import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
 import { spoolHolder } from "./library/spool-holder.ts";
 import { gridfinityCup } from "./library/gridfinity-cup.ts";
 import { wallHook } from "./library/wall-hook.ts";
+import { extrusionSpoolArm } from "./library/extrusion-spool-arm.ts";
 import { knob } from "./library/knob.ts";
 
 /** Helper names injected into every script, in injection order. */
@@ -16,7 +17,7 @@ export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -1111,6 +1112,14 @@ export function buildPrelude(
      *   Matches OpenSCAD's render: scripts/cad-reference.mjs, cases knob-*.
      */
     knob: (opts: any = {}) => knob(module, opts ?? {}),
+
+    /**
+     * A filament spool arm that bolts onto 2020 aluminium extrusion.
+     * @remarks First-party, from published facts (Misumi HFS5-2020's 20mm
+     *   profile and 6mm slot, ISO M5 clearance and head sizes, 1 kg spool
+     *   sizes) - no portable OpenSCAD source exists; see the module.
+     */
+    extrusionSpoolArm: (opts: any = {}) => extrusionSpoolArm(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
 
     /**
      * A rack of cup pockets on a stable base.

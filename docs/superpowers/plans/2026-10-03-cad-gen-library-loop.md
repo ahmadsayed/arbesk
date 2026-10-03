@@ -1,7 +1,7 @@
 # cad-gen library loop — handoff
 
-**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** paused after iteration 8 of 12.
-Resume at **iteration 9** (below).
+**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** iteration 9 of 12 done.
+Next: **iteration 10** (below).
 
 ## What the loop is
 
@@ -48,8 +48,9 @@ local `blockchain/deployments/*.json` changes are never committed. The full meth
 | 6 | `158bf71` | AaronVerDow's wall hook; no portable pipe clamp found |
 | 7 | `dc5a7d8` | Maciej Małecki's knob (`knob`), exact vs OpenSCAD in 3 configs |
 | 8 | `e659765` | GT2 pulleys owned by `gt2Pulley`, built from the Gates standard |
+| 9 | (this commit) | `extrusionSpoolArm` for 2020 extrusion, first-party from published facts |
 
-Library today: `knob` (ported), `gt2Pulley` (spec-derived), plus `knuckleHinge`,
+Library today: `extrusionSpoolArm` (spec-derived), `knob` (ported), `gt2Pulley` (spec-derived), plus `knuckleHinge`,
 `printInPlaceHinge`, `spoolHolder`, `gridfinityCup`, `wallHook` (ported), and the
 earlier `phoneStand`, `boardCase`, `spurGear`, `gridfinityBase`, `railHook`, `cupRack`. Each Jev call asks library fit
 (one `score` per catalog entry), `piece_count` (choice) and `cad_suitable` (noul)
@@ -80,17 +81,33 @@ overshot by tan-error. Fallow's ratchet flagged the helper CRITICAL (CRAP 116);
 the decrap process (characterization tests first, one extraction per move) split
 it into `resolveGt2Spec`/`assertGt2Spec`/`gt2ScrewDiameter` - audit clean.
 
-## Iteration 9 — start here
+## Iteration 9 — DONE
 
-Pick the highest-value item after a fresh full run. Current ranking:
+Fresh full run (attempt#4, 2026-10-04): **17/17 build, no repair rounds, no
+failures** - the `uno-case` flake did not recur. But two "passes" were wrong on
+inspection: the spool ARM had a 6mm rod for a 55mm spool hole, and the pipe clamp
+came back as ONE fused block where Jev expected 2 pieces.
 
-1. **Spool arm for 2020 extrusion** — now the only recurring hand-built failure:
-   the `spool-holder` scenario failed repairs in 2 of the last 3 full runs (2
-   bodies). `spoolHolder` is a stand, so the arm is hand-built each time. Search
-   for a permissive 2020-mount spool arm; the rcarmo arms are MIT but
-   printer-specific (Prusa frame, KP3S). If nothing portable turns up, consider
-   a first-party `extrusionMount` helper (2020 dimensions are facts: 20mm square,
-   5mm slot, T-nut M5) - the arm above it is simple geometry.
+No portable 2020 spool arm exists (robinolejnik/spool-holder is CC0 but FreeCAD
+only; sarahannalien's MIT holder hangs under a shelf; jsconan GPL-3.0; avolkov
+share-alike). So `extrusionSpoolArm` is first-party, from Misumi HFS5-2020 (20mm
+profile, 6mm slot, 1.6mm slot lip), ISO M5 sizes and 1 kg spool sizes: a slot-keyed
+plate, two M5 holes on the slot centre line, a 32mm rod sized from `spoolBore`,
+tilted 5 deg, an end lip, and a gusset split into two side ribs so the lower screw
+head and the driver stay reachable (a full-width gusset buried it - caught before
+shipping by a probe test). Live attempt#5: the 2020 arm, a 3 kg/85mm-bore arm and
+an Ender-3 V-slot arm all call it, one body, first attempt.
+
+## Iteration 10 — start here
+
+1. **Fused multi-piece parts (gate gap)** — the connected gate only caps bodies
+   from ABOVE. attempt#4's two-half pipe clamp came back as one fused block (Jev
+   expected 2) and passed. A request whose Jev `piece_count` is >= 2 and whose
+   part is FEWER bodies is suspect, but not always wrong (a hinged box can be one
+   piece with a living hinge). Options: a repair hint when bodies < expected; or a
+   Jev `noul` on whether the pieces "must be printed separately" to decide
+   whether fewer is a defect. Then the clamp itself (still no portable source -
+   see backlog) is the natural follow-up.
 2. **Finer usefulness ranking** — Jev's single 0-3 usefulness score saturates (45 repos
    ≥ 2.8). Split it into several questions (reusable / parametric / printable /
    general-purpose) and rank on the combination; re-rank `candidates.json`. Also screen

@@ -667,3 +667,36 @@ describe("ported wall hook", () => {
     expect(Math.abs(r.stats.volumeMm3 - 61111.2) / 61111.2).toBeLessThan(0.001);
   });
 });
+
+// First-party, from the 2020 profile's published dimensions - see the module.
+describe("extrusionSpoolArm", () => {
+  it("is one body with a 32mm rod for a 1 kg spool", async () => {
+    const r = await run("P.s; return extrusionSpoolArm({});");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    // 32mm rod + 2 x 6mm lip across; 80mm plate tall; 9.4mm behind the face.
+    expect(size[0]).toBeCloseTo(44, 0);
+    expect(size[2]).toBeCloseTo(80, 0);
+    expect(r.stats.bboxMm.min[1]).toBeCloseTo(-9.4, 1);
+  });
+
+  it("keeps both screw paths clear: shank, head and driver", async () => {
+    const r = await run(
+      "P.s; const a = extrusionSpoolArm({});" +
+      // The shank (r 2.6) through key and plate; the head and driver (r 4.25)
+      // from the plate's front face outward. The plate itself must stop the head.
+      "const path = (z) => M.cylinder(9.9, 2.6, 2.6, 24).rotate([-90, 0, 0]).translate([0, -9.4, z])" +
+      ".add(M.cylinder(50, 4.25, 4.25, 24).rotate([-90, 0, 0]).translate([0, 0.01, z]));" +
+      "return a.intersect(path(10)).add(a.intersect(path(70))).add(box(1, 1, 1).translate([200, 0, 0]));",
+    );
+    // Only the 1mm marker cube survives: nothing of the arm is in either path.
+    expect(r.stats.volumeMm3).toBeCloseTo(1, 1);
+  });
+
+  it("refuses a hole spacing that buries a screw head under the rod", async () => {
+    const r = await run("P.s; return extrusionSpoolArm({ holeSpacing: 30 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("use at least");
+  });
+});
