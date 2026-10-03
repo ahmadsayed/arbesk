@@ -1,7 +1,7 @@
 # cad-gen library loop — handoff
 
-**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** paused after iteration 7 of 12.
-Resume at **iteration 8** (below).
+**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** paused after iteration 8 of 12.
+Resume at **iteration 9** (below).
 
 ## What the loop is
 
@@ -47,53 +47,55 @@ local `blockchain/deployments/*.json` changes are never committed. The full meth
 | 5 | `fb8a09c` | Jev `piece_count` replaces yes/no; `bodyAllowance` + `MULTI_BODY_HELPERS` |
 | 6 | `158bf71` | AaronVerDow's wall hook; no portable pipe clamp found |
 | 7 | `dc5a7d8` | Maciej Małecki's knob (`knob`), exact vs OpenSCAD in 3 configs |
+| 8 | `e659765` | GT2 pulleys owned by `gt2Pulley`, built from the Gates standard |
 
-Library today: `knob`, `knuckleHinge`, `printInPlaceHinge`, `spoolHolder`,
-`gridfinityCup`, `wallHook` (ported), plus the earlier `phoneStand`, `boardCase`,
-`spurGear`, `gridfinityBase`, `railHook`, `cupRack`. Each Jev call asks library fit
+Library today: `knob` (ported), `gt2Pulley` (spec-derived), plus `knuckleHinge`,
+`printInPlaceHinge`, `spoolHolder`, `gridfinityCup`, `wallHook` (ported), and the
+earlier `phoneStand`, `boardCase`, `spurGear`, `gridfinityBase`, `railHook`, `cupRack`. Each Jev call asks library fit
 (one `score` per catalog entry), `piece_count` (choice) and `cad_suitable` (noul)
 together.
 
-Last full run (attempt#22, after iteration 7): 15/16 scenarios build. The `knob`
-scenario now calls `knob()` (Jev `knobs=1.66`, one solid, 30 ms). `soap-dish` passed
-again (its attempt#20 failure was nondeterministic - see the backlog note).
-`pulley-gt2` FAILED in a new way: 21 detached bodies - DeepSeek drew teeth this
-time and they do not fuse (attempt#20's toothless disc built fine). `hinge` and
-`pipe-clamp` are 2 bodies by design (`piece_count`).
+Last full run (iteration 8 post-change, 14/16): `pulley-gt2` now builds through
+`gt2Pulley()` (Jev `gt2-pulley=1.99`, one solid, 13 ms, exact envelope) and `knob`
+through `knob()`. Two non-deterministic regressions appeared that also passed the
+identical re-rank run 80 minutes earlier: `uno-case` (`InvalidConstruction` after 2
+repairs) and `spool-holder` (2 bodies after 2 repairs - the known hand-built 2020
+arm). Watch both; if either fails twice in a row it earns an iteration.
+**Note:** the attempt gallery was cleaned before iteration 8, so the counter reset -
+iteration-8 runs live in `attempt#1` (re-rank full), `attempt#2` (GT2 live proof),
+`attempt#3` (post-change full), alongside the kept `attempt#20-22`.
 
-## Iteration 7 — DONE
+## Iteration 8 — DONE
 
-Ported Maciej Małecki's MIT-licensed knob (`mmalecki/openscad-knobs:knob.scad`).
-Round case matched OpenSCAD exactly on the first try; the star case exposed one
-real porting bug - OpenSCAD `rotate(a) translate(t)` nests the translate INSIDE
-the rotated frame, which is Manifold's `.translate().rotate()` chaining order,
-not `.rotate().translate()`. Three reference cases (`knob-default`, `knob-round`,
-`knob-big-star`) now match to 0.000 mm; the full reference suite (17 cases)
-still passes. Live proof: the `knob` scenario builds through `knob({...})` with
-the catalog's subtract-the-bore pattern (round bore + flat) - 1 solid,
-30 x 30 x 18 mm, kernel 30 ms. Note the port returns the UNCUTOFF solid (the
-SCAD's children() cut has no Manifold equivalent); the catalog entry documents
-the bore/flat subtraction with worked numbers.
+Owned GT2 pulleys with `gt2Pulley`, written from the Gates PowerGrip GT standard
+(the spurGear pattern: standard maths, no permissive reference exists). Key
+numbers, cross-checked: pitch 2mm; outside = pitch − 2×0.254 (a Gates-licensee
+catalog holds pitch−outside = 0.020" at every size, and a 20T pulley is 12.22mm
+across); groove 0.76mm deep, 40° straight flanks (the printable approximation of
+the curvilinear molded profile). Flanges, bore, optional M3/M4 set-screw. Five
+unit tests pin envelope/tooth-count/grooves/cutters/refusals. Two real bugs were
+caught before shipping: the bore cutter z-centred on the origin (top flange had
+no hole - invisible to a bbox check), and mirror-flank arcs in the outline that
+overshot by tan-error. Fallow's ratchet flagged the helper CRITICAL (CRAP 116);
+the decrap process (characterization tests first, one extraction per move) split
+it into `resolveGt2Spec`/`assertGt2Spec`/`gt2ScrewDiameter` - audit clean.
 
-## Iteration 8 — start here
+## Iteration 9 — start here
 
 Pick the highest-value item after a fresh full run. Current ranking:
 
-1. **GT2 pulley** — now the top defect: attempt#22 failed with 21 detached
-   bodies (teeth drawn but unfused); attempt#20's toothless disc built but was
-   wrong. No permissive GT2 source found in 17 repos (unlicensed/GPL), BOSL2
-   has none. The belt profile is a published standard (like the involute maths
-   behind `spurGear`), so write the helper from the spec: 2 mm pitch, 40°
-   tooth, 20 teeth -> ~12.2 mm pitch diameter, plus flanges and a bore.
-2. **Spool arm for 2020 extrusion** — the `spool-holder` scenario asks for an arm on 2020
-   extrusion with M5 T-nuts; `spoolHolder` is a stand, so the arm is still hand-built and
-   came apart once. Search for a permissive 2020-mount spool arm; the rcarmo arms are
-   MIT but printer-specific (Prusa frame, KP3S).
-3. **Finer usefulness ranking** — Jev's single 0-3 usefulness score saturates (45 repos
+1. **Spool arm for 2020 extrusion** — now the only recurring hand-built failure:
+   the `spool-holder` scenario failed repairs in 2 of the last 3 full runs (2
+   bodies). `spoolHolder` is a stand, so the arm is hand-built each time. Search
+   for a permissive 2020-mount spool arm; the rcarmo arms are MIT but
+   printer-specific (Prusa frame, KP3S). If nothing portable turns up, consider
+   a first-party `extrusionMount` helper (2020 dimensions are facts: 20mm square,
+   5mm slot, T-nut M5) - the arm above it is simple geometry.
+2. **Finer usefulness ranking** — Jev's single 0-3 usefulness score saturates (45 repos
    ≥ 2.8). Split it into several questions (reusable / parametric / printable /
    general-purpose) and rank on the combination; re-rank `candidates.json`. Also screen
    out non-SCAD "skill" repos that ranked at the top.
-4. **Allow CERN-OHL-P-2.0** in `cad-candidates.mjs`'s `PORTABLE_SPDX` — a permissive
+3. **Allow CERN-OHL-P-2.0** in `cad-candidates.mjs`'s `PORTABLE_SPDX` — a permissive
    hardware licence; `3d-paws/3D-PAWS-Print-Files` was rejected only for that. Confirm
    with a read of the licence text before adding.
 
@@ -104,9 +106,12 @@ Pick the highest-value item after a fresh full run. Current ranking:
   keep searching (Printables/GitHub code search with other words: "split collar",
   "shaft collar", "tube clamp two piece"), or write a helper from first principles as
   with gears (a standard shape, not a hand-tuned profile).
-- **GT2 pulley** — see iteration 8 ranking; the failure mode changed from toothless to
-  21 detached bodies (teeth drawn, unfused).
-- **Soap-dish repair blind spot (observed attempt#20, passed attempt#22)** — root cause
+- **Watch: `uno-case` flake** — `InvalidConstruction` after 2 repairs in the iteration-8
+  post-change run, but it passed the identical re-rank run the same evening. If it
+  fails twice in a row, root-cause it (boardCase + lid geometry); if it keeps
+  flip-flopping, consider whether the repair prompt handles kernel-status failures
+  as well as it handles `connected`.
+- **Soap-dish repair blind spot (observed attempt#20, passed since)** — root cause
   of the failure: the model placed the ribs at the SAME centered pitch as the drainage
   slots (identical `start + i*pitch` arithmetic), so every rib sat over a slot; the
   slot cut removed the rib's 0.5 mm fuse zone and the overlap repair hint cannot fix
@@ -133,7 +138,7 @@ Pick the highest-value item after a fresh full run. Current ranking:
 /loop Grow and harden @arbesk/cad-gen on branch feat/cad-gen-enhance-loop, one iteration
 per firing, against live DeepSeek + Jev (keys in .env) ... (see the loop prompt in the
 session that produced this file; the rules above are the substance). Continue from
-iteration 8 in docs/superpowers/plans/2026-10-03-cad-gen-library-loop.md, stop after
+iteration 9 in docs/superpowers/plans/2026-10-03-cad-gen-library-loop.md, stop after
 iteration 12.
 ```
 
