@@ -28,7 +28,11 @@ describe("createGenerationProvider (default registry)", () => {
   it("still resolves mock and tripo3d", () => {
     const mock = createGenerationProvider({ id: "mock", capabilities: ["text-to-3d"] });
     expect(mock.id).toBe("mock");
-    const tripo = createGenerationProvider({ id: "tripo3d", apiKey: "test-key", capabilities: ["text-to-3d"] });
+    const tripo = createGenerationProvider({
+      id: "tripo3d",
+      apiKey: "test-key",
+      capabilities: ["text-to-3d"],
+    });
     expect(tripo.id).toBe("tripo3d");
   });
 

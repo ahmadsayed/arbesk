@@ -69,13 +69,26 @@ function liveTask(taskId: string): CadTaskState | undefined {
   return state;
 }
 
-export function createCadProvider({ config, generator, onSettle }: CadProviderOptions): GenerationProvider {
+export function createCadProvider({
+  config,
+  generator,
+  onSettle,
+}: CadProviderOptions): GenerationProvider {
   const capabilities = new Set(config.capabilities);
   const id = config.id;
 
   function unsupported(cap: GenerationCapability): never {
     requireCapability(id, capabilities, cap);
     throw new Error("unreachable");
+  }
+
+  /** The settle callback must never alter task state or fire twice. */
+  function safeSettle(taskId: string, outcome: CadSettleOutcome): void {
+    try {
+      onSettle?.(taskId, outcome);
+    } catch (err) {
+      console.error("cad provider onSettle callback threw:", (err as Error).message);
+    }
   }
 
   /** Captures every rejection into task state — nothing escapes unhandled. */
@@ -86,7 +99,7 @@ export function createCadProvider({ config, generator, onSettle }: CadProviderOp
         signal: state.controller.signal,
       });
       state.result = result;
-      onSettle?.(taskId, { ok: true, result });
+      safeSettle(taskId, { ok: true, result });
     } catch (err) {
       const e = err as Error & { suitability?: number; alternative?: unknown };
       state.error = e instanceof CadRequestUnsuitable
@@ -97,7 +110,7 @@ export function createCadProvider({ config, generator, onSettle }: CadProviderOp
             alternative: e.alternative,
           }
         : { message: e.message };
-      onSettle?.(taskId, { ok: false, error: state.error });
+      safeSettle(taskId, { ok: false, error: state.error });
     }
   }
 
