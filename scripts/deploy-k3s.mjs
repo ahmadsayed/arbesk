@@ -4,7 +4,7 @@
 //
 // Every run picks up the LATEST local configuration and code — no staleness
 // checks, everything is regenerated and copied fresh:
-//   1. node scripts/make-env-k3s.mjs  → .env.k3s from current .env files
+//   1. bun scripts/make-env-k3s.mjs  → .env.k3s from current .env files
 //   2. recreate the arbesk-env secret on the cluster from .env.k3s
 //   3. buildx arm64 build + push ahmadsayed/arbesk:<MMDDHHMM>
 //   4. stamp the new tag into deploy/k8s/deployment.yaml
@@ -32,7 +32,7 @@ const kubectl = (remote) =>
   execSync(`ssh ${SSH} "sudo -n k3s kubectl ${remote}"`, { cwd: root, stdio: "inherit" });
 
 // 1. Regenerate .env.k3s from the current local .env / blockchain/.env
-run("node", ["scripts/make-env-k3s.mjs"]);
+run("bun", ["scripts/make-env-k3s.mjs"]);
 
 // 2. Recreate the secret BEFORE the rollout, so new pods mount fresh env.
 log("recreating secret arbesk-env");

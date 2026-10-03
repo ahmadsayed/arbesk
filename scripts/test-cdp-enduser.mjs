@@ -1,13 +1,13 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Verifies CDP Secret API key credentials and tests email → smart account
  * address resolution via the CDP server SDK (end-user management API).
  * @remarks Requires CDP_API_KEY_ID and CDP_API_KEY_SECRET in the root .env.
  *
  * Usage:
- *   node scripts/test-cdp-enduser.mjs                 # list end users (read-only)
- *   node scripts/test-cdp-enduser.mjs alice@x.com     # look up one email
- *   node scripts/test-cdp-enduser.mjs alice@x.com --create  # pre-generate if missing
+ *   bun scripts/test-cdp-enduser.mjs                 # list end users (read-only)
+ *   bun scripts/test-cdp-enduser.mjs alice@x.com     # look up one email
+ *   bun scripts/test-cdp-enduser.mjs alice@x.com --create  # pre-generate if missing
  */
 try {
   process.loadEnvFile();

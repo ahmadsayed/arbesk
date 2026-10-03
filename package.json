@@ -33,7 +33,7 @@
     "nodemon": "bun run build:frontend && bun --watch src/index.ts",
     "build:server": "bun scripts/build-server.mjs",
     "start:prod": "./scripts/start-prod.sh",
-    "deploy:k3s": "node scripts/deploy-k3s.mjs",
+    "deploy:k3s": "bun scripts/deploy-k3s.mjs",
     "dev": "./scripts/start-dev.sh",
     "dev:testnet": "./scripts/start-dev.sh --testnet",
     "test:api": "bun scripts/run-tests.mjs test/api.test.js",

@@ -1,7 +1,7 @@
 // @ts-nocheck — TODO: type properly (implicit any in helpers); scripts/ pattern
 // Generates .env.k3s for the promptscad.com k3s deployment by extracting the
 // needed secrets from the local .env files, so no manual copy-pasting.
-// Run locally (never in CI):  node scripts/make-env-k3s.mjs
+// Run locally (never in CI):  bun scripts/make-env-k3s.mjs
 // The output file is gitignored (.env*). Values are masked in stdout.
 //
 // Key mapping notes:
