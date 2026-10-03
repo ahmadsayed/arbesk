@@ -41,7 +41,7 @@
     "bench:asset-core": "bun packages/asset-core/src/bench/run.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test:all": "bun run lint && bun run typecheck && bun run typecheck:frontend && bun run test:frontend && bun run test:api && bun run test:contracts",
+    "test:all": "bun scripts/ensure-local-chain.mjs && bun run lint && bun run typecheck && bun run typecheck:frontend && bun run test:frontend && bun run test:api && bun run test:contracts",
     "typecheck": "tsc --noEmit",
     "typecheck:frontend": "tsc --noEmit -p frontend/tsconfig.json",
     "test:e2e": "NODE_OPTIONS='' playwright test --config=e2e/playwright.config.js",

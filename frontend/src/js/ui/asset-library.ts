@@ -469,6 +469,9 @@ async function openAssetEntry(entry: any): Promise<void> {
 
     dismissCreatePulse();
     updateUrlAsset(entry.tokenId);
+    // A card clicked during the first Studio entry races the lazy Babylon
+    // load; without this the load throws and the open is lost.
+    await ensureEngineReady();
     await loadAssetManifest(
       entry.manifestCid,
       null,

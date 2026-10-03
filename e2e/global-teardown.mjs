@@ -1,5 +1,4 @@
-import { execSync } from "node:child_process";
-import { ROOT, log, sleep, readState, clearState } from "./lib/infra.mjs";
+import { log, run, sleep, readState, clearState } from "./lib/infra.mjs";
 
 function isAlive(pid) {
   if (!pid) return false;
@@ -53,16 +52,22 @@ export default async function globalTeardown() {
   // Stop all backends in parallel.
   await Promise.all(workers.map((w) => stopBackend(w)));
 
-  // Bring down each worker's Docker stack.
-  for (const worker of workers) {
-    if (worker.weStartedInfra && worker.composeProject) {
+  // Bring down every worker's Docker stack in parallel. `-t 1` skips Docker's
+  // 10s SIGTERM grace period (some services ignore SIGTERM): the stacks are
+  // disposable and the next setup wipes their volumes anyway.
+  await Promise.all(
+    workers.map(async (worker) => {
+      if (!(worker.weStartedInfra && worker.composeProject)) {
+        log(
+          `Leaving pre-existing IPFS/Hardhat containers running for worker ${worker.workerIndex}`,
+        );
+        return;
+      }
       log(
         `Stopping Docker stack for worker ${worker.workerIndex} (project ${worker.composeProject})...`,
       );
       try {
-        execSync(`docker compose -p "${worker.composeProject}" down`, {
-          stdio: "inherit",
-          cwd: ROOT,
+        await run(`docker compose -p "${worker.composeProject}" down -t 1`, {
           timeout: 60000,
         });
       } catch (err) {
@@ -70,12 +75,8 @@ export default async function globalTeardown() {
           `WARN: could not tear down worker ${worker.workerIndex} stack: ${err.message}`,
         );
       }
-    } else {
-      log(
-        `Leaving pre-existing IPFS/Hardhat containers running for worker ${worker.workerIndex}`,
-      );
-    }
-  }
+    }),
+  );
 
   clearState();
   log("Teardown complete");

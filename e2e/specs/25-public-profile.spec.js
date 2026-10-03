@@ -176,16 +176,13 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
       // Read-only chrome: no New button for anonymous profile visitors.
       await expect(anon.locator(SELECTORS.newAssetBtn)).toBeHidden();
 
-      // Clicking the card opens the asset in the viewport. Under full-suite
-      // load the click races with anonymous profile init settling (a clobbered
-      // open reverts to "No asset open"), so retry until the open sticks.
-      await expect(async () => {
-        await card.click();
-        await expect(anon.locator(SELECTORS.assetStatusName)).toContainText(
-          assetName,
-          { timeout: 10000 },
-        );
-      }).toPass({ timeout: 60000, intervals: [1000, 2000, 5000] });
+      // Clicking the card opens the asset in the viewport on the first try,
+      // even while the first Studio entry is still lazy-loading Babylon
+      // (regression: that race used to revert the open to "No asset open").
+      await card.click();
+      await expect(anon.locator(SELECTORS.assetStatusName)).toContainText(
+        assetName,
+      );
     } finally {
       await anon.close();
     }

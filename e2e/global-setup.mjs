@@ -1,4 +1,4 @@
-import { execSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
@@ -9,6 +9,8 @@ import {
   log,
   sleep,
   resetHardhatChain,
+  rpc,
+  run,
   writeState,
 } from "./lib/infra.mjs";
 
@@ -178,11 +180,10 @@ async function startStack(i) {
 
   // Always begin from a clean state for this worker's project.
   try {
-    execSync(`docker compose -p "${ports.composeProject}" down --volumes --remove-orphans`, {
-      stdio: "ignore",
-      cwd: ROOT,
-      timeout: 60000,
-    });
+    await run(
+      `docker compose -p "${ports.composeProject}" down --volumes --remove-orphans >/dev/null 2>&1`,
+      { timeout: 60000 },
+    );
   } catch {
     // ignore cleanup errors
   }
@@ -195,12 +196,7 @@ async function startStack(i) {
     NOSTR_HOST_PORT: String(7777 + i),
   };
 
-  execSync(`docker compose -p "${ports.composeProject}" up -d`, {
-    stdio: "inherit",
-    cwd: ROOT,
-    env,
-    timeout: 120000,
-  });
+  await run(`docker compose -p "${ports.composeProject}" up -d`, { env });
 
   // Wait for the services we need before returning.
   await waitForHardhatRpc(ports.hardhatRpc);
@@ -211,20 +207,44 @@ async function startStack(i) {
   log(`Worker ${i}: Nostr relay ready on ${ports.nostrUrl}`);
 }
 
-async function deployToStack(composeProject) {
-  // Force a fresh MockUSDC deploy by removing any cached address.
-  clearUsdcTokenEnv();
+/**
+ * @param {string} composeProject
+ * @param {boolean} writesSharedFiles true for exactly one stack: deploy.js
+ *   read-modify-writes the host-mounted blockchain/.env and deployments/, so
+ *   the concurrent deploys must leave them alone (DEPLOY_SKIP_SHARED_WRITES).
+ *   They still get a fresh MockUSDC: an empty USDC_TOKEN wins over .env
+ *   because dotenv never overrides variables that are already set.
+ */
+async function deployToStack(composeProject, writesSharedFiles) {
+  if (writesSharedFiles) {
+    // Force a fresh MockUSDC deploy by removing any cached address.
+    clearUsdcTokenEnv();
+  }
+  const envFlags = writesSharedFiles
+    ? ""
+    : "-e DEPLOY_SKIP_SHARED_WRITES=1 -e USDC_TOKEN= ";
 
   // The deploy runs inside the container, so it targets the container's own
   // Hardhat node on port 8545 regardless of the host port mapping.
-  execSync(
-    `docker compose -p "${composeProject}" exec -T hardhat npx hardhat run scripts/deploy.js --network localhost`,
-    {
-      stdio: "inherit",
-      cwd: ROOT,
-      timeout: 120000,
-    },
+  await run(
+    `docker compose -p "${composeProject}" exec -T ${envFlags}hardhat npx hardhat run scripts/deploy.js --network localhost`,
   );
+}
+
+/**
+ * Fail fast if a stack that skipped the shared writes did not end up with
+ * contracts at the addresses the first deploy recorded.
+ */
+async function assertContractsDeployed(i) {
+  const envPath = path.join(ROOT, "blockchain", ".env");
+  const { hardhatRpc } = portsForWorker(i);
+  for (const key of ["CONTRACT_ADDRESS", "PAID_CONTRACT_ADDRESS", "USDC_TOKEN"]) {
+    const address = readEnvVar(envPath, key);
+    const code = address ? await rpc(hardhatRpc, "eth_getCode", [address, "latest"]) : null;
+    if (!code || code === "0x") {
+      throw new Error(`Worker ${i}: no contract code for ${key}=${address} on ${hardhatRpc}`);
+    }
+  }
 }
 
 async function startBackend(i) {
@@ -354,37 +374,38 @@ export default async function globalSetup() {
   // across all Hardhat containers.
   const ports0 = portsForWorker(0);
   log("Compiling contracts once (shared artifacts)...");
-  execSync(
+  await run(
     `docker compose -p "${ports0.composeProject}" exec -T hardhat npx hardhat compile`,
-    {
-      stdio: "inherit",
-      cwd: ROOT,
-      timeout: 120000,
-    },
   );
   log("Contracts compiled");
 
-  // Step 3: deploy sequentially per worker. Sequential avoids a race writing
-  // the shared blockchain/.env; deterministic addresses mean order is irrelevant.
-  for (let i = 0; i < E2E_WORKERS; i++) {
-    const ports = portsForWorker(i);
+  const deployWorker = async (i) => {
     log(`Deploying contracts for worker ${i}...`);
-    await resetHardhatChain(ports.hardhatRpc);
-    await deployToStack(ports.composeProject);
+    await resetHardhatChain(portsForWorker(i).hardhatRpc);
+    await deployToStack(portsForWorker(i).composeProject, i === 0);
     log(`Worker ${i}: contracts deployed`);
-  }
+  };
 
-  // Step 4: sync addresses and build frontend once. Contract addresses are
-  // identical across workers, so a single build serves all workers.
-  log("Syncing network-config.ts with deployed contract addresses...");
-  syncNetworkConfigWithDeployedAddresses(ports0.hardhatRpc);
-  log("Rebuilding frontend with synced contract addresses...");
-  execSync("bun run build:frontend", {
-    stdio: "inherit",
-    cwd: ROOT,
-    timeout: 120000,
-  });
-  log("Frontend rebuilt");
+  // Step 3: worker 0 deploys alone and records the addresses in the shared
+  // blockchain/.env + deployments/. Addresses are deterministic (same
+  // deployer, fresh chain), so they hold for every worker.
+  await deployWorker(0);
+
+  // Step 4: the remaining workers deploy concurrently (no shared writes)
+  // while the frontend is built once from worker 0's addresses.
+  const buildFrontend = async () => {
+    log("Syncing network-config.ts with deployed contract addresses...");
+    syncNetworkConfigWithDeployedAddresses(ports0.hardhatRpc);
+    log("Rebuilding frontend with synced contract addresses...");
+    await run("bun run build:frontend");
+    log("Frontend rebuilt");
+  };
+  const deployOthers = async () => {
+    const others = Array.from({ length: E2E_WORKERS - 1 }, (_, k) => k + 1);
+    await Promise.all(others.map(deployWorker));
+    await Promise.all(others.map(assertContractsDeployed));
+  };
+  await Promise.all([buildFrontend(), deployOthers()]);
 
   // Step 5: start backends in parallel.
   const workers = await Promise.all(
