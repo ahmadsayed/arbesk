@@ -399,6 +399,18 @@ function cutoutFor(
   const edge = edgeOf(s.wall ?? s.edge);
   const alongX = edge.charAt(0) === "x";
   const span = alongX ? L : W;
+  // An x wall RUNS along y, so its length is W, and a y wall's is L. Refused,
+  // not clamped: attempt#1 put a Pi's HDMI at 75 on its 56 mm x+ wall, and the
+  // block cut thin air - a valid case with the port silently missing.
+  const run = alongX ? W : L;
+  if (!(s.at >= 0 && s.at <= run)) {
+    throw new Error(
+      "boardCase cutout on wall '" + edge + "' has at = " + s.at + ", but that wall is " +
+      "only " + run + " mm long (0 to " + run + "). The x walls run along boardWidth (" +
+      W + " mm) and the y walls along boardLength (" + L + " mm). Put the port on the " +
+      "wall it is actually on, or measure 'at' along that wall.",
+    );
+  }
   const seat = edge.charAt(1) === "+" ? span + half - wall + depth : wall - half - depth;
   const across = [seat, s.at, (s.z ?? s.sill ?? 0) + s.height / 2];
   const centre = alongX ? across : [across[1], across[0], across[2]];

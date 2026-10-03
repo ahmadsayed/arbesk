@@ -456,3 +456,23 @@ describe("fillet quality", () => {
     expect(r.stats.filletQuality).toBeUndefined();
   }, 30000);
 });
+
+describe("boardCase cutouts", () => {
+  const PI = "boardLength: 85, boardWidth: 56, holes: [[3.5,3.5],[3.5,52.5],[61.5,52.5],[61.5,3.5]]";
+
+  it("cuts a port that lies on its wall", async () => {
+    const r = await run("P.s; return boardCase({ " + PI +
+      ", cutouts: [{ wall: 'y-', at: 30, width: 8, height: 4, z: 2 }] });");
+    expect(r.ok).toBe(true);
+  });
+
+  it("refuses a port placed past the end of its wall", async () => {
+    // attempt#1 rpi4-case: HDMI at 75 and power at 90 on the 56 mm x+ wall
+    // were silently cut into thin air - a valid case with no HDMI opening.
+    const r = await run("P.s; return boardCase({ " + PI +
+      ", cutouts: [{ wall: 'x+', at: 75, width: 15, height: 12, z: 5 }] });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("56");
+    expect(r.error).toContain("x+");
+  });
+});
