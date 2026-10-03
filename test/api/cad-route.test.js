@@ -36,6 +36,7 @@ const PHONE_STAND_CREDIT = {
   helper: "phoneStand",
   work: "SmartPhoneHolder",
   author: "DrLex",
+  authorGithub: ["https://github.com/DrLex0"],
   licence: "CC-BY",
   url: "https://github.com/DrLex0/print3d-customizable-smartphone-holder",
 };
@@ -113,6 +114,9 @@ beforeEach(() => {
   delete process.env.CAD_MAX_REPAIR_ATTEMPTS;
   delete process.env.CAD_MAX_IMAGE_BYTES;
   delete process.env.CAD_MAX_REQUEST_MS;
+  // A developer's real key in .env would route Jev calls through the shared
+  // transport stub; selection has its own tests (test/cad-gen/select.test.js).
+  delete process.env.JEV_API_KEY;
 });
 
 afterEach(() => {
@@ -396,6 +400,24 @@ describe("POST /cad/repairs", () => {
     const second = await post("/cad/repairs", body, WALLET, app);
     expect(second.status).toBe(429);
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("an unsuitable request", () => {
+  test("is a 422 the UI can act on, and costs no quota", async () => {
+    const { CadRequestUnsuitable } = await import("@arbesk/cad-gen");
+    generate = jest.fn(async () => {
+      throw new CadRequestUnsuitable("This looks like an artistic or organic model.", 0.04);
+    });
+    const res = await request(buildApp()).post("/cad/generations")
+      .set("Authorization", sessionHeader()).send({ prompt: "a dragon figurine" });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("CAD_REQUEST_UNSUITABLE");
+    expect(res.body.error.details).toEqual({
+      suitability: 0.04, alternative: { kind: "organic-mesh", provider: "tripo3d" },
+    });
+    expect(res.headers["x-cad-quota-remaining"]).toBe("50");
   });
 });
 

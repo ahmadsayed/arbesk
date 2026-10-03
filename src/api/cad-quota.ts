@@ -285,6 +285,25 @@ export function releaseCadSlot(wallet: string, token: string): void {
   if (held && held.token === token) locks.delete(key);
 }
 
+/**
+ * Gives back the unit an admitted request was charged.
+ * @remarks For a request refused before any provider spend - today only
+ *   CadRequestUnsuitable, judged by Jev before DeepSeek is called. A unit is
+ *   the price of a DeepSeek call; charging one for being told "wrong tool" would
+ *   punish the user for the server's own triage. Never refunds below zero, and
+ *   only within the same UTC day the unit was charged.
+ */
+export function refundCadUnit(wallet: string, opts: QuotaOptions): void {
+  const now = nowMs(opts);
+  const key = wallet.toLowerCase();
+  const current = loadState(opts);
+  const entry = current.wallets[key];
+  if (!entry || entry.day !== utcDay(now) || entry.used <= 0) return;
+  current.wallets[key] = { day: entry.day, used: entry.used - 1 };
+  pruneAndSave(opts, current, now);
+  console.log("[CAD] wallet=" + key + " refunded, quota=" + (entry.used - 1));
+}
+
 /** Quota headers, so a UI can show the remaining budget. */
 export function cadQuotaHeaders(wallet: string, opts: QuotaOptions): Record<string, string> {
   const now = nowMs(opts);

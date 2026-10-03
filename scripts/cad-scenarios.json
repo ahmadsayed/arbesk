@@ -1,0 +1,70 @@
+[
+  {
+    "name": "l-bracket",
+    "prompt": "An L-shaped mounting bracket, 60 mm wide, 30 mm deep, 40 mm tall, 4 mm thick, with two M4 clearance holes in each leg"
+  },
+  {
+    "name": "gear-spur",
+    "prompt": "A spur gear, module 2, 20 teeth, 8 mm thick, with a 5 mm bore"
+  },
+  {
+    "name": "gf-bin-2x3",
+    "prompt": "A Gridfinity bin, 2 by 3 units, 6 units tall"
+  },
+  {
+    "name": "rpi4-case",
+    "prompt": "A case for a Raspberry Pi 4 with openings for the USB, Ethernet and HDMI ports"
+  },
+  {
+    "name": "uno-case",
+    "prompt": "An enclosure for an Arduino Uno with the board on standoffs and a USB-B opening"
+  },
+  {
+    "name": "phone-stand",
+    "prompt": "A phone stand that holds a phone at 60 degrees in landscape"
+  },
+  {
+    "name": "nut-trap-plate",
+    "prompt": "A 60 x 30 x 8 mm plate with two M3 hex nut traps on the underside and matching clearance holes"
+  },
+  {
+    "name": "cable-clip",
+    "prompt": "A desk-edge cable clip for three 6 mm cables, screwed down with one M3 screw"
+  },
+  {
+    "name": "hinge",
+    "prompt": "A two-part print-in-place hinge, 40 mm long, 30 mm wide when open, with a 3 mm pin"
+  },
+  {
+    "name": "pipe-clamp",
+    "prompt": "A split pipe clamp for a 25 mm diameter pipe, two halves joined by two M5 bolts"
+  },
+  {
+    "name": "knob",
+    "prompt": "A knurled control knob, 30 mm diameter, 18 mm tall, with a D-shaft bore for a 6 mm potentiometer shaft"
+  },
+  {
+    "name": "wall-hook",
+    "prompt": "A wall hook for a coat, screw-mounted with two countersunk screws"
+  },
+  {
+    "name": "drawer-divider",
+    "prompt": "An adjustable drawer divider slotted to slide into a 120 mm deep drawer, 60 mm tall"
+  },
+  {
+    "name": "pulley-gt2",
+    "prompt": "A GT2 timing pulley, 20 teeth, for a 6 mm belt and a 5 mm motor shaft with a set-screw hole"
+  },
+  {
+    "name": "spool-holder",
+    "prompt": "A filament spool holder arm that mounts on 2020 aluminium extrusion with M5 T-nuts"
+  },
+  {
+    "name": "soap-dish",
+    "prompt": "A soap dish 110 x 80 mm with drainage slots and raised ribs"
+  },
+  {
+    "name": "spool-stand",
+    "prompt": "A desktop filament spool holder for a standard 1 kg spool"
+  }
+]

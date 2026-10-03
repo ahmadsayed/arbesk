@@ -323,6 +323,60 @@ describe("spurGear", () => {
   }, 40000);
 });
 
+// GT2 pulley: built from the published Gates PowerGrip GT dimensions (2mm
+// pitch, 0.254mm radial pitch factor, 0.76mm groove). The failure this owns:
+// every live attempt drew the pulley by hand - toothless discs and once 21
+// detached teeth - because the three diameters (pitch 12.73, outside 12.22,
+// root 10.70 for 20 teeth) are not guessable.
+describe("gt2Pulley", () => {
+  it("puts 20 teeth on a 12.22 mm circle, flange to flange on z = 0", async () => {
+    const r = await run("return gt2Pulley({});");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(7.112, 2); // flanges at OD + 2
+    expect(r.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(8, 4); // 6mm body + 2 x 1mm flange
+    expect(r.stats.bodies.count).toBe(1);
+  }, 40000);
+
+  it("sizes the tooth circle from the tooth count", async () => {
+    const a = await run("return gt2Pulley({ teeth: 20, flanges: false });");
+    const b = await run("return gt2Pulley({ teeth: 40, flanges: false });");
+    expect(a.stats.bboxMm.max[0]).toBeCloseTo(6.112, 2);
+    expect(b.stats.bboxMm.max[0]).toBeCloseTo(12.478, 2); // 40 x 2 / PI - 0.508
+  }, 40000);
+
+  it("has grooves, not a plain barrel", async () => {
+    const r = await run("return gt2Pulley({ teeth: 20, flanges: false });");
+    const barrel = await run("return cylinder(6.112, 6, { segments: 256 });");
+    expect(r.stats.volumeMm3).toBeLessThan(barrel.stats.volumeMm3 * 0.97);
+  }, 40000);
+
+  it("subtracts the bore and the set-screw hole", async () => {
+    const solid = await run("return gt2Pulley({ teeth: 20, setScrew: 'none' });");
+    const screwed = await run("return gt2Pulley({ teeth: 20, setScrew: 'M3' });");
+    expect(screwed.stats.volumeMm3).toBeLessThan(solid.stats.volumeMm3);
+    const bored = await run("return gt2Pulley({ teeth: 20, bore: 8 });");
+    expect(bored.stats.volumeMm3).toBeLessThan(solid.stats.volumeMm3);
+    // Widening the default 5mm bore to 8 removes one annulus through the 8mm height.
+    expect(solid.stats.volumeMm3 - bored.stats.volumeMm3)
+      .toBeCloseTo(Math.PI * (16 - 6.25) * 8, -1);
+  }, 40000);
+
+  it("refuses a spec it cannot build", async () => {
+    const big = await run("return gt2Pulley({ teeth: 20, bore: 12 });");
+    expect(big.ok).toBe(false);
+    expect(big.error).toMatch(/leaves no hub/);
+
+    const few = await run("return gt2Pulley({ teeth: 6 });");
+    expect(few.ok).toBe(false);
+    expect(few.error).toMatch(/at least 8 teeth/);
+
+    const badScrew = await run("return gt2Pulley({ teeth: 20, setScrew: 'M5' });");
+    expect(badScrew.ok).toBe(false);
+    expect(badScrew.error).toMatch(/"none", "M3" or "M4"/);
+  }, 40000);
+});
+
 // Regression, from the live timing pulley: the model assembled the teeth from
 // boxes placed around a cylinder, leaving them 0.75mm clear of the body and
 // reaching 7.5mm above it. Watertight, one connected solid, every gate passed,
@@ -455,4 +509,303 @@ describe("fillet quality", () => {
     expect(r.stats.filletMode).toBe("exact");
     expect(r.stats.filletQuality).toBeUndefined();
   }, 30000);
+});
+
+describe("boardCase cutouts", () => {
+  const PI = "boardLength: 85, boardWidth: 56, holes: [[3.5,3.5],[3.5,52.5],[61.5,52.5],[61.5,3.5]]";
+
+  it("cuts a port that lies on its wall", async () => {
+    const r = await run("P.s; return boardCase({ " + PI +
+      ", cutouts: [{ wall: 'y-', at: 30, width: 8, height: 4, z: 2 }] });");
+    expect(r.ok).toBe(true);
+  });
+
+  it("refuses a port placed past the end of its wall", async () => {
+    // attempt#1 rpi4-case: HDMI at 75 and power at 90 on the 56 mm x+ wall
+    // were silently cut into thin air - a valid case with no HDMI opening.
+    const r = await run("P.s; return boardCase({ " + PI +
+      ", cutouts: [{ wall: 'x+', at: 75, width: 15, height: 12, z: 5 }] });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("56");
+    expect(r.error).toContain("x+");
+  });
+});
+
+// The numbers below are OpenSCAD's render of BOSL2's own examples (see
+// scripts/cad-reference.mjs). A port that drifts from them is a different part.
+describe("ported BOSL2 hinges", () => {
+  it("printInPlaceHinge matches OpenSCAD's render of the BOSL2 example", async () => {
+    const r = await run("P.s; return printInPlaceHinge({});");
+    expect(r.ok).toBe(true);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(40.4, 1);
+    expect(size[1]).toBeCloseTo(25.0, 1);
+    expect(size[2]).toBeCloseTo(7.1, 1);
+    expect(Math.abs(r.stats.volumeMm3 - 2499.7) / 2499.7).toBeLessThan(0.005);
+  });
+
+  it("knuckleHinge matches OpenSCAD's render of a bare inner half", async () => {
+    const r = await run("P.s; return knuckleHinge({ length: 35, segs: 6, offset: 5, inner: true," +
+      " armHeight: 2, armAngle: 60, clip: 1 });");
+    expect(r.ok).toBe(true);
+    expect(Math.abs(r.stats.volumeMm3 - 227.0) / 227.0).toBeLessThan(0.005);
+  });
+
+  it("refuses an offset smaller than the knuckle radius", async () => {
+    const r = await run("P.s; return knuckleHinge({ length: 20, segs: 3, offset: 1 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("knuckle radius");
+  });
+});
+
+describe("printInPlaceHinge refusals", () => {
+  it("refuses segments too short to hold their pins, naming a count that works", async () => {
+    // attempt#5 door-hinge: 32 segs over 50mm came out as 16 loose pieces.
+    const r = await run("P.s; return printInPlaceHinge({ length: 50, segs: 32, knuckleDiam: 8 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/at most \d+ segs/);
+  });
+
+  it("scales the default offset with the knuckle so the leaves stay apart", async () => {
+    // A 6mm knuckle at BOSL2's literal offset 3.1 fuses the leaves into one body.
+    const r = await run("P.s; return printInPlaceHinge({ knuckleDiam: 6 });");
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("body count", () => {
+  it("reports two bodies for two boxes that do not touch, largest first", async () => {
+    const r = await run("P.s; return box(10, 10, 10).add(box(2, 2, 2).translate([20, 0, 0]));");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    expect(r.stats.bodies.boxes[0].max[0]).toBeCloseTo(5, 3);
+    expect(r.stats.bodies.boxes[1].min[0]).toBeCloseTo(19, 3);
+  });
+
+  it("reports one body when the pieces overlap", async () => {
+    const r = await run("P.s; return box(10, 10, 10).add(box(2, 2, 2).translate([5.5, 0, 0]));");
+    expect(r.stats.bodies.count).toBe(1);
+  });
+});
+
+// OpenSCAD's render of Matthew Burke's filament_spool_holder.scad (MIT), part
+// by part, with its default parameters - see scripts/cad-reference.mjs spool-*.
+describe("ported spool holder", () => {
+  const cases = [
+    ["side_frame", [175.0, 177.31, 8.0], 80718.9],
+    ["crossbar", [133.0, 20.0, 18.0], 45095.9],
+    ["axle", [163.0, 17.91, 17.91], 41212.4],
+    ["axle_cap", [27.0, 27.0, 11.0], 4208.7],
+  ];
+  for (const [part, size, volume] of cases) {
+    it(part + " matches OpenSCAD's render", async () => {
+      const r = await run("P.s; return spoolHolder({ part: '" + part + "' });");
+      expect(r.ok).toBe(true);
+      const got = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+      for (const a of [0, 1, 2]) expect(got[a]).toBeCloseTo(size[a], 1);
+      expect(Math.abs(r.stats.volumeMm3 - volume) / volume).toBeLessThan(0.001);
+      expect(r.stats.bodies.count).toBe(1);
+    });
+  }
+
+  it("refuses a bore bigger than the spool, with the SCAD's own message", async () => {
+    const r = await run("P.s; return spoolHolder({ spoolMaxDiameter: 60, spoolMaxBoreDiameter: 58 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("4 mm of spool flange");
+  });
+});
+
+// OpenSCAD's render of vector76's gridfinity_basic_cup.scad (MIT) with these
+// -D settings - see scripts/cad-reference.mjs gf-cup-*.
+describe("ported Gridfinity bin", () => {
+  const cases = [
+    ["{}", [83.5, 41.5, 24.75], 25985.7],
+    ["{ width: 2, depth: 3, height: 6 }", [83.5, 125.5, 45.75], 75384.2],
+    ["{ width: 1, depth: 1, height: 2, lipStyle: 'reduced', fingerslide: false }", [41.5, 41.5, 17.75], 10923.5],
+  ];
+  for (const [args, size, volume] of cases) {
+    it(args + " matches OpenSCAD's render", async () => {
+      const r = await run("P.s; return gridfinityCup(" + args + ");");
+      expect(r.ok).toBe(true);
+      const got = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+      for (const a of [0, 1, 2]) expect(got[a]).toBeCloseTo(size[a], 1);
+      expect(Math.abs(r.stats.volumeMm3 - volume) / volume).toBeLessThan(0.001);
+      expect(r.stats.bodies.count).toBe(1);
+    });
+  }
+
+  it("refuses a label style that is not a string, saying how to pass one", async () => {
+    // attempt#14: labelMap[P.idx] missed, and the port crashed on startsWith.
+    const r = await run("P.s; return gridfinityCup({ withLabel: undefined, chambers: 2 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("write the string literally");
+  });
+
+  it("refuses a fractional depth the port does not support", async () => {
+    const r = await run("P.s; return gridfinityCup({ depth: 1.5 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("depth is whole grid units");
+  });
+});
+
+// OpenSCAD's render of AaronVerDow's parametrized_wall_hook.scad (Unlicense) -
+// see scripts/cad-reference.mjs wall-hook-*.
+describe("ported wall hook", () => {
+  it("matches OpenSCAD's render with the defaults", async () => {
+    const r = await run("P.s; return wallHook({});");
+    expect(r.ok).toBe(true);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(57.0, 1);
+    expect(size[1]).toBeCloseTo(104.28, 1);
+    expect(size[2]).toBeCloseTo(12.0, 1);
+    expect(Math.abs(r.stats.volumeMm3 - 25480.3) / 25480.3).toBeLessThan(0.001);
+    expect(r.stats.bodies.count).toBe(1);
+  });
+
+  it("matches OpenSCAD's render resized for a coat", async () => {
+    const r = await run("P.s; return wallHook({ width: 16, d: 60, height: 95, theight: 40 });");
+    expect(Math.abs(r.stats.volumeMm3 - 61111.2) / 61111.2).toBeLessThan(0.001);
+  });
+});
+
+// First-party, from the 2020 profile's published dimensions - see the module.
+describe("extrusionSpoolArm", () => {
+  it("is one body with a 32mm rod for a 1 kg spool", async () => {
+    const r = await run("P.s; return extrusionSpoolArm({});");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    // 32mm rod + 2 x 6mm lip across; 80mm plate tall; 9.4mm behind the face.
+    expect(size[0]).toBeCloseTo(44, 0);
+    expect(size[2]).toBeCloseTo(80, 0);
+    expect(r.stats.bboxMm.min[1]).toBeCloseTo(-9.4, 1);
+  });
+
+  it("keeps both screw paths clear: shank, head and driver", async () => {
+    const r = await run(
+      "P.s; const a = extrusionSpoolArm({});" +
+      // The shank (r 2.6) through key and plate; the head and driver (r 4.25)
+      // from the plate's front face outward. The plate itself must stop the head.
+      "const path = (z) => M.cylinder(9.9, 2.6, 2.6, 24).rotate([-90, 0, 0]).translate([0, -9.4, z])" +
+      ".add(M.cylinder(50, 4.25, 4.25, 24).rotate([-90, 0, 0]).translate([0, 0.01, z]));" +
+      "return a.intersect(path(10)).add(a.intersect(path(70))).add(box(1, 1, 1).translate([200, 0, 0]));",
+    );
+    // Only the 1mm marker cube survives: nothing of the arm is in either path.
+    expect(r.stats.volumeMm3).toBeCloseTo(1, 1);
+  });
+
+  it("refuses a hole spacing that buries a screw head under the rod", async () => {
+    const r = await run("P.s; return extrusionSpoolArm({ holeSpacing: 30 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("use at least");
+  });
+});
+
+// First-party, from ISO fastener sizes - see packages/cad-gen/src/core/library/pipe-clamp.ts.
+// Defaults: 25mm pipe, bore 25.4, wall 5, M5 at x = +-19, halves split 5mm apart
+// with each bore centre 2mm from y = 0 (the 1mm pinch is 0.5mm a side).
+describe("pipeClamp", () => {
+  const tube = (r0, r1, y) =>
+    "M.cylinder(20, " + r1 + ", " + r1 + ", 64).subtract(M.cylinder(20, " + r0 + ", " + r0 + ", 64))" +
+    ".translate([0, " + y + ", 0])";
+
+  it("is two halves laid out flat, 5mm apart, standing on z = 0", async () => {
+    const r = await run("P.s; return pipeClamp({ pipeDiameter: 25, bolt: 'M5' });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    const [a, b] = [...r.stats.bodies.boxes].sort((p, q) => p.min[1] - q.min[1]);
+    // Bolt at 19 + the 4.73mm nut corner + 2.5mm of ear = 26.2 either side.
+    expectSameBbox(a, { min: [-26.23, -19.70, 0], max: [26.23, -2.5, 20] });
+    expectSameBbox(b, { min: [-26.23, 2.5, 0], max: [26.23, 19.70, 20] });
+  });
+
+  it("leaves a bore the pipe fits, and no more", async () => {
+    const fits = await run("P.s; const c = pipeClamp({});" +
+      "return c.intersect(M.cylinder(20, 12.5, 12.5, 64).translate([0, 2, 0]))" +
+      ".add(c.intersect(M.cylinder(20, 12.5, 12.5, 64).translate([0, -2, 0])))" +
+      ".add(box(1, 1, 1).translate([200, 0, 0]));");
+    expect(fits.stats.volumeMm3).toBeCloseTo(1, 1);
+    // A 0.4mm-larger probe bites the 12.7mm bore wall all round each half.
+    const tight = await run("P.s; return pipeClamp({}).intersect(M.cylinder(20, 13.1, 13.1, 64).translate([0, 2, 0]));");
+    expect(tight.stats.volumeMm3).toBeGreaterThan(100);
+  });
+
+  it("keeps the bolt holes clear of the bore: the ring next to it is whole", async () => {
+    // A 3.2mm band of ring just outside the bore, on the +y half only. The bolt
+    // holes start at 19 - 2.75 = 16.25 from the axis, so nothing is cut from it.
+    const upper = ".intersect(box(100, 100, 20).translate([0, 52.5, 10]))";
+    const whole = await run("P.s; return " + tube(12.75, 15.95, 2) + upper + ";");
+    const cut = await run("P.s; return pipeClamp({}).intersect(" + tube(12.75, 15.95, 2) + ")" + upper + ";");
+    // Within tessellation (0.1%); a hole breaking in would take tens of mm3.
+    expect(Math.abs(cut.stats.volumeMm3 - whole.stats.volumeMm3) / whole.stats.volumeMm3).toBeLessThan(0.001);
+  });
+
+  it("passes both bolt shanks straight through both halves", async () => {
+    const r = await run("P.s; const c = pipeClamp({});" +
+      "const shank = (x) => M.cylinder(60, 2.7, 2.7, 24).rotate([-90, 0, 0]).translate([x, -30, 10]);" +
+      "return c.intersect(shank(19)).add(c.intersect(shank(-19))).add(box(1, 1, 1).translate([200, 0, 0]));");
+    expect(r.stats.volumeMm3).toBeCloseTo(1, 1);
+  });
+
+  it("sizes a 32mm pipe on M6 with plain holes", async () => {
+    const r = await run("P.s; return pipeClamp({ pipeDiameter: 32, bolt: 6, nutTrap: false });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    // Bore 16.2 + counterbore 5.2 + 1.2 -> spacing ceil(45.2) = 46, ear to 23 + 5.2 + 2.5.
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(30.7, 1);
+  });
+
+  it("refuses a bolt spacing that breaks into the bore, naming one that works", async () => {
+    const r = await run("P.s; return pipeClamp({ boltSpacing: 30 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("into the 25.4mm bore; use at least 38mm");
+  });
+
+  it("refuses an unknown bolt, a fused layout and a width the head will not fit", async () => {
+    expect((await run("P.s; return pipeClamp({ bolt: 'M7' });")).error).toContain("not one of M3, M4, M5");
+    expect((await run("P.s; return pipeClamp({ gap: 0 });")).error).toContain("gap must be at least 1mm");
+    expect((await run("P.s; return pipeClamp({ width: 8 });")).error).toContain("use at least 13mm");
+  });
+});
+
+// A live Uno case built its lid with box() over boardCase's corner-origin frame
+// and it landed half off the case, fused into the rim. boardCaseLid shares the
+// case's options, so the lid fits by construction.
+describe("boardCaseLid", () => {
+  const UNO = "{ boardLength: 68.58, boardWidth: 53.34, holes: [[13.97,2.54],[15.24,50.8],[66.04,7.62],[66.04,35.56]] }";
+
+  it("is a second body laid clear beside the case", async () => {
+    const r = await run("P.s; const o = " + UNO + "; return boardCase(o).add(boardCaseLid(o));");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    const [kase, lid] = [...r.stats.bodies.boxes].sort((a, b) => a.min[0] - b.min[0]);
+    expect(lid.min[0]).toBeGreaterThan(kase.max[0]);
+    // Same outer footprint as the case.
+    expect(lid.max[1] - lid.min[1]).toBeCloseTo(kase.max[1] - kase.min[1], 1);
+  });
+
+  it("has a lip 0.2mm a side inside the case cavity", async () => {
+    // Only the lip stands above the 2.5mm plate: its footprint is the cavity
+    // (board + 2 x 2mm clearance) less 2 x 0.2mm.
+    const r = await run("P.s; const o = " + UNO + "; return boardCaseLid(o).intersect(" +
+      "box(1000, 1000, 10).translate([0, 0, 2.5 + 0.01 + 5]));");
+    const size = [0, 1].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(68.58 + 4 - 0.4, 2);
+    expect(size[1]).toBeCloseTo(53.34 + 4 - 0.4, 2);
+  });
+});
+
+describe("zero-volume flakes", () => {
+  it("are not counted as bodies, and are removed from the solid", async () => {
+    // A face-thin box pressed against the main body decomposes to a body of
+    // ~0 volume - the shape of the flake a live cable clip's fillet left.
+    const r = await run("P.s; return box(10, 10, 10).add(box(4, 4, 1e-9).translate([0, 0, 5]));");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+  });
+
+  it("still counts a small but real separate piece", async () => {
+    const r = await run("P.s; return box(10, 10, 10).add(box(0.5, 0.5, 0.5).translate([20, 0, 0]));");
+    expect(r.stats.bodies.count).toBe(2);
+  });
 });

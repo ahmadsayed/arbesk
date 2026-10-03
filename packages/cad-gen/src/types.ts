@@ -36,6 +36,16 @@ export interface CadStats {
   /** Ball resolution the opening actually used, so a draft fillet is never
    *  mistaken for a high-quality one. Only set when an opening ran. */
   filletQuality?: "draft" | "high";
+  /**
+   * How many separate bodies the solid is, and where each one is.
+   * @remarks A part whose feature floats a hair clear of the body is a valid,
+   *   watertight solid that passes every other check; this is the only stat
+   *   that sees it. Bounds are listed (largest first, capped) so a repair turn
+   *   can say WHICH piece came loose, not just that one did.
+   */
+  bodies?: { count: number; boxes: { min: [number, number, number]; max: [number, number, number] }[] };
+  /** Zero-volume flakes the kernel removed from the solid (see DEGENERATE_BODY_MM3). */
+  degenerateBodiesDropped?: number;
 }
 
 /** Renderer-neutral mesh in Manifold coordinates (millimetres, Z-up). */

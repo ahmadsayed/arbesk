@@ -92,5 +92,6 @@ export function cadGeneratorFrom(env) {
     model: env.CAD_MODEL || "deepseek-flash",
     ...(env.DEEPSEEK_BASE_URL ? { baseUrl: env.DEEPSEEK_BASE_URL } : {}),
     ...(env.CAD_THINKING ? { thinking: true } : {}),
+    ...(env.JEV_API_KEY ? { jev: { apiKey: env.JEV_API_KEY } } : {}),
   });
 }

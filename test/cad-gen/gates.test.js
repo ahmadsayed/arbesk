@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { evaluateStaticGates, evaluateKernelGates } from "@arbesk/cad-gen/core/gates.js";
+import {
+  bodyAllowance, bodyFloor, evaluateStaticGates, evaluateKernelGates, SEPARATE_THRESHOLD,
+} from "@arbesk/cad-gen/core/gates.js";
 import { validateDesign } from "@arbesk/cad-gen/backend/validate.js";
 
 const PRELUDE = ["box", "hole"];
@@ -22,6 +24,21 @@ describe("evaluateStaticGates", () => {
     const gates = evaluateStaticGates(design("return box(1, 1, 1);"), PRELUDE);
     expect(gates.find((g) => g.gate === "parameters").ok).toBe(false);
   });
+
+  it("fails the syntax gate for a script that does not parse", () => {
+    // attempt#1 hinge: a live design redeclared a const and reached the client.
+    const gates = evaluateStaticGates(
+      design("const c = P.s; const c = 1; return box(c, c, c);"), PRELUDE);
+    const syntax = gates.find((g) => g.gate === "syntax");
+    expect(syntax.ok).toBe(false);
+    expect(syntax.error).toContain("does not parse");
+  });
+
+  it("checks syntax without running the script", () => {
+    const gates = evaluateStaticGates(
+      design("throw new Error('ran'); return box(P.s, P.s, P.s);"), PRELUDE);
+    expect(gates.find((g) => g.gate === "syntax").ok).toBe(true);
+  });
 });
 
 describe("evaluateKernelGates", () => {
@@ -32,6 +49,85 @@ describe("evaluateKernelGates", () => {
 
   it("passes sane stats", () => {
     expect(evaluateKernelGates(stats, LIMITS).every((g) => g.ok)).toBe(true);
+  });
+
+  it("fails the connected gate when the part came apart, naming each piece", () => {
+    const bodies = { count: 2, boxes: [
+      { min: [0, 0, 0], max: [10, 10, 2] }, { min: [0, 0, 5], max: [2, 2, 9] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.ok).toBe(false);
+    expect(connected.error).toContain("2 separate bodies");
+    expect(connected.error).toContain("[0.0, 0.0, 5.0] to [2.0, 2.0, 9.0]");
+    expect(connected.error).toContain("OUTSIDE the main body");
+  });
+
+  it("names a part a through-cut has severed, instead of saying it floats", () => {
+    // Live cable clip: slots cut through the full height left four fins, each
+    // spanning z -6..6 like the main body, side by side in x.
+    const bodies = { count: 2, boxes: [
+      { min: [-25, -10, -6], max: [-11, 10, 6] }, { min: [11, -10, -6], max: [25, 10, 6] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.error).toContain("SEVERED");
+    expect(connected.error).toContain("Leave a floor or bridge");
+    expect(connected.error).not.toContain("OUTSIDE the main body");
+  });
+
+  it("tells a piece resting inside a cavity apart from one floating away", () => {
+    // attempt#10 gf-bin: the base's top sat in the cavity, touching the floor.
+    const bodies = { count: 2, boxes: [
+      { min: [-41.8, -62.8, 0], max: [41.8, 62.8, 42] }, { min: [-40.3, -61.3, 1.5], max: [40.3, 61.3, 3.2] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.error).toContain("INSIDE the main body's bounds");
+    expect(connected.error).toContain("only TOUCHES");
+  });
+
+  it("passes as many bodies as the request implies, and fails one more", () => {
+    const at = (count, maxBodies) => evaluateKernelGates(
+      { ...stats, bodies: { count, boxes: [{ min: [0, 0, 0], max: [1, 1, 1] }] } }, { ...LIMITS, maxBodies },
+    ).find((g) => g.gate === "connected");
+    expect(at(2, 2).ok).toBe(true);
+    // attempt#17: a two-half clamp shipped as 6 bodies under a yes/no "separate".
+    expect(at(6, 2).ok).toBe(false);
+    expect(at(6, 2).error).toContain("at most 2");
+  });
+
+  it("allows a multi-body helper its own bodies whatever the count says", () => {
+    expect(bodyAllowance("return printInPlaceHinge({});", 1)).toBe(2);
+    expect(bodyAllowance("return pipeClamp({ pipeDiameter: 25 });", 1)).toBe(2);
+    expect(bodyAllowance("return box(1, 1, 1);", undefined)).toBe(1);
+    expect(bodyAllowance("return box(1, 1, 1);", 3)).toBe(3);
+    expect(bodyAllowance("return box(1, 1, 1);", 5)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("fails the pieces gate when separate pieces came out fused", () => {
+    // attempt#4: a two-half pipe clamp came back as one block and passed.
+    const at = (count, minBodies) => evaluateKernelGates(
+      { ...stats, bodies: { count, boxes: [{ min: [0, 0, 0], max: [1, 1, 1] }] } },
+      { ...LIMITS, maxBodies: 2, minBodies },
+    ).find((g) => g.gate === "pieces");
+    expect(at(1, 2).ok).toBe(false);
+    expect(at(1, 2).error).toContain("1 body, but the request needs 2 SEPARATE pieces");
+    expect(at(1, 2).error).toContain("at least 2mm");
+    expect(at(2, 2).ok).toBe(true);
+    expect(at(1, undefined).ok).toBe(true);
+    expect(evaluateKernelGates(stats, { ...LIMITS, minBodies: 4 })
+      .find((g) => g.gate === "pieces").ok).toBe(true);
+  });
+
+  it("asks for a floor only when Jev judged fused pieces wrong, and fails open", () => {
+    expect(bodyFloor(2, 0.95)).toBe(2);
+    expect(bodyFloor(4, SEPARATE_THRESHOLD)).toBe(4);
+    // A hinged box can be one piece with a living hinge: Jev 0.65.
+    expect(bodyFloor(2, 0.65)).toBe(1);
+    expect(bodyFloor(1, 0.95)).toBe(1);
+    expect(bodyFloor(2, undefined)).toBe(1);
+    expect(bodyFloor(undefined, 0.95)).toBe(1);
   });
 
   it("fails on a degenerate volume", () => {

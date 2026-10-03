@@ -186,6 +186,75 @@ prompt, never a verdict: the server re-runs the guard on whatever comes back
 regardless, and a client reporting no failures still gets a statically-gated
 design.
 
+## Two-stage generation: the catalog and Jev
+
+The system prompt is no longer one fixed text. `backend/catalog.ts` holds one
+entry per library module or knowledge block (summary, helper rows, guidance), and
+`buildSystemPrompt(ids, fit)` sends the core rules plus the selected entries.
+**Adding a part means adding a catalog entry, never a paragraph in prompt.ts.**
+
+Stage one is **Jev** (TypeSafe AI, `backend/jev.ts`, `JEV_API_KEY`): a decision
+model that answers typed questions with calibrated probabilities, ~100-400 ms,
+$0.042/MTok. ONE call per request asks:
+
+| question | type | used for |
+|---|---|---|
+| one per catalog entry | `score` 0-2 | entries ≥ `FIT_THRESHOLD` (1.0) are documented, with their fit |
+| `piece_count` | `choice` one/two/three/four/many | the `connected` gate allows that many bodies (`bodyAllowance`), raised to what a multi-body helper builds (`MULTI_BODY_HELPERS`) |
+| `pieces_separate` | `noul` | "would ONE fused solid be wrong?" - with `piece_count` >= 2 and this ≥ `SEPARATE_THRESHOLD` (0.75), the `pieces` gate needs at least `piece_count` bodies (`bodyFloor` → `KernelLimits.minBodies`) |
+| `cad_suitable` | `noul` | < `SUITABILITY_THRESHOLD` (0.5) refuses the request |
+
+The body count is gated from both sides. `connected` caps it from above
+(`maxBodies`); `pieces` floors it from below (`minBodies`, 1 when absent), so a
+two-half clamp fused into one block fails with a repair message that says to
+SEPARATE the pieces - the opposite of `connected`'s "overlap" advice. Fewer bodies
+is not always wrong (a hinged box may use a living hinge), which is why the floor
+needs Jev's second judgement and not just the count. Calibrated live on 20
+requests: fused-is-wrong 0.84-0.97 (clamp, four coasters, sliding/snap-fit lid,
+three spacers, lift-off lid, earrings); fused-may-be-fine 0.05-0.65 (hinged box
+0.65, print-in-place chain 0.45, print-in-place hinge 0.34, Gridfinity bin with
+dividers 0.30, bracket 0.05). Missing answers give a floor of 1: Jev never fails
+a part by being down.
+
+Selection only ever adds documentation, and Jev **fails open**: no key, an
+outage or a bad reply falls back to the whole catalog and never refuses. A
+client repair skips Jev and reuses the entries its design already calls.
+
+**Unsuitable requests.** An artistic or organic subject (a figurine, a bust, an
+animal) throws `CadRequestUnsuitable` BEFORE any DeepSeek call. The route answers
+**422 `CAD_REQUEST_UNSUITABLE`** with `details: { suitability, alternative:
+{ kind: "organic-mesh", provider: "tripo3d" } }` and **refunds the quota unit** -
+the UI should offer the Tripo3D generator instead. Measured: engineering parts
+0.96-0.99, simple decorative geometry 0.73-0.91, sculpted subjects 0.03-0.18.
+
+## Growing the library
+
+1. `bun scripts/cad-candidates.mjs <owner/repo>[:<file.scad>] ...` - the licence
+   gate. Jev classifies the LICENSE text and asks whether THIS file came from
+   elsewhere (README provenance included); a source is portable only when
+   GitHub's SPDX and Jev both say permissive/attribution AND a human has read it.
+   Results accumulate in `test-results/reference/candidates.json`; `--all`
+   re-judges every saved candidate (resumable: records already judged under the
+   current `RUBRIC` are skipped unless `--force`).
+   **Ranking** - the same Jev call asks `is_scad_design` (noul: real OpenSCAD
+   modelling source, not an agent-skill bundle, app or converter) and four 0-3
+   scores, combined as
+   `rank = isScadDesign * (0.25 + 0.75*generalPurpose/3) * (parametric + printability + maturity)/9`.
+   Both factors gate: skill bundles sink to ~0.02-0.06 and printer-specific
+   one-offs to ~0.2, while BOSL2 and vector76's Gridfinity sit near 0.8. Port
+   from the top of the ranked list the script prints.
+2. Port per the `openscad-reference-port` skill into `core/library/<part>.ts`,
+   reproducing the licence notice the licence requires (MIT and BSD do).
+   **CERN-OHL-P-2.0** is accepted (permissive, s3.4 allows other terms), but its
+   notices are heavier than MIT's: keep every Notice (s3.1-3.2), add a notice
+   that you modified it with the date and a brief description (s3.3b), and
+   ship a copy of the licence text with the port (s3.4b). CERN-OHL-S and
+   CERN-OHL-W are reciprocal and stay rejected.
+3. `bun scripts/cad-reference.mjs <case>` renders the UNMODIFIED original with
+   OpenSCAD (`-D` overrides) and the port: size, volume and bodies must match.
+4. `ATTRIBUTED_HELPERS` entry with `authorGithub`, a catalog entry, a
+   `PRELUDE_VERSION` bump, a scenario - and a live run proving DeepSeek calls it.
+
 ## Harnesses
 
 - `scripts/cad-smoke.mjs` — one prompt → design → **real GLB and 3MF on disk**.

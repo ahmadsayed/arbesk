@@ -5,13 +5,20 @@
  *   PRELUDE_VERSION (spec section 4).
  */
 import type { ManifoldModule } from "../types.ts";
+import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
+import { spoolHolder } from "./library/spool-holder.ts";
+import { gridfinityCup } from "./library/gridfinity-cup.ts";
+import { wallHook } from "./library/wall-hook.ts";
+import { extrusionSpoolArm } from "./library/extrusion-spool-arm.ts";
+import { knob } from "./library/knob.ts";
+import { pipeClamp } from "./library/pipe-clamp.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -208,6 +215,129 @@ function spurOutlinePoints(m: number, z: number, phi: number, steps: number): nu
   return points;
 }
 
+// Gates PowerGrip GT (GT2) 2mm-pitch dimensions. These are published
+// standard dimensions - facts, not creative work - quoted from the Gates
+// Light Power & Precision drive manual lineage (see backend/catalog.ts's
+// provenance note) and cross-checked against a Gates-licensee catalog (CMT
+// 2MR: pitch diameter minus outside diameter is 0.020" at every tooth count).
+/** Belt pitch: 2mm. */
+const GT2_PITCH = 2;
+/**
+ * Radial pitch factor: outside diameter = pitch diameter - 2 x 0.254.
+ * @remarks A 20-tooth pulley is 12.73mm pitch, 12.22mm across the teeth -
+ *   the "12.2mm GT2 pulley" every printer part is measured against.
+ */
+const GT2_PITCH_FACTOR = 0.254;
+/** Nominal groove depth (the belt tooth height), per the SDP/SI handbook. */
+const GT2_GROOVE_DEPTH = 0.76;
+/** Flat at the groove bottom, between the two flanks. */
+const GT2_VALLEY_FLAT = 0.45;
+/** Half the included groove angle: the flanks lean 20 deg off the radial. */
+const GT2_HALF_ANGLE = (20 * Math.PI) / 180;
+
+/**
+ * The radial clearance-hole diameter for a set-screw size, 0 for "none".
+ * @remarks Refuses a size the helper does not know, naming the allowed set.
+ */
+function gt2ScrewDiameter(screw: unknown): number {
+  const dia = ({ none: 0, M3: 3.4, M4: 4.5 } as Record<string, number>)[screw as string] ?? 0;
+  if (dia === 0 && screw !== "none") {
+    throw new Error('gt2Pulley: setScrew is "none", "M3" or "M4"');
+  }
+  return dia;
+}
+
+/**
+ * Rejects a pulley spec the kernel cannot build.
+ * @remarks A bore at or beyond the root circle minus 1mm would leave nothing
+ *   to hold the teeth, and flanges that touch the bore are not flanges - both
+ *   are refused by name rather than silently returned.
+ */
+function assertGt2Spec(z: number, width: number, bore: number, rRoot: number, flangeD: number): void {
+  if (!(z >= 8)) throw new Error("gt2Pulley needs at least 8 teeth");
+  if (!(width > 0)) throw new Error("gt2Pulley needs a positive beltWidth");
+  if (!(bore > 0) || bore / 2 >= rRoot - 1) {
+    throw new Error("gt2Pulley: a " + bore + " mm bore leaves no hub inside the " +
+      (2 * rRoot).toFixed(2) + " mm root diameter");
+  }
+  if (flangeD <= bore) throw new Error("gt2Pulley: flangeDiameter must clear the bore");
+}
+
+/**
+ * One resolved, validated GT2 pulley spec.
+ * @remarks Every dimension the build reads, so the helper body assembles
+ *   without re-deriving anything.
+ */
+interface Gt2Spec {
+  teeth: number;
+  beltWidth: number;
+  bore: number;
+  flanges: boolean;
+  flangeThickness: number;
+  flangeDiameter: number;
+  screwDiameter: number;
+  rOut: number;
+  rRoot: number;
+  total: number;
+}
+
+/** Defaults, the standard radii and the set-screw size for one option set. */
+function resolveGt2Spec(o: any): Gt2Spec {
+  const {
+    teeth = 20,
+    beltWidth = 6,
+    bore = 5,
+    flanges = true,
+    flangeThickness = 1,
+    setScrew = "none",
+  } = o ?? {};
+  const rOut = ((GT2_PITCH * teeth) / Math.PI - 2 * GT2_PITCH_FACTOR) / 2;
+  const rRoot = rOut - GT2_GROOVE_DEPTH;
+  const flangeDiameter = o.flangeDiameter ?? 2 * rOut + 2;
+  assertGt2Spec(teeth, beltWidth, bore, rRoot, flangeDiameter);
+  const screwDiameter = gt2ScrewDiameter(setScrew);
+  if (screwDiameter > 0 && screwDiameter >= bore) {
+    throw new Error("gt2Pulley: a set screw needs a bore bigger than " + screwDiameter + " mm");
+  }
+  return {
+    teeth, beltWidth, bore, flanges, flangeThickness, flangeDiameter,
+    screwDiameter, rOut, rRoot,
+    total: beltWidth + 2 * flangeThickness,
+  };
+}
+
+/**
+ * The closed 2D outline of a GT2 pulley, as [x, y] millimetre points.
+ * @remarks The Gates groove is a modified curvilinear profile; this is the
+ *   straight-flanked approximation every printable pulley uses - tip flat,
+ *   40 deg flanks, valley flat - with the dimensions above. Per tooth the
+ *   outline emits six points: tip centre, land edge, valley edge, valley
+ *   centre, and their mirrors, so consecutive points never span a groove.
+ */
+function gt2OutlinePoints(teeth: number): number[][] {
+  const z = teeth;
+  const pitchDia = (GT2_PITCH * z) / Math.PI;
+  const rOut = (pitchDia - 2 * GT2_PITCH_FACTOR) / 2;
+  const rRoot = rOut - GT2_GROOVE_DEPTH;
+  const flankArc = GT2_GROOVE_DEPTH * Math.tan(GT2_HALF_ANGLE);
+  const land = GT2_PITCH - 2 * flankArc - GT2_VALLEY_FLAT;
+  const at = (r: number, a: number): number[] => [r * Math.cos(a), r * Math.sin(a)];
+  const arc = (mm: number): number => mm / rOut;
+  const points: number[][] = [];
+  for (let i = 0; i < z; i++) {
+    const c = (i * 2 * Math.PI) / z;
+    points.push(
+      at(rOut, c),
+      at(rOut, c + arc(land / 2)),
+      at(rRoot, c + arc(land / 2 + flankArc)),
+      at(rRoot, c + arc(land / 2 + flankArc + GT2_VALLEY_FLAT / 2)),
+      at(rRoot, c + arc(land / 2 + flankArc + GT2_VALLEY_FLAT)),
+      at(rOut, c + arc(land / 2 + 2 * flankArc + GT2_VALLEY_FLAT)),
+    );
+  }
+  return points;
+}
+
 export interface PreludeOptions {
   /**
    * Circular segments for every feature the script does not size itself.
@@ -374,6 +504,23 @@ function edgeOf(value: unknown): string {
 }
 
 /**
+ * Refuses a cutout whose centre is off its wall.
+ * @remarks Refused, not clamped: attempt#1 put a Pi's HDMI at 75 on its 56 mm
+ *   x+ wall, and the block cut thin air - a valid case with the port silently
+ *   missing. An x wall RUNS along y, so its length is W, and a y wall's is L.
+ * @throws Error naming the wall's real length, so a repair turn can move it.
+ */
+function assertOnWall(edge: string, at: number, run: number, L: number, W: number): void {
+  if (at >= 0 && at <= run) return;
+  throw new Error(
+    "boardCase cutout on wall '" + edge + "' has at = " + at + ", but that wall is " +
+    "only " + run + " mm long (0 to " + run + "). The x walls run along boardWidth (" +
+    W + " mm) and the y walls along boardLength (" + L + " mm). Put the port on the " +
+    "wall it is actually on, or measure 'at' along that wall.",
+  );
+}
+
+/**
  * A block that punches one opening through a case wall.
  * @remarks Deliberately overshoots the wall on both sides, so the opening is a
  *   through-hole rather than a pocket - a connector needs clearance outside the
@@ -399,6 +546,7 @@ function cutoutFor(
   const edge = edgeOf(s.wall ?? s.edge);
   const alongX = edge.charAt(0) === "x";
   const span = alongX ? L : W;
+  assertOnWall(edge, s.at, alongX ? W : L, L, W);
   const seat = edge.charAt(1) === "+" ? span + half - wall + depth : wall - half - depth;
   const across = [seat, s.at, (s.z ?? s.sill ?? 0) + s.height / 2];
   const centre = alongX ? across : [across[1], across[0], across[2]];
@@ -614,6 +762,41 @@ export function buildPrelude(
       return solid.subtract(
         Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
       );
+    },
+
+    /**
+     * A GT2 (Gates PowerGrip GT, 2mm pitch) timing pulley with belt flanges,
+     * a shaft bore and an optional radial set-screw hole.
+     * @remarks Built from the published standard dimensions (see the constants
+     *   above): a 20-tooth pulley is 12.73mm pitch diameter, 12.22mm across
+     *   the teeth, grooves 0.76mm deep - the part every printer uses but no
+     *   model draws correctly by hand. The groove is the straight-flanked
+     *   printable approximation (40 deg included), not the curvilinear
+     *   molded profile. Lies on z = 0, axis on the origin: flange, toothed
+     *   body of beltWidth, flange. Dimensions are facts and carry no credit
+     *   (as Gridfinity's do).
+     */
+    gt2Pulley: (opts: any = {}) => {
+      const s = resolveGt2Spec(opts);
+      let part = Manifold.extrude(
+        CrossSection.ofPolygons([gt2OutlinePoints(s.teeth)]),
+        s.beltWidth, 0, 0, [1, 1], false,
+      ).translate([0, 0, s.flangeThickness]);
+      if (s.flanges) {
+        const flange = Manifold.cylinder(s.flangeThickness, s.flangeDiameter / 2, s.flangeDiameter / 2, segmentsFor(opts), false);
+        part = part.add(flange).add(flange.translate([0, 0, s.flangeThickness + s.beltWidth]));
+      }
+      part = part.subtract(
+        Manifold.cylinder(s.total + 2, s.bore / 2, s.bore / 2, segmentsFor(opts), true)
+          .translate([0, 0, s.total / 2]),
+      );
+      if (s.screwDiameter > 0) {
+        part = part.subtract(
+          Manifold.cylinder(2 * s.rRoot, s.screwDiameter / 2, s.screwDiameter / 2, segmentsFor(opts), true)
+            .rotate([0, 90, 0]).translate([0, 0, s.flangeThickness + s.beltWidth / 2]),
+        );
+      }
+      return part;
     },
 
     /**
@@ -843,6 +1026,41 @@ export function buildPrelude(
     },
 
     /**
+     * The lid for a boardCase, built from the SAME options, laid beside it for printing.
+     * @remarks First-party. A live Uno case drew its lid with box() - centred on
+     *   the origin - and placed it over boardCase, whose frame is the board's
+     *   lower-left corner: the lid landed half off the case and fused into its
+     *   rim. Built here, the lid shares boardCase's dimensions by construction.
+     *   A rounded plate the case's outer size, with a hollow locating lip that
+     *   drops inside the walls (lipClearance a side) for a friction fit, printed
+     *   lip-up at x = outerLength + spacing in the board's frame. So
+     *   boardCase(o).add(boardCaseLid(o)) is exactly two bodies, case and lid.
+     */
+    boardCaseLid: (opts: any = {}) => {
+      const o = {
+        ...CASE_DEFAULTS, lidThickness: 2.5, lipHeight: 3, lipWall: 1.5, lipClearance: 0.2, spacing: 6,
+        ...(opts ?? {}),
+      };
+      const L = o.boardLength;
+      const W = o.boardWidth;
+      const gap = o.clearance;
+      const outerL = L + 2 * (gap + o.wall);
+      const outerW = W + 2 * (gap + o.wall);
+      const innerL = L + 2 * gap - 2 * o.lipClearance;
+      const innerW = W + 2 * gap - 2 * o.lipClearance;
+      if (!(o.lipWall > 0 && innerL - 2 * o.lipWall > 0 && innerW - 2 * o.lipWall > 0)) {
+        throw new Error("boardCaseLid: lipWall " + o.lipWall + " leaves no opening inside the lip");
+      }
+      const plate = Manifold.extrude(roundRect(outerL, outerW, o.cornerRadius), o.lidThickness, 0, 0, [1, 1], true)
+        .translate([0, 0, o.lidThickness / 2]);
+      // The lip starts INSIDE the plate, so plate and lip are one body.
+      const lip = Manifold.cube([innerL, innerW, o.lipHeight + 0.5], true)
+        .subtract(Manifold.cube([innerL - 2 * o.lipWall, innerW - 2 * o.lipWall, o.lipHeight + 2], true))
+        .translate([0, 0, o.lidThickness + (o.lipHeight + 0.5) / 2 - 0.5]);
+      return plate.add(lip).translate([L / 2 + outerL + o.spacing, W / 2, 0]);
+    },
+
+    /**
      * A hook that clips over a rail and cannot come off.
      * @remarks ONE extruded profile plus a stem that overlaps it, so the part is
      *   a single body and there is no join to get wrong. A live attempt drew this
@@ -873,6 +1091,79 @@ export function buildPrelude(
         .translate([-(inner + o.wall / 2), -(inner + drop / 2) + 2, 0]);
       return ringSolid.add(stemSolid).rotate([90, 0, 0]);
     },
+
+    /**
+     * One half of a knuckle hinge, to mount on the user's own part.
+     * @remarks PORT of knuckle_hinge() from BOSL2 hinges.scad, BSD-2-Clause, by
+     *   Adrian Mariano and Revar Desmera (github.com/adrianVmariano,
+     *   github.com/revarbat) - credited through ATTRIBUTED_HELPERS. Mounting face
+     *   on z = 0, pin axis along X at y = clearance, z = offset; the arm reaches
+     *   toward -y. Matches OpenSCAD's render: scripts/cad-reference.mjs.
+     */
+    knuckleHinge: (opts: any = {}) =>
+      knuckleHinge(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * A complete two-leaf print-in-place hinge, captured on cone-tipped pins.
+     * @remarks PORT of the print-in-place example in BOSL2 hinges.scad,
+     *   BSD-2-Clause, by Adrian Mariano and Revar Desmera
+     *   (github.com/adrianVmariano, github.com/revarbat) - credited through
+     *   ATTRIBUTED_HELPERS. TWO bodies by design: fused leaves are not a hinge.
+     */
+    printInPlaceHinge: (opts: any = {}) =>
+      printInPlaceHinge(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * One print part of a multipart filament spool holder.
+     * @remarks PORT of filament_spool_holder.scad from
+     *   3dthings-filament-spool-holder, MIT, by Matthew Burke
+     *   (github.com/Burke9077) - credited through ATTRIBUTED_HELPERS. Matches
+     *   OpenSCAD's render of every part: scripts/cad-reference.mjs.
+     */
+    spoolHolder: (opts: any = {}) => spoolHolder(module, opts ?? {}),
+
+    /**
+     * A complete Gridfinity bin: feet, walls, stacking lip, chambers, label tab.
+     * @remarks PORT of basic_cup() from gridfinity_openscad, MIT, by Jamie (vector76)
+     *   (github.com/vector76) - credited through ATTRIBUTED_HELPERS. Matches
+     *   OpenSCAD's render: scripts/cad-reference.mjs, cases gf-cup-*.
+     */
+    gridfinityCup: (opts: any = {}) => gridfinityCup(module, opts ?? {}),
+
+    /**
+     * A screw-mounted J-shaped wall hook with two countersunk holes.
+     * @remarks PORT of wall_hook() from parametrized_wall_hook.scad, Unlicense
+     *   (public domain), by AaronVerDow (github.com/AaronVerDow) - credited
+     *   through ATTRIBUTED_HELPERS anyway. Matches OpenSCAD's render:
+     *   scripts/cad-reference.mjs, cases wall-hook-*.
+     */
+    wallHook: (opts: any = {}) => wallHook(module, opts ?? {}),
+
+    /**
+     * A star- or round-profile control knob with an optional spacer stem.
+     * @remarks PORT of knob() from mmalecki/openscad-knobs, MIT, by
+     *   Maciej Małecki (github.com/mmalecki) - credited through
+     *   ATTRIBUTED_HELPERS. Face down on z = 0, axis on the origin. Returns
+     *   the UNCUTOFF solid: subtract the shaft bore from the returned solid.
+     *   Matches OpenSCAD's render: scripts/cad-reference.mjs, cases knob-*.
+     */
+    knob: (opts: any = {}) => knob(module, opts ?? {}),
+
+    /**
+     * A filament spool arm that bolts onto 2020 aluminium extrusion.
+     * @remarks First-party, from published facts (Misumi HFS5-2020's 20mm
+     *   profile and 6mm slot, ISO M5 clearance and head sizes, 1 kg spool
+     *   sizes) - no portable OpenSCAD source exists; see the module.
+     */
+    extrusionSpoolArm: (opts: any = {}) => extrusionSpoolArm(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * A split pipe clamp: two bolted half-rings, laid out side by side to print.
+     * @remarks First-party, from published facts (ISO socket heads, hex nuts and
+     *   clearance holes; the pipe's diameter is the user's) - no portable
+     *   OpenSCAD source exists; see the module. Returns TWO bodies by design.
+     */
+    pipeClamp: (opts: any = {}) => pipeClamp(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
 
     /**
      * A rack of cup pockets on a stable base.
