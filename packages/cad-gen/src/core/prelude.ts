@@ -18,7 +18,7 @@ export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -1023,6 +1023,41 @@ export function buildPrelude(
         part = part.subtract(cutoutFor(module, c, L, W, gap, wall));
       }
       return part;
+    },
+
+    /**
+     * The lid for a boardCase, built from the SAME options, laid beside it for printing.
+     * @remarks First-party. A live Uno case drew its lid with box() - centred on
+     *   the origin - and placed it over boardCase, whose frame is the board's
+     *   lower-left corner: the lid landed half off the case and fused into its
+     *   rim. Built here, the lid shares boardCase's dimensions by construction.
+     *   A rounded plate the case's outer size, with a hollow locating lip that
+     *   drops inside the walls (lipClearance a side) for a friction fit, printed
+     *   lip-up at x = outerLength + spacing in the board's frame. So
+     *   boardCase(o).add(boardCaseLid(o)) is exactly two bodies, case and lid.
+     */
+    boardCaseLid: (opts: any = {}) => {
+      const o = {
+        ...CASE_DEFAULTS, lidThickness: 2.5, lipHeight: 3, lipWall: 1.5, lipClearance: 0.2, spacing: 6,
+        ...(opts ?? {}),
+      };
+      const L = o.boardLength;
+      const W = o.boardWidth;
+      const gap = o.clearance;
+      const outerL = L + 2 * (gap + o.wall);
+      const outerW = W + 2 * (gap + o.wall);
+      const innerL = L + 2 * gap - 2 * o.lipClearance;
+      const innerW = W + 2 * gap - 2 * o.lipClearance;
+      if (!(o.lipWall > 0 && innerL - 2 * o.lipWall > 0 && innerW - 2 * o.lipWall > 0)) {
+        throw new Error("boardCaseLid: lipWall " + o.lipWall + " leaves no opening inside the lip");
+      }
+      const plate = Manifold.extrude(roundRect(outerL, outerW, o.cornerRadius), o.lidThickness, 0, 0, [1, 1], true)
+        .translate([0, 0, o.lidThickness / 2]);
+      // The lip starts INSIDE the plate, so plate and lip are one body.
+      const lip = Manifold.cube([innerL, innerW, o.lipHeight + 0.5], true)
+        .subtract(Manifold.cube([innerL - 2 * o.lipWall, innerW - 2 * o.lipWall, o.lipHeight + 2], true))
+        .translate([0, 0, o.lidThickness + (o.lipHeight + 0.5) / 2 - 0.5]);
+      return plate.add(lip).translate([L / 2 + outerL + o.spacing, W / 2, 0]);
     },
 
     /**

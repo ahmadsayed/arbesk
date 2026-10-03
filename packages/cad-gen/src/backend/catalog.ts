@@ -55,12 +55,18 @@ export interface CatalogEntry {
 export const CATALOG: CatalogEntry[] = [
   {
     id: "board-case",
-    helpers: ["boardCase"],
+    helpers: ["boardCase", "boardCaseLid"],
     summary: "enclosure for a Raspberry Pi, Arduino or any PCB - standoffs, port cutouts, board dimensions",
     helperRows: [
       "boardCase({ boardLength, boardWidth, holes, cutouts, wall?, ... })   PCB enclosure",
+      "boardCaseLid({ ...the same options })   its friction-fit lid, laid beside it",
     ],
     guidance: [
+      "A case WITH A LID is boardCase(o).add(boardCaseLid(o)) - the SAME options object o",
+      "for both. NEVER build the lid yourself with box() or roundedBox(): those are",
+      "centred on the origin, but boardCase's origin is the board's corner, so a live",
+      "hand-built lid landed half off the case and fused into its rim. boardCaseLid",
+      "lays the lid beside the case for printing; two bodies is correct.",
       "A Raspberry Pi, Arduino or any other PCB case is ALWAYS boardCase({...}). This is",
       "not a suggestion: it owns ONE frame - the board's lower-left corner is the",
       "origin - so a standoff cannot land outside the wall. Every hand-built case",

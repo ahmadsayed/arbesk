@@ -767,3 +767,30 @@ describe("pipeClamp", () => {
     expect((await run("P.s; return pipeClamp({ width: 8 });")).error).toContain("use at least 13mm");
   });
 });
+
+// A live Uno case built its lid with box() over boardCase's corner-origin frame
+// and it landed half off the case, fused into the rim. boardCaseLid shares the
+// case's options, so the lid fits by construction.
+describe("boardCaseLid", () => {
+  const UNO = "{ boardLength: 68.58, boardWidth: 53.34, holes: [[13.97,2.54],[15.24,50.8],[66.04,7.62],[66.04,35.56]] }";
+
+  it("is a second body laid clear beside the case", async () => {
+    const r = await run("P.s; const o = " + UNO + "; return boardCase(o).add(boardCaseLid(o));");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(2);
+    const [kase, lid] = [...r.stats.bodies.boxes].sort((a, b) => a.min[0] - b.min[0]);
+    expect(lid.min[0]).toBeGreaterThan(kase.max[0]);
+    // Same outer footprint as the case.
+    expect(lid.max[1] - lid.min[1]).toBeCloseTo(kase.max[1] - kase.min[1], 1);
+  });
+
+  it("has a lip 0.2mm a side inside the case cavity", async () => {
+    // Only the lip stands above the 2.5mm plate: its footprint is the cavity
+    // (board + 2 x 2mm clearance) less 2 x 0.2mm.
+    const r = await run("P.s; const o = " + UNO + "; return boardCaseLid(o).intersect(" +
+      "box(1000, 1000, 10).translate([0, 0, 2.5 + 0.01 + 5]));");
+    const size = [0, 1].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(68.58 + 4 - 0.4, 2);
+    expect(size[1]).toBeCloseTo(53.34 + 4 - 0.4, 2);
+  });
+});
