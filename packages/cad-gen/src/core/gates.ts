@@ -32,7 +32,7 @@ export interface KernelLimits {
  *   being what the helper is - whatever the request's wording led Jev to
  *   judge. attempt#17's hinge passed the old yes/no question at exactly 0.5.
  */
-export const MULTI_BODY_HELPERS: Record<string, number> = { printInPlaceHinge: 2 };
+export const MULTI_BODY_HELPERS: Record<string, number> = { printInPlaceHinge: 2, pipeClamp: 2 };
 
 /**
  * How many bodies a design may have: Jev's piece count, raised to what any

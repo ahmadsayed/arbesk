@@ -86,6 +86,7 @@ describe("evaluateKernelGates", () => {
 
   it("allows a multi-body helper its own bodies whatever the count says", () => {
     expect(bodyAllowance("return printInPlaceHinge({});", 1)).toBe(2);
+    expect(bodyAllowance("return pipeClamp({ pipeDiameter: 25 });", 1)).toBe(2);
     expect(bodyAllowance("return box(1, 1, 1);", undefined)).toBe(1);
     expect(bodyAllowance("return box(1, 1, 1);", 3)).toBe(3);
     expect(bodyAllowance("return box(1, 1, 1);", 5)).toBe(Number.POSITIVE_INFINITY);
