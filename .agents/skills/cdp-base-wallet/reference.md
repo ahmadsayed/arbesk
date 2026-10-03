@@ -11,29 +11,32 @@ User email ──► signInWithEmail() ──► verifyEmailOTP() ──► crea
                                               EOA + ERC-4337 Smart Account
                                                           │
                                                           ▼
-                                              buildCdpEip1193Provider()
+                                       createCdpSigner() — native Signer (no EIP-1193)
                                                           │
-                              ┌───────────────────────────┼───────────────────────────┐
-                              ▼                           ▼                           ▼
-                    eth_accounts / eth_chainId    personal_sign (SIWE)    eth_sendTransaction
-                              │                           │                           ▼
-                              │                           │                    sendUserOperation()
-                              │                           │                           ▼
-                              │                           │              getUserOperation() polling
-                              │                           │                           ▼
-                              │                           │              return real transactionHash
-                              ▼                           ▼                           ▼
-                         Web3.js / wallet-core      SIWE session          Web3.js receipt polling
+          ┌──────────────────────────┬────────────────────┴────────────┬─────────────────────────────┐
+          ▼                          ▼                                 ▼                             ▼
+   signMessage (SIWE)    publish / updateUri /             payments (wallet-payments.ts)     reads: viem
+          │              updateEditors / burn                          │                     read client
+          ▼                          │                                 ▼
+    SIWE session                     ▼                      sendContractCall → browser
+                         _relayForCdp → POST /wallet/relay  sendUserOperation(), poll
+                         (emits ASSET_PUBLISH_PENDING first) getUserOperation() until
+                                     │                      transactionHash is set
+                                     ▼
+                         server: cdp-signer.ts (cdp.endUser.sendUserOperation),
+                         polls until transactionHash is set, then responds
 ```
 
 ## Key Files (full detail)
 
-- `frontend/src/js/blockchain/wallet-cdp.ts` — CDP SDK wrapper + EIP-1193 shim
+- `frontend/src/js/blockchain/wallet-cdp.ts` — CDP SDK wrapper + native `Signer` (`createCdpSigner`; the EIP-1193 shim is gone)
 - `frontend/src/js/blockchain/wallet-core.ts` — wallet connection orchestration; persists CDP email in `localStorage` under `arbesk-cdp-email`; stores last-used wallet in `arbesk-last-wallet`; auto-restores CDP, EOA, and WalletConnect sessions on page load via silent `eth_accounts` / session checks (no popup)
 - `frontend/src/js/ui/wallet-modal.ts` — email OTP UI; clears stale CDP browser state before starting a new OTP flow
 - `frontend/src/js/ui/header-wallet-button.ts` — displays CDP user email; hides network selector for CDP sessions
 - `frontend/src/js/blockchain/smart-wallet-support.ts` — Base Sepolia chain gating (`isSmartWalletSupported(chainId)`)
-- `frontend/src/js/blockchain/wallet-publishing.ts` — publish/updateURI with smart-account gas skipping
+- `frontend/src/js/blockchain/wallet-publishing.ts` — publish/updateURI/updateEditors/burn; CDP sessions route through `_relayForCdp` → backend relay
+- `src/api/routes/wallet-relay.ts` — relay route for CDP writes; caches address → end-user id (the fallback `listEndUsers` scan is O(users))
+- `src/api/cdp-signer.ts` — server-side CDP Signer; `wait()` returns once `transactionHash` is set, not on `status === "complete"`
 - `src/api/routes/paymaster.ts` — backend paymaster proxy (reserved for production custom paymasters)
 - `src/api/siwe-verify.ts` — SIWE verification with `eoaAddress` fallback (embedded EOA signs; `message.address` is the smart account)
 

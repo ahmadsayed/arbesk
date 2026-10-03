@@ -1,7 +1,8 @@
 /**
  * Routes a contract call through the injected Signer port.
- * @remarks Keeps contract writes independent of wallet kind — the prerequisite
- *   for deleting the CDP EIP-1193 shim.
+ * @remarks Keeps contract writes independent of wallet kind (injected EOA or
+ *   the native CDP Signer). CDP publish/updateUri/updateEditors/burn bypass
+ *   this via the backend relay (wallet-publishing.ts).
  */
 import { encodeFunctionData } from "viem";
 import type { Abi } from "viem";

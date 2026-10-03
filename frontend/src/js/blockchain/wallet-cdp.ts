@@ -345,7 +345,7 @@ async function _waitForUserOperationTransaction(
       continue;
     }
 
-    log("CDP:EIP1193", `UserOperation status (attempt ${attempt}):`, op.status);
+    log("CDP", `UserOperation status (attempt ${attempt}):`, op.status);
 
     // transactionHash is set as soon as the op is broadcast and included in
     // a block — this can happen before CDP's status string reaches
