@@ -220,9 +220,23 @@ the UI should offer the Tripo3D generator instead. Measured: engineering parts
    gate. Jev classifies the LICENSE text and asks whether THIS file came from
    elsewhere (README provenance included); a source is portable only when
    GitHub's SPDX and Jev both say permissive/attribution AND a human has read it.
-   Results accumulate in `test-results/reference/candidates.json`.
+   Results accumulate in `test-results/reference/candidates.json`; `--all`
+   re-judges every saved candidate (resumable: records already judged under the
+   current `RUBRIC` are skipped unless `--force`).
+   **Ranking** - the same Jev call asks `is_scad_design` (noul: real OpenSCAD
+   modelling source, not an agent-skill bundle, app or converter) and four 0-3
+   scores, combined as
+   `rank = isScadDesign * (0.25 + 0.75*generalPurpose/3) * (parametric + printability + maturity)/9`.
+   Both factors gate: skill bundles sink to ~0.02-0.06 and printer-specific
+   one-offs to ~0.2, while BOSL2 and vector76's Gridfinity sit near 0.8. Port
+   from the top of the ranked list the script prints.
 2. Port per the `openscad-reference-port` skill into `core/library/<part>.ts`,
    reproducing the licence notice the licence requires (MIT and BSD do).
+   **CERN-OHL-P-2.0** is accepted (permissive, s3.4 allows other terms), but its
+   notices are heavier than MIT's: keep every Notice (s3.1-3.2), add a notice
+   that you modified it with the date and a brief description (s3.3b), and
+   ship a copy of the licence text with the port (s3.4b). CERN-OHL-S and
+   CERN-OHL-W are reciprocal and stay rejected.
 3. `bun scripts/cad-reference.mjs <case>` renders the UNMODIFIED original with
    OpenSCAD (`-D` overrides) and the port: size, volume and bodies must match.
 4. `ATTRIBUTED_HELPERS` entry with `authorGithub`, a catalog entry, a
