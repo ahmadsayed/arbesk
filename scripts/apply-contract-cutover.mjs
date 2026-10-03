@@ -1,12 +1,12 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Base Sepolia contract cutover + rollback (host script, off-chain).
 //
 // Flips the contract address + indexer deployment block across every source
 // of truth, and resets the indexer state, in one atomic step. Generalizes
 // scripts/sync-deployed-addresses.mjs (which handles Hardhat Local only).
 //
-//   node scripts/apply-contract-cutover.mjs --new 0xNEW --block 123456
-//   node scripts/apply-contract-cutover.mjs --revert
+//   bun scripts/apply-contract-cutover.mjs --new 0xNEW --block 123456
+//   bun scripts/apply-contract-cutover.mjs --revert
 //
 // Sources updated:
 //   1. blockchain/.env            (BASE_CONTRACT_ADDRESS)

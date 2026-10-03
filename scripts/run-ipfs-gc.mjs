@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // @ts-check
 /**
  * Standalone IPFS garbage collector for Arbesk.
