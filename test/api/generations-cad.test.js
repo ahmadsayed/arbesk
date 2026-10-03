@@ -211,6 +211,7 @@ describe("POST /api/v1/generations with provider cad", () => {
       .set("Authorization", sessionHeader());
     expect(del.status).toBe(200);
     expect(del.body.status).toBe("cancelled");
+    expect(del.body.upstreamCancelled).toBe(true);
     release();
   });
 });

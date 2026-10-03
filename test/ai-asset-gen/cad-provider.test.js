@@ -78,6 +78,31 @@ describe("createCadProvider", () => {
     expect(onSettle.mock.calls[0][1].ok).toBe(true);
   });
 
+  it("a throwing onSettle cannot corrupt task state or double-settle", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { generate, release } = gatedGenerator();
+      const onSettle = jest.fn(() => { throw new Error("settle boom"); });
+      const provider = createCadProvider({ config: CONFIG, generator: { generate }, onSettle });
+
+      const taskId = await provider.textToModel({ prompt: "a 10mm cube" });
+      release();
+      await until(() => onSettle.mock.calls.length === 1, "settle");
+      // A bogus second (ok:false) settle would fire immediately after the throw.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const poll = await provider.poll(taskId);
+      expect(poll.status).toBe("success");
+      expect(poll.format).toBe("cad-design");
+      expect(poll.output).toEqual(RESULT);
+      expect(onSettle).toHaveBeenCalledTimes(1);
+      expect(onSettle.mock.calls[0][1].ok).toBe(true);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it("passes an AbortSignal to the generator and aborts it on cancel", async () => {
     const generate = jest.fn(async (input) => {
       await new Promise((resolve, reject) => {
