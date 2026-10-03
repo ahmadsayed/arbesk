@@ -13,7 +13,7 @@
  *   source's licence against these classes:
  *     - facts and standards (a 42mm grid, a board's hole spacing) - NO entry.
  *       Dimensions are not creative works, so there is nothing to credit.
- *     - permissive code (MIT, BSD, Apache-2) - ENTRY HERE, even though the
+ *     - permissive code (MIT, BSD, Apache-2, CC0) - ENTRY HERE, even though the
  *       licence only asks for a notice. A notice buried in our source is not a
  *       credit the person holding the printed part can see, and crediting costs
  *       nothing but the truth.
@@ -44,6 +44,13 @@ export interface Attribution {
   work: string;
   /** Who made it, as the source states it. */
   author: string;
+  /**
+   * Each author's GitHub profile.
+   * @remarks Required for EVERY entry, permissive licences included: a name
+   *   alone is hard to follow, and the profile is where a user finds the rest of
+   *   that person's work.
+   */
+  authorGithub: string[];
   /** The licence as the source states it. */
   licence: string;
   /** Link to the original. Required: a credit a user cannot follow is not one. */
@@ -62,6 +69,7 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     helper: "boardCase",
     work: "OpenSCAD RPi 4 case (rpi/pi-case-body.stl, rpi_case.scad)",
     author: "raksahb",
+    authorGithub: ["https://github.com/raksahb"],
     licence: "MIT",
     url: "https://github.com/raksahb/openscad",
   },
@@ -72,6 +80,26 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     helper: "spurGear",
     work: "BOSL2 (Belfry OpenSCAD Library v2), gears.scad",
     author: "Revar Desmera",
+    authorGithub: ["https://github.com/revarbat"],
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
+  // BSD-2-Clause. hinges.scad is mostly Adrian Mariano's work (by commit count),
+  // on Revar Desmera's library. Verified against OpenSCAD's own render of the
+  // BOSL2 examples: scripts/cad-reference.mjs, cases hinge-pip and knuckle-bare.
+  knuckleHinge: {
+    helper: "knuckleHinge",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), hinges.scad knuckle_hinge()",
+    author: "Adrian Mariano and Revar Desmera",
+    authorGithub: ["https://github.com/adrianVmariano", "https://github.com/revarbat"],
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
+  printInPlaceHinge: {
+    helper: "printInPlaceHinge",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), hinges.scad print-in-place hinge example",
+    author: "Adrian Mariano and Revar Desmera",
+    authorGithub: ["https://github.com/adrianVmariano", "https://github.com/revarbat"],
     licence: "BSD-2-Clause",
     url: "https://github.com/BelfrySCAD/BOSL2",
   },
@@ -79,6 +107,7 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     helper: "phoneStand",
     work: "SmartPhoneHolder",
     author: "DrLex",
+    authorGithub: ["https://github.com/DrLex0"],
     licence: "CC-BY",
     url: "https://github.com/DrLex0/print3d-customizable-smartphone-holder",
   },

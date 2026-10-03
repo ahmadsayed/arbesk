@@ -79,6 +79,9 @@ describe("ATTRIBUTED_HELPERS", () => {
       missing: [
         entry.work ? null : "work",
         entry.author ? null : "author",
+        (entry.authorGithub ?? []).length > 0 &&
+          entry.authorGithub.every((u) => /^https:\/\/github\.com\/[^/]+$/.test(u))
+          ? null : "authorGithub",
         entry.licence ? null : "licence",
         /^https:\/\//.test(entry.url ?? "") ? null : "url",
       ].filter(Boolean),

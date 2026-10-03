@@ -91,7 +91,7 @@ function assertManifold(result: any, module: ManifoldModule): any {
 }
 
 /** De-interleaves Manifold's property buffer into a renderer-neutral mesh. */
-function meshFrom(raw: ManifoldMeshData): CadMesh {
+export function meshFrom(raw: ManifoldMeshData): CadMesh {
   const vertCount = raw.vertProperties.length / raw.numProp;
   const positions = new Float32Array(vertCount * 3);
   for (let v = 0; v < vertCount; v++) {

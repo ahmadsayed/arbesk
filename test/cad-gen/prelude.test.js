@@ -476,3 +476,45 @@ describe("boardCase cutouts", () => {
     expect(r.error).toContain("x+");
   });
 });
+
+// The numbers below are OpenSCAD's render of BOSL2's own examples (see
+// scripts/cad-reference.mjs). A port that drifts from them is a different part.
+describe("ported BOSL2 hinges", () => {
+  it("printInPlaceHinge matches OpenSCAD's render of the BOSL2 example", async () => {
+    const r = await run("P.s; return printInPlaceHinge({});");
+    expect(r.ok).toBe(true);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(40.4, 1);
+    expect(size[1]).toBeCloseTo(25.0, 1);
+    expect(size[2]).toBeCloseTo(7.1, 1);
+    expect(Math.abs(r.stats.volumeMm3 - 2499.7) / 2499.7).toBeLessThan(0.005);
+  });
+
+  it("knuckleHinge matches OpenSCAD's render of a bare inner half", async () => {
+    const r = await run("P.s; return knuckleHinge({ length: 35, segs: 6, offset: 5, inner: true," +
+      " armHeight: 2, armAngle: 60, clip: 1 });");
+    expect(r.ok).toBe(true);
+    expect(Math.abs(r.stats.volumeMm3 - 227.0) / 227.0).toBeLessThan(0.005);
+  });
+
+  it("refuses an offset smaller than the knuckle radius", async () => {
+    const r = await run("P.s; return knuckleHinge({ length: 20, segs: 3, offset: 1 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("knuckle radius");
+  });
+});
+
+describe("printInPlaceHinge refusals", () => {
+  it("refuses segments too short to hold their pins, naming a count that works", async () => {
+    // attempt#5 door-hinge: 32 segs over 50mm came out as 16 loose pieces.
+    const r = await run("P.s; return printInPlaceHinge({ length: 50, segs: 32, knuckleDiam: 8 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/at most \d+ segs/);
+  });
+
+  it("scales the default offset with the knuckle so the leaves stay apart", async () => {
+    // A 6mm knuckle at BOSL2's literal offset 3.1 fuses the leaves into one body.
+    const r = await run("P.s; return printInPlaceHinge({ knuckleDiam: 6 });");
+    expect(r.ok).toBe(true);
+  });
+});

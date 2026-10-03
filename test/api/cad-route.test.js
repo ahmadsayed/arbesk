@@ -36,6 +36,7 @@ const PHONE_STAND_CREDIT = {
   helper: "phoneStand",
   work: "SmartPhoneHolder",
   author: "DrLex",
+  authorGithub: ["https://github.com/DrLex0"],
   licence: "CC-BY",
   url: "https://github.com/DrLex0/print3d-customizable-smartphone-holder",
 };

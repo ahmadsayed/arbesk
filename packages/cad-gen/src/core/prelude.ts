@@ -5,13 +5,14 @@
  *   PRELUDE_VERSION (spec section 4).
  */
 import type { ManifoldModule } from "../types.ts";
+import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -891,6 +892,27 @@ export function buildPrelude(
         .translate([-(inner + o.wall / 2), -(inner + drop / 2) + 2, 0]);
       return ringSolid.add(stemSolid).rotate([90, 0, 0]);
     },
+
+    /**
+     * One half of a knuckle hinge, to mount on the user's own part.
+     * @remarks PORT of knuckle_hinge() from BOSL2 hinges.scad, BSD-2-Clause, by
+     *   Adrian Mariano and Revar Desmera (github.com/adrianVmariano,
+     *   github.com/revarbat) - credited through ATTRIBUTED_HELPERS. Mounting face
+     *   on z = 0, pin axis along X at y = clearance, z = offset; the arm reaches
+     *   toward -y. Matches OpenSCAD's render: scripts/cad-reference.mjs.
+     */
+    knuckleHinge: (opts: any = {}) =>
+      knuckleHinge(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * A complete two-leaf print-in-place hinge, captured on cone-tipped pins.
+     * @remarks PORT of the print-in-place example in BOSL2 hinges.scad,
+     *   BSD-2-Clause, by Adrian Mariano and Revar Desmera
+     *   (github.com/adrianVmariano, github.com/revarbat) - credited through
+     *   ATTRIBUTED_HELPERS. TWO bodies by design: fused leaves are not a hinge.
+     */
+    printInPlaceHinge: (opts: any = {}) =>
+      printInPlaceHinge(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
 
     /**
      * A rack of cup pockets on a stable base.

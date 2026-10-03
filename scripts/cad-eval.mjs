@@ -28,6 +28,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { buildPrelude, PRELUDE_NAMES } from "../packages/cad-gen/src/core/prelude.ts";
 import { meshToGlb, meshTo3mf } from "../packages/cad-gen/src/core/export/index.ts";
+import { meshFrom } from "../packages/cad-gen/src/core/kernel.ts";
 import { PROJECT_ROOT, cadGeneratorFrom, loadCadKernel, loadEnv } from "./lib/cad-harness.mjs";
 
 /** @typedef {{ positions: Float32Array, indices: Uint32Array }} Mesh */
@@ -384,17 +385,7 @@ function componentsOf(module, design) {
   const solids = part.decompose();
   return {
     solids: solids.length,
-    meshes: solids.map((/** @type {any} */ s) => {
-      const raw = s.getMesh();
-      const nv = raw.vertProperties.length / raw.numProp;
-      const positions = new Float32Array(nv * 3);
-      for (let v = 0; v < nv; v++) {
-        positions[v * 3] = raw.vertProperties[v * raw.numProp];
-        positions[v * 3 + 1] = raw.vertProperties[v * raw.numProp + 1];
-        positions[v * 3 + 2] = raw.vertProperties[v * raw.numProp + 2];
-      }
-      return { positions, indices: new Uint32Array(raw.triVerts) };
-    }),
+    meshes: solids.map((/** @type {any} */ s) => meshFrom(s.getMesh())),
     tints: solids.map((/** @type {any} */ _s, /** @type {number} */ i) => TINTS[i % TINTS.length]),
   };
 }
@@ -563,6 +554,42 @@ async function main() {
   console.log("\nrenders written to " + runDir);
 }
 
+/** Client repair rounds after the first build, as the browser worker will spend. */
+const CLIENT_REPAIR_ROUNDS = 2;
+
+/**
+ * Builds a design the way the browser worker will: run the kernel, and on a
+ * failure send it back as a repair turn carrying the kernel's own error.
+ * @remarks The server never runs the kernel, so a design that throws in it -
+ *   a helper refusing its arguments, say - can only be repaired by this round
+ *   trip. Without it the harness reports failures a real client would fix.
+ * @param {{ generator: any, kernel: any, outDir: string,
+ *   scenario: { name: string, prompt: string } }} ctx Run context.
+ * @param {any} result The first generation.
+ * @returns {Promise<{ run: any, design: any } | null>} The build, or null.
+ */
+async function buildWithClientRepair(ctx, result) {
+  let design = result.design;
+  for (let round = 0; ; round++) {
+    try {
+      return { run: ctx.kernel.run(design), design };
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      if (round >= CLIENT_REPAIR_ROUNDS) {
+        console.log("FAILED after " + round + " client repair(s): " + error);
+        return null;
+      }
+      console.log("client repair " + (round + 1) + ": " + error.slice(0, 160));
+      const repaired = await ctx.generator.generate({
+        prompt: ctx.scenario.prompt, priorDesign: design,
+        failures: [{ gate: "kernel", error }],
+      });
+      design = repaired.design;
+      fs.writeFileSync(path.join(ctx.outDir, slug(ctx.scenario.name) + ".json"), JSON.stringify(design, null, 2));
+    }
+  }
+}
+
 /**
  * Generates, builds, renders and reports one scenario.
  * @param {{ generator: any, kernel: any, module: any, outDir: string,
@@ -570,7 +597,7 @@ async function main() {
  * @returns {Promise<void>} Resolves once the scenario has been reported.
  */
 async function runScenario(ctx) {
-  const { generator, kernel, outDir, scenario } = ctx;
+  const { generator, outDir, scenario } = ctx;
   const stem = slug(scenario.name);
   console.log("\n=== " + scenario.name + " ===");
   console.log("PROMPT: " + scenario.prompt);
@@ -584,7 +611,10 @@ async function runScenario(ctx) {
     // disk to read: that is exactly when its code is most wanted.
     fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(result.design, null, 2));
     const buildStart = Date.now();
-    const { mesh, stats } = kernel.run(result.design);
+    const built = await buildWithClientRepair(ctx, result);
+    if (!built) return;
+    const { mesh, stats } = built.run;
+    result.design = built.design;
     console.log("kernel   " + (Date.now() - buildStart) + "ms  " + JSON.stringify(stats));
     const { solids, meshes, tints } = componentsOf(ctx.module, result.design);
     console.log("solids   " + solids + (solids > 1 ? "   <-- NOT ONE BODY, pieces are not joined" : ""));
