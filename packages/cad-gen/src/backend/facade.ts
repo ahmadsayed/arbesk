@@ -15,7 +15,8 @@ import type { LlmMessage } from "./deepseek.ts";
 import { buildTurnMessages, buildRepairMessages } from "./prompt.ts";
 import type { TurnInput } from "./prompt.ts";
 import { generateWithRepair } from "./repair.ts";
-import { selectLibraries } from "./select.ts";
+import { selectLibraries, SUITABILITY_THRESHOLD } from "./select.ts";
+import { CadRequestUnsuitable } from "../errors.ts";
 import type { LibrarySelection } from "./select.ts";
 import { createJevClient } from "./jev.ts";
 import type { JevConfig } from "./jev.ts";
@@ -121,6 +122,21 @@ function openingMessages(input: CadGenerateInput): LlmMessage[] {
   );
 }
 
+/**
+ * Refuses a request parametric CAD cannot model, before DeepSeek is paid for it.
+ * @throws CadRequestUnsuitable when Jev judged it below SUITABILITY_THRESHOLD.
+ */
+function refuseUnsuitable(selection: LibrarySelection): void {
+  const s = selection.suitability;
+  if (s === undefined || s >= SUITABILITY_THRESHOLD) return;
+  throw new CadRequestUnsuitable(
+    "This looks like an artistic or organic model (a figure, an animal, a sculpture), not an " +
+    "engineering part, so CAD generation cannot model it well. Use an organic 3D model " +
+    "generator for it instead.",
+    s,
+  );
+}
+
 /** The selection as diagnostics report it: Jev's tokens named apart from DeepSeek's. */
 function selectionDiagnostics(selection: LibrarySelection): CadDiagnostics["selection"] {
   const { tokens, ...rest } = selection;
@@ -154,6 +170,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
 
       // Stage one: which catalog entries this request needs (see select.ts).
       const selection = await selectLibraries(jev, input, input.signal);
+      refuseUnsuitable(selection);
       const turn = { ...input, libraries: selection.libraries, libraryFit: selection.fit };
 
       const outcome = await generateWithRepair({

@@ -186,6 +186,48 @@ prompt, never a verdict: the server re-runs the guard on whatever comes back
 regardless, and a client reporting no failures still gets a statically-gated
 design.
 
+## Two-stage generation: the catalog and Jev
+
+The system prompt is no longer one fixed text. `backend/catalog.ts` holds one
+entry per library module or knowledge block (summary, helper rows, guidance), and
+`buildSystemPrompt(ids, fit)` sends the core rules plus the selected entries.
+**Adding a part means adding a catalog entry, never a paragraph in prompt.ts.**
+
+Stage one is **Jev** (TypeSafe AI, `backend/jev.ts`, `JEV_API_KEY`): a decision
+model that answers typed questions with calibrated probabilities, ~100-400 ms,
+$0.042/MTok. ONE call per request asks:
+
+| question | type | used for |
+|---|---|---|
+| one per catalog entry | `score` 0-2 | entries ≥ `FIT_THRESHOLD` (1.0) are documented, with their fit |
+| `separate_parts` | `noul` | ≥ 0.5 lets the client's `connected` gate accept several bodies |
+| `cad_suitable` | `noul` | < `SUITABILITY_THRESHOLD` (0.5) refuses the request |
+
+Selection only ever adds documentation, and Jev **fails open**: no key, an
+outage or a bad reply falls back to the whole catalog and never refuses. A
+client repair skips Jev and reuses the entries its design already calls.
+
+**Unsuitable requests.** An artistic or organic subject (a figurine, a bust, an
+animal) throws `CadRequestUnsuitable` BEFORE any DeepSeek call. The route answers
+**422 `CAD_REQUEST_UNSUITABLE`** with `details: { suitability, alternative:
+{ kind: "organic-mesh", provider: "tripo3d" } }` and **refunds the quota unit** -
+the UI should offer the Tripo3D generator instead. Measured: engineering parts
+0.96-0.99, simple decorative geometry 0.73-0.91, sculpted subjects 0.03-0.18.
+
+## Growing the library
+
+1. `bun scripts/cad-candidates.mjs <owner/repo>[:<file.scad>] ...` - the licence
+   gate. Jev classifies the LICENSE text and asks whether THIS file came from
+   elsewhere (README provenance included); a source is portable only when
+   GitHub's SPDX and Jev both say permissive/attribution AND a human has read it.
+   Results accumulate in `test-results/reference/candidates.json`.
+2. Port per the `openscad-reference-port` skill into `core/library/<part>.ts`,
+   reproducing the licence notice the licence requires (MIT and BSD do).
+3. `bun scripts/cad-reference.mjs <case>` renders the UNMODIFIED original with
+   OpenSCAD (`-D` overrides) and the port: size, volume and bodies must match.
+4. `ATTRIBUTED_HELPERS` entry with `authorGithub`, a catalog entry, a
+   `PRELUDE_VERSION` bump, a scenario - and a live run proving DeepSeek calls it.
+
 ## Harnesses
 
 - `scripts/cad-smoke.mjs` — one prompt → design → **real GLB and 3MF on disk**.

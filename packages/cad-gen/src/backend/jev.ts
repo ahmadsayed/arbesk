@@ -49,8 +49,33 @@ export interface JevClient {
     request: string,
     candidates: Record<string, string>,
     signal?: AbortSignal,
-  ): Promise<{ fit: Record<string, LibraryFit>; separateParts?: number; usage: TokenUsage }>;
+  ): Promise<{
+    fit: Record<string, LibraryFit>;
+    separateParts?: number;
+    suitability?: number;
+    usage: TokenUsage;
+  }>;
 }
+
+/**
+ * Question id for "can parametric CAD model this at all?".
+ * @remarks Measured live: engineering parts score 0.96-0.99, simple geometric
+ *   decorative items 0.73-0.91, organic or sculpted subjects (a dragon, a bust,
+ *   a hand, a figurine) 0.03-0.18; a chess knight 0.40.
+ */
+export const SUITABILITY_QUESTION = "cad_suitable";
+
+const SUITABILITY = {
+  type: "noul",
+  instructions: "Can the requested object be modelled well by a parametric CAD script that builds " +
+    "it from geometric primitives, 2D profiles, extrusions, revolutions and boolean operations - " +
+    "an engineering, functional or geometric part - WITHOUT needing free-form organic sculpting " +
+    "such as characters, people, animals, faces, figurines, statues or realistic natural shapes?",
+  criteria: {
+    true: "A geometric or functional part that CAD primitives can model",
+    false: "An artistic, organic or sculpted model that needs free-form sculpting",
+  },
+};
 
 /**
  * Question id for "does the request intend separate, unjoined pieces?".
@@ -144,11 +169,17 @@ export function createJevClient(config: JevConfig): JevClient {
   return {
     async scoreFit(request, candidates, signal) {
       const body = await askJev(config, "CAD part request: " + request,
-        { ...fitQuestions(candidates), [SEPARATE_PARTS_QUESTION]: SEPARATE_PARTS }, signal);
+        {
+          ...fitQuestions(candidates),
+          [SEPARATE_PARTS_QUESTION]: SEPARATE_PARTS,
+          [SUITABILITY_QUESTION]: SUITABILITY,
+        }, signal);
       const separate = body?.answers?.[SEPARATE_PARTS_QUESTION]?.noul;
+      const suitable = body?.answers?.[SUITABILITY_QUESTION]?.noul;
       return {
         fit: readFits(body, Object.keys(candidates)),
         ...(typeof separate === "number" ? { separateParts: separate } : {}),
+        ...(typeof suitable === "number" ? { suitability: suitable } : {}),
         usage: usageOf(body),
       };
     },

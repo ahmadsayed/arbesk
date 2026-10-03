@@ -17,8 +17,12 @@ export {
 } from "./prompt.ts";
 export { CATALOG, CATALOG_IDS, catalogEntries, entriesUsedBy } from "./catalog.ts";
 export type { CatalogEntry } from "./catalog.ts";
-export { FIT_THRESHOLD, SEPARATE_PARTS_THRESHOLD, selectLibraries } from "./select.ts";
-export { askJev, createJevClient, FIT_LEVELS, JevError, SEPARATE_PARTS_QUESTION } from "./jev.ts";
+export {
+  FIT_THRESHOLD, SEPARATE_PARTS_THRESHOLD, SUITABILITY_THRESHOLD, selectLibraries,
+} from "./select.ts";
+export {
+  askJev, createJevClient, FIT_LEVELS, JevError, SEPARATE_PARTS_QUESTION, SUITABILITY_QUESTION,
+} from "./jev.ts";
 export type { JevClient, JevConfig, LibraryFit } from "./jev.ts";
 export type { LibrarySelection, SelectionSource } from "./select.ts";
 export type { TurnInput } from "./prompt.ts";

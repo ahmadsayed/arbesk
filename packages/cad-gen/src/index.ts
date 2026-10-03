@@ -6,7 +6,7 @@
  */
 export { CONTRACT_VERSION, PRELUDE_VERSION } from "./core/contract.ts";
 export {
-  CadError, CadDesignError, CadGenerationFailed, CadGuardError, CadKernelError,
+  CadError, CadDesignError, CadGenerationFailed, CadGuardError, CadKernelError, CadRequestUnsuitable,
 } from "./errors.ts";
 export type {
   CadDesign, CadMesh, CadParameter, CadParameterMap,

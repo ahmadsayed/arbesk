@@ -403,6 +403,24 @@ describe("POST /cad/repairs", () => {
   });
 });
 
+describe("an unsuitable request", () => {
+  test("is a 422 the UI can act on, and costs no quota", async () => {
+    const { CadRequestUnsuitable } = await import("@arbesk/cad-gen");
+    generate = jest.fn(async () => {
+      throw new CadRequestUnsuitable("This looks like an artistic or organic model.", 0.04);
+    });
+    const res = await request(buildApp()).post("/cad/generations")
+      .set("Authorization", sessionHeader()).send({ prompt: "a dragon figurine" });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("CAD_REQUEST_UNSUITABLE");
+    expect(res.body.error.details).toEqual({
+      suitability: 0.04, alternative: { kind: "organic-mesh", provider: "tripo3d" },
+    });
+    expect(res.headers["x-cad-quota-remaining"]).toBe("50");
+  });
+});
+
 describe("the real generator, with only the transport stubbed", () => {
   /** A DeepSeek chat-completion response carrying one design document. */
   function completion(design) {

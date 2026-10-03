@@ -136,6 +136,26 @@ async function judge(jev, spec) {
   };
 }
 
+/**
+ * judge(), retried with backoff; a candidate that still fails is recorded as an
+ * error rather than ending the batch.
+ * @param {{ apiKey: string, timeoutMs: number }} jev Jev config.
+ * @param {string} spec The candidate.
+ */
+async function judgeWithRetry(jev, spec) {
+  let last = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await judge(jev, spec);
+    } catch (e) {
+      last = e instanceof Error ? e.message : String(e);
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  return { repo: spec.split(":")[0], file: spec.split(":")[1] ?? null, error: last, portable: false,
+    checkedAt: new Date().toISOString() };
+}
+
 async function main() {
   const specs = process.argv.slice(2);
   if (specs.length === 0) {
@@ -144,19 +164,25 @@ async function main() {
   }
   const env = loadEnv(path.join(PROJECT_ROOT, ".env"));
   if (!env.JEV_API_KEY) throw new Error("JEV_API_KEY missing from .env");
-  const jev = { apiKey: env.JEV_API_KEY };
+  // Offline: a slow answer is fine, a lost batch is not.
+  const jev = { apiKey: env.JEV_API_KEY, timeoutMs: 30000 };
+  const force = specs[0] === "--force";
+  if (force) specs.shift();
   /** @type {Record<string, any>} */
   const all = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, "utf8")) : {};
-  for (const spec of specs) {
-    const r = await judge(jev, spec);
-    all[spec] = r;
-    console.log((r.portable ? "OK  " : "NO  ") + spec.padEnd(60) + " usefulness " +
-      r.jev.usefulness.toFixed(2) + "  " + r.reason);
-  }
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, JSON.stringify(all, null, 2));
+  for (const spec of specs) {
+    if (!force && all[spec] && !all[spec].error) continue;
+    const r = /** @type {any} */ (await judgeWithRetry(jev, spec));
+    all[spec] = r;
+    // Saved per candidate: a batch of a hundred is ten minutes of calls.
+    fs.writeFileSync(OUT, JSON.stringify(all, null, 2));
+    console.log(r.error ? "ERR " + spec.padEnd(60) + " " + r.error
+      : (r.portable ? "OK  " : "NO  ") + spec.padEnd(60) + " usefulness " +
+        r.jev.usefulness.toFixed(2) + "  " + r.reason);
+  }
   console.log("\nranked (portable only):");
-  for (const r of Object.values(all).filter((x) => x.portable).sort((x, y) => y.jev.usefulness - x.jev.usefulness)) {
+  for (const r of Object.values(all).filter((x) => x.portable && !x.error).sort((x, y) => y.jev.usefulness - x.jev.usefulness)) {
     console.log("  " + r.jev.usefulness.toFixed(2) + "  " + r.repo + (r.file ? ":" + r.file : ""));
   }
 }

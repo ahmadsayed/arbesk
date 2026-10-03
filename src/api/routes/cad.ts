@@ -15,7 +15,7 @@ import type {
   CadFailure, CadGenerateInput, CadGenerateResult, CadGenerator, CadLimits,
 } from "@arbesk/cad-gen/backend/index.js";
 import {
-  acquireCadSlot, cadLockTtlMs, cadQuotaHeaders, releaseCadSlot,
+  acquireCadSlot, cadLockTtlMs, cadQuotaHeaders, refundCadUnit, releaseCadSlot,
   CAD_DEFAULT_REQUEST_LIMITS,
 } from "../cad-quota.ts";
 import type { CadRequestLimits, QuotaDecision, QuotaOptions } from "../cad-quota.ts";
@@ -364,8 +364,19 @@ function toWireResult(result: CadGenerateResult) {
  *   passing a provider 401 through would read as "your session is invalid"
  *   when the session is perfectly good.
  */
-function respondWithFailure(c: Context, err: unknown): Response {
-  const e = err as Error & { code?: string; diagnostics?: unknown };
+function respondWithFailure(c: Context<CadEnv>, err: unknown): Response {
+  const e = err as Error & { code?: string; diagnostics?: unknown; suitability?: number; alternative?: unknown };
+  if (e.name === "CadRequestUnsuitable") {
+    // Refused before any DeepSeek call, so the unit is given back.
+    const { config, wallet } = c.get("cad");
+    refundCadUnit(wallet, config.quota);
+    setQuotaHeaders(c, wallet, config);
+    console.log("[CAD] unsuitable wallet=" + wallet + " suitability=" + e.suitability);
+    return sendError(c, 422, "CAD_REQUEST_UNSUITABLE", e.message, {
+      suitability: e.suitability,
+      alternative: e.alternative,
+    });
+  }
   if (e.name === "CadGenerationFailed") {
     console.error("[CAD] generation failed: " + e.message);
     return sendError(c, 500, "CAD_GENERATION_FAILED", e.message, e.diagnostics ?? null);

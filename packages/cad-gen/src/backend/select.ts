@@ -43,7 +43,18 @@ export interface LibrarySelection {
    *   is at least SEPARATE_PARTS_THRESHOLD. Absent when Jev was not asked.
    */
   separateParts?: number;
+  /**
+   * Jev's probability that parametric CAD can model the request at all.
+   * @remarks Below SUITABILITY_THRESHOLD the generator refuses before any
+   *   DeepSeek call (CadRequestUnsuitable). Absent when Jev was not asked - no
+   *   key, an outage, a client repair - and an absent answer never refuses:
+   *   a Jev outage must not block a legitimate part.
+   */
+  suitability?: number;
 }
+
+/** Jev's CAD-suitability probability below which a request is refused. */
+export const SUITABILITY_THRESHOLD = 0.5;
 
 /** Jev's separate-parts probability above which several bodies are the intent. */
 export const SEPARATE_PARTS_THRESHOLD = 0.5;
@@ -89,13 +100,15 @@ export async function selectLibraries(
 
   try {
     const candidates = Object.fromEntries(CATALOG.map((e) => [e.id, e.summary]));
-    const { fit, usage, separateParts } = await jev.scoreFit(requestText(input), candidates, signal);
+    const { fit, usage, separateParts, suitability } =
+      await jev.scoreFit(requestText(input), candidates, signal);
     const chosen = Object.entries(fit).filter(([, f]) => f.score >= FIT_THRESHOLD).map(([id]) => id);
     const libraries = ordered([...chosen, ...prior]);
     const kept = Object.fromEntries(libraries.filter((id) => fit[id]).map((id) => [id, fit[id]]));
     return {
       libraries, fit: kept, source: "jev", tokens: usage,
       ...(separateParts === undefined ? {} : { separateParts }),
+      ...(suitability === undefined ? {} : { suitability }),
     };
   } catch (err) {
     if (signal?.aborted) throw err;

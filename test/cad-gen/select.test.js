@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createJevClient, JevError } from "@arbesk/cad-gen/backend/jev.js";
-import { FIT_THRESHOLD, selectLibraries } from "@arbesk/cad-gen/backend/select.js";
+import { FIT_THRESHOLD, SUITABILITY_THRESHOLD, selectLibraries } from "@arbesk/cad-gen/backend/select.js";
 import { buildSystemPrompt } from "@arbesk/cad-gen/backend/prompt.js";
 import { CATALOG_IDS } from "@arbesk/cad-gen/backend/catalog.js";
 import { createCadGenerator } from "@arbesk/cad-gen/backend/facade.js";
@@ -41,7 +41,7 @@ describe("createJevClient", () => {
     expect(seen[0].auth).toBe("Bearer k");
     expect(seen[0].req.model).toBe("jev-latest");
     expect(seen[0].req.state).toContain("a hinged box");
-    expect(Object.keys(seen[0].req.questions)).toEqual(["hinge", "gear", "separate_parts"]);
+    expect(Object.keys(seen[0].req.questions)).toEqual(["hinge", "gear", "separate_parts", "cad_suitable"]);
     expect(seen[0].req.questions.separate_parts.type).toBe("noul");
     expect(seen[0].req.questions.hinge.type).toBe("score");
     expect(seen[0].req.questions.hinge.criteria).toHaveLength(3);
@@ -128,4 +128,52 @@ describe("the fit reaches the DeepSeek prompt", () => {
     expect(r.diagnostics.selection.jevTokens).toEqual({ prompt: 800, completion: 100 });
     expect(r.diagnostics.tokens).toEqual({ prompt: 10, completion: 5 });
   }, 40000);
+});
+
+describe("the suitability gate", () => {
+  /** A Jev transport answering fit questions with 0 and the gate with `suitable`. */
+  const gateFetch = (suitable) => async (_u, init) => {
+    const req = JSON.parse(init.body);
+    const answers = Object.fromEntries(Object.keys(req.questions).map((id) => [id,
+      id === "cad_suitable" ? { type: "noul", noul: suitable }
+        : id === "separate_parts" ? { type: "noul", noul: 0.1 }
+          : { type: "score", score: 0, confidence: 0.9 }]));
+    return new Response(JSON.stringify({ answers, usage: { input_tokens: 9, output_tokens: 1 } }),
+      { status: 200 });
+  };
+  const generatorWith = (suitable, deepseek) => createCadGenerator({
+    apiKey: "k",
+    jev: { apiKey: "j", fetchImpl: gateFetch(suitable) },
+    fetchImpl: deepseek,
+  });
+
+  it("refuses an artistic request before DeepSeek is called, naming the alternative", async () => {
+    let deepseekCalls = 0;
+    expect(0.04).toBeLessThan(SUITABILITY_THRESHOLD);
+    const g = generatorWith(0.04, async () => { deepseekCalls += 1; });
+    const failed = g.generate({ prompt: "a dragon figurine" });
+    await expect(failed).rejects.toMatchObject({
+      name: "CadRequestUnsuitable",
+      suitability: 0.04,
+      alternative: { kind: "organic-mesh", provider: "tripo3d" },
+    });
+    expect(deepseekCalls).toBe(0);
+  });
+
+  it("lets an engineering part through", async () => {
+    const g = generatorWith(0.99, async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        code: "return box(P.s, P.s, P.s);", parameters: { s: { value: 10, unit: "mm" } }, summary: "a box",
+      }) } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    }), { status: 200 }));
+    const r = await g.generate({ prompt: "an L-bracket" });
+    expect(r.diagnostics.selection.suitability).toBe(0.99);
+  }, 40000);
+
+  it("never refuses when Jev gave no answer - an outage must not block a part", async () => {
+    const s = await selectLibraries(
+      { scoreFit: async () => { throw new JevError("jev 529", 529); } }, { prompt: "a dragon" });
+    expect(s.suitability).toBeUndefined();
+  });
 });
