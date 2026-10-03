@@ -82,11 +82,12 @@ function packChunk(indexBytes: Uint8Array, posBytes: Uint8Array, normalBytes: Ui
 }
 
 /**
- * Serialises a mesh plus its design document to GLB bytes.
- * @remarks Single self-contained buffer; the design rides in asset.extras, so
- *   the exported file alone reconstructs the design and its credits.
+ * Builds the shared glTF document plus its binary chunk.
+ * @remarks meshToGlb wraps this in a GLB container; meshToGltf (gltf.ts)
+ *   embeds the chunk as a base64 data URI. One builder means the two formats
+ *   cannot drift apart.
  */
-export function meshToGlb(mesh: CadMesh, design: CadDesign): Uint8Array {
+export function buildPartDocument(mesh: CadMesh, design: CadDesign) {
   const normals = computeNormals(mesh);
   const indexBytes = bytesOf(mesh.indices);
   const posBytes = bytesOf(mesh.positions);
@@ -130,5 +131,15 @@ export function meshToGlb(mesh: CadMesh, design: CadDesign): Uint8Array {
     ],
   };
 
+  return { gltf, bin };
+}
+
+/**
+ * Serialises a mesh plus its design document to GLB bytes.
+ * @remarks Single self-contained buffer; the design rides in asset.extras, so
+ *   the exported file alone reconstructs the design and its credits.
+ */
+export function meshToGlb(mesh: CadMesh, design: CadDesign): Uint8Array {
+  const { gltf, bin } = buildPartDocument(mesh, design);
   return new Uint8Array(serializeGLB(gltf as never, bin));
 }

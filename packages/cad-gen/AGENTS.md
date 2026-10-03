@@ -118,6 +118,9 @@ route.
   never baked into vertices. Serialized through asset-core's `serializeGLB`;
   **never hand-roll a GLB container.** (The eval harness used to, and it wrote
   no normals and no design sidecar — exactly the drift a shared core prevents.)
+- `meshToGltf(mesh, design)` — self-contained glTF JSON (the binary chunk as
+  a base64 data URI), same `buildPartDocument` as the GLB, so the two cannot
+  drift. This is the client-side render target of the generation pipeline.
 - `meshTo3mf(mesh, design)` — hand-written OPC package, millimetres, Z-up.
   Deliberately not manifold's `lib/export-3mf.js`: that path pulls
   `@jscadui/3mf-export`, a second `@gltf-transform` and an esbuild-wasm peer,

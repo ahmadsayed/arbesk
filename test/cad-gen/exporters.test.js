@@ -8,7 +8,7 @@
 import { describe, expect, it } from "bun:test";
 import { unzipSync, strFromU8 } from "fflate";
 import {
-  meshToGlb, meshTo3mf, readDesignFrom3mf, serializeDesign, parseEmbeddedDesign,
+  meshToGlb, meshToGltf, meshTo3mf, readDesignFrom3mf, serializeDesign, parseEmbeddedDesign,
   attributionsFor,
 } from "@arbesk/cad-gen";
 import { detectFormat } from "@arbesk/asset-core/formats/index.js";
@@ -168,5 +168,50 @@ describe("the design sidecar", () => {
 
   it("credits nothing for a design that calls no ported helper", () => {
     expect(attributionsFor(readDesignFrom3mf(meshTo3mf(MESH, DESIGN)).code)).toEqual([]);
+  });
+});
+
+describe("meshToGltf", () => {
+  const b64ToBytes = (b64) =>
+    Uint8Array.from(Buffer.from(b64.slice("data:application/octet-stream;base64,".length), "base64"));
+
+  it("writes self-contained glTF 2.0 JSON with the buffer as a data URI", () => {
+    const json = JSON.parse(meshToGltf(MESH, DESIGN));
+    expect(json.asset.version).toBe("2.0");
+    expect(json.buffers).toHaveLength(1);
+    expect(json.buffers[0].uri.startsWith("data:application/octet-stream;base64,")).toBe(true);
+    const bin = b64ToBytes(json.buffers[0].uri);
+    expect(bin.length).toBe(json.buffers[0].byteLength);
+    expect(json.buffers[0].byteLength).toBeGreaterThan(0);
+  });
+
+  it("produces the same document as the GLB path (buffers aside)", () => {
+    const gltf = JSON.parse(meshToGltf(MESH, DESIGN));
+    const glbJson = readGlbJson(meshToGlb(MESH, DESIGN));
+    const stripBuffers = (doc) => {
+      const { buffers: _buffers, ...rest } = doc;
+      return rest;
+    };
+    expect(stripBuffers(gltf)).toEqual(stripBuffers(glbJson));
+  });
+
+  it("embeds the design document in asset extras", () => {
+    const json = JSON.parse(meshToGltf(MESH, DESIGN));
+    expect(json.asset.extras.arbesk_cad.code).toBe(DESIGN.code);
+    expect(json.asset.extras.arbesk_units).toBe("mm");
+  });
+
+  it("keeps the binary chunk byte-identical to the GLB path", () => {
+    const gltf = JSON.parse(meshToGltf(MESH, DESIGN));
+    const fromGltf = b64ToBytes(gltf.buffers[0].uri);
+
+    const glb = meshToGlb(MESH, DESIGN);
+    const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
+    const jsonLength = view.getUint32(12, true);
+    const binLength = view.getUint32(20 + jsonLength, true);
+    const fromGlb = glb.subarray(20 + jsonLength + 8, 20 + jsonLength + 8 + binLength);
+
+    expect(fromGltf.length).toBe(fromGlb.length);
+    expect(Buffer.from(fromGltf).equals(Buffer.from(fromGlb))).toBe(true);
   });
 });
