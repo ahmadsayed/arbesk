@@ -31,7 +31,7 @@ const CONFIG = { id: "cad", capabilities: ["text-to-3d"] };
 function gatedGenerator() {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
-  const generate = jest.fn(async (input) => {
+  const generate = jest.fn(async (_input) => {
     await gate;
     return RESULT;
   });

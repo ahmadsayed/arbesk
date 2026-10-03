@@ -62,7 +62,7 @@ async function post(body, address = WALLET) {
 
 async function until(predicate, what = "condition") {
   for (let i = 0; i < 200; i++) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   throw new Error(what + " never became true");
