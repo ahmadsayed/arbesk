@@ -374,6 +374,23 @@ function edgeOf(value: unknown): string {
 }
 
 /**
+ * Refuses a cutout whose centre is off its wall.
+ * @remarks Refused, not clamped: attempt#1 put a Pi's HDMI at 75 on its 56 mm
+ *   x+ wall, and the block cut thin air - a valid case with the port silently
+ *   missing. An x wall RUNS along y, so its length is W, and a y wall's is L.
+ * @throws Error naming the wall's real length, so a repair turn can move it.
+ */
+function assertOnWall(edge: string, at: number, run: number, L: number, W: number): void {
+  if (at >= 0 && at <= run) return;
+  throw new Error(
+    "boardCase cutout on wall '" + edge + "' has at = " + at + ", but that wall is " +
+    "only " + run + " mm long (0 to " + run + "). The x walls run along boardWidth (" +
+    W + " mm) and the y walls along boardLength (" + L + " mm). Put the port on the " +
+    "wall it is actually on, or measure 'at' along that wall.",
+  );
+}
+
+/**
  * A block that punches one opening through a case wall.
  * @remarks Deliberately overshoots the wall on both sides, so the opening is a
  *   through-hole rather than a pocket - a connector needs clearance outside the
@@ -399,18 +416,7 @@ function cutoutFor(
   const edge = edgeOf(s.wall ?? s.edge);
   const alongX = edge.charAt(0) === "x";
   const span = alongX ? L : W;
-  // An x wall RUNS along y, so its length is W, and a y wall's is L. Refused,
-  // not clamped: attempt#1 put a Pi's HDMI at 75 on its 56 mm x+ wall, and the
-  // block cut thin air - a valid case with the port silently missing.
-  const run = alongX ? W : L;
-  if (!(s.at >= 0 && s.at <= run)) {
-    throw new Error(
-      "boardCase cutout on wall '" + edge + "' has at = " + s.at + ", but that wall is " +
-      "only " + run + " mm long (0 to " + run + "). The x walls run along boardWidth (" +
-      W + " mm) and the y walls along boardLength (" + L + " mm). Put the port on the " +
-      "wall it is actually on, or measure 'at' along that wall.",
-    );
-  }
+  assertOnWall(edge, s.at, alongX ? W : L, L, W);
   const seat = edge.charAt(1) === "+" ? span + half - wall + depth : wall - half - depth;
   const across = [seat, s.at, (s.z ?? s.sill ?? 0) + s.height / 2];
   const centre = alongX ? across : [across[1], across[0], across[2]];
