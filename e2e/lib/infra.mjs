@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -119,6 +119,30 @@ export function log(step) {
 }
 
 /**
+ * Async counterpart of execSync(cmd, { stdio: "inherit", cwd: ROOT }) so that
+ * independent per-worker commands can run concurrently via Promise.all —
+ * execSync blocks the event loop and would serialize them.
+ */
+export function run(cmd, { env = process.env, timeout = 120000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, { shell: true, stdio: "inherit", cwd: ROOT, env });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`Timed out after ${timeout}ms: ${cmd}`));
+    }, timeout);
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`Exit code ${code}: ${cmd}`));
+    });
+  });
+}
+
+/**
  * Check whether a Docker Compose service is running for the given project.
  * Defaults to this worktree's project. Using the project name isolates
  * worktrees and parallel workers from each other.
@@ -159,7 +183,7 @@ export function clearState() {
   }
 }
 
-async function rpc(rpcUrl, method, params = []) {
+export async function rpc(rpcUrl, method, params = []) {
   const res = await fetch(rpcUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

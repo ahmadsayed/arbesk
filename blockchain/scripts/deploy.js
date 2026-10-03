@@ -105,6 +105,14 @@ async function main() {
     );
   }
 
+  // Parallel E2E stacks deploy concurrently to identical (deterministic)
+  // addresses; only the first one may write the host-mounted deployments/
+  // and .env files, or concurrent read-modify-writes can corrupt them.
+  if (process.env.DEPLOY_SKIP_SHARED_WRITES === "1") {
+    console.log("DEPLOY_SKIP_SHARED_WRITES=1 - not writing deployments/ or .env");
+    return;
+  }
+
   // ── Save deployment artifacts ──
   const deployDir = path.join(__dirname, "..", "deployments", network);
   fs.mkdirSync(deployDir, { recursive: true });
