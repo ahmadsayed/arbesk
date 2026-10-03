@@ -1,7 +1,7 @@
 # cad-gen library loop — handoff
 
-**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** iteration 9 of 12 done.
-Next: **iteration 10** (below).
+**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** COMPLETE - all 12 iterations done (10-12 ran in parallel worktrees and were
+merged on 2026-10-04). The next session starts a new loop from "What's next" below.
 
 ## What the loop is
 
@@ -48,9 +48,12 @@ local `blockchain/deployments/*.json` changes are never committed. The full meth
 | 6 | `158bf71` | AaronVerDow's wall hook; no portable pipe clamp found |
 | 7 | `dc5a7d8` | Maciej Małecki's knob (`knob`), exact vs OpenSCAD in 3 configs |
 | 8 | `e659765` | GT2 pulleys owned by `gt2Pulley`, built from the Gates standard |
-| 9 | (this commit) | `extrusionSpoolArm` for 2020 extrusion, first-party from published facts |
+| 9 | `c4e4b46` | `extrusionSpoolArm` for 2020 extrusion, first-party from published facts |
+| 10 | `ef6b0bc` | Jev `pieces_separate` + `pieces` gate: separate pieces that came out fused now fail |
+| 11 | `47870dc` | candidate rank on five Jev questions (no more saturation); CERN-OHL-P-2.0 allowed |
+| 12 | `7c85df9` | `pipeClamp`, a two-half bolted clamp, first-party from ISO fastener sizes |
 
-Library today: `extrusionSpoolArm` (spec-derived), `knob` (ported), `gt2Pulley` (spec-derived), plus `knuckleHinge`,
+Library today: `pipeClamp` (spec-derived), `extrusionSpoolArm` (spec-derived), `knob` (ported), `gt2Pulley` (spec-derived), plus `knuckleHinge`,
 `printInPlaceHinge`, `spoolHolder`, `gridfinityCup`, `wallHook` (ported), and the
 earlier `phoneStand`, `boardCase`, `spurGear`, `gridfinityBase`, `railHook`, `cupRack`. Each Jev call asks library fit
 (one `score` per catalog entry), `piece_count` (choice) and `cad_suitable` (noul)
@@ -98,32 +101,51 @@ head and the driver stay reachable (a full-width gusset buried it - caught befor
 shipping by a probe test). Live attempt#5: the 2020 arm, a 3 kg/85mm-bore arm and
 an Ender-3 V-slot arm all call it, one body, first attempt.
 
-## Iteration 10 — start here
+## Iterations 10-12 — DONE (parallel)
 
-1. **Fused multi-piece parts (gate gap)** — the connected gate only caps bodies
-   from ABOVE. attempt#4's two-half pipe clamp came back as one fused block (Jev
-   expected 2) and passed. A request whose Jev `piece_count` is >= 2 and whose
-   part is FEWER bodies is suspect, but not always wrong (a hinged box can be one
-   piece with a living hinge). Options: a repair hint when bodies < expected; or a
-   Jev `noul` on whether the pieces "must be printed separately" to decide
-   whether fewer is a defect. Then the clamp itself (still no portable source -
-   see backlog) is the natural follow-up.
-2. **Finer usefulness ranking** — Jev's single 0-3 usefulness score saturates (45 repos
-   ≥ 2.8). Split it into several questions (reusable / parametric / printable /
-   general-purpose) and rank on the combination; re-rank `candidates.json`. Also screen
-   out non-SCAD "skill" repos that ranked at the top.
-3. **Allow CERN-OHL-P-2.0** in `cad-candidates.mjs`'s `PORTABLE_SPDX` — a permissive
-   hardware licence; `3d-paws/3D-PAWS-Print-Files` was rejected only for that. Confirm
-   with a read of the licence text before adding.
+Ran as three sub-agents in separate worktrees on disjoint files, merged in order
+10, 12, 11, plus `pipeClamp: 2` added to `MULTI_BODY_HELPERS` at merge (`2377be8`).
+Merged tree: 302 tests pass; full live run (attempt#6) **17/17 build, 0 repair
+rounds**; the pipe clamp - the loop's longest-standing failure - now goes through
+`pipeClamp`, 2 bodies, Jev `pieces_separate` 0.95.
+
+- **10** - one more Jev question in the same call, `pieces_separate` (noul: would
+  printing this as ONE fused solid be wrong?). Calibrated on 20 prompts: fused-is-wrong
+  0.84-0.97, fused-may-be-fine <= 0.65; threshold 0.75. `bodyFloor()` + new `pieces`
+  gate (KernelLimits.minBodies) fail a part with fewer bodies than that. Live: fused
+  coasters, sliding lid and clamp were each repaired into separate pieces.
+- **11** - `cad-candidates.mjs` ranks on `is_scad_design` x general-purpose x
+  (parametric + printability + maturity), with a .scad sample in the state. 158
+  candidates re-judged, 137 portable, only 12 >= 0.7. Two old licence passes were
+  WRONG and are now rejected: CameronBrooks11/snapfit-scad (README: adapted from
+  Thingiverse) and IOIO72/scad-universal-stand (file header CC-BY-NC-SA). Neither was
+  ported - verified. CERN-OHL-P-2.0 allowed after reading the v2 text (s3.4); porter
+  obligations in AGENTS.md.
+- **12** - `pipeClamp`: two half-rings standing on their end faces (hoop load along
+  the layers), counterbored heads on one half, corner-up hex nut pockets on the other,
+  1mm pinch gap; refusals name the fix. Live: 25mm/M5, 32mm/M6 and 20mm/M4 clamps all
+  call it, 2 bodies, first attempt.
+
+## What's next (a new loop)
+
+1. **Watch: the `uno-case` lid.** attempt#6 put its `pieces_separate` at 0.71, just
+   under the 0.75 threshold, and DeepSeek drew it as one piece. If a case-with-lid
+   request starts failing or shipping fused, look here first.
+2. **Hinged-lid box (iteration 10 finding)** - passed with 2 bodies but its "lid" was a
+   solid block resting loose in the box. Neither body gate can see that; a knuckleHinge
+   catalog nudge or a Jev check on the lid's shape would.
+3. **Top ranked ports** (new ranking, all portable): `rcolyer/threads-scad` (CC0, 0.89 -
+   threads, caps, bolts), `lijon/jl_scad` (BSD-2, 0.87), `Irev-Dev/Round-Anything` (MIT,
+   0.76 - fillets, could replace slow minkowski fillets), `adgaudio/OpenSCAD_connectors`
+   (MIT, 0.73), `Lavakoons-n-Peebles/openscad-Lid-Generator` (MIT, 0.69).
+4. **`cad-candidates.mjs` speed** - ~6 s per candidate, sequential: up to 7 `gh` spawns
+   each. Run candidates concurrently (e.g. 8), use GitHub's /license endpoint (text +
+   SPDX in one call), and cache fetched files. Also widen the licence lookup to
+   `License.txt` (thecarp/GearHinge's licence lives there).
 
 ## Backlog after that
 
-- **Pipe clamp (two halves, bolted)** — still fails (12 bodies after 2 repairs). No
-  portable source found in 17: all real split clamps are unlicensed or GPL/AGPL. Options:
-  keep searching (Printables/GitHub code search with other words: "split collar",
-  "shaft collar", "tube clamp two piece"), or write a helper from first principles as
-  with gears (a standard shape, not a hand-tuned profile).
-- **Watch: `uno-case` flake** — `InvalidConstruction` after 2 repairs in the iteration-8
+- **(resolved in 9, keep watching) `uno-case` flake** — `InvalidConstruction` after 2 repairs in the iteration-8
   post-change run, but it passed the identical re-rank run the same evening. If it
   fails twice in a row, root-cause it (boardCase + lid geometry); if it keeps
   flip-flopping, consider whether the repair prompt handles kernel-status failures
@@ -136,8 +158,6 @@ an Ender-3 V-slot arm all call it, one body, first attempt.
   could add: if the fuse zone crosses a through-cut, move the feature clear of the cut
   or bridge across it. Nondeterministic trigger, so verify any hint change across
   several runs.
-- **Threads** — `rcolyer/threads-scad` (CC0) and `adrianschlatter/threadlib` (BSD-3) passed
-  the repo gate; useful for caps, bolts, jar lids.
 - **Gridfinity label tabs** — "label tabs" (plural) got one tab; the catalog guidance
   could say `leftchamber` gives one per compartment.
 - **Wall-hook vs over-door** — "hook on a door" picked `wallHook`; an over-door hook is
@@ -154,9 +174,8 @@ an Ender-3 V-slot arm all call it, one body, first attempt.
 ```text
 /loop Grow and harden @arbesk/cad-gen on branch feat/cad-gen-enhance-loop, one iteration
 per firing, against live DeepSeek + Jev (keys in .env) ... (see the loop prompt in the
-session that produced this file; the rules above are the substance). Continue from
-iteration 9 in docs/superpowers/plans/2026-10-03-cad-gen-library-loop.md, stop after
-iteration 12.
+session that produced this file; the rules above are the substance). Start a NEW loop
+from "What's next" in docs/superpowers/plans/2026-10-03-cad-gen-library-loop.md.
 ```
 
 Prerequisites: `openscad` on PATH (2021.01 works); `test-results/reference/` holds cloned
