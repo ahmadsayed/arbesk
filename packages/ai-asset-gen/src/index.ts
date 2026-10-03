@@ -18,3 +18,5 @@ export type {
 export { TripoApiError } from "./providers/tripo.ts";
 export { createMockProvider } from "./providers/mock-provider.ts";
 export { createTripoProvider } from "./providers/tripo-provider.ts";
+export { createCadProvider, cadWireResult } from "./providers/cad-provider.ts";
+export type { CadProviderOptions, CadSettleOutcome, CadSettleError } from "./providers/cad-provider.ts";

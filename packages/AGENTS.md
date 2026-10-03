@@ -34,14 +34,16 @@ only): `--verbose`/`-v` in the CLI, `ARBESK_VERBOSE=1` everywhere.
 ```
 @arbesk/wallet  ──(depends on)──▶  @arbesk/authz
 @arbesk/cad-gen  ──(depends on)──▶  @arbesk/asset-core   (GLB serialization)
-@arbesk/ai-asset-gen               (independent, backend-only)
+@arbesk/ai-asset-gen  ──(depends on)──▶  @arbesk/cad-gen   (CAD provider)
 ```
 
-`@arbesk/authz` imports `@arbesk/wallet/merkle.js`, and `@arbesk/cad-gen`
+`@arbesk/authz` imports `@arbesk/wallet/merkle.js`, `@arbesk/cad-gen`
 imports `@arbesk/asset-core/formats/gltf/gltf-core.js` for GLB serialization
-(never hand-roll a GLB container — see the cad-gen guide). `@arbesk/wallet`,
-`@arbesk/asset-core` and `@arbesk/ai-asset-gen` are independent of each other
-and of the frontend/backend trees.
+(never hand-roll a GLB container — see the cad-gen guide), and
+`@arbesk/ai-asset-gen` imports `@arbesk/cad-gen` for the CAD provider
+(`createCadGenerator` from the backend entry + `CadRequestUnsuitable` from
+the root). `@arbesk/wallet` and `@arbesk/asset-core` are independent of each
+other and of the frontend/backend trees.
 
 > **Intentional duplication — Merkle primitives.** Because `@arbesk/asset-core`
 > cannot import `@arbesk/wallet` (they are independent), `asset-core` keeps a
@@ -69,10 +71,11 @@ and of the frontend/backend trees.
 ## Build & test
 
 ```bash
-bun run build:packages   # tsc → dist/ (ESM + .d.ts); bun runs the four
-                         # independent packages in parallel, then @arbesk/authz
-                         # and @arbesk/cad-gen (they type-check against
-                         # @arbesk/wallet's and @arbesk/asset-core's dist)
+bun run build:packages   # tsc → dist/ (ESM + .d.ts); bun runs the three
+                         # bottom packages in parallel, then @arbesk/authz and
+                         # @arbesk/cad-gen (they type-check against
+                         # @arbesk/wallet's and @arbesk/asset-core's dist),
+                         # then @arbesk/ai-asset-gen (against cad-gen's dist)
 bun run typecheck        # after build (resolves @arbesk/* via workspace symlinks)
 bun run test             # jest maps @arbesk/*.js → each package's .ts source (no build step)
 ```

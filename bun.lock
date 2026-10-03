@@ -54,6 +54,9 @@
     "packages/ai-asset-gen": {
       "name": "@arbesk/ai-asset-gen",
       "version": "0.1.0",
+      "dependencies": {
+        "@arbesk/cad-gen": "*",
+      },
     },
     "packages/asset-core": {
       "name": "@arbesk/asset-core",
