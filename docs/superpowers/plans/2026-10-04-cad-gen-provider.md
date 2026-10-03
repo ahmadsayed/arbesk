@@ -505,10 +505,12 @@ describe("createCadProvider", () => {
 
   it("maps a generic failure to a message-only failure", async () => {
     const generate = jest.fn(async () => { throw new Error("provider down"); });
-    const provider = createCadProvider({ config: CONFIG, generator: { generate } });
+    const onSettle = jest.fn();
+    const provider = createCadProvider({ config: CONFIG, generator: { generate }, onSettle });
     const taskId = await provider.textToModel({ prompt: "x" });
-    await until(async () => (await provider.poll(taskId)).status === "failed", "failure");
+    await until(() => onSettle.mock.calls.length === 1, "settle");
     const poll = await provider.poll(taskId);
+    expect(poll.status).toBe("failed");
     expect(poll.error).toBe("provider down");
     expect(poll.output.code).toBeUndefined();
   });
@@ -763,7 +765,7 @@ git commit -m "feat(ai-asset-gen): cad provider — design-on-the-wire lifecycle
 - Test: `test/api/generations-cad.test.js`
 
 **Interfaces:**
-- Consumes: `createCadProvider`, `CadSettleOutcome` from `@arbesk/ai-asset-gen/index.js`; `cadConfigFromEnv`, `CadRuntimeConfig` (exported) from `../routes/cad.ts`; `acquireCadSlot`, `releaseCadSlot`, `refundCadUnit`, `cadQuotaHeaders`, `QuotaOptions` from `../cad-quota.ts`; `registerTask` (now accepting `provider`) from `../generation-tasks.ts`; everything from Tasks 1-3.
+- Consumes: `createCadProvider`, `CadSettleOutcome` from `@arbesk/ai-asset-gen/index.js`; `cadConfigFromEnv`, `CadRuntimeConfig` (exported) from `../routes/cad.ts`; `acquireCadSlot`, `releaseCadSlot`, `refundCadUnit` from `../cad-quota.ts`; `registerTask` (now accepting `provider`) from `../generation-tasks.ts`; everything from Tasks 1-3.
 - Produces:
   - `export interface GenerationProvidersDeps { generator?: CadGenerator; quotaStatePath?: string; fetchImpl?: typeof fetch }` (= `CadRouteDeps` shape)
   - `export function resolveCadRuntime(deps: GenerationProvidersDeps): CadConfigOutcome` — thin wrapper over `cadConfigFromEnv(process.env, deps)`
@@ -1066,10 +1068,8 @@ import {
   acquireCadSlot,
   releaseCadSlot,
   refundCadUnit,
-  cadQuotaHeaders,
 } from "../cad-quota.ts";
-import type { QuotaOptions } from "../cad-quota.ts";
-import { refuseAdmission } from "../routes/cad.ts";
+import { refuseAdmission, setQuotaHeaders as setCadQuotaHeaders } from "../routes/cad.ts";
 import type { CadRuntimeConfig } from "../routes/cad.ts";
 ```
 
@@ -1086,16 +1086,11 @@ const CAD_CAPABILITIES: GenerationCapability[] = ["text-to-3d"];
   if (effectiveProvider !== "mock" && effectiveProvider !== "cad") {
 ```
 
-4. New helpers (place above `handleTripoRequest`):
+4. The quota-header setter comes from routes/cad.ts (imported above as
+   `setCadQuotaHeaders`) — no local copy. The CAD dispatch helper goes above
+   `handleTripoRequest`:
 
 ```ts
-/** Sets the X-Cad-Quota-* headers on the response being built. */
-function setCadQuotaHeaders(c: Context, wallet: string, quota: QuotaOptions): void {
-  for (const [name, value] of Object.entries(cadQuotaHeaders(wallet, quota))) {
-    c.header(name, value);
-  }
-}
-
 /**
  * CAD dispatch: server-paid, design-on-the-wire. Admits through the cad
  * quota (daily rounds + one in-flight per wallet), starts the in-process
@@ -1127,7 +1122,7 @@ async function handleCadRequest(
     return refuseAdmission(c, userAddress, config, decision);
   }
 
-  setCadQuotaHeaders(c, userAddress, config.quota);
+  setCadQuotaHeaders(c, userAddress, config);
   const provider = createCadGenerationProvider(config.generator, (taskId, outcome) => {
     releaseCadSlot(userAddress, decision.token);
     if (!outcome.ok && outcome.error.code === "CAD_REQUEST_UNSUITABLE") {
