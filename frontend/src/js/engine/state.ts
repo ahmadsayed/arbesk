@@ -4,6 +4,8 @@
  *   read-only.
  */
 
+import type { RenderScheduler } from "./render-scheduler.ts";
+
 export const DEFAULT_WOOD_COLOR = "#C19A6B";
 export const MAX_CHILD_ASSET_DEPTH = 5;
 export const PLACEHOLDER_COLOR = "#E8D5B7";
@@ -56,6 +58,8 @@ export interface EngineState {
   resizeObserverInstance: ResizeObserver | null;
   /** The render-loop callback, stored so the router can pause/resume it on SPA view changes. */
   renderLoopFn: (() => void) | null;
+  /** Skips scene.render() on idle frames; invalidate() forces full-rate frames. */
+  renderScheduler: RenderScheduler | null;
   pointerObservableCallback: ((pointerInfo: BABYLON.PointerInfo) => void) | null;
   highlightLayer: BABYLON.HighlightLayer | null;
   highlightedNodeId: string | null;
@@ -123,6 +127,7 @@ export const state: EngineState = {
   resizeEngineHandler: null,
   resizeObserverInstance: null,
   renderLoopFn: null,
+  renderScheduler: null,
   pointerObservableCallback: null,
   highlightLayer: null,
   highlightedNodeId: null,
