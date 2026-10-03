@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "scripts": {
     "build": "bun run clean && bun run build:pug && bun run build:scss && bun run build:bundle && bun run build:assets && bun run build:compress",
-    "build:compress": "node scripts/compress.js",
+    "build:compress": "bun scripts/compress.js",
     "build:bundle": "bun scripts/bundle.js",
-    "build:assets": "node scripts/build-assets.js",
-    "build:ts": "node scripts/build-ts.js",
-    "build:pug": "node scripts/build-pug.js",
-    "build:scripts": "node scripts/build-scripts.js",
-    "build:scss": "node scripts/build-scss.js",
-    "clean": "node scripts/clean.js"
+    "build:assets": "bun scripts/build-assets.js",
+    "build:ts": "bun scripts/build-ts.js",
+    "build:pug": "bun scripts/build-pug.js",
+    "build:scripts": "bun scripts/build-scripts.js",
+    "build:scss": "bun scripts/build-scss.js",
+    "clean": "bun scripts/clean.js"
   },
   "description": "Arbesk Studio frontend — Pug + SCSS + Babylon.js",
   "license": "MIT",
