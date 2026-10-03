@@ -11,6 +11,9 @@ import type { CadDesign } from "../types.ts";
 import type { LlmMessage } from "./deepseek.ts";
 import type { GateResult } from "../core/gates.ts";
 import { PRELUDE_NAMES } from "../core/prelude.ts";
+import { CATALOG_IDS, catalogEntries } from "./catalog.ts";
+import { FIT_LEVELS } from "./jev.ts";
+import type { LibraryFit } from "./jev.ts";
 
 /** Rules the generated script must obey. */
 const RULES = [
@@ -32,61 +35,6 @@ const RULES = [
   "itself 'width + 2' into a part 'width + 4' tall and left a millimetre of solid",
   "at each end - a blind hole where a through-hole was asked for, invisible in the",
   "render and passed by every check.",
-  "A Raspberry Pi, Arduino or any other PCB case is ALWAYS boardCase({...}). This is",
-  "not a suggestion: it owns ONE frame - the board's lower-left corner is the",
-  "origin - so a standoff cannot land outside the wall. Every hand-built case",
-  "failed exactly there, with two of four posts outside the box and every validity",
-  "check passing. Pass the board's own numbers and its mounting holes:",
-  "  Raspberry Pi model B (3B, 3B+, 4B, 5): boardLength 85, boardWidth 56, holes",
-  "  [[3.5,3.5],[3.5,52.5],[61.5,52.5],[61.5,3.5]], and cutouts for USB, Ethernet,",
-  "  HDMI and power - the Ethernet socket is 21.2 x 16mm and the plugs need",
-  "  clearance outside the wall, so cut right through it.",
-  "Each cutout is { wall, at, width, height, z }: it names its wall as 'x-' (the",
-  "  edge at x = 0), 'x+' (at",
-  "  boardLength), 'y-' or 'y+'; 'left' and 'right' are not accepted because they",
-  "  do not say which axis is meant. \"at\" is the position along that wall.",
-  "  Arduino Uno R3: boardLength 68.58, boardWidth 53.34, holes",
-  "  [[13.97,2.54],[15.24,50.8],[66.04,7.62],[66.04,35.56]] - NOT the corners of a",
-  "  rectangle - plus cutouts on one short edge for the USB-B and the barrel jack.",
-  "A phone stand is ALWAYS phoneStand({ thickness, lift, width }). This is not a",
-  "suggestion and not a fallback: its profile is a ported reference design of 91",
-  "hand-tuned points, and a profile you draw yourself will NOT reproduce it. Five",
-  "attempts were made to have a model draw this shape by hand; every one produced",
-  "something that was a single valid solid and still not a stand. Call the helper.",
-  "For a stand phoneStand does not cover - a tablet, a laptop - the shape is ONE",
-  "SOLID, NOT AN ASSEMBLY: a single 2D side profile extruded across the width of",
-  "the thing it holds, with everything else subtracted from it. The phone or",
-  "tablet sits in the channel; anything else is SUBTRACTED from that one body.",
-  "This is how the well-regarded open-source holders do it: DrLex0's",
-  "SmartPhoneHolder is literally linear_extrude(width) extrusionProfile() with",
-  "slots cut out of it. Do NOT build a base plate plus a leaning back plate and",
-  "union them - separate plates come apart, cannot be printed as one piece, and",
-  "are how three attempts at a phone stand each produced a disconnected body. A",
-  "profile cannot come apart, because there was never a join. Typical numbers for",
-  "a phone: hold across 60-75mm of width, 10-14mm of body thickness, a channel",
-  "wide enough for the phone plus a case, and a front lip 12mm or more so it",
-  "cannot slide out.",
-  "A hinge is ALWAYS printInPlaceHinge({...}) or knuckleHinge({...}). This is not a",
-  "suggestion: both are ports of BOSL2's hinges, verified against OpenSCAD's own",
-  "render, with cone-tipped captive pins and the segment gaps a printer needs. Two",
-  "live attempts at a hand-drawn hinge failed - one did not even parse, one threw.",
-  "A standalone hinge is printInPlaceHinge: it returns TWO bodies on purpose, the",
-  "only exception to the one-solid rule, because leaves that fuse are not a hinge.",
-  "Its defaults are a 25mm-long hinge with two 20 x 25 x 2mm leaves; set length,",
-  "leafWidth and thickness from the request, and leave offset unset - it scales",
-  "with knuckleDiam so the knuckle clears the other leaf. Its FRAME, exactly: the",
-  "pin runs along Y and length is along Y (y from -length/2 to +length/2); the",
-  "left leaf spans x from -leafWidth/2 to +leafWidth/2, the right leaf from",
-  "leafWidth/2 + leafGap to 3*leafWidth/2 + leafGap (leafGap defaults to 0.4); both",
-  "leaves span z from -thickness/2 to +thickness/2 and the knuckle sits above",
-  "them. So a screw hole in a leaf is hole(part, { axis: 'z', at: [x, y] }) with",
-  "x inside that leaf's span and y along the length - keep it clear of the",
-  "knuckle, which occupies about knuckleDiam either side of x = leafWidth/2 + leafGap/2.",
-  "To hinge a lid or a door of the",
-  "user's own part, add knuckleHinge({ inner: false }) to one piece and",
-  "knuckleHinge({ inner: true }) to the other, with the same length, segs and",
-  "offset: its mounting face is z = 0, the pin runs along X at height offset, and",
-  "the arm reaches toward -y; rotate and translate it onto the face.",
   "EVERY builder is CENTRED ON THE ORIGIN - box, cylinder, sphere, extrude,",
   "revolve and spurGear all put their centre at (0, 0, 0). A cylinder 15 mm long",
   "spans z = -7.5 to +7.5, NOT 0 to 15, and an extrusion of height h spans -h/2 to",
@@ -95,13 +43,6 @@ const RULES = [
   "hand. Getting this wrong is the single most common way a part comes out with a",
   "piece detached from the rest - a flange placed at z = +15 against a body ending",
   "at +7.5 is a floating disc, and it still passes every validity check.",
-  "Use spurGear for every gear. NEVER write the tooth trigonometry yourself and",
-  "never approximate teeth with trapezoids or boxes: that looks almost right and",
-  "meshes with nothing. Two gears turn together ONLY if they share the SAME module",
-  "and pressure angle, with parallel axes at centre distance",
-  "(module x (teeth1 + teeth2)) / 2. Report the module, tooth count and pressure",
-  "angle you chose, since the user has to match them against whatever the gear",
-  "drives.",
   "When a part's cross-section is a CUSTOM OUTLINE - gear or sprocket teeth, a",
   "cam, a pulley, a bracket that is not a rectangle - DRAW THE OUTLINE as [x, y]",
   "points and extrude it with polygon plus extrude. One contour, or several when",
@@ -163,16 +104,6 @@ const HELPER_DOCS = [
   "roundedBox(w, d, h, r)                EXACT prismatic fillet",
   "hole(part, { diameter, axis, at, through })   axis 'x'|'y'|'z'; at [a,b] in-plane",
   "boltCircle(part, { count, diameter, circleDiameter, axis, at })",
-  "spurGear({ module, teeth, thickness, bore?, pressureAngle? })   involute gear",
-  "gridfinityBase({ unitsX, unitsY })    standard Gridfinity base, sitting on z = 0",
-  "boardCase({ boardLength, boardWidth, holes, cutouts, wall?, ... })   PCB enclosure",
-  "railHook({ railDiameter, wall?, width?, drop? })   hook that clips over a rail",
-  "cupRack({ cupDiameter, columns?, rows?, pocketDepth? })   rack of cup pockets",
-  "printInPlaceHinge({ length?, leafWidth?, thickness?, segs?, knuckleDiam?, leafGap? })",
-  "                                      two-leaf hinge, printed assembled",
-  "knuckleHinge({ length, segs, offset, inner?, knuckleDiam?, armAngle?, gap?, inPlace? })",
-  "                                      one hinge half to add to your own part",
-  "phoneStand({ thickness, lift, width })  desk stand that holds a phone at a lean",
   "standoffs([[x,y], ...], { diameter, height, screw? })   one post per hole",
   "filletEdges(part, r, { mode, quality })   rounds edges, keeps the outer size",
   "chamferEdges(part, r, { quality })    same rounding as filletEdges, no flat bevel",
@@ -205,126 +136,6 @@ const SOLID_METHODS = [
   "\"part.union is not a function\" and wastes the whole attempt.",
 ].join("\n");
 
-/**
- * Dimensions of the standards these parts are built against.
- * @remarks This is the whole reason a case or a bin can be asked for by name:
- *   the numbers are not derivable, they are quoted from the published specs, and
- *   a model that guesses them produces something that does not fit. It is
- *   rendered AFTER the OUTPUT section so the helper-table lockstep test, which
- *   parses every name-paren occurrence before it, never reads a dimension as a
- *   helper.
- */
-/**
- * PROVENANCE, checked 2026-09-12. These numbers are physical facts about real
- * hardware - a board's outline, a connector's shell - and facts are not
- * copyrightable, so quoting them creates no derivative work. The check that
- * matters is that we copy NUMBERS and never EXPRESSION (names, structure,
- * comments), and that is what happened here.
- *
- * The licences of every source consulted, so the next person does not have to
- * redo this:
- *   - Raspberry Pi board, hole pattern and connector sizes: cross-checked
- *     against process1183/openscad-library, which is GPL-3.0. NO code, names or
- *     comments were taken from it - the facts are also in Raspberry Pi's own
- *     mechanical drawings, which is the correct primary citation. Treat that
- *     repository as off-limits for anything expressive.
- *   - Arduino Uno R3 hole pattern: KiCad's footprint library (CC-BY-SA-4.0 with
- *     a design exception) and Arduino's published drawing, which agree exactly.
- *     Used to VERIFY, not to copy.
- *   - Gridfinity: the published specification's grid and base profile.
- *   - BOSL2 gear proportions: BSD-2-Clause. Credited in ATTRIBUTED_HELPERS.
- */
-const STANDARDS = [
-  "GRIDFINITY. Compatibility is exact - a base a hundredth out does not seat in",
-  "someone else's baseplate, so use these and do not round them: 42mm grid pitch;",
-  "0.25mm clearance per side, so a 1x1 footprint is 41.5mm; height unit 7mm; bin",
-  "corner radius 3.75mm; base profile 4.75mm tall (0.8mm 45-degree taper, 1.8mm",
-  "riser, 2.15mm taper); magnet holes 6.5mm dia x 2.4mm deep and M3 screw holes",
-  "3mm dia x 6mm deep, on a 26mm square inside each cell. gridfinityBase gives",
-  "the base sitting on z = 0 - build the floor and walls directly on top of it.",
-  "The stacking lip that lets one bin carry another is the base profile mirrored,",
-  "4.75mm tall, around the top rim, and it ADDS to the nominal height.",
-  "",
-  "RASPBERRY PI model B (3B, 3B+, 4B, 5). Take x across the 85mm side and y across",
-  "the 56mm side, with the origin at one corner of the board: board 85 x 56 x",
-  "1.5mm with a 3mm corner radius. Four 2.75mm mounting holes inset 3.5mm from two",
-  "edges, on a 58 x 49mm rectangle - at (3.5,3.5), (3.5,52.5), (61.5,52.5), and",
-  "(61.5,3.5). Put a standoff on every one; there are four, not two. The 40-pin",
-  "GPIO header is 51 x 5.1 x 8.5mm, runs along the y = 56 edge centred 32.5mm from",
-  "the left, and stands 8.5mm above the board. The Ethernet socket is 21.2 x 16 x",
-  "13.5mm and the micro SD card 11.5 x 12mm; both sit on an edge, so they need",
-  "openings. PI 4B PORTS, by wall (positions are the connector CENTRE along that",
-  "wall; an x wall is only 56mm long and a y wall 85mm):",
-  "  'x+' (x = 85): USB pairs at y 9 and 27 (each 13 x 16mm), Ethernet at y 45.75.",
-  "  'y-' (y = 0): USB-C power at x 11.2, micro-HDMI at x 26 and 39.5 (each about",
-  "  7 x 3.5mm - cut 11 x 7 for the plug), 3.5mm audio at x 53.5.",
-  "  'x-' (x = 0): micro SD, under the board, centred near y 28.",
-  "HDMI and power are NOT on the USB edge - they are on a LONG side. A wall closed",
-  "across any of those makes the case useless - cut them, and remember the plugs",
-  "need clearance OUTSIDE the wall too, so the opening must go right through.",
-  "Zero and Zero 2 W: board 65 x 30mm, same 3.5mm inset and 2.75mm holes on a",
-  "58 x 23mm rectangle.",
-  "",
-  "ARDUINO UNO R3. Board 68.58 x 53.34mm, four 3.2mm mounting holes measured from",
-  "one corner: (13.97,2.54), (15.24,50.8), (66.04,7.62), (66.04,35.56) - note they",
-  "are NOT at the corners of a rectangle, so passing them straight to standoffs()",
-  "is the only reliable way to get the posts right. The USB-B socket and the barrel",
-  "jack are on one short edge and both need openings through the wall; the headers",
-  "stand about 8.5mm above the board, so the lid needs that much clearance or a",
-  "cutout over the header area.",
-  "",
-  "A hook that goes over a rail is ALWAYS railHook({ railDiameter, ... }). Do not",
-  "draw one: a live attempt drew a rail hook as an assembly and it came back as SIX",
-  "disconnected pieces. Its ring wraps 300 degrees by construction, which is what",
-  "stops it coming off - a hand-drawn C open at the side drops its load the moment",
-  "it swings.",
-  "A rack for mugs or cups is ALWAYS cupRack({ cupDiameter, ... }). A live attempt",
-  "produced a 6mm-thick plate with four holes: the right footprint, one valid",
-  "solid, every check passed, and it cannot hold a mug that is 95mm tall. The",
-  "pockets are deep by construction, so a cup sits down inside the rack.",
-  "KITCHEN AND HOUSEHOLD - no standard exists, so pick sensible numbers and STATE",
-  "them. A mug is 80-90mm across and 95-100mm tall, so a cup pocket is the mug",
-  "diameter plus 2-3mm. A kitchen sponge is about 110 x 70 x 40mm. A wardrobe rail",
-  "is 25mm diameter (some are 20 or 30), a shelf is usually 18mm thick.",
-  "For these, FUNCTION is the specification, and four things decide whether the",
-  "part is any good:",
-  "  DRAIN. Anything holding something wet - a sponge holder, a soap dish, a sink",
-  "  caddy, a shower shelf - needs holes or slots in its floor and a slight fall,",
-  "  or it holds a puddle and grows mould. Slots 4-5mm wide drain freely and still",
-  "  carry a sponge.",
-  "  DO NOT LET GO. A hook over a rail or a door top needs a closed loop, or a lip",
-  "  reaching more than half the rail diameter down the far side; an open C drops",
-  "  its load the moment it swings. A hook is loaded in shear, so thicken it where",
-  "  the loop meets the body, and do not make the hook thinner than 6mm.",
-  "  CLEARANCE AND REACH. Leave room for fingers to lift a mug in and out, and",
-  "  keep a wall-mounted part's fixings reachable once it is loaded.",
-  "  STABILITY. A part standing on a surface needs a footprint wide enough not to",
-  "  tip - a wide base, never a narrow one under a high centre of mass. Round the",
-  "  inside corner where a wall meets a floor: a sharp internal corner is both a",
-  "  stress riser and a hard print.",
-  "FASTENERS, ISO metric, millimetres. Cut clearance holes and pockets - never try",
-  "to model a thread, which this kernel cannot do and no printer can reproduce.",
-  "  Socket head cap screws (ISO 4762), head DIAMETER / head HEIGHT:",
-  "    M3 5.5 / 3.0, M4 7.0 / 4.0, M5 8.5 / 5.0, M6 10.0 / 6.0, M8 13.0 / 8.0.",
-  "  Hex nuts (ISO 4032), across FLATS / height / thread pitch:",
-  "    M3 5.5 / 2.4 / 0.5, M4 7.0 / 3.2 / 0.7, M5 8.0 / 4.7 / 0.8,",
-  "    M6 10.0 / 5.2 / 1.0, M8 13.0 / 6.8 / 1.25. Across corners is about 15% more",
-  "    than across flats.",
-  "  Clearance holes to pass a screw through: M3 3.4, M4 4.5, M5 5.5, M6 6.6, M8 9.0.",
-  "  A hex pocket that captures a nut is the across-flats size plus 0.2mm and the",
-  "  nut's height plus 0.2mm; a counterbore for a screw head is the head diameter",
-  "  plus 0.4mm and the head height plus 0.2mm.",
-  "  Heat-set inserts in a printed part: bore DIAMETER / DEPTH -",
-  "    M3 4.0 / 6.0, M4 5.6 / 8.0, M5 6.4 / 9.5.",
-  "PHONES have no standard, so pick sensible numbers and state them: a modern",
-  "handset is 70-80mm wide and 8-11mm thick with a case. Build a stand as ONE",
-  "extruded profile, per the RULES above - a reference design that works holds the",
-  "phone across 60mm of width in a channel cut through a 12mm-thick body, leaning",
-  "back about 15-20 degrees from vertical, with a front lip so it cannot slide out",
-  "and a slot underneath so a charging cable can pass. If charging access matters,",
-  "leave the bottom of the channel open rather than closed.",
-].join("\n");
-
 const OUTPUT_SHAPE = [
   "Reply with a single JSON object and nothing else:",
   '{ "code": "<function body>", "parameters": { "<name>": { "value": <number>,',
@@ -332,27 +143,59 @@ const OUTPUT_SHAPE = [
   '  "summary": "<one-line description of what changed>" }',
 ].join("\n");
 
-export const SYSTEM_PROMPT = [
-  "You design manufacturable engineering parts by writing Manifold scripts.",
-  "",
-  "RULES",
-  RULES,
-  "",
-  "AVAILABLE HELPERS",
-  HELPER_DOCS,
-  "",
-  "OUTPUT",
-  OUTPUT_SHAPE,
-  "",
-  "SOLID METHODS",
-  SOLID_METHODS,
-  "",
-  "STANDARDS",
-  STANDARDS,
-  "",
-  "When a previous design is supplied, treat it as the current state: return the",
-  "COMPLETE updated script, preserving everything the user did not ask to change.",
-].join("\n");
+/**
+ * The line that tells the model how strongly an entry was judged to fit.
+ * @remarks Jev scores fit on FIT_LEVELS (0-2). Stated, not hidden: a module
+ *   judged "Clearly needed" is one the model should build the part around, and
+ *   one judged merely "Possibly useful" is one it may leave out.
+ */
+function fitLine(id: string, fit: LibraryFit | undefined): string[] {
+  if (!fit) return [];
+  const level = FIT_LEVELS[Math.min(FIT_LEVELS.length - 1, Math.round(fit.score))];
+  return ["[module " + id + ": fit " + fit.score.toFixed(2) + " of 2 - " + level + "]"];
+}
+
+/** Section heading for the selected catalog entries' guidance. */
+const LIBRARY_HEADING = "LIBRARY AND REFERENCE";
+
+/**
+ * The system prompt for one request: the core rules and helpers, plus the
+ * catalog entries the selector chose.
+ * @remarks The AVAILABLE HELPERS table gets the selected entries' rows, and
+ *   their guidance follows SOLID METHODS under LIBRARY AND REFERENCE - AFTER
+ *   the OUTPUT section, so the helper-table lockstep test, which parses every
+ *   name-paren occurrence before OUTPUT, never reads a dimension as a helper.
+ * @param ids Catalog ids to include; defaults to the whole catalog.
+ */
+export function buildSystemPrompt(
+  ids: Iterable<string> = CATALOG_IDS,
+  fit: Record<string, LibraryFit> = {},
+): string {
+  const entries = catalogEntries(ids);
+  const library = entries.flatMap((e) => ["", ...fitLine(e.id, fit[e.id]), ...e.guidance]);
+  return [
+    "You design manufacturable engineering parts by writing Manifold scripts.",
+    "",
+    "RULES",
+    RULES,
+    "",
+    "AVAILABLE HELPERS",
+    [HELPER_DOCS, ...entries.flatMap((e) => e.helperRows)].join("\n"),
+    "",
+    "OUTPUT",
+    OUTPUT_SHAPE,
+    "",
+    "SOLID METHODS",
+    SOLID_METHODS,
+    ...(library.length > 0 ? ["", LIBRARY_HEADING, ...library.slice(1)] : []),
+    "",
+    "When a previous design is supplied, treat it as the current state: return the",
+    "COMPLETE updated script, preserving everything the user did not ask to change.",
+  ].join("\n");
+}
+
+/** The full prompt, every catalog entry included - what an unselected request sees. */
+export const SYSTEM_PROMPT = buildSystemPrompt();
 
 
 export interface TurnInput {
@@ -360,6 +203,10 @@ export interface TurnInput {
   priorDesign?: CadDesign;
   images?: { data: string; mime: string }[];
   priorSourceNote?: string;
+  /** Catalog ids to document; the whole catalog when omitted. */
+  libraries?: string[];
+  /** Jev's fit for the selected ids, stated in the prompt. */
+  libraryFit?: Record<string, LibraryFit>;
 }
 
 /**
@@ -368,7 +215,7 @@ export interface TurnInput {
  *   prior parameter *values*, which live outside the script (spec section 6).
  */
 export function buildTurnMessages(input: TurnInput): LlmMessage[] {
-  const messages: LlmMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
+  const messages: LlmMessage[] = [{ role: "system", content: buildSystemPrompt(input.libraries, input.libraryFit) }];
 
   const parts: string[] = [];
   if (input.priorDesign) {

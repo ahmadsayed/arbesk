@@ -13,8 +13,14 @@ export type {
   DeepSeekClient, DeepSeekConfig, LlmContentBlock, LlmMessage,
 } from "./deepseek.ts";
 export {
-  SYSTEM_PROMPT, buildTurnMessages, buildRepairMessages, PROMPT_HELPER_NAMES,
+  SYSTEM_PROMPT, buildSystemPrompt, buildTurnMessages, buildRepairMessages, PROMPT_HELPER_NAMES,
 } from "./prompt.ts";
+export { CATALOG, CATALOG_IDS, catalogEntries, entriesUsedBy } from "./catalog.ts";
+export type { CatalogEntry } from "./catalog.ts";
+export { FIT_THRESHOLD, selectLibraries } from "./select.ts";
+export { createJevClient, FIT_LEVELS, JevError } from "./jev.ts";
+export type { JevClient, JevConfig, LibraryFit } from "./jev.ts";
+export type { LibrarySelection, SelectionSource } from "./select.ts";
 export type { TurnInput } from "./prompt.ts";
 export { generateWithRepair } from "./repair.ts";
 export type { AttemptRecord, RepairDeps, RepairOutcome } from "./repair.ts";

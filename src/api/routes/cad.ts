@@ -151,6 +151,27 @@ function providerOptions(env: Env, deps: CadRouteDeps, limits: CadLimits) {
     thinking: isThinkingEnabled(env),
     limits,
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    ...jevOptions(env, deps),
+  };
+}
+
+/**
+ * Jev library selection, when JEV_API_KEY is set.
+ * @remarks Optional by design: without it every request sees the whole
+ *   library catalog, which is how the service worked before selection existed.
+ */
+function jevOptions(env: Env, deps: CadRouteDeps) {
+  const apiKey = (env.JEV_API_KEY ?? "").trim();
+  if (!apiKey) return {};
+  const baseUrl = (env.JEV_BASE_URL ?? "").trim();
+  const model = (env.JEV_MODEL ?? "").trim();
+  return {
+    jev: {
+      apiKey,
+      ...(baseUrl ? { baseUrl } : {}),
+      ...(model ? { model } : {}),
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    },
   };
 }
 

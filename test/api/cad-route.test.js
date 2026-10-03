@@ -114,6 +114,9 @@ beforeEach(() => {
   delete process.env.CAD_MAX_REPAIR_ATTEMPTS;
   delete process.env.CAD_MAX_IMAGE_BYTES;
   delete process.env.CAD_MAX_REQUEST_MS;
+  // A developer's real key in .env would route Jev calls through the shared
+  // transport stub; selection has its own tests (test/cad-gen/select.test.js).
+  delete process.env.JEV_API_KEY;
 });
 
 afterEach(() => {

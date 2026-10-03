@@ -607,6 +607,10 @@ async function runScenario(ctx) {
     console.log("generate " + (Date.now() - started) + "ms  attempts=" +
       result.diagnostics.attempts.length + "  tokens=" + JSON.stringify(result.diagnostics.tokens));
     console.log("summary: " + result.design.summary);
+    const sel = result.diagnostics.selection;
+    console.log("selection " + sel.source + ": " + (sel.libraries.map((/** @type {string} */ id) =>
+      id + (sel.fit[id] ? "=" + sel.fit[id].score.toFixed(2) : "")).join(", ") || "(none)") +
+      (sel.error ? "  [" + sel.error + "]" : ""));
     // Written BEFORE the build, so a design whose kernel run throws is still on
     // disk to read: that is exactly when its code is most wanted.
     fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(result.design, null, 2));

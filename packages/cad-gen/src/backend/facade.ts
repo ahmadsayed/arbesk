@@ -15,6 +15,10 @@ import type { LlmMessage } from "./deepseek.ts";
 import { buildTurnMessages, buildRepairMessages } from "./prompt.ts";
 import type { TurnInput } from "./prompt.ts";
 import { generateWithRepair } from "./repair.ts";
+import { selectLibraries } from "./select.ts";
+import type { LibrarySelection } from "./select.ts";
+import { createJevClient } from "./jev.ts";
+import type { JevConfig } from "./jev.ts";
 import type { AttemptRecord } from "./repair.ts";
 
 /**
@@ -35,6 +39,8 @@ export interface CadGenConfig {
   thinking?: boolean;
   limits?: Partial<CadLimits>;
   fetchImpl?: typeof fetch;
+  /** Jev, for library selection. Without it every request sees the whole catalog. */
+  jev?: JevConfig;
 }
 
 /**
@@ -56,6 +62,8 @@ export interface CadGenerateInput extends TurnInput {
 }
 
 export interface CadDiagnostics {
+  /** Catalog entries the generation prompt documented, and how they were chosen. */
+  selection: Omit<LibrarySelection, "tokens"> & { jevTokens: TokenUsage };
   attempts: AttemptRecord[];
   durationMs: number;
   tokens: TokenUsage;
@@ -113,6 +121,12 @@ function openingMessages(input: CadGenerateInput): LlmMessage[] {
   );
 }
 
+/** The selection as diagnostics report it: Jev's tokens named apart from DeepSeek's. */
+function selectionDiagnostics(selection: LibrarySelection): CadDiagnostics["selection"] {
+  const { tokens, ...rest } = selection;
+  return { ...rest, jevTokens: tokens };
+}
+
 /**
  * Builds the CAD generator.
  * @remarks repairAttempts is capped by the configured maximum, so a caller
@@ -129,12 +143,18 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
     ...(config.fetchImpl ? { fetchImpl: config.fetchImpl } : {}),
   });
 
+  const jev = config.jev?.apiKey ? createJevClient(config.jev) : undefined;
+
   return {
     async generate(input) {
       const started = Date.now();
       const attempts = input.repairAttempts
         ? Math.min(input.repairAttempts, limits.maxRepairAttempts)
         : limits.maxRepairAttempts;
+
+      // Stage one: which catalog entries this request needs (see select.ts).
+      const selection = await selectLibraries(jev, input, input.signal);
+      const turn = { ...input, libraries: selection.libraries, libraryFit: selection.fit };
 
       const outcome = await generateWithRepair({
         client,
@@ -144,7 +164,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         // See validateStatic for why, and for the measurement that shows the
         // server-side proxy disagreeing with the delivered part.
         validate: async (design) => validateStatic(design, PRELUDE_NAMES),
-      }, openingMessages(input), attempts, input.signal);
+      }, openingMessages(turn), attempts, input.signal);
 
       return {
         design: { ...outcome.design, turn: (input.priorDesign?.turn ?? 0) + 1 },
@@ -152,6 +172,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         provider: { id: "deepseek", model },
         attribution: attributionsFor(outcome.design.code),
         diagnostics: {
+          selection: selectionDiagnostics(selection),
           attempts: outcome.attempts,
           durationMs: Date.now() - started,
           tokens: outcome.tokens,
