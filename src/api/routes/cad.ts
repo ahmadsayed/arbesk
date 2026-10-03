@@ -85,7 +85,7 @@ export interface CadRuntimeConfig {
   maxImageBytes: number;
 }
 
-type CadConfigOutcome =
+export type CadConfigOutcome =
   | { ok: true; config: CadRuntimeConfig }
   | { ok: false; status: number; code: string; message: string };
 
@@ -268,14 +268,14 @@ function precheck(
 }
 
 /** Sets the quota headers on the response being built. */
-function setQuotaHeaders(c: Context, wallet: string, config: CadRuntimeConfig): void {
+export function setQuotaHeaders(c: Context, wallet: string, config: CadRuntimeConfig): void {
   for (const [name, value] of Object.entries(cadQuotaHeaders(wallet, config.quota))) {
     c.header(name, value);
   }
 }
 
 /** Refuses a request the quota or the in-flight lock turned away. */
-function refuseAdmission(
+export function refuseAdmission(
   c: Context,
   wallet: string,
   config: CadRuntimeConfig,
