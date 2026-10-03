@@ -189,7 +189,7 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 - Accepts optional `sourceAssetCid` + `retexture` (`tripo3d` only): re-textures the referenced GLB via Tripo's v3 re-texture endpoint (`POST /models/texture`; texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream). Requires `prompt` as the texture description; the `202` response includes `"refined": true`. Accepts optional `sourceAssetCid` + `retopo` for smart retopology (`mesh/decimate` v2.0, optional `faceLimit` 500–20000, adaptive when omitted); the `202` response includes `"retopo": true`. `sourceAssetCid` requires exactly one of `retexture`, `retopo`, or `animate`. A CID that cannot be fetched from IPFS → `400 SOURCE_ASSET_UNAVAILABLE`. Optional `textureQuality` (`standard`/`detailed`/`extreme`) applies to generation and retexture.
 - If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses the `@arbesk/ai-asset-gen` mock provider and returns the raw asset bytes immediately (`200`).
 - If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v3 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
-- If `provider` is `"cad"`, the backend runs the parametric-CAD pipeline (`@arbesk/cad-gen`) as a server-paid, design-on-the-wire task: it admits the request through the CAD quota (daily rounds + one in-flight per wallet), starts an in-process task, and returns a task ID (`202`). No `providerKey` is accepted — the server holds the model key. `prompt` is required. The browser polls `GET /api/v1/generations/:taskId` until the task completes.
+- If `provider` is `"cad"`, the backend runs the parametric-CAD pipeline (`@arbesk/cad-gen`) as a server-paid, design-on-the-wire task: it admits the request through the CAD quota (daily rounds + one in-flight per wallet), starts an in-process task, and returns a task ID (`202`). No `providerKey` is required — the server holds the model key (any supplied key is ignored). `prompt` is required. The browser polls `GET /api/v1/generations/:taskId` until the task completes.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
 - **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.ts` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
@@ -238,7 +238,7 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 }
 ```
 
-The CAD provider is server-paid, so `providerKey` is neither required nor accepted; the `202` carries no refinement markers.
+The CAD provider is server-paid, so `providerKey` is not required (any supplied key is ignored); the `202` carries no refinement markers.
 
 The browser (`api.ts` → `generateAsset()`) decodes the base64, uploads the asset to IPFS, constructs the manifest, uploads the manifest, and returns `{ assetManifestCid, sourceAssetCid }` to the UI.
 
@@ -246,8 +246,8 @@ The browser (`api.ts` → `generateAsset()`) decodes the base64, uploads the ass
 
 | HTTP | Meaning |
 |---:|---|
-| 400 | `prompt` or `nodeId` missing, `providerKey` required for non-mock provider, or `sourceAssetCid` missing for refinement actions |
-| 400 | `MISSING_PROVIDER_KEY` — a non-mock provider was chosen without a `providerKey` |
+| 400 | `prompt` or `nodeId` missing, `providerKey` missing for `tripo3d`, or `sourceAssetCid` missing for refinement actions |
+| 400 | `MISSING_PROVIDER_KEY` — `tripo3d` was chosen without a `providerKey` (`tripo3d` only) |
 | 400 | `SOURCE_ASSET_UNAVAILABLE` — the GLB referenced by `sourceAssetCid` could not be fetched from IPFS |
 | 400 | `SOURCE_ASSET_UNSUPPORTED_FORMAT` — the source is not glTF/GLB (e.g. 3MF) or its glTF has unresolvable external references; glTF JSON is composed to GLB automatically before upload |
 | 401 | Missing, malformed, or invalid Session auth |
