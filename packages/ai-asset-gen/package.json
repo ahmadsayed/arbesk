@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Arbesk 3D-model generation SDK: a capability-gated facade over the mock and Tripo3D providers (text/image/multiview-to-3D, retexture, retopo, rig, animate). Backend-only.",
+  "description": "Arbesk 3D-model generation SDK: a capability-gated facade over the mock, Tripo3D and CAD (design-on-the-wire) providers. Backend-only.",
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +16,9 @@
     "build": "bun run clean && bun --bun tsc -p tsconfig.build.json",
     "clean": "bun -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@arbesk/cad-gen": "*"
   },
   "license": "ISC"
 }

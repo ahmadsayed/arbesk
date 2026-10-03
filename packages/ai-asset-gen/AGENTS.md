@@ -1,6 +1,6 @@
 # @arbesk/ai-asset-gen — 3D model generation SDK
 
-Capability-gated facade over the **mock** and **Tripo3D** providers.
+Capability-gated facade over the **mock**, **Tripo3D** and **CAD** providers.
 
 ## Purpose
 
@@ -15,7 +15,7 @@ never on provider kind.
 - **Backend-only**: uses Node globals (Buffer, fs, path, fetch, FormData,
   AbortSignal). Not imported by the browser.
 - No imports from frontend/, src/api/, or constants/.
-- No in-repo package deps — independent of the wallet/authz/asset-core packages.
+- One in-repo dep: `@arbesk/cad-gen` (`createCadGenerator` from the backend entry + `CadRequestUnsuitable` from the root). The CAD provider returns the **design document** (`format: "cad-design"`) — the server never runs the kernel (cad-gen S11).
 - Follow-up ops take a **SourceRef** (fileToken | buffer | cid); the cid kind is
   resolved by an injected **sourceResolver** port, so IPFS reads and glTF
   composition stay in the backend.
@@ -24,10 +24,12 @@ never on provider kind.
 
 createGenerationProvider(config) → GenerationProvider:
 
-- config.id: "mock" | "tripo3d"
+- config.id: "mock" | "tripo3d" | "cad"
 - config.apiKey: BYOK key (Tripo3D only)
 - config.sourceResolver: (cid) => Uint8Array (follow-ups)
 - config.capabilities: declared capability set
+
+Provider construction is a registry (`createProviderRegistry(factories)`) injected at the composition root; `createGenerationProvider` remains as the two-provider default.
 
 Uniform lifecycle: start (each capability method) → poll →
 download(taskIdOrUrl) / cancel. Mock collapses to "immediately success".
