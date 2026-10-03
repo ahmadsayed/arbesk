@@ -44,6 +44,14 @@ export interface LibrarySelection {
    */
   expectedPieces?: number;
   /**
+   * Jev's probability that ONE fused solid would be wrong for the request.
+   * @remarks With expectedPieces >= 2 and this at or above SEPARATE_THRESHOLD,
+   *   the client's `pieces` gate fails a part with fewer bodies - see
+   *   bodyFloor in core/gates.ts. Absent when Jev was not asked, and an absent
+   *   answer never fails a part.
+   */
+  piecesSeparate?: number;
+  /**
    * Jev's probability that parametric CAD can model the request at all.
    * @remarks Below SUITABILITY_THRESHOLD the generator refuses before any
    *   DeepSeek call (CadRequestUnsuitable). Absent when Jev was not asked - no
@@ -97,7 +105,7 @@ export async function selectLibraries(
 
   try {
     const candidates = Object.fromEntries(CATALOG.map((e) => [e.id, e.summary]));
-    const { fit, usage, expectedPieces, suitability } =
+    const { fit, usage, expectedPieces, piecesSeparate, suitability } =
       await jev.scoreFit(requestText(input), candidates, signal);
     const chosen = Object.entries(fit).filter(([, f]) => f.score >= FIT_THRESHOLD).map(([id]) => id);
     const libraries = ordered([...chosen, ...prior]);
@@ -105,6 +113,7 @@ export async function selectLibraries(
     return {
       libraries, fit: kept, source: "jev", tokens: usage,
       ...(expectedPieces === undefined ? {} : { expectedPieces }),
+      ...(piecesSeparate === undefined ? {} : { piecesSeparate }),
       ...(suitability === undefined ? {} : { suitability }),
     };
   } catch (err) {

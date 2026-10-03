@@ -201,7 +201,20 @@ $0.042/MTok. ONE call per request asks:
 |---|---|---|
 | one per catalog entry | `score` 0-2 | entries ≥ `FIT_THRESHOLD` (1.0) are documented, with their fit |
 | `piece_count` | `choice` one/two/three/four/many | the `connected` gate allows that many bodies (`bodyAllowance`), raised to what a multi-body helper builds (`MULTI_BODY_HELPERS`) |
+| `pieces_separate` | `noul` | "would ONE fused solid be wrong?" - with `piece_count` >= 2 and this ≥ `SEPARATE_THRESHOLD` (0.75), the `pieces` gate needs at least `piece_count` bodies (`bodyFloor` → `KernelLimits.minBodies`) |
 | `cad_suitable` | `noul` | < `SUITABILITY_THRESHOLD` (0.5) refuses the request |
+
+The body count is gated from both sides. `connected` caps it from above
+(`maxBodies`); `pieces` floors it from below (`minBodies`, 1 when absent), so a
+two-half clamp fused into one block fails with a repair message that says to
+SEPARATE the pieces - the opposite of `connected`'s "overlap" advice. Fewer bodies
+is not always wrong (a hinged box may use a living hinge), which is why the floor
+needs Jev's second judgement and not just the count. Calibrated live on 20
+requests: fused-is-wrong 0.84-0.97 (clamp, four coasters, sliding/snap-fit lid,
+three spacers, lift-off lid, earrings); fused-may-be-fine 0.05-0.65 (hinged box
+0.65, print-in-place chain 0.45, print-in-place hinge 0.34, Gridfinity bin with
+dividers 0.30, bracket 0.05). Missing answers give a floor of 1: Jev never fails
+a part by being down.
 
 Selection only ever adds documentation, and Jev **fails open**: no key, an
 outage or a bad reply falls back to the whole catalog and never refuses. A

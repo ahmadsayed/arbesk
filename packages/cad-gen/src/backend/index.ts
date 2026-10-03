@@ -22,7 +22,7 @@ export {
 } from "./select.ts";
 export {
   askJev, createJevClient, FIT_LEVELS, JevError, PIECE_COUNT_QUESTION, PIECE_COUNTS,
-  SUITABILITY_QUESTION,
+  SEPARATE_QUESTION, SUITABILITY_QUESTION,
 } from "./jev.ts";
 export type { JevClient, JevConfig, LibraryFit } from "./jev.ts";
 export type { LibrarySelection, SelectionSource } from "./select.ts";
