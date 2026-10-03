@@ -100,6 +100,11 @@ export function scopeUrlToSubject(address: string): void {
 }
 
 async function activateStudio(): Promise<void> {
+  // Snapshot the URL before any await (subject chain, Babylon): an asset
+  // opened from the gallery meanwhile writes its own ?asset= and must not be
+  // mistaken for a deep link and reloaded (that reload cleared the scene).
+  const params = new URLSearchParams(location.search);
+  const hasUrlAsset = Boolean(params.get("asset") || params.get("manifest"));
   // Public profile subject in the URL (/studio/<base58>): adopt it as the
   // library subject and resolve its chain BEFORE any tokenURI reads, so cold
   // cross-chain Studio links work and the sidebar Gallery panel can load the
@@ -127,8 +132,7 @@ async function activateStudio(): Promise<void> {
   // Load whatever the URL points at (Library → Studio handoff, or a cold
   // deep-link). No-op when there are no ?asset/?manifest params, so a plain
   // tab-switch back to Studio keeps the in-memory scene intact.
-  const params = new URLSearchParams(location.search);
-  if (params.get("asset") || params.get("manifest")) {
+  if (hasUrlAsset) {
     await loadFromParams();
   }
 }
