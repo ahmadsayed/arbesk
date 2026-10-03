@@ -4,6 +4,7 @@
  */
 import type { CadDesign, CadStats } from "../types.ts";
 import { guardScript } from "./guard.ts";
+import { referencedIdentifiers } from "./document.ts";
 
 export interface GateResult {
   gate: string;
@@ -14,10 +15,31 @@ export interface GateResult {
 export interface KernelLimits {
   maxTriangles: number;
   /**
-   * The request asked for separate pieces - a print-in-place hinge, a clamp in
-   * two halves - so more than one body is the intent, not a defect.
+   * Most bodies the part may have; 1 when absent. More than one is the intent
+   * for a print-in-place hinge or a clamp in two halves - see bodyAllowance.
    */
-  allowSeparateBodies?: boolean;
+  maxBodies?: number;
+}
+
+/**
+ * Library helpers that return several bodies BY CONSTRUCTION, and how many.
+ * @remarks Deterministic, so a design that calls one is never failed for
+ *   being what the helper is - whatever the request's wording led Jev to
+ *   judge. attempt#17's hinge passed the old yes/no question at exactly 0.5.
+ */
+export const MULTI_BODY_HELPERS: Record<string, number> = { printInPlaceHinge: 2 };
+
+/**
+ * How many bodies a design may have: Jev's piece count, raised to what any
+ * multi-body helper it calls produces. A count of 5 means "5 or more", so no cap.
+ * @param code The design's script. @param expectedPieces Jev's count, if asked.
+ */
+export function bodyAllowance(code: string, expectedPieces?: number): number {
+  if (expectedPieces !== undefined && expectedPieces >= 5) return Number.POSITIVE_INFINITY;
+  const called = referencedIdentifiers(code);
+  const floor = Math.max(1, ...Object.entries(MULTI_BODY_HELPERS)
+    .filter(([name]) => called.has(name)).map(([, n]) => n));
+  return Math.max(floor, expectedPieces ?? 1);
 }
 
 type Box = { min: [number, number, number]; max: [number, number, number] };
@@ -40,14 +62,15 @@ function whereLoose(b: Box, main: Box): string {
 }
 
 /** The connected-gate failure, naming every loose piece so a repair can join it. */
-function disconnectedError(bodies: NonNullable<CadStats["bodies"]>): string {
+function disconnectedError(bodies: NonNullable<CadStats["bodies"]>, allowed: number): string {
   const fmt = (v: number[]) => "[" + v.map((x) => x.toFixed(1)).join(", ") + "]";
   const main = bodies.boxes[0];
   const listed = bodies.boxes.map((b, i) =>
     "  body " + (i + 1) + (i === 0 ? " (main)" : "") + ": " + fmt(b.min) + " to " + fmt(b.max) +
     (i === 0 ? "" : " - " + whereLoose(b, main)));
-  return "the part is " + bodies.count + " separate bodies, not one - a feature does not touch " +
-    "the body it belongs to. Bounding boxes, largest first:\n" + listed.join("\n") + "\n" +
+  const want = allowed === 1 ? "one" : "at most " + allowed + " (the separate pieces the request asks for)";
+  return "the part is " + bodies.count + " separate bodies, not " + want + " - a feature does not " +
+    "touch the body it belongs to. Bounding boxes, largest first:\n" + listed.join("\n") + "\n" +
     "Make every feature OVERLAP the main body (by 0.5mm or more), not merely meet it: " +
     "remember every builder is centred on the origin, and use stack() to put parts end to end.";
 }
@@ -123,9 +146,9 @@ export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): Gate
       ? { gate: "volume", ok: true }
       : { gate: "volume", ok: false, error: "solid has no volume - the result is degenerate" },
 
-    stats.bodies === undefined || stats.bodies.count <= 1 || limits.allowSeparateBodies === true
+    stats.bodies === undefined || stats.bodies.count <= (limits.maxBodies ?? 1)
       ? { gate: "connected", ok: true }
-      : { gate: "connected", ok: false, error: disconnectedError(stats.bodies) },
+      : { gate: "connected", ok: false, error: disconnectedError(stats.bodies, limits.maxBodies ?? 1) },
 
     stats.triangles <= limits.maxTriangles
       ? { gate: "budget", ok: true }

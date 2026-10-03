@@ -51,7 +51,7 @@ export interface JevClient {
     signal?: AbortSignal,
   ): Promise<{
     fit: Record<string, LibraryFit>;
-    separateParts?: number;
+    expectedPieces?: number;
     suitability?: number;
     usage: TokenUsage;
   }>;
@@ -78,22 +78,31 @@ const SUITABILITY = {
 };
 
 /**
- * Question id for "does the request intend separate, unjoined pieces?".
- * @remarks Asked in the SAME call as the fit scores - one more question costs
- *   a few dozen input tokens. Its answer decides whether a multi-body result is
- *   the intent (a print-in-place hinge) or a defect (a hook arm floating off its
- *   plate). Catalog ids are kebab-case, so this snake_case id cannot collide.
+ * Question id for "how many separate pieces does the request imply?".
+ * @remarks Asked in the SAME call as the fit scores. Replaced a yes/no
+ *   "separate pieces intended?" that could not tell two clamp halves from six
+ *   fragments: attempt#17 shipped a clamp in 6 bodies because "separate" was
+ *   true, and the hinge passed at exactly the 0.5 threshold. Calibrated live:
+ *   10 of 10 requests counted right (hinge 2, clamp 2, hinged box 2, four
+ *   coasters 4, three spacers 3, bracket / soap dish / bin / hook 1).
  */
-export const SEPARATE_PARTS_QUESTION = "separate_parts";
+export const PIECE_COUNT_QUESTION = "piece_count";
 
-const SEPARATE_PARTS = {
-  type: "noul",
-  instructions: "Does the request ask for a part made of separate pieces that are deliberately " +
-    "NOT joined to each other - for example a print-in-place hinge, a box with a captive hinged " +
-    "lid, a clamp printed as two halves, or a set of several separate items?",
+/** The choice ids, and the count each stands for; "many" is 5 or more. */
+export const PIECE_COUNTS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, many: 5 };
+
+const PIECE_COUNT = {
+  type: "choice",
+  instructions: "How many SEPARATE, unjoined solid pieces will the finished print of this request " +
+    "consist of? Count pieces that are printed loose or captive (a print-in-place hinge's two " +
+    "leaves are 2). Do NOT count screws, nuts, magnets or other bought hardware, and do not " +
+    "count features of one piece (holes, slots, ribs) as pieces.",
   criteria: {
-    true: "Several separate, unjoined pieces are intended",
-    false: "One single connected part is intended",
+    one: "1 piece - a single connected part",
+    two: "2 pieces",
+    three: "3 pieces",
+    four: "4 pieces",
+    many: "5 or more pieces",
   },
 };
 
@@ -171,14 +180,14 @@ export function createJevClient(config: JevConfig): JevClient {
       const body = await askJev(config, "CAD part request: " + request,
         {
           ...fitQuestions(candidates),
-          [SEPARATE_PARTS_QUESTION]: SEPARATE_PARTS,
+          [PIECE_COUNT_QUESTION]: PIECE_COUNT,
           [SUITABILITY_QUESTION]: SUITABILITY,
         }, signal);
-      const separate = body?.answers?.[SEPARATE_PARTS_QUESTION]?.noul;
+      const pieces = PIECE_COUNTS[body?.answers?.[PIECE_COUNT_QUESTION]?.choice];
       const suitable = body?.answers?.[SUITABILITY_QUESTION]?.noul;
       return {
         fit: readFits(body, Object.keys(candidates)),
-        ...(typeof separate === "number" ? { separateParts: separate } : {}),
+        ...(pieces === undefined ? {} : { expectedPieces: pieces }),
         ...(typeof suitable === "number" ? { suitability: suitable } : {}),
         usage: usageOf(body),
       };

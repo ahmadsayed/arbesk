@@ -29,8 +29,7 @@ import zlib from "node:zlib";
 import { buildPrelude, PRELUDE_NAMES } from "../packages/cad-gen/src/core/prelude.ts";
 import { meshToGlb, meshTo3mf } from "../packages/cad-gen/src/core/export/index.ts";
 import { meshFrom } from "../packages/cad-gen/src/core/kernel.ts";
-import { evaluateKernelGates } from "../packages/cad-gen/src/core/gates.ts";
-import { SEPARATE_PARTS_THRESHOLD } from "../packages/cad-gen/src/backend/select.ts";
+import { bodyAllowance, evaluateKernelGates } from "../packages/cad-gen/src/core/gates.ts";
 import { PROJECT_ROOT, cadGeneratorFrom, loadCadKernel, loadEnv } from "./lib/cad-harness.mjs";
 
 /** @typedef {{ positions: Float32Array, indices: Uint32Array }} Mesh */
@@ -577,13 +576,13 @@ async function buildWithClientRepair(ctx, result) {
   let design = result.design;
   // Jev's judgement from the FIRST call: a repair round skips Jev, and whether
   // the request wants separate pieces does not change between rounds.
-  const separate = result.diagnostics.selection.separateParts;
-  const allowSeparateBodies = separate !== undefined && separate >= SEPARATE_PARTS_THRESHOLD;
-  if (separate !== undefined) console.log("separate parts p=" + separate.toFixed(2));
+  const pieces = result.diagnostics.selection.expectedPieces;
+  if (pieces !== undefined) console.log("expected pieces " + (pieces >= 5 ? "5+" : pieces));
   for (let round = 0; ; round++) {
     try {
       const run = ctx.kernel.run(design);
-      const failed = evaluateKernelGates(run.stats, { maxTriangles: MAX_TRIANGLES, allowSeparateBodies })
+      const maxBodies = bodyAllowance(design.code, pieces);
+      const failed = evaluateKernelGates(run.stats, { maxTriangles: MAX_TRIANGLES, maxBodies })
         .find((/** @type {any} */ g) => !g.ok);
       if (failed) throw new Error(failed.gate + ": " + failed.error);
       return { run, design };

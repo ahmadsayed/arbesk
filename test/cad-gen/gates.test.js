@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { evaluateStaticGates, evaluateKernelGates } from "@arbesk/cad-gen/core/gates.js";
+import { bodyAllowance, evaluateStaticGates, evaluateKernelGates } from "@arbesk/cad-gen/core/gates.js";
 import { validateDesign } from "@arbesk/cad-gen/backend/validate.js";
 
 const PRELUDE = ["box", "hole"];
@@ -72,10 +72,21 @@ describe("evaluateKernelGates", () => {
     expect(connected.error).toContain("only TOUCHES");
   });
 
-  it("passes several bodies when the request intends separate pieces", () => {
-    const bodies = { count: 2, boxes: [] };
-    const gates = evaluateKernelGates({ ...stats, bodies }, { ...LIMITS, allowSeparateBodies: true });
-    expect(gates.find((g) => g.gate === "connected").ok).toBe(true);
+  it("passes as many bodies as the request implies, and fails one more", () => {
+    const at = (count, maxBodies) => evaluateKernelGates(
+      { ...stats, bodies: { count, boxes: [{ min: [0, 0, 0], max: [1, 1, 1] }] } }, { ...LIMITS, maxBodies },
+    ).find((g) => g.gate === "connected");
+    expect(at(2, 2).ok).toBe(true);
+    // attempt#17: a two-half clamp shipped as 6 bodies under a yes/no "separate".
+    expect(at(6, 2).ok).toBe(false);
+    expect(at(6, 2).error).toContain("at most 2");
+  });
+
+  it("allows a multi-body helper its own bodies whatever the count says", () => {
+    expect(bodyAllowance("return printInPlaceHinge({});", 1)).toBe(2);
+    expect(bodyAllowance("return box(1, 1, 1);", undefined)).toBe(1);
+    expect(bodyAllowance("return box(1, 1, 1);", 3)).toBe(3);
+    expect(bodyAllowance("return box(1, 1, 1);", 5)).toBe(Number.POSITIVE_INFINITY);
   });
 
   it("fails on a degenerate volume", () => {

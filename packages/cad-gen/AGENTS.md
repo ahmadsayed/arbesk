@@ -200,7 +200,7 @@ $0.042/MTok. ONE call per request asks:
 | question | type | used for |
 |---|---|---|
 | one per catalog entry | `score` 0-2 | entries ≥ `FIT_THRESHOLD` (1.0) are documented, with their fit |
-| `separate_parts` | `noul` | ≥ 0.5 lets the client's `connected` gate accept several bodies |
+| `piece_count` | `choice` one/two/three/four/many | the `connected` gate allows that many bodies (`bodyAllowance`), raised to what a multi-body helper builds (`MULTI_BODY_HELPERS`) |
 | `cad_suitable` | `noul` | < `SUITABILITY_THRESHOLD` (0.5) refuses the request |
 
 Selection only ever adds documentation, and Jev **fails open**: no key, an

@@ -41,8 +41,8 @@ describe("createJevClient", () => {
     expect(seen[0].auth).toBe("Bearer k");
     expect(seen[0].req.model).toBe("jev-latest");
     expect(seen[0].req.state).toContain("a hinged box");
-    expect(Object.keys(seen[0].req.questions)).toEqual(["hinge", "gear", "separate_parts", "cad_suitable"]);
-    expect(seen[0].req.questions.separate_parts.type).toBe("noul");
+    expect(Object.keys(seen[0].req.questions)).toEqual(["hinge", "gear", "piece_count", "cad_suitable"]);
+    expect(seen[0].req.questions.piece_count.type).toBe("choice");
     expect(seen[0].req.questions.hinge.type).toBe("score");
     expect(seen[0].req.questions.hinge.criteria).toHaveLength(3);
     expect(fit.hinge.score).toBe(1.9);
@@ -136,7 +136,7 @@ describe("the suitability gate", () => {
     const req = JSON.parse(init.body);
     const answers = Object.fromEntries(Object.keys(req.questions).map((id) => [id,
       id === "cad_suitable" ? { type: "noul", noul: suitable }
-        : id === "separate_parts" ? { type: "noul", noul: 0.1 }
+        : id === "piece_count" ? { type: "choice", choice: "two", confidence: 0.9 }
           : { type: "score", score: 0, confidence: 0.9 }]));
     return new Response(JSON.stringify({ answers, usage: { input_tokens: 9, output_tokens: 1 } }),
       { status: 200 });
@@ -169,6 +169,7 @@ describe("the suitability gate", () => {
     }), { status: 200 }));
     const r = await g.generate({ prompt: "an L-bracket" });
     expect(r.diagnostics.selection.suitability).toBe(0.99);
+    expect(r.diagnostics.selection.expectedPieces).toBe(2);
   }, 40000);
 
   it("never refuses when Jev gave no answer - an outage must not block a part", async () => {

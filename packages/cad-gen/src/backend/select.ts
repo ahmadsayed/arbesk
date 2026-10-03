@@ -38,11 +38,11 @@ export interface LibrarySelection {
   /** Why the fallback was taken, when it was. */
   error?: string;
   /**
-   * Jev's probability that the request intends separate, unjoined pieces.
-   * @remarks The client's connected gate allows more than one body when this
-   *   is at least SEPARATE_PARTS_THRESHOLD. Absent when Jev was not asked.
+   * How many separate pieces Jev judged the request to imply (5 = "5 or more").
+   * @remarks The client's connected gate allows up to this many bodies - see
+   *   bodyAllowance in core/gates.ts. Absent when Jev was not asked.
    */
-  separateParts?: number;
+  expectedPieces?: number;
   /**
    * Jev's probability that parametric CAD can model the request at all.
    * @remarks Below SUITABILITY_THRESHOLD the generator refuses before any
@@ -55,9 +55,6 @@ export interface LibrarySelection {
 
 /** Jev's CAD-suitability probability below which a request is refused. */
 export const SUITABILITY_THRESHOLD = 0.5;
-
-/** Jev's separate-parts probability above which several bodies are the intent. */
-export const SEPARATE_PARTS_THRESHOLD = 0.5;
 
 const NO_TOKENS: TokenUsage = { prompt: 0, completion: 0 };
 
@@ -100,14 +97,14 @@ export async function selectLibraries(
 
   try {
     const candidates = Object.fromEntries(CATALOG.map((e) => [e.id, e.summary]));
-    const { fit, usage, separateParts, suitability } =
+    const { fit, usage, expectedPieces, suitability } =
       await jev.scoreFit(requestText(input), candidates, signal);
     const chosen = Object.entries(fit).filter(([, f]) => f.score >= FIT_THRESHOLD).map(([id]) => id);
     const libraries = ordered([...chosen, ...prior]);
     const kept = Object.fromEntries(libraries.filter((id) => fit[id]).map((id) => [id, fit[id]]));
     return {
       libraries, fit: kept, source: "jev", tokens: usage,
-      ...(separateParts === undefined ? {} : { separateParts }),
+      ...(expectedPieces === undefined ? {} : { expectedPieces }),
       ...(suitability === undefined ? {} : { suitability }),
     };
   } catch (err) {
