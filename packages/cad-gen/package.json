@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Arbesk engineering-CAD generation SDK: Manifold-script codegen, static guard, kernel port and GLB/3MF exporters. Environment-agnostic core plus a Node-only backend.",
+  "description": "Arbesk engineering-CAD generation SDK: Manifold-script codegen, static guard, kernel port and glTF/GLB/3MF exporters. Environment-agnostic core plus a Node-only backend.",
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
