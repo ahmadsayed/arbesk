@@ -31,6 +31,7 @@
  *   - BOSL2 gear proportions and hinges: BSD-2-Clause. Credited in
  *     ATTRIBUTED_HELPERS.
  *   - Matthew Burke's spool holder: MIT. Credited in ATTRIBUTED_HELPERS.
+ *   - Maciej Małecki's knobs: MIT. Credited in ATTRIBUTED_HELPERS.
  */
 
 /** One selectable block of prompt documentation. */
@@ -297,6 +298,35 @@ export const CATALOG: CatalogEntry[] = [
       "  Its frame: the curve is centred on the origin, the plate runs up +y, and it lies",
       "  flat on z = 0 to z = width - print orientation, screw holes along x.",
       "For a hook that hangs OVER a rail or a door top instead of screwing on, use railHook.",
+    ],
+  },
+  {
+    id: "knobs",
+    helpers: ["knob"],
+    summary: "control knobs - amplifier, potentiometer and appliance knobs with a star or round grip profile",
+    helperRows: [
+      "knob({ d?, h?, shape?, chamfer?, stemD?, stemH?, starPoints?, center? })  control knob",
+    ],
+    guidance: [
+      "A control knob - an amplifier or potentiometer knob, an appliance dial - is ALWAYS",
+      "knob({...}). This is not a suggestion: it is a port of Maciej Małecki's parametric",
+      "knob, verified against OpenSCAD's own render. A hand-drawn knob came back as a",
+      "smooth cylinder with dots subtracted around it - no grip, and it does not look",
+      "like a knob. The star profile is what fingers grip: rounded points around a",
+      "central body, one call.",
+      "  d: head diameter, default 32 (a small pot knob is 15-20, an amp knob 30-40).",
+      "  h: head height, default 10. shape: \"star\" (default) or \"round\". chamfer:",
+      "  edge chamfer, default 0.5. stemD/stemH: a spacer stem below the head for the",
+      "  shaft and nut (0 means none), default 15 x 5. starPoints: default 4 (3-6 are",
+      "  common). A knob is face down on z = 0 with its axis on the origin.",
+      "The helper returns the UNCUTOFF knob: subtract the shaft bore from the returned",
+      "solid, where h is the head height used in the call. A round bore:",
+      "k.subtract(cylinder(3, h + 2, { segments: 24 }).translate([0, 0, h / 2])). A D-shaft",
+      "bore is the round bore plus a flat cut on one side: for a 6 mm shaft with a",
+      "0.9 mm flat, the flat plane sits 2.1 mm from the axis, so",
+      "k.subtract(box(2, 8, h + 2).translate([3.1, 0, h / 2])) leaves exactly that flat.",
+      "Both cutters must pass through the head and out the other side - a blind bore",
+      "whose cutter stops inside the head fails the build.",
     ],
   },
   {

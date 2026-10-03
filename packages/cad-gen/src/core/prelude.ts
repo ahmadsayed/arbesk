@@ -9,13 +9,14 @@ import { knuckleHinge, printInPlaceHinge } from "./library/knuckle-hinge.ts";
 import { spoolHolder } from "./library/spool-holder.ts";
 import { gridfinityCup } from "./library/gridfinity-cup.ts";
 import { wallHook } from "./library/wall-hook.ts";
+import { knob } from "./library/knob.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
-  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "stack",
+  "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
 ] as const;
@@ -942,6 +943,16 @@ export function buildPrelude(
      *   scripts/cad-reference.mjs, cases wall-hook-*.
      */
     wallHook: (opts: any = {}) => wallHook(module, opts ?? {}),
+
+    /**
+     * A star- or round-profile control knob with an optional spacer stem.
+     * @remarks PORT of knob() from mmalecki/openscad-knobs, MIT, by
+     *   Maciej Małecki (github.com/mmalecki) - credited through
+     *   ATTRIBUTED_HELPERS. Face down on z = 0, axis on the origin. Returns
+     *   the UNCUTOFF solid: subtract the shaft bore from the returned solid.
+     *   Matches OpenSCAD's render: scripts/cad-reference.mjs, cases knob-*.
+     */
+    knob: (opts: any = {}) => knob(module, opts ?? {}),
 
     /**
      * A rack of cup pockets on a stable base.

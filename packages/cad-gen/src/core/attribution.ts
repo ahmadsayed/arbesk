@@ -136,6 +136,17 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "Unlicense",
     url: "https://github.com/AaronVerDow/cad",
   },
+  // MIT. Licence gated by scripts/cad-candidates.mjs per file (GitHub SPDX MIT,
+  // Jev "permissive", the repository's own work) and read by hand. Matches
+  // OpenSCAD: scripts/cad-reference.mjs knob-*.
+  knob: {
+    helper: "knob",
+    work: "openscad-knobs (knob.scad)",
+    author: "Maciej Małecki",
+    authorGithub: ["https://github.com/mmalecki"],
+    licence: "MIT",
+    url: "https://github.com/mmalecki/openscad-knobs",
+  },
   phoneStand: {
     helper: "phoneStand",
     work: "SmartPhoneHolder",

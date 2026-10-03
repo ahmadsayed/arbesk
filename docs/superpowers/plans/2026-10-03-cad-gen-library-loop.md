@@ -1,7 +1,7 @@
 # cad-gen library loop — handoff
 
-**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** paused after iteration 6 of 12.
-Resume at **iteration 7** (below).
+**Branch:** `feat/cad-gen-enhance-loop` (pushed). **Status:** paused after iteration 7 of 12.
+Resume at **iteration 8** (below).
 
 ## What the loop is
 
@@ -46,23 +46,45 @@ local `blockchain/deployments/*.json` changes are never committed. The full meth
 | 4 | `0215808` | vector76's Gridfinity bin (`gridfinityCup`), 5 configs vs OpenSCAD |
 | 5 | `fb8a09c` | Jev `piece_count` replaces yes/no; `bodyAllowance` + `MULTI_BODY_HELPERS` |
 | 6 | `158bf71` | AaronVerDow's wall hook; no portable pipe clamp found |
+| 7 | `e96529c` | Maciej Małecki's knob (`knob`), exact vs OpenSCAD in 3 configs |
 
-Library today: `knuckleHinge`, `printInPlaceHinge`, `spoolHolder`, `gridfinityCup`,
-`wallHook` (ported), plus the earlier `phoneStand`, `boardCase`, `spurGear`,
-`gridfinityBase`, `railHook`, `cupRack`. Each Jev call asks library fit (one `score` per
-catalog entry), `piece_count` (choice) and `cad_suitable` (noul) together.
+Library today: `knob`, `knuckleHinge`, `printInPlaceHinge`, `spoolHolder`,
+`gridfinityCup`, `wallHook` (ported), plus the earlier `phoneStand`, `boardCase`,
+`spurGear`, `gridfinityBase`, `railHook`, `cupRack`. Each Jev call asks library fit
+(one `score` per catalog entry), `piece_count` (choice) and `cad_suitable` (noul)
+together.
 
-Last full run (attempt#17, before iterations 5-6): 17/17 scenarios build. Since then the
-hook, the piece counts and the clamp's failure mode changed — **start iteration 7 with a
-fresh full run** to re-rank.
+Last full run (attempt#22, after iteration 7): 15/16 scenarios build. The `knob`
+scenario now calls `knob()` (Jev `knobs=1.66`, one solid, 30 ms). `soap-dish` passed
+again (its attempt#20 failure was nondeterministic - see the backlog note).
+`pulley-gt2` FAILED in a new way: 21 detached bodies - DeepSeek drew teeth this
+time and they do not fuse (attempt#20's toothless disc built fine). `hinge` and
+`pipe-clamp` are 2 bodies by design (`piece_count`).
 
-## Iteration 7 — start here
+## Iteration 7 — DONE
+
+Ported Maciej Małecki's MIT-licensed knob (`mmalecki/openscad-knobs:knob.scad`).
+Round case matched OpenSCAD exactly on the first try; the star case exposed one
+real porting bug - OpenSCAD `rotate(a) translate(t)` nests the translate INSIDE
+the rotated frame, which is Manifold's `.translate().rotate()` chaining order,
+not `.rotate().translate()`. Three reference cases (`knob-default`, `knob-round`,
+`knob-big-star`) now match to 0.000 mm; the full reference suite (17 cases)
+still passes. Live proof: the `knob` scenario builds through `knob({...})` with
+the catalog's subtract-the-bore pattern (round bore + flat) - 1 solid,
+30 x 30 x 18 mm, kernel 30 ms. Note the port returns the UNCUTOFF solid (the
+SCAD's children() cut has no Manifold equivalent); the catalog entry documents
+the bore/flat subtraction with worked numbers.
+
+## Iteration 8 — start here
 
 Pick the highest-value item after a fresh full run. Current ranking:
 
-1. **Knobs** — `mmalecki/openscad-knobs` passed the repo-level licence gate. Run the
-   file-level gate, port the knob module, verify, and prove it on the `knob` scenario
-   (today hand-built: D-shaft bore, minkowski knurl, ~0.6 s).
+1. **GT2 pulley** — now the top defect: attempt#22 failed with 21 detached
+   bodies (teeth drawn but unfused); attempt#20's toothless disc built but was
+   wrong. No permissive GT2 source found in 17 repos (unlicensed/GPL), BOSL2
+   has none. The belt profile is a published standard (like the involute maths
+   behind `spurGear`), so write the helper from the spec: 2 mm pitch, 40°
+   tooth, 20 teeth -> ~12.2 mm pitch diameter, plus flanges and a bore.
 2. **Spool arm for 2020 extrusion** — the `spool-holder` scenario asks for an arm on 2020
    extrusion with M5 T-nuts; `spoolHolder` is a stand, so the arm is still hand-built and
    came apart once. Search for a permissive 2020-mount spool arm; the rcarmo arms are
@@ -82,8 +104,16 @@ Pick the highest-value item after a fresh full run. Current ranking:
   keep searching (Printables/GitHub code search with other words: "split collar",
   "shaft collar", "tube clamp two piece"), or write a helper from first principles as
   with gears (a standard shape, not a hand-tuned profile).
-- **GT2 pulley** — still no teeth / wrong size. No permissive GT2 source found yet
-  (unlicensed or GPL so far); BOSL2 has none.
+- **GT2 pulley** — see iteration 8 ranking; the failure mode changed from toothless to
+  21 detached bodies (teeth drawn, unfused).
+- **Soap-dish repair blind spot (observed attempt#20, passed attempt#22)** — root cause
+  of the failure: the model placed the ribs at the SAME centered pitch as the drainage
+  slots (identical `start + i*pitch` arithmetic), so every rib sat over a slot; the
+  slot cut removed the rib's 0.5 mm fuse zone and the overlap repair hint cannot fix
+  that (it extends the rib INTO the void). The repair message for INSIDE-touching bodies
+  could add: if the fuse zone crosses a through-cut, move the feature clear of the cut
+  or bridge across it. Nondeterministic trigger, so verify any hint change across
+  several runs.
 - **Threads** — `rcolyer/threads-scad` (CC0) and `adrianschlatter/threadlib` (BSD-3) passed
   the repo gate; useful for caps, bolts, jar lids.
 - **Gridfinity label tabs** — "label tabs" (plural) got one tab; the catalog guidance
@@ -91,7 +121,8 @@ Pick the highest-value item after a fresh full run. Current ranking:
 - **Wall-hook vs over-door** — "hook on a door" picked `wallHook`; an over-door hook is
   `railHook`. Consider a Jev `choice` between mounting styles.
 - **Slow fillets** — hand-drawn parts using `filletEdges` in minkowski mode still take
-  10-70 s (knob, earlier wall hook). Ports remove them one family at a time.
+  10-70 s (earlier wall hook). Ports remove them one family at a time; the knob port
+  removed the knob instance (minkowski knurl, was 17.9 s).
 - **Browser worker (milestone 2)** — still unbuilt. `scripts/cad-eval.mjs`'s
   `buildWithClientRepair` + `bodyAllowance` are the reference for its repair loop; the UI
   must handle 422 `CAD_REQUEST_UNSUITABLE` by offering Tripo3D.
@@ -102,7 +133,7 @@ Pick the highest-value item after a fresh full run. Current ranking:
 /loop Grow and harden @arbesk/cad-gen on branch feat/cad-gen-enhance-loop, one iteration
 per firing, against live DeepSeek + Jev (keys in .env) ... (see the loop prompt in the
 session that produced this file; the rules above are the substance). Continue from
-iteration 7 in docs/superpowers/plans/2026-10-03-cad-gen-library-loop.md, stop after
+iteration 8 in docs/superpowers/plans/2026-10-03-cad-gen-library-loop.md, stop after
 iteration 12.
 ```
 

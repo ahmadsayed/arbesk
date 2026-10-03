@@ -77,6 +77,20 @@ const CASES = {
     defines: { width: "16", d: "60", height: "95", theight: "40" },
     code: "return wallHook({ width: 16, d: 60, height: 95, theight: 40 });",
   },
+  "knob-default": {
+    repo: "mmalecki/openscad-knobs", file: "knob.scad",
+    code: "return knob({});",
+  },
+  "knob-round": {
+    repo: "mmalecki/openscad-knobs", file: "knob.scad",
+    defines: { shape: "\"round\"" },
+    code: "return knob({ shape: 'round' });",
+  },
+  "knob-big-star": {
+    repo: "mmalecki/openscad-knobs", file: "knob.scad",
+    defines: { head_d: "45", head_h: "14", star_points: "6", stem_d: "20", stem_h: "8" },
+    code: "return knob({ d: 45, h: 14, starPoints: 6, stemD: 20, stemH: 8 });",
+  },
   "knuckle-bare": {
     scad: "knuckle-bare.scad",
     code: "return knuckleHinge({ length: 35, segs: 6, offset: 5, inner: true, armHeight: 2, armAngle: 60, clip: 1 });",
