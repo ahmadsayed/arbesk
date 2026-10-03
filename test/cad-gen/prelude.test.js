@@ -794,3 +794,18 @@ describe("boardCaseLid", () => {
     expect(size[1]).toBeCloseTo(53.34 + 4 - 0.4, 2);
   });
 });
+
+describe("zero-volume flakes", () => {
+  it("are not counted as bodies, and are removed from the solid", async () => {
+    // A face-thin box pressed against the main body decomposes to a body of
+    // ~0 volume - the shape of the flake a live cable clip's fillet left.
+    const r = await run("P.s; return box(10, 10, 10).add(box(4, 4, 1e-9).translate([0, 0, 5]));");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+  });
+
+  it("still counts a small but real separate piece", async () => {
+    const r = await run("P.s; return box(10, 10, 10).add(box(0.5, 0.5, 0.5).translate([20, 0, 0]));");
+    expect(r.stats.bodies.count).toBe(2);
+  });
+});

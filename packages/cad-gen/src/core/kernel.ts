@@ -141,13 +141,41 @@ function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
   };
 }
 
+/**
+ * The volume below which a decomposed body is a numerical flake, not a part.
+ * @remarks Measured live: a cable clip's filletEdges opening left a body of
+ *   -5e-14 mm3 and 4 triangles where a channel nearly broke through the top
+ *   face. The connected gate counted it as a loose piece and sent the model -
+ *   twice - to "extend it into the solid", which no edit to the design can do.
+ *   0.001 mm3 is a 0.1mm cube: far below any feature a printer can make.
+ */
+export const DEGENERATE_BODY_MM3 = 1e-3;
+
+/** Whether a decomposed body is a zero-volume flake. */
+function isDegenerate(body: any): boolean {
+  return Math.abs(body.volume()) < DEGENERATE_BODY_MM3;
+}
+
+/**
+ * The solid with any zero-volume flakes removed, and how many there were.
+ * @remarks So the delivered mesh is clean as well as the body count honest.
+ */
+function withoutFlakes(module: ManifoldModule, result: any): { solid: any; dropped: number } {
+  if (typeof result.decompose !== "function") return { solid: result, dropped: 0 };
+  const parts: any[] = result.decompose();
+  const kept = parts.filter((p) => !isDegenerate(p));
+  const dropped = parts.length - kept.length;
+  if (dropped === 0 || kept.length === 0) return { solid: result, dropped: 0 };
+  return { solid: (module as any).Manifold.compose(kept), dropped };
+}
+
 /** Bodies listed in a repair message; past this the count says enough. */
 const MAX_BODY_BOXES = 8;
 
 /** The solid's separate bodies, largest first; nothing when the host cannot decompose. */
 function bodiesOf(result: any): Pick<CadStats, "bodies"> {
   if (typeof result.decompose !== "function") return {};
-  const parts: any[] = result.decompose();
+  const parts: any[] = result.decompose().filter((p: any) => !isDegenerate(p));
   const boxes = parts
     .map((p) => ({ volume: p.volume(), box: p.boundingBox() as ManifoldBox }))
     .sort((a, b) => b.volume - a.volume)
@@ -171,14 +199,16 @@ export function createCadKernel(
     run(design: CadDesign): KernelRunResult {
       const helpers = buildPrelude(module, options);
       const fn = compileScript(design.code, names);
-      const result = assertManifold(
+      const raw = assertManifold(
         callScript(fn, parameterValues(design), module, helpers, names),
         module,
       );
+      const { solid: result, dropped } = withoutFlakes(module, raw);
+      const stats = statsFrom(result, helpers);
 
       return {
         mesh: meshFrom(result.getMesh()),
-        stats: statsFrom(result, helpers),
+        stats: dropped > 0 ? { ...stats, degenerateBodiesDropped: dropped } : stats,
       };
     },
   };

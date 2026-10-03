@@ -44,6 +44,8 @@ export interface CadStats {
    *   can say WHICH piece came loose, not just that one did.
    */
   bodies?: { count: number; boxes: { min: [number, number, number]; max: [number, number, number] }[] };
+  /** Zero-volume flakes the kernel removed from the solid (see DEGENERATE_BODY_MM3). */
+  degenerateBodiesDropped?: number;
 }
 
 /** Renderer-neutral mesh in Manifold coordinates (millimetres, Z-up). */

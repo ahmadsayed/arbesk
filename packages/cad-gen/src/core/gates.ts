@@ -82,10 +82,34 @@ type Box = { min: [number, number, number]; max: [number, number, number] };
  */
 function whereLoose(b: Box, main: Box): string {
   const inside = [0, 1, 2].every((a) => b.min[a] >= main.min[a] - 1e-6 && b.max[a] <= main.max[a] + 1e-6);
-  return inside
-    ? "INSIDE the main body's bounds: it sits in a cavity or on a face and only TOUCHES it. " +
-      "Faces that merely touch never fuse - extend it into the solid it rests on, or remove it"
-    : "OUTSIDE the main body: it floats clear of it - move it so it overlaps the main body";
+  if (inside) {
+    return "INSIDE the main body's bounds: it sits in a cavity or on a face and only TOUCHES it. " +
+      "Faces that merely touch never fuse - extend it into the solid it rests on, or remove it";
+  }
+  const severedAxis = severedAlong(b, main);
+  if (severedAxis !== undefined) {
+    return "SEVERED: it spans the main body's full extent along " + severedAxis + ", side by side " +
+      "with it - a cut (a slot, channel or groove) went ALL the way through and split the part. " +
+      "Leave a floor or bridge of material across every cut instead of cutting it clean through; " +
+      "do not move the pieces";
+  }
+  return "OUTSIDE the main body: it floats clear of it - move it so it overlaps the main body";
+}
+
+/**
+ * The axis along which a loose body exactly matches the main body's extent.
+ * @remarks The signature of a part a through-cut has split: a live cable clip
+ *   cut its cable slots through the full height and came back as four fins,
+ *   each spanning z -6..6 like the main one. "Move it so it overlaps" - the
+ *   advice for a floating piece - cost both repair rounds; the fix is to leave
+ *   material under the cut.
+ */
+function severedAlong(b: Box, main: Box): string | undefined {
+  const tol = 0.05;
+  const axis = [0, 1, 2].find((a) =>
+    Math.abs(b.min[a] - main.min[a]) < tol && Math.abs(b.max[a] - main.max[a]) < tol &&
+    b.max[a] - b.min[a] > tol);
+  return axis === undefined ? undefined : "xyz"[axis];
 }
 
 /** The connected-gate failure, naming every loose piece so a repair can join it. */

@@ -63,6 +63,19 @@ describe("evaluateKernelGates", () => {
     expect(connected.error).toContain("OUTSIDE the main body");
   });
 
+  it("names a part a through-cut has severed, instead of saying it floats", () => {
+    // Live cable clip: slots cut through the full height left four fins, each
+    // spanning z -6..6 like the main body, side by side in x.
+    const bodies = { count: 2, boxes: [
+      { min: [-25, -10, -6], max: [-11, 10, 6] }, { min: [11, -10, -6], max: [25, 10, 6] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.error).toContain("SEVERED");
+    expect(connected.error).toContain("Leave a floor or bridge");
+    expect(connected.error).not.toContain("OUTSIDE the main body");
+  });
+
   it("tells a piece resting inside a cavity apart from one floating away", () => {
     // attempt#10 gf-bin: the base's top sat in the cavity, touching the floor.
     const bodies = { count: 2, boxes: [

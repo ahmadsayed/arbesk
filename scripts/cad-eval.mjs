@@ -28,7 +28,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { buildPrelude, PRELUDE_NAMES } from "../packages/cad-gen/src/core/prelude.ts";
 import { meshToGlb, meshTo3mf } from "../packages/cad-gen/src/core/export/index.ts";
-import { meshFrom } from "../packages/cad-gen/src/core/kernel.ts";
+import { DEGENERATE_BODY_MM3, meshFrom } from "../packages/cad-gen/src/core/kernel.ts";
 import { bodyAllowance, bodyFloor, evaluateKernelGates } from "../packages/cad-gen/src/core/gates.ts";
 import { PROJECT_ROOT, cadGeneratorFrom, loadCadKernel, loadEnv } from "./lib/cad-harness.mjs";
 
@@ -383,7 +383,8 @@ function componentsOf(module, design) {
   const fn = new Function("PARAMETERS", "P", "M", ...PRELUDE_NAMES, design.code);
   const helpers = buildPrelude(module, { segments: 64 });
   const part = fn(values, values, module.Manifold, ...PRELUDE_NAMES.map((n) => helpers[n]));
-  const solids = part.decompose();
+  // Same rule as the kernel: a zero-volume flake is not a body.
+  const solids = part.decompose().filter((/** @type {any} */ s) => Math.abs(s.volume()) >= DEGENERATE_BODY_MM3);
   return {
     solids: solids.length,
     meshes: solids.map((/** @type {any} */ s) => meshFrom(s.getMesh())),

@@ -128,6 +128,17 @@ rounds**; the pipe clamp - the loop's longest-standing failure - now goes throug
 
 ## What's next (a new loop)
 
+0. **Cable clip -> a library module.** The full re-test (2026-10-04) found it failing
+   twice in a row. Two of its causes are now fixed in the kernel/gates (a zero-volume
+   fillet flake was counted as a body; a through-cut that SEVERED the part got
+   "move it" advice), and it passes 3 of 4 live runs - but it is still hand-drawn
+   and varies every run. A `cableClip` helper (desk-edge / screw-down / adhesive,
+   n cables of diameter d) would end it, as ports did for hooks and bins.
+0. **Kernel timeout in the browser worker.** A soap dish that filleted its whole
+   finished part with `filletEdges` ran > 8 minutes in the harness (no cap there);
+   a fresh generation took 38 ms. The worker needs a wall-clock cap that reports a
+   repairable failure ("fillet before cutting, or round the 2D profile").
+
 1. **Watch: the `uno-case` lid.** attempt#6 put its `pieces_separate` at 0.71, just
    under the 0.75 threshold, and DeepSeek drew it as one piece. If a case-with-lid
    request starts failing or shipping fused, look here first.
