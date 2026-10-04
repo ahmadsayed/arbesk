@@ -111,8 +111,8 @@ Validates the full wallet-discovery and authentication path:
 
 - Injects a Hardhat-backed EIP-1193/EIP-6963 provider into the browser.
 - Opens `/studio`.
-- Confirms the Studio connects via the Login / Signup picker and authenticates via SIWE.
-- Asserts the **Login / Signup** button opens the wallet picker, selecting the injected wallet connects, and the wallet menu button shows the connected address.
+- Confirms the Studio connects via the Sign in picker and authenticates via SIWE.
+- Asserts the **Sign in** button opens the wallet picker, selecting the injected wallet connects, and the wallet menu button shows the connected address.
 
 **Why it matters:** Any change to `wallet-discovery.ts`, `siwe.ts`, the headerbar wallet buttons, or the SIWE session flow can break this. If this spec fails, every subsequent spec fails because they all depend on being logged in.
 
@@ -224,7 +224,7 @@ Validates the two ways to reuse another collection's asset inside a parent scene
 
 Validates the Nautilus-style collection browser on `/library`:
 
-1. Confirms the wallet gate appears before connection and connects via the Login / Signup picker.
+1. Confirms the wallet gate appears before connection and connects via the Sign in picker.
 2. Asserts the wallet-derived default collection is labeled **Default**.
 3. Publishes an asset in Studio and verifies it appears inside **Default** in the library.
 4. Tests breadcrumb navigation and the **Up** button to return to the collection list.

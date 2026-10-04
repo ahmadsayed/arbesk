@@ -1,5 +1,8 @@
 export const SELECTORS = {
   testnetBanner: "#testnetBanner",
+  // Header network status (dot + label); the network select lives in the
+  // wallet popover (#headerbarNetworkSelect).
+  networkStatus: "#networkStatus",
   connectWalletBtn: "#connectWalletBtn",
   disconnectWalletBtn: "#disconnectWalletBtn",
   walletOptionsList: "#walletOptionsList",
@@ -58,6 +61,7 @@ export const SELECTORS = {
   providerSelect: "#providerSelect",
   tierSelect: "#tierSelect",
   assetNameDisplay: "#assetNameDisplay",
+  // Studio "Assets" tab (formerly Gallery): placement picker
   gallerySwitcherBtn: '[data-view="library"]',
   createSwitcherBtn: '[data-view="chat"]',
   assetLibraryBody: "#assetLibraryBody",
@@ -84,9 +88,10 @@ export const SELECTORS = {
   scaleSectionSummary: "#scaleSection summary",
   animationsSection: "#animationsSection",
   animationSelect: "#animationSelect",
-  // New asset + nesting (linked child assets)
-  // New ▾ menu; "Empty asset" keeps the #newAssetBtn id inside it.
+  // New ▾ menu ("Empty asset" keeps the #newAssetBtn id inside it) + nesting
+  // (linked child assets)
   newMenuBtn: "#newMenuBtn",
+  newMenu: "#newMenu",
   newAssetBtn: "#newAssetBtn",
   // Properties → Asset (name, collection, tier, team); hidden with no asset.
   assetSection: "#assetSection",

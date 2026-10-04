@@ -1531,6 +1531,15 @@ git add e2e
 git commit -m "test(e2e): New ▾ menu helper; Settings tab removed; Assets tab label"
 ```
 
+**As built (#82, PR pending):** most of this task shipped incrementally with the
+feature PRs (#75–#81) to keep E2E green per PR. What remained for this sweep:
+`networkStatus` + `newMenu` selectors and comment fixes in
+`studio-selectors.mjs`, and stale "Login / Signup" wording in `flows.mjs`
+comments and `e2e/README.md` (the button now reads "Sign in"). The flow helper
+shipped as `startEmptyAsset()` in #78 (not `newEmptyAsset`); the only
+`click(SELECTORS.newAssetBtn)` left is inside that helper, as intended. No spec
+asserts "Draft Scene" and `settingsSwitcherBtn` is already gone.
+
 ---
 
 ### Task 9: Docs and visual verification
