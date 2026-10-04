@@ -39,6 +39,12 @@ describe("parseArgs", () => {
     expect(parseArgs(["--limit", "3"]).limit).toBe(3);
   });
 
+  it("takes a model override, and refuses an empty one", () => {
+    expect(parseArgs([]).model).toBeNull();
+    expect(parseArgs(["--model", "deepseek-v4-pro"]).model).toBe("deepseek-v4-pro");
+    expect(() => parseArgs(["--model", "  "])).toThrow("--model");
+  });
+
   it("writes the HTML report by default and can be told not to", () => {
     expect(parseArgs([]).report).toBe(true);
     expect(parseArgs(["--no-report"]).report).toBe(false);

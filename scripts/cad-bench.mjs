@@ -15,6 +15,7 @@
  *                             [--concurrency N] [--thinking on|off] [--no-jev] [--no-triage]
  *                             [--no-render]      skip the best-effort PNG renders
  *                             [--no-report]      skip the HTML galleries
+ *                             [--model <id>]     override DEEPSEEK_MODEL for this run
  *                             [--resume <runDir>] [--compare <runDir>] [--out <root>]
  *   bun scripts/cad-bench.mjs --agreement <runDir>   score a hand-labelled triage-agreement.md
  *
@@ -64,6 +65,7 @@ export function parseArgs(argv) {
     variants: /** @type {("measured" | "abstract")[]} */ (["measured"]),
     limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: DEFAULT_CONCURRENCY,
     jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null), render: true, report: true,
+    model: /** @type {string | null} */ (null),
     resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
     agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
   };
@@ -101,6 +103,12 @@ export function parseArgs(argv) {
         const n = Number(raw);
         if (!Number.isInteger(n) || n < 1) throw new Error("--concurrency must be a positive integer, got " + raw);
         opts.concurrency = n;
+        break;
+      }
+      case "--model": {
+        const v = value().trim();
+        if (!v) throw new Error("--model needs a model id");
+        opts.model = v;
         break;
       }
       case "--no-jev": opts.jev = false; break;
@@ -278,6 +286,8 @@ async function main() {
   // --thinking overrides CAD_THINKING for this run only. The harness reads
   // .env, not process.env, so a shell variable would never reach the reader.
   if (opts.thinking) env.CAD_THINKING = opts.thinking === "on" ? "true" : "false";
+  // The same reader production uses, so a model A/B measures the shipped path.
+  if (opts.model) env.DEEPSEEK_MODEL = opts.model;
   if (!env.JEV_API_KEY && (opts.jev || opts.triage)) {
     console.warn("JEV_API_KEY missing from .env: running as --no-jev --no-triage");
     opts.jev = false;
