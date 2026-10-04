@@ -38,9 +38,8 @@ Full UI architecture: stack, directory map, studio shell, interaction principles
 | `frontend/src/js/ui/asset-drop-zone.ts` | Drop target for dragged gallery cards |
 | `frontend/src/js/ui/chat-messages.ts` | Chat / studio editor surfaces |
 | `frontend/src/js/ui/chat-history.ts` | Chat provenance / history rendering |
-| `packages/asset-core/src/domain/version-history-store.ts` | Version history state store (feeds scene/model clocks) |
-| `frontend/src/js/ui/version-clock.ts` | Shared SVG clock face component |
-| `frontend/src/js/ui/scene-clock.ts` | Scene-level version clock |
+| `packages/asset-core/src/domain/version-history-store.ts` | Version history state store (feeds the timeline strip / model clock) |
+| `frontend/src/js/ui/version-timeline.ts` | Version timeline strip (APG slider) |
 | `frontend/src/js/ui/model-clock-gizmo.ts` | Per-model version clock gizmo |
 | `frontend/src/js/ui/asset-save.ts` | Save Draft / Publish wiring |
 | `frontend/src/js/ui/create-panel.ts` | "New asset" dialog flow |

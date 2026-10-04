@@ -175,7 +175,7 @@ The system currently combines:
 | UI | `ui/create-panel.ts` | Prompt flow, asset definition controls, generation trigger |
 | UI | `ui/asset-save.ts` | Save/publish lifecycle UI; delegates manifest building to `services/asset-save/` |
 | UI | `ui/asset-library.ts` | Token gallery, collection expansion, thumbnail rendering |
-| Domain / UI | `packages/asset-core/src/domain/version-history-store.ts`, `ui/version-clock.ts`, `ui/scene-clock.ts`, `ui/model-clock-gizmo.ts` | Version history store + scene/model clock UIs |
+| Domain / UI | `packages/asset-core/src/domain/version-history-store.ts`, `ui/version-timeline.ts`, `ui/model-clock-gizmo.ts` | Version history store + timeline strip / model clock UIs |
 | UI | `ui/collaborators-panel.ts` | Editor list / add/remove UI |
 | UI | `ui/comments-panel.ts` | Asset-level comment thread UI |
 | UI | `ui/ledger-panel.ts` | Activity feed — walks manifest chain client-side, fetches full manifests |
@@ -386,7 +386,7 @@ Manifest v1 (CID: bafyA...)  ←──  Manifest v2 (CID: bafyB...)  ←──  
 
 | Consumer | Description |
 |---|---|
-| Version clock UI | Frontend (`time-travel.ts` / `domain/version-history-store.ts` / `ui/scene-clock.ts` / `ui/model-clock-gizmo.ts`) walks `prev_asset_manifest_cid` client-side and renders scene/model version clocks |
+| Version clock UI | Frontend (`time-travel.ts` / `domain/version-history-store.ts` / `ui/version-timeline.ts` / `ui/model-clock-gizmo.ts`) walks `prev_asset_manifest_cid` client-side and renders the version timeline strip and the per-node model clock |
 | Activity ledger | Frontend (`ledger-panel.ts`) walks the chain to render the activity feed |
 | Burn cleanup | Backend (`POST /api/v1/ipfs/unpin`) walks the chain and collects source CIDs from `node.source` |
 | Replay prevention | In-memory `usedTxHashes` set plus chain walk to detect duplicate on-chain generation transactions |

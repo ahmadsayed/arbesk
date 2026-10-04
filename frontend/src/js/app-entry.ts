@@ -14,7 +14,6 @@ import "./services/team.ts";
 import "./ui/toasts.ts";
 import "./ui/asset-save.ts";
 import "./ui/asset-chrome.ts";
-import "./ui/scene-clock.ts";
 import "./ui/version-timeline.ts";
 import "./ui/create-panel.ts";
 import "./ui/asset-drop-zone.ts";
