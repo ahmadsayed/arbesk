@@ -5,23 +5,21 @@
 // Make inspector sections collapsible with native <details>.
 // Token Info, Color, and any future section use the same summary style
 // as the existing .inspector-section-title.
+// Flat sections: a hairline under each, no boxed card.
 .inspector-section details {
-  border: var(--border-size-1) solid var(--border-hairline);
-  border-radius: var(--radius-2);
-  overflow: hidden;
+  border-bottom: var(--border-size-1) solid var(--hairline);
 }
 
 .inspector-section summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 32px;
   cursor: pointer;
-  padding: var(--size-2) var(--size-3);
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-7);
+  padding: var(--size-1) var(--size-3);
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
   color: var(--dim-fg);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   list-style: none;
 
   &::-webkit-details-marker {
@@ -100,8 +98,8 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-round);
-  background: var(--accent-bg);
-  color: var(--accent-fg);
+  background: var(--raised-bg);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -255,7 +253,7 @@
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background: var(--surface-overlay);
+    background: var(--raised-bg);
   }
 }
 
@@ -279,7 +277,7 @@
   left: 0;
   right: 0;
   background: var(--popover-bg);
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
   box-shadow: var(--shadow-3);
   max-height: 160px;

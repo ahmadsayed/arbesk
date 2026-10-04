@@ -111,6 +111,8 @@ function mix(a, b, p) {
 const DERIVED_TEXT_PAIRS = [
   // _library-grid .status-uploading/.status-pending, _version-clock hover badge
   ["window-fg on warning 22% tint", (t) => [t["window-fg"], mix(t.warning, t["card-bg"], 0.22)]],
+  // owner badge, metadata chip, .status-besked (accent tint, #71)
+  ["window-fg on accent 18% tint", (t) => [t["window-fg"], mix(t["accent-bg"], t["card-bg"], 0.18)]],
   // _testnet-banner
   ["window-fg on warning 18% banner", (t) => [t["window-fg"], mix(t.warning, t["window-bg"], 0.18)]],
   // _cards warning / error states

@@ -33,11 +33,9 @@
   flex-shrink: 0;
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   padding: 2px var(--size-2);
-  background-color: var(--accent-bg);
-  color: var(--accent-fg);
+  background-color: color-mix(in srgb, var(--accent-bg) 18%, var(--card-bg));
+  color: var(--window-fg);
   border-radius: var(--radius-2);
   white-space: nowrap;
 
@@ -85,8 +83,6 @@
   font-weight: var(--font-weight-6);
   padding: 1px var(--size-1);
   border-radius: var(--radius-1);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   line-height: 1.2;
 
   &.team-role-editor {

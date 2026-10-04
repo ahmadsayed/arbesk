@@ -25,7 +25,7 @@
   flex-direction: column;
   overflow-y: auto;
   background-color: var(--view-bg);
-  border-right: var(--border-size-1) solid var(--border-color);
+  border-right: var(--border-size-1) solid var(--hairline);
 
   // The pane sets display types that would defeat the `hidden` attribute.
   [hidden] {
@@ -41,7 +41,7 @@
   place-items: center;
   overflow: hidden;
   background-color: var(--viewport-bg);
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
   color: var(--dim-fg);
 
@@ -78,8 +78,6 @@
   padding: var(--size-1) var(--size-2);
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   background-color: var(--card-bg);
   color: var(--dim-fg);
   border: var(--border-size-1) solid var(--border-color);
@@ -93,7 +91,7 @@
 }
 
 .library-details-pill {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
   padding: 1px var(--size-1);
@@ -103,7 +101,7 @@
 }
 
 .library-details-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-size-0);
 }
 
@@ -198,7 +196,7 @@
   justify-content: space-between;
   gap: var(--size-3);
   padding: var(--size-2) 0;
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--hairline);
   font-size: var(--font-size-1);
 
   .k {
@@ -242,7 +240,7 @@
   gap: var(--size-2);
   margin: var(--size-2) var(--size-3) 0;
   padding-top: var(--size-2);
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--hairline);
   font-size: var(--font-size-0);
 
   svg {
@@ -254,7 +252,7 @@
 .library-details-prompt {
   margin: var(--size-2) var(--size-3) 0;
   padding-top: var(--size-2);
-  border-top: var(--border-size-1) solid var(--border-color);
+  border-top: var(--border-size-1) solid var(--hairline);
   font-size: var(--font-size-0);
 }
 

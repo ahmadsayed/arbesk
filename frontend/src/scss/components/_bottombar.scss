@@ -8,7 +8,7 @@
   justify-content: space-between;
   height: var(--bottombar-height);
   padding: 0 var(--size-3);
-  background: var(--gradient-headerbar);
+  background: var(--headerbar-bg);
   color: var(--dim-fg);
   border-top: var(--border-size-1) solid var(--border-hairline);
   font-size: var(--font-size-0);
@@ -96,8 +96,8 @@
   cursor: pointer;
 
   &:hover {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--surface-overlay-hover);
+    color: var(--accent-text);
   }
 
   &.disconnected {

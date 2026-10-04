@@ -1766,11 +1766,9 @@ async function onAnimate(generationId: string) {
     for (const group of ANIMATE_PRESET_GROUPS) {
       const header = document.createElement("div");
       header.textContent = group.category;
-      header.style.fontSize = "var(--font-size-0)";
-      header.style.fontWeight = "var(--font-weight-7)";
+      header.style.fontSize = "var(--font-size-1)";
+      header.style.fontWeight = "var(--font-weight-6)";
       header.style.color = "var(--dim-fg)";
-      header.style.textTransform = "uppercase";
-      header.style.letterSpacing = "0.06em";
       header.style.marginTop = "var(--size-2)";
       groupsWrap.appendChild(header);
       for (const opt of group.presets) addPresetRow(opt, groupsWrap);

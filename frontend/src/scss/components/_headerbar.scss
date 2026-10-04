@@ -11,7 +11,7 @@
   gap: var(--size-2);
   height: var(--headerbar-height);
   padding: 0 var(--size-3);
-  background: var(--gradient-headerbar);
+  background: var(--headerbar-bg);
   color: var(--headerbar-fg);
   border-bottom: var(--border-size-1) solid var(--border-hairline);
   flex-shrink: 0;
@@ -80,8 +80,8 @@
   }
 
   &.active {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--raised-bg);
+    color: var(--headerbar-fg);
   }
 }
 
@@ -177,12 +177,12 @@
   padding: 0 var(--size-3);
   font-size: var(--font-size-1);
   font-weight: var(--font-weight-6);
-  font-family: var(--font-mono);
-  color: var(--accent-fg);
-  background: var(--gradient-accent);
-  border: var(--border-size-1) solid var(--accent-bg);
+  font-family: var(--font-family);
+  color: var(--headerbar-fg);
+  background: var(--raised-bg);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-round);
-  box-shadow: var(--accent-shadow);
+  box-shadow: none;
   cursor: pointer;
   white-space: nowrap;
   transition: filter var(--duration-quick) var(--ease-out-3),
@@ -195,18 +195,17 @@
   }
 
   &:hover {
-    filter: brightness(1.05);
-    box-shadow: var(--accent-shadow), var(--glow-accent);
+    background-color: color-mix(in srgb, var(--raised-bg) 85%, var(--headerbar-fg));
   }
 
   &:focus-visible {
     outline: none;
-    box-shadow: var(--accent-shadow), var(--focus-ring);
+    box-shadow: var(--focus-ring);
   }
 
   // Disconnected (idle) state — outlined, not filled
   &.disconnected {
-    color: var(--accent-bg);
+    color: var(--accent-text);
     background: transparent;
     box-shadow: none;
 
@@ -231,32 +230,32 @@
   font-size: var(--font-size-1);
   font-weight: var(--font-weight-6);
   font-family: var(--font-family);
-  color: var(--accent-fg);
-  background-color: var(--accent-bg);
+  color: var(--headerbar-fg);
+  background-color: var(--raised-bg);
   background-repeat: no-repeat;
   background-position: right 10px center, 14px center;
   background-size: 12px, 8px;
-  border: var(--border-size-1) solid var(--accent-bg);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-round);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: filter var(--duration-quick) var(--ease-out-3);
+  transition: background-color var(--duration-quick) var(--ease-out-3);
 
   // Chevron dropdown arrow + disconnected gray dot
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Ccircle cx='4' cy='4' r='4' fill='%23adb5bd'/%3E%3C/svg%3E");
 
   &.connected {
     // Green dot when wallet is connected
     background-image:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"),
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Ccircle cx='4' cy='4' r='4' fill='%2328a745'/%3E%3C/svg%3E");
   }
 
   &:hover {
-    filter: brightness(1.05);
+    background-color: color-mix(in srgb, var(--raised-bg) 85%, var(--headerbar-fg));
   }
 
   &:focus-visible {

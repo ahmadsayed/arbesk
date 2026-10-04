@@ -37,24 +37,19 @@
 
 // Primary
 .btn-primary {
-  background: var(--gradient-accent);
+  background: var(--accent-bg);
   color: var(--accent-fg);
-  box-shadow: var(--accent-shadow);
 
   &:hover:not(:disabled) {
-    filter: brightness(1.05);
-    box-shadow: var(--accent-shadow), var(--glow-accent);
-    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--accent-bg) 88%, var(--window-fg));
   }
 
   &:active:not(:disabled) {
-    filter: brightness(0.97);
-    box-shadow: var(--accent-shadow);
-    transform: translateY(0);
+    background: color-mix(in srgb, var(--accent-bg) 80%, var(--window-fg));
   }
 
   &:focus-visible {
-    box-shadow: var(--accent-shadow), var(--focus-ring);
+    box-shadow: var(--focus-ring);
   }
 }
 
@@ -78,12 +73,12 @@
 // Outline
 .btn-outline {
   background: transparent;
-  color: var(--accent-bg);
-  border-color: var(--accent-bg);
+  color: var(--accent-text);
+  border-color: var(--accent-text);
 
   &:hover:not(:disabled) {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--surface-overlay-hover);
+    color: var(--accent-text);
   }
 
   &:active:not(:disabled) {

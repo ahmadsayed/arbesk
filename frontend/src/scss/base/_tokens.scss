@@ -99,11 +99,6 @@
   --focus-ring: 0 0 0 2px var(--window-bg), 0 0 0 4px var(--accent-text);
   --glow-accent: none;
   --accent-shadow: none;
-
-  // TRANSITIONAL flat aliases — usages and these tokens are removed in Task 5.
-  --gradient-accent: var(--accent-bg);
-  --gradient-headerbar: var(--headerbar-bg);
-  --gradient-sidebar: var(--sidebar-bg);
 }
 
 // ── Borders ───────────────────────────────────────────────────────────

@@ -36,8 +36,8 @@
               color var(--duration-quick) var(--ease-out-3);
 
   &:hover {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--surface-overlay-hover);
+    color: var(--accent-text);
   }
 }
 
