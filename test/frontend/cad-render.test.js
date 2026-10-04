@@ -17,9 +17,9 @@ function mockWorker(impl) {
 const DESIGN = { code: "return box(P.width, P.depth, P.height);", parameters: {}, summary: "box" };
 
 describe("renderCadDesignInWorker", () => {
-  test("spawns a module worker at /workers/cad-worker.js and resolves bytes", async () => {
+  test("spawns a module worker at /js/workers/cad-worker.js and resolves bytes", async () => {
     const Fake = mockWorker((w) => {
-      expect(w.url).toBe("/workers/cad-worker.js");
+      expect(w.url).toContain("/js/workers/cad-worker.js?v=1");
       expect(w.opts).toEqual({ type: "module" });
       w.onmessage({ data: { type: "ok", bytes: new Uint8Array([1, 2, 3]), summary: "box", stats: { tris: 12 } } });
     });

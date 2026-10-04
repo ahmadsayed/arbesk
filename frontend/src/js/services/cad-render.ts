@@ -17,7 +17,12 @@ export interface CadRenderResult {
 }
 
 const DEFAULT_TIMEOUT_MS = 90_000;
-const WORKER_URL = "/workers/cad-worker.js";
+// @ts-ignore TS1470 - NodeNext treats frontend .ts as CommonJS output
+// (frontend/package.json has no "type":"module"), but this is browser-native
+// ESM where import.meta is valid. Absolute path against import.meta.url so
+// the URL stays correct from any chunk; ?v= cache-busts the fixed-name asset
+// (bump when the worker bundle changes, same discipline as gltf-worker).
+const WORKER_URL = new URL("/js/workers/cad-worker.js?v=1", import.meta.url).href;
 
 export function renderCadDesignInWorker(
   design: CadDesign,
