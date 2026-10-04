@@ -13,7 +13,7 @@ import { getPendingChildRefs, getPendingSourceOverrides } from "../engine/cleanu
 
 const titleEl = document.getElementById("assetStatusName");
 const metaEl = document.getElementById("assetStatusMeta");
-const newBtn = document.getElementById("newAssetBtn");
+const newBtn = document.getElementById("newMenuBtn");
 const saveBtn = document.getElementById("saveAssetBtn");
 const publishBtn = document.getElementById("publishAssetBtn");
 const downloadBtn = document.getElementById("downloadAssetBtn");

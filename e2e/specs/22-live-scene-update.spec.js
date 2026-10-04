@@ -8,6 +8,7 @@ import {
   editFirstNodeColor,
   assetCardLocator,
   uniqueAssetName,
+  startEmptyAsset,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -25,7 +26,7 @@ test.describe("live scene updates", () => {
     const childTokenDec = BigInt(childTokenHex).toString();
 
     // 2. Start a parent draft and link the child as a live reference.
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, parentName);
     await page.click(SELECTORS.dialogConfirmBtn);

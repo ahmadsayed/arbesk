@@ -27,6 +27,7 @@ const SECTIONS = [
     heading: "Asset",
     rows: [
       [`${MOD}+N`, "New asset"],
+      [`${MOD}+O`, "Upload model…"],
       [`${MOD}+S`, "Save draft"],
       ["Delete", "Unlink selected child asset"],
       [`${MOD}+Z`, "Undo edit"],

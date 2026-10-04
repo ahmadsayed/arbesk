@@ -17,6 +17,7 @@ import { libraryState } from "./state/library-state.ts";
 import { initTheme } from "./engine/theme.ts";
 import { initWalletPopover } from "./ui/wallet-popover.ts";
 import { initThemeMenu } from "./ui/theme-menu.ts";
+import { initNewMenu } from "./ui/new-menu.ts";
 import { hideWalletModal } from "./ui/wallet-modal.ts";
 // Installs the engine/wallet-backed deps of the asset-core version-history
 // store (side effect) before any scene/history events can fire.
@@ -88,6 +89,7 @@ rewriteShortcutTitles();
 // ─── Theme ───
 initTheme();
 initThemeMenu();
+initNewMenu();
 
 // ─── Wallet ───
 // Start EIP-6963 discovery and silently restore the previous connection (owned

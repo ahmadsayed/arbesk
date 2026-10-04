@@ -174,7 +174,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
         anon.locator(SELECTORS.galleryVisitorBadge),
       ).toContainText("Read-only");
       // Read-only chrome: no New button for anonymous profile visitors.
-      await expect(anon.locator(SELECTORS.newAssetBtn)).toBeHidden();
+      await expect(anon.locator(SELECTORS.newMenuBtn)).toBeHidden();
 
       // Clicking the card opens the asset in the viewport on the first try,
       // even while the first Studio entry is still lazy-loading Babylon

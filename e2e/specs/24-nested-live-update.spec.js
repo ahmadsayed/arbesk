@@ -17,6 +17,7 @@ import {
   editFirstNodeColor,
   assetCardLocator,
   uniqueAssetName,
+  startEmptyAsset,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -86,7 +87,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       // ── 2. A: build C (default collection) with a live-ref to GC ──────
       await pageA.goto("/studio");
       await ensureStudioConnected(pageA);
-      await pageA.click(SELECTORS.newAssetBtn);
+      await startEmptyAsset(pageA);
       await expect(pageA.locator(SELECTORS.dialogInput)).toBeVisible();
       await pageA.fill(SELECTORS.dialogInput, childName);
       await pageA.click(SELECTORS.dialogConfirmBtn);
@@ -107,7 +108,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       ).toString();
 
       // ── 3. A: build P (default collection) with a live-ref to C ───────
-      await pageA.click(SELECTORS.newAssetBtn);
+      await startEmptyAsset(pageA);
       await expect(pageA.locator(SELECTORS.dialogInput)).toBeVisible();
       await pageA.fill(SELECTORS.dialogInput, parentName);
       await pageA.click(SELECTORS.dialogConfirmBtn);

@@ -12,6 +12,7 @@ import {
   generateSaveAndPublish,
   assetCardLocator,
   uniqueAssetName,
+  startEmptyAsset,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -42,7 +43,7 @@ test.describe("nesting / linked child assets", () => {
     assertCollectionManifest(childCollection);
 
     // ── 2. Start a fresh parent draft ────────────────────────────────
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     // startNewAsset() shows a native confirm() (auto-accepted) followed
     // by a GNOME HIG dialog for the name.
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
@@ -147,7 +148,7 @@ test.describe("nesting / linked child assets", () => {
     const childTokenDec = BigInt(childTokenHex).toString();
 
     // ── 2. Start a fresh parent draft ────────────────────────────────
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, parentName);
     await page.click(SELECTORS.dialogConfirmBtn);
