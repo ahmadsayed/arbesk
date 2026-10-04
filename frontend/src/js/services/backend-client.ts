@@ -25,10 +25,12 @@ export const API_BASE = "/api/v1";
 export class ApiError extends Error {
   status: number;
   code: string | null;
-  constructor(message: string, status: number, code: string | null = null) {
+  details: any;
+  constructor(message: string, status: number, code: string | null = null, details: any = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
     this.name = "ApiError";
   }
 }

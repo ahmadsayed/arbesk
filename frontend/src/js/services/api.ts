@@ -180,6 +180,22 @@ export interface GenerationProgress {
 }
 
 /**
+ * Collect the extra fields a failed poll may carry beyond the standard
+ * message/code/details shape.
+ * @remarks CAD failures put `suitability`/`alternative` directly on `error`
+ *   (not under `details`); preserving them lets the UI offer a Tripo 3D retry.
+ */
+function pollFailureExtras(pollData: any): any {
+  const { details } = parseErrorBody(pollData);
+  const extras: any = { ...(details ?? {}) };
+  if (pollData.error && typeof pollData.error === "object") {
+    if ("suitability" in pollData.error) extras.suitability = pollData.error.suitability;
+    if ("alternative" in pollData.error) extras.alternative = pollData.error.alternative;
+  }
+  return Object.keys(extras).length ? extras : null;
+}
+
+/**
  * Poll an async Tripo3D generation task until it succeeds, fails, is
  * cancelled via the signal, or times out.
  *
@@ -217,7 +233,12 @@ async function pollGeneration(taskId: string, signal?: AbortSignal, onProgress?:
 
     if (pollData.status === "failed") {
       const { message, code } = parseErrorBody(pollData);
-      throw new ApiError(message || "Generation failed", 500, code);
+      throw new ApiError(
+        message || "Generation failed",
+        500,
+        code,
+        pollFailureExtras(pollData)
+      );
     }
 
     // queued or running — surface progress to screen readers
@@ -226,7 +247,7 @@ async function pollGeneration(taskId: string, signal?: AbortSignal, onProgress?:
     announceStatus(
       pollData.stage
         ? `${pollData.stage}… ${progress}%`
-        : `Generating 3D asset on Tripo3D… ${progress}%`
+        : `Generating 3D asset… ${progress}%`
     );
     onProgress?.({ stage: pollData.stage ?? null, progress });
 
@@ -733,6 +754,126 @@ export async function generateAsset({
     ...(tier !== undefined && tier !== null && { tier: Number(tier) }),
     ...(data.taskId && { taskId: data.taskId }),
     ...(data.providerTaskId && { providerTaskId: data.providerTaskId }),
+  };
+}
+
+export interface GenerateCadAssetParams {
+  prompt: string;
+  nodeId: string;
+  assetId?: string;
+  prevAssetManifestCid?: string;
+  transformMatrix?: number[];
+  signal?: AbortSignal;
+  onTaskId?: (taskId: string) => void;
+  onProgress?: (update: GenerationProgress) => void;
+}
+
+/**
+ * Upload the rendered 3MF + generation manifest to IPFS — the same staging
+ * flow as generateAsset — and record the CAD provenance on the manifest.
+ * @remarks The manifest gains `metadata.cad` (summary/provider/attribution/
+ *   providerTaskId). The browser IPFS writer stringifies the manifest as-is —
+ *   nothing on this write path runs the zod manifest schema (which would strip
+ *   the unknown key), so it round-trips in the pinned bytes.
+ */
+async function stageCadAsset(
+  rendered: { bytes: Uint8Array; summary: string },
+  final: any,
+  manifestArgs: {
+    prompt: string;
+    nodeId: string;
+    assetId?: string;
+    prevAssetManifestCid?: string;
+    transformMatrix?: number[];
+  }
+): Promise<{ assetCid: string; assetManifestCid: string }> {
+  const { writeToIPFS, writeJSONToIPFS } = await import("../ipfs/write-to-ipfs.ts");
+  const { getFromRemoteIPFS } = await import("../ipfs/remote-ipfs.ts");
+
+  announceStatus("Uploading asset to IPFS…");
+  const manifestData = { format: "3mf", path: "asset.3mf" };
+  const assetCid = await writeToIPFS(rendered.bytes, manifestData.path);
+  log(`[GEN] browser uploaded cad source asset → ${assetCid}`);
+
+  const manifest = await buildGenerationManifest({
+    ...manifestArgs,
+    assetCid,
+    data: manifestData,
+    scaleCompensation: null,
+    getFromRemoteIPFS,
+  });
+  manifest.metadata = {
+    ...(manifest.metadata ?? {}),
+    cad: {
+      summary: rendered.summary,
+      provider: final.provider ?? null,
+      attribution: final.attribution ?? [],
+      providerTaskId: final.providerTaskId ?? null,
+    },
+  };
+
+  announceStatus("Uploading manifest to IPFS…");
+  const assetManifestCid = await writeJSONToIPFS(manifest, null as any, {
+    assetId: manifest.asset_id,
+  });
+  log(`[GEN] browser uploaded manifest → ${assetManifestCid}`);
+  return { assetCid, assetManifestCid };
+}
+
+/**
+ * POST /api/v1/generations with provider "cad": the backend returns a design
+ * document (no asset bytes — design-on-the-wire). The browser guards and
+ * kernels it in a worker, exports 3MF, then runs the SAME upload + manifest
+ * flow as generateAsset so every downstream consumer sees format "3mf".
+ */
+export async function generateCadAsset({
+  prompt,
+  nodeId,
+  assetId,
+  prevAssetManifestCid,
+  transformMatrix,
+  signal,
+  onTaskId,
+  onProgress,
+}: GenerateCadAssetParams): Promise<GenerateAssetResult> {
+  announceStatus("Generating parametric CAD design…");
+  const response = await fetchWithSession("/generations", {
+    body: { provider: "cad", prompt, nodeId },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const { message, code, details } = parseErrorBody(data);
+    announceStatus("CAD generation failed: " + (message || `HTTP ${response.status}`));
+    throw new ApiError(message || `CAD generation failed (HTTP ${response.status})`, response.status, code, details);
+  }
+  if (!data.taskId) {
+    throw new ApiError("CAD generation did not return a task", 500, "CAD_TASK_FAILED");
+  }
+  onTaskId?.(data.taskId);
+
+  const final = await pollGeneration(data.taskId, signal, onProgress);
+  if (final.format !== "cad-design" || !final.design) {
+    throw new ApiError("CAD generation returned an unexpected result", 500, "CAD_TASK_FAILED");
+  }
+
+  announceStatus("Rendering CAD model…");
+  const { renderCadDesignInWorker } = await import("./cad-render.ts");
+  const rendered = await renderCadDesignInWorker(final.design, final.runtime ?? {});
+
+  const { assetCid, assetManifestCid } = await stageCadAsset(
+    rendered,
+    final,
+    { prompt, nodeId, assetId, prevAssetManifestCid, transformMatrix }
+  );
+
+  announceStatus("Asset generated successfully.");
+  return {
+    assetManifestCid,
+    sourceAssetCid: assetCid,
+    format: "3mf",
+    path: "asset.3mf",
+    taskId: data.taskId,
+    ...(final.providerTaskId && { providerTaskId: final.providerTaskId }),
   };
 }
 
