@@ -195,8 +195,11 @@ or a never-saved draft (no `metadata.computed` yet). Owner: a small new
 
 - Spec 21 (`metadata-computed`) extended: after a CAD save, status bar shows
   mm dimensions; after a Tripo-mock save, meter dimensions.
-- Printability: generated model → Check printability → badge appears (mock
-  GLB is a closed box → `Print-ready`).
+- Printability: on a CAD-generated model (Manifold kernel output is
+  watertight by construction) the badge reads `Print-ready`; on the
+  Tripo-mock character it reads `Not watertight · N open edges` — AI models
+  are genuinely non-manifold (verified: open clothing shells), and the honest
+  negative is the useful signal.
 - Metadata: typed fields persist across save/reopen.
 
 **Contract notes:** `metadata.computed` gains optional keys only:

@@ -1202,9 +1202,13 @@ test("typed metadata fields persist across save and reopen", async ({ page }) =>
 ```
 
 Notes for the implementer:
-- The mock GLB (`mock-gltf-assets/`) is a closed box — expect `Print-ready`. If the pipeline's composed scene includes a ground/grid mesh that leaks into the analysis, the badge will read otherwise; that indicates `isViewportChrome` filtering is incomplete, not a wrong expectation.
+- **As built:** the mock GLB is NOT watertight (verified per-mesh on the live
+  scene: scarf 240 + eyeBrows 96 + body 32 open edges, 90 non-manifold on
+  body; the groundGrid/axes chrome is correctly excluded). The glTF test
+  asserts `/^Not watertight · \d+ open edges$/`; the CAD test asserts
+  `Print-ready` (Manifold kernel output is watertight by construction).
 - `saveDraft(page, prevCid)` in `flows.mjs` waits for the URL to flip — reuse it as-is.
-- `openInspector(page)`: `grep -n "openInspector" e2e/helpers/flows.mjs` — if absent, the inspector toggle selector lives in `studio-selectors.mjs`; add the helper to `flows.mjs` next to `openCreate`.
+- `openInspector(page)` exists at `e2e/helpers/flows.mjs:659`.
 
 - [ ] **Step 3: Run the affected specs**
 
