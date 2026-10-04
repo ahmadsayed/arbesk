@@ -28,7 +28,7 @@ export interface CollectionRef {
   tokenId: string;
 }
 
-export type TransformMode = "translate" | "rotate" | "scale" | "time" | null;
+export type TransformMode = "translate" | "rotate" | "time" | null;
 
 export interface EngineState {
   engine: BABYLON.Engine;

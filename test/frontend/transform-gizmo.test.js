@@ -1,26 +1,41 @@
 // @test-env dom
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
+import {
+  isEditing,
+  setEditing,
+  _resetEditModeForTesting,
+} from "../../frontend/src/js/state/edit-mode.js";
+import { walletState } from "../../frontend/src/js/state/wallet-state.js";
+import { _resetForTesting as resetAssetStore } from "@arbesk/asset-core/domain/asset-store.js";
+import { enterEditForTest } from "./helpers/edit-mode.js";
+
+const dragEnd = () => state.gizmoManager.gizmos.positionGizmo.onDragEndObservable.fire();
 
 describe("transform-gizmo toolbar", () => {
   let viewport;
 
   beforeEach(() => {
+    _resetEditModeForTesting();
+    walletState.set({ walletAddress: null });
+    resetAssetStore();
     // Provide a minimal BABYLON global for initTransformGizmo.
     global.BABYLON = {
       GizmoManager: class {
         constructor() {
           this.positionGizmoEnabled = false;
           this.rotationGizmoEnabled = false;
-          this.scaleGizmoEnabled = false;
           this.usePointerToAttachGizmos = false;
           this.clearGizmoOnEmptyPointerEvent = false;
+          const obs = () => {
+            const fns = [];
+            return { add: (f) => fns.push(f), fire: () => fns.forEach((f) => f()) };
+          };
           this.gizmos = {
-            positionGizmo: { onDragEndObservable: { add: () => {} } },
-            rotationGizmo: { onDragEndObservable: { add: () => {} } },
-            scaleGizmo: { onDragEndObservable: { add: () => {} } },
+            positionGizmo: { onDragStartObservable: obs(), onDragEndObservable: obs() },
+            rotationGizmo: { onDragStartObservable: obs(), onDragEndObservable: obs() },
           };
         }
         attachToNode() {}
@@ -59,6 +74,7 @@ describe("transform-gizmo toolbar", () => {
     state.highlightedNodeId = null;
     state.selectedNodeIds = new Set();
     state.nodeAnchors = new Map();
+    state.isGizmoDragging = false;
 
     initTransformGizmo({}, null);
   });
@@ -70,6 +86,7 @@ describe("transform-gizmo toolbar", () => {
   });
 
   test("toolbar buttons are re-enabled after deselect then reselect", () => {
+    enterEditForTest();
     const anchor = { isDisposed: () => false };
     state.nodeAnchors.set("node-1", anchor);
 
@@ -104,17 +121,16 @@ describe("transform-gizmo toolbar", () => {
     state.nodeAnchors.set("node-1", anchor);
     state.highlightedNodeId = "node-1";
     emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
-    expect(modes).toEqual(["translate"]);
+    expect(modes).toEqual([]);
 
     const timeBtn = viewport.querySelector('.transform-tool[data-mode="time"]');
     expect(timeBtn).toBeTruthy();
     timeBtn.click();
 
     expect(state.transformMode).toBe("time");
-    expect(modes).toEqual(["translate", "time"]);
+    expect(modes).toEqual(["time"]);
     expect(state.gizmoManager.positionGizmoEnabled).toBe(false);
     expect(state.gizmoManager.rotationGizmoEnabled).toBe(false);
-    expect(state.gizmoManager.scaleGizmoEnabled).toBe(false);
     expect(timeBtn.classList.contains("active")).toBe(true);
     off();
   });
@@ -130,6 +146,7 @@ describe("transform-gizmo toolbar", () => {
   });
 
   test("time mode is disabled for multi-selections", () => {
+    enterEditForTest();
     const mkAnchor = () => ({
       isDisposed: () => false,
       getAbsolutePosition: () => ({}),
@@ -167,6 +184,94 @@ describe("transform-gizmo toolbar", () => {
 
     state.selectedNodeIds = new Set(["node-1", "node-2"]);
     emit(EVENTS.SELECTION_CHANGED, { nodeIds: ["node-1", "node-2"] });
+    expect(state.transformMode).toBe(null);
+  });
+  test("View mode: selecting attaches no gizmo and shows only Edit + Time", () => {
+    const attach = jest.spyOn(state.gizmoManager, "attachToNode");
+    state.nodeAnchors.set("node-1", { isDisposed: () => false });
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+
+    expect(state.transformMode).toBe(null);
+    expect(attach).not.toHaveBeenCalledWith(state.nodeAnchors.get("node-1"));
+    const visible = (sel) => !viewport.querySelector(sel).hidden;
+    expect(visible('[data-mode="translate"]')).toBe(false);
+    expect(visible('[data-mode="time"]')).toBe(true);
+    expect(viewport.querySelector('[data-mode="scale"]')).toBeNull();
+  });
+
+  test("Edit button is hidden when the user cannot save", () => {
+    expect(document.getElementById("editModeBtn").hidden).toBe(true);
+    enterEditForTest();
+    const btn = document.getElementById("editModeBtn");
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toBe("Done");
+    expect(btn.getAttribute("aria-label")).toBe("Done editing (E)");
+  });
+
+  test("entering Edit selects Move and attaches to the selection", () => {
+    const anchor = { isDisposed: () => false };
+    state.nodeAnchors.set("node-1", anchor);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    const attach = jest.spyOn(state.gizmoManager, "attachToNode");
+
+    enterEditForTest();
     expect(state.transformMode).toBe("translate");
+    expect(attach).toHaveBeenLastCalledWith(anchor);
+    expect(viewport.querySelector('[data-mode="translate"]').hidden).toBe(false);
+    expect(viewport.querySelector('[data-mode="time"]').hidden).toBe(true);
+  });
+
+  test("keys: T/R do nothing in View; E toggles; S is gone; V works in both", () => {
+    state.nodeAnchors.set("node-1", { isDisposed: () => false });
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    const press = (key, opts = {}) =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key, ...opts }));
+
+    press("t");
+    press("r");
+    press("s");
+    expect(state.transformMode).toBe(null);
+
+    // make canEdit() true, then use the real key
+    enterEditForTest();
+    press("e"); // E toggles back out
+    expect(isEditing()).toBe(false);
+    press("e");
+    expect(isEditing()).toBe(true);
+    press("r");
+    expect(state.transformMode).toBe("rotate");
+    press("s");
+    expect(state.transformMode).toBe("rotate"); // no scale tool
+
+    press("v"); // leaves Edit, enters Time
+    expect(isEditing()).toBe(false);
+    expect(state.transformMode).toBe("time");
+  });
+
+  test("leaving Edit clears the placement mode and detaches", () => {
+    state.nodeAnchors.set("node-1", { isDisposed: () => false });
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    const attach = jest.spyOn(state.gizmoManager, "attachToNode");
+    setEditing(false);
+    expect(state.transformMode).toBe(null);
+    expect(attach).toHaveBeenLastCalledWith(null);
+  });
+
+  test("leaving Edit mid-drag detaches only after the drag ends", () => {
+    state.nodeAnchors.set("node-1", { isDisposed: () => false });
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    state.isGizmoDragging = true;
+    setEditing(false);
+    expect(state.transformMode).toBe("translate"); // still mid-drag
+    state.isGizmoDragging = false;
+    dragEnd(); // fires the position gizmo's onDragEndObservable
+    expect(state.transformMode).toBe(null);
   });
 });

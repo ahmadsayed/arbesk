@@ -199,6 +199,23 @@
   flex-direction: column;
 }
 
+.transform-toolbar-sep {
+  width: var(--border-size-1);
+  align-self: stretch;
+  margin-inline: var(--size-1);
+  background-color: var(--hairline);
+}
+
+// Text button (Edit / Done) among icon buttons.
+.edit-mode-toggle {
+  padding-inline: var(--size-2);
+  font-weight: 500;
+}
+
+.transform-toolbar [hidden] {
+  display: none;
+}
+
 // ── Viewport orientation gizmo ─────────────────────────────────────
 // Blender-style 2D X/Y/Z overlay in the top-right corner. Sits above
 // the 3D canvas but never intercepts pointer events.

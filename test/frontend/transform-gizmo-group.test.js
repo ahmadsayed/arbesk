@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
+import { enterEditForTest } from "./helpers/edit-mode.js";
+import { _resetEditModeForTesting } from "../../frontend/src/js/state/edit-mode.js";
 
 // ── Minimal, exact matrix mock ──────────────────────────────────────────────
 // Babylon row-vector semantics: v' = v × M; A.multiply(B) applies A first.
@@ -105,6 +107,7 @@ describe("transform-gizmo group drag", () => {
   let attachedNode;
 
   beforeEach(() => {
+    _resetEditModeForTesting();
     const positionGizmo = {
       onDragStartObservable: mkObservable(),
       onDragEndObservable: mkObservable(),
@@ -118,7 +121,6 @@ describe("transform-gizmo group drag", () => {
           this.gizmos = {
             positionGizmo,
             rotationGizmo: { onDragStartObservable: mkObservable(), onDragEndObservable: mkObservable() },
-            scaleGizmo: { onDragStartObservable: mkObservable(), onDragEndObservable: mkObservable() },
           };
         }
         attachToNode(node) { attachedNode = node; }
@@ -144,6 +146,7 @@ describe("transform-gizmo group drag", () => {
       { onBeforeRenderObservable: { add: (cb) => { beforeRender = cb; } } },
       null
     );
+    enterEditForTest();
   });
 
   afterEach(() => {

@@ -1,7 +1,7 @@
 // @test-env dom
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
-import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   clearUndoStacks,
   canUndo,
@@ -10,6 +10,8 @@ import {
   popUndoEntry,
 } from "../../frontend/src/js/engine/undo-stack.js";
 import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
+import { enterEditForTest } from "./helpers/edit-mode.js";
+import { _resetEditModeForTesting } from "../../frontend/src/js/state/edit-mode.js";
 
 // Observable stub that stores callbacks so tests can fire them.
 const observable = () => {
@@ -21,6 +23,7 @@ let positionGizmo;
 let dragMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 beforeEach(() => {
+  _resetEditModeForTesting();
   dragMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; // identity
   positionGizmo = {
     onDragStartObservable: observable(),
@@ -31,13 +34,11 @@ beforeEach(() => {
       constructor() {
         this.positionGizmoEnabled = false;
         this.rotationGizmoEnabled = false;
-        this.scaleGizmoEnabled = false;
         this.usePointerToAttachGizmos = false;
         this.clearGizmoOnEmptyPointerEvent = false;
         this.gizmos = {
           positionGizmo,
           rotationGizmo: null,
-          scaleGizmo: null,
         };
       }
       attachToNode() {}
@@ -88,6 +89,7 @@ beforeEach(() => {
   clearUndoStacks();
 
   initTransformGizmo({}, null);
+  enterEditForTest();
   state.nodeAnchors.set("n1", {
     scaling: {},
     rotationQuaternion: null,
@@ -125,6 +127,16 @@ describe("gizmo drag undo capture", () => {
     positionGizmo.onDragStartObservable.fire();
     positionGizmo.onDragEndObservable.fire(); // same matrix
     expect(canUndo()).toBe(false);
+  });
+
+  test("a click without a drag stages nothing", () => {
+    const staged = [];
+    const off = on(EVENTS.TRANSFORM_STAGED, (e) => staged.push(e));
+    positionGizmo.onDragStartObservable.fire();
+    positionGizmo.onDragEndObservable.fire(); // unchanged matrix
+    off();
+    expect(state.pendingTransformEdits.size).toBe(0);
+    expect(staged).toHaveLength(0);
   });
 
   test("label uses the mode captured at drag start, not at drag end", () => {
