@@ -298,3 +298,20 @@ html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
   gap: var(--size-1);
   flex-shrink: 0;
 }
+
+// Unsaved-changes dot on Save draft. The header meta's "Unsaved changes"
+// text is the primary cue (WCAG 1.4.1); the dot only echoes it.
+#saveAssetBtn.has-unsaved {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: var(--size-1);
+    right: var(--size-1);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent-bg);
+  }
+}

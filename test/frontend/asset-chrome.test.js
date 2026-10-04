@@ -7,6 +7,7 @@
 import { beforeAll, beforeEach, expect, mock, test } from "bun:test";
 let assetStore, _resetAssets, walletState, libraryState, emit, EVENTS;
 let renameAsset, resetForNewAsset, closeAsset;
+let state;
 
 // Controlled stand-in for the version-history store: tests set entries/active
 // directly and poke subscribers to trigger a re-render.
@@ -74,6 +75,7 @@ beforeAll(async () => {
     "@arbesk/asset-core/domain/asset.js"
   ));
   await import("../../frontend/src/js/ui/asset-chrome.js");
+  ({ state } = await import("../../frontend/src/js/engine/state.js"));
 });
 
 beforeEach(() => {
@@ -82,6 +84,7 @@ beforeEach(() => {
   libraryState.set({ subjectAddress: null, subjectChainId: null });
   versionStore.entries = [];
   versionStore.active = -1;
+  state.pendingTransformEdits = new Map();
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
 });
 
@@ -183,4 +186,44 @@ test("meta omits the version when there is no history yet", () => {
   versionStore.entries = [];
   notifyVersionSubs();
   expect(meta()).toBe("Draft");
+});
+
+test("meta gains 'Unsaved changes' and Save gets the dot while edits are pending", () => {
+  walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
+  assetStore.set({ activeAssetManifestCid: "bafyA", activeAssetName: "Stand" });
+  versionStore.entries = [{ cid: "bafyA" }];
+  versionStore.active = 0;
+  notifyVersionSubs();
+  expect(meta()).toBe("v1 · Draft");
+
+  state.pendingTransformEdits.set("n1", [1]);
+  emit(EVENTS.PENDING_EDITS_CHANGED);
+  expect(meta()).toBe("v1 · Draft · Unsaved changes");
+  const save = document.getElementById("saveAssetBtn");
+  expect(save.classList.contains("has-unsaved")).toBe(true);
+  expect(save.getAttribute("aria-label")).toBe("Save Draft (unsaved changes)");
+
+  state.pendingTransformEdits.clear();
+  emit(EVENTS.PENDING_EDITS_CHANGED);
+  expect(meta()).toBe("v1 · Draft");
+  expect(save.classList.contains("has-unsaved")).toBe(false);
+  expect(save.getAttribute("aria-label")).toBe("Save Draft");
+});
+
+test("with no versions yet the marker reads 'Draft · Unsaved changes'", () => {
+  assetStore.set({ activeAssetManifestCid: "bafyA", activeAssetName: "Stand" });
+  state.pendingTransformEdits.set("n1", [1]);
+  emit(EVENTS.PENDING_EDITS_CHANGED);
+  expect(meta()).toBe("Draft · Unsaved changes");
+});
+
+test("beforeunload is prevented only while dirty", () => {
+  const clean = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(clean);
+  expect(clean.defaultPrevented).toBe(false);
+
+  state.pendingTransformEdits.set("n1", [1]);
+  const dirty = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(dirty);
+  expect(dirty.defaultPrevented).toBe(true);
 });
