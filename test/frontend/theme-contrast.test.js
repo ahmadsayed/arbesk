@@ -87,6 +87,12 @@ for (const name of THEMES) {
     test("selection on viewport-bg ≥ 3:1", () => {
       expect(contrast(t.selection, t["viewport-bg"])).toBeGreaterThanOrEqual(3);
     });
+    // The 3D stage must read as its own surface, not blend into the chrome.
+    for (const surface of ["window-bg", "sidebar-bg"]) {
+      test(`viewport-bg stands apart from ${surface} (≥ 1.15:1)`, () => {
+        expect(contrast(t["viewport-bg"], t[surface])).toBeGreaterThanOrEqual(1.15);
+      });
+    }
     test("accent-text (focus ring) on window-bg ≥ 3:1", () => {
       expect(contrast(t["accent-text"], t["window-bg"])).toBeGreaterThanOrEqual(3);
     });

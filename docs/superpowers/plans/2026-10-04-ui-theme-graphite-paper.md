@@ -217,8 +217,8 @@ Create `frontend/src/scss/themes/_graphite.scss`:
   --warning: #f0a64b;
   --info: #5ccfe6;
 
-  --viewport-bg: #1a1b1e;
-  --viewport-grid: #2e3035;
+  --viewport-bg: #2a2b2f;
+  --viewport-grid: #3c3e44;
   --selection: #f0a64b;
 }
 ```
@@ -1711,8 +1711,8 @@ describe("readViewportTheme", () => {
     stubMatchMedia(false);
     const { theme } = await load();
     expect(theme.readViewportTheme(() => "nope")).toEqual({
-      bg: "#1a1b1e",
-      grid: "#2e3035",
+      bg: "#2a2b2f",
+      grid: "#3c3e44",
       selection: "#f0a64b",
     });
   });
@@ -1736,8 +1736,8 @@ export interface ViewportTheme {
 }
 
 const VIEWPORT_FALLBACK: ViewportTheme = {
-  bg: "#1a1b1e",
-  grid: "#2e3035",
+  bg: "#2a2b2f",
+  grid: "#3c3e44",
   selection: "#f0a64b",
 };
 
