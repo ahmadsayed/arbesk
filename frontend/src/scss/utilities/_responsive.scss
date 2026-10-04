@@ -119,17 +119,10 @@
 
   // Keep everything on one row: the network pill moves out of the picture
   // (CDP logins hide it anyway; EOA users switch networks in their wallet),
-  // the wallet button collapses to its icon, tabs and history slim down.
+  // tabs and history slim down. The avatar is already compact at 32px and the
+  // Sign in label is short, so neither needs collapsing.
   .headerbar-network-select {
     display: none;
-  }
-
-  .headerbar-wallet span {
-    display: none;
-  }
-
-  .headerbar-wallet {
-    padding: 0 var(--size-2);
   }
 
   .page-switcher-tab {

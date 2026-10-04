@@ -5,6 +5,7 @@
  */
 
 import { truncateAddress } from "../utils/format.ts";
+import { identiconSvg } from "../utils/identicon.ts";
 import { getCachedSession } from "../services/api.ts";
 import { walletState } from "../state/wallet-state.ts";
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -46,6 +47,7 @@ function hwState(): HeaderWalletState {
 interface HeaderWalletComponent {
   readonly connected: boolean;
   readonly isCdp: boolean;
+  readonly identicon: string;
   readonly label: string;
   readonly showAuthRequired: boolean;
   init(): void;
@@ -62,6 +64,10 @@ export function headerWallet(): HeaderWalletComponent {
 
     get isCdp() {
       return hwState().walletSource === "cdp";
+    },
+
+    get identicon() {
+      return identiconSvg(hwState().address);
     },
 
     get label() {

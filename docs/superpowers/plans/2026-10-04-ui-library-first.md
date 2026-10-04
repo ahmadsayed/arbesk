@@ -1204,6 +1204,18 @@ git add frontend/src test/frontend/identicon.test.js test/frontend/header-wallet
 git commit -m "feat(header): account as identicon avatar; quiet Sign in button"
 ```
 
+**As built (#80, PR pending):**
+- `.headerbar-signin` also needs `min-height: 32px` — `.btn` sets
+  `min-height: 36px`, which beats `height` alone.
+- `_responsive.scss` lost its `.headerbar-wallet` collapse rules (dead
+  selectors): the avatar is already 32px and the "Sign in" label is short.
+- Avatar button is 32px (with a 20px glyph), not the spec's 28px — it matches
+  the sign-in button's height.
+- Updating the `header-wallet-button.test.js` fixture to the new markup also
+  fixed that file's 2 pre-existing baseline failures (store/event sync tests).
+- Added one extra test beyond the plan: disconnected state renders no
+  identicon.
+
 ---
 
 ### Task 7: Network select into the account menu; labelled network status dot
