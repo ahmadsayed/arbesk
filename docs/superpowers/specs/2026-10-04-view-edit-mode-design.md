@@ -272,3 +272,10 @@ in the same listener as the other transform keys.
   (version timeline) merged; rebase onto `main` once it lands — the V-key /
   model-clock path is untouched by #109, so no conflicts are expected in
   `transform-gizmo.ts`.
+
+## 14. Amendments (from planning)
+
+1. The unsaved query lives in `state/unsaved-changes.ts` (not `engine/cleanup.ts`); source-colour edits (`parametric-preview.ts`) and metadata annotations register as pending sources and count as unsaved.
+2. `beforeunload` prompts whenever `hasUnsavedChanges()` is true, including during an in-flight save (pending state clears only after a successful save).
+3. Gizmo drag end stages only nodes whose matrix changed, so a click without a drag never marks the asset dirty.
+4. The Edit/Done button has no `aria-pressed`; its accessible name is "Edit placement (E)" / "Done editing (E)" (WCAG 2.5.3 label-in-name).
