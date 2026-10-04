@@ -1,0 +1,86 @@
+// ═══════════════════════════════════════════════════════════════════
+// Menu popover — shared by the theme picker and (Phase 2) New ▾ menu.
+// ═══════════════════════════════════════════════════════════════════
+
+.menu-anchor {
+  display: inline-flex;
+}
+
+// Fixed so clipping ancestors (the headerbar is overflow: hidden) can't cut
+// it off; ui/menu-button.ts sets top/left under the button on open.
+.menu-popover {
+  position: fixed;
+  z-index: 200; // same layer as the wallet popover, below modals (1000)
+  min-width: 11rem;
+  margin: 0;
+  padding: var(--size-1);
+  list-style: none;
+  color: var(--popover-fg);
+  background: var(--popover-bg);
+  border: var(--border-size-1) solid var(--hairline);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-4);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  min-height: 28px;
+  padding: 0 var(--size-2);
+  border-radius: var(--radius-1);
+  font-size: var(--font-size-1);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--surface-overlay-hover);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--accent-text);
+  }
+
+  &[aria-checked="true"]::after {
+    content: "✓";
+    margin-left: auto;
+    color: var(--accent-text);
+  }
+
+  &[aria-disabled="true"] {
+    color: var(--dim-fg);
+    cursor: default;
+  }
+
+  kbd {
+    margin-left: auto;
+    font: var(--font-size-0) var(--font-mono);
+    color: var(--dim-fg);
+  }
+}
+
+.menu-separator {
+  height: 1px;
+  margin: var(--size-1) 0;
+  background: var(--hairline);
+}
+
+// Two-half swatches: hard-coded previews of the *other* theme are the one
+// sanctioned place for literals outside theme files — kept here (not in
+// components/) via custom properties so the leak guard stays meaningful.
+.theme-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: var(--border-size-1) solid var(--border-color);
+  background: linear-gradient(135deg, var(--swatch-a) 50%, var(--swatch-b) 50%);
+}
+
+.theme-swatch--graphite { --swatch-a: var(--theme-preview-graphite-bg); --swatch-b: var(--theme-preview-graphite-accent); }
+.theme-swatch--paper { --swatch-a: var(--theme-preview-paper-bg); --swatch-b: var(--theme-preview-paper-accent); }
+.theme-swatch--system { --swatch-a: var(--theme-preview-paper-bg); --swatch-b: var(--theme-preview-graphite-bg); }

@@ -14,8 +14,9 @@ import {
 } from "./blockchain/wallet.ts";
 import { walletState } from "./state/wallet-state.ts";
 import { libraryState } from "./state/library-state.ts";
-import { initTheme, toggleTheme } from "./engine/theme.ts";
+import { initTheme } from "./engine/theme.ts";
 import { initWalletPopover } from "./ui/wallet-popover.ts";
+import { initThemeMenu } from "./ui/theme-menu.ts";
 import { hideWalletModal } from "./ui/wallet-modal.ts";
 // Installs the engine/wallet-backed deps of the asset-core version-history
 // store (side effect) before any scene/history events can fire.
@@ -86,7 +87,7 @@ rewriteShortcutTitles();
 
 // ─── Theme ───
 initTheme();
-document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
+initThemeMenu();
 
 // ─── Wallet ───
 // Start EIP-6963 discovery and silently restore the previous connection (owned

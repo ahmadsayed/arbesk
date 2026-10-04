@@ -35,11 +35,22 @@ button#backBtn.headerbar-back.hidden(aria-label="Go back to parent asset", title
       use(href="/icons.svg#download")
 
 .headerbar-actions(x-data="headerWallet")
-  button#themeToggle.btn.btn-icon.btn-flat(aria-label="Toggle theme" title="Toggle theme")
-    svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#sun")
-    svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#moon")
+  .menu-anchor
+    button#themeMenuBtn.btn.btn-icon.btn-flat(type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="themeMenu" aria-label="Theme" title="Theme")
+      svg.theme-icon-light(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+        use(href="/icons.svg#sun")
+      svg.theme-icon-dark(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+        use(href="/icons.svg#moon")
+    ul#themeMenu.menu-popover(role="menu" aria-label="Theme" hidden)
+      li.menu-item(role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-pref="system")
+        span.theme-swatch.theme-swatch--system(aria-hidden="true")
+        span System
+      li.menu-item(role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-pref="graphite")
+        span.theme-swatch.theme-swatch--graphite(aria-hidden="true")
+        span Graphite
+      li.menu-item(role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-pref="paper")
+        span.theme-swatch.theme-swatch--paper(aria-hidden="true")
+        span Paper
   select#headerbarNetworkSelect.headerbar-network-select(:class="{ connected: connected && !isCdp, hidden: isCdp }" aria-label="Select network" title="Select network")
     option(value="baseSepolia" selected) Base Sepolia Testnet
     option(value="hardhat") Hardhat Local

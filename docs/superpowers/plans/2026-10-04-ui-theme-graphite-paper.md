@@ -740,11 +740,12 @@ git commit -m "feat(theme): system/graphite/paper preference with legacy migrati
 - Consumes: `getThemePref`, `setThemePref`, `ThemePref` from Task 2.
 - Produces (`ui/menu-button.ts`), **reused by Phase 2's New ▾ menu**:
   ```ts
-  export interface MenuButtonOptions { onSelect: (item: HTMLElement) => void; onOpen?: () => void }
+  export interface MenuButtonOptions { onSelect: (item: HTMLElement) => void; onOpen?: () => void; align?: "start" | "end" }
   export interface MenuButtonHandle { open(focus?: "first" | "last"): void; close(): void; destroy(): void }
   export function initMenuButton(button: HTMLElement, menu: HTMLElement, opts: MenuButtonOptions): MenuButtonHandle
   ```
   `onOpen` runs just before the menu is shown, so callers can toggle item `hidden` state (Phase 2 hides the CAD item this way).
+  As built: the menu is `position: fixed` and placed under the button in JS (`align`, default `"end"`), because the headerbar is `overflow: hidden`; item focus uses `preventScroll`; keys in the menu stop propagating so viewport shortcuts (Home, Escape, G…) don't fire; window resize closes it.
   Items are `menu` descendants matching `[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]` that are not `[aria-disabled="true"]` and not `[hidden]`.
 - Produces: `initThemeMenu(): void` in `ui/theme-menu.ts`.
 - Produces: the CSS class `.menu-popover` with `.menu-item` rows (styled in `_menu.scss`), reused by Phase 2.

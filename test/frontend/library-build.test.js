@@ -40,7 +40,8 @@ describe("Library view build (app.html)", () => {
 
   test("app.html has the shared headerbar wallet ids", () => {
     const html = readDist("app.html");
-    expect(html).toMatch(/id="themeToggle"/);
+    expect(html).toMatch(/id="themeMenuBtn"/);
+    expect(html).toMatch(/id="themeMenu"/);
     expect(html).toMatch(/id="headerbarNetworkSelect"/);
     expect(html).toMatch(/id="connectWalletBtn"/);
     expect(html).toMatch(/id="disconnectWalletBtn"/);

@@ -204,17 +204,17 @@
   }
 }
 
-// Theme toggle icons — show the opposite of current theme
+// Theme menu button icon — shows the current scheme (moon = dark)
 .theme-icon-light,
 .theme-icon-dark {
   display: none;
 }
 
-[data-scheme="light"] .theme-icon-dark {
+[data-scheme="light"] .theme-icon-light {
   display: block;
 }
 
-[data-scheme="dark"] .theme-icon-light {
+[data-scheme="dark"] .theme-icon-dark {
   display: block;
 }
 
