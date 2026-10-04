@@ -975,6 +975,14 @@ git add frontend/src test/frontend/asset-chrome.test.js
 git commit -m "feat(header): asset meta shows v<N> · Draft|Published in tabular mono"
 ```
 
+**As built (#79, PR pending):** no SCSS change was needed — Phase 1 already gave
+`.headerbar-title` `min-width: 0` with ellipsis truncation on
+`.headerbar-title-text`/`.headerbar-title-meta`, and `flex-shrink: 0` on
+`.headerbar-actions`/`.headerbar-doc-actions`, so the meta already truncates
+before any button shrinks. The existing `"Draft Scene"` expectations in
+`test/frontend/asset-chrome.test.js` became `"Draft"`; no E2E spec asserted the
+old text, so no spec changes.
+
 ---
 
 ### Task 6: Avatar account button and Sign in button

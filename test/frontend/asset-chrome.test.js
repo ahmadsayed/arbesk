@@ -8,6 +8,14 @@ import { beforeAll, beforeEach, expect, mock, test } from "bun:test";
 let assetStore, _resetAssets, walletState, libraryState, emit, EVENTS;
 let renameAsset, resetForNewAsset, closeAsset;
 
+// Controlled stand-in for the version-history store: tests set entries/active
+// directly and poke subscribers to trigger a re-render.
+const versionStore = {
+  entries: [],
+  active: -1,
+  subs: new Set(),
+};
+
 function title() {
   return document.getElementById("assetStatusName").textContent;
 }
@@ -24,6 +32,22 @@ beforeAll(async () => {
     () => ({
       getPendingChildRefs: () => [],
       getPendingSourceOverrides: () => new Map(),
+    })
+  );
+  await mock.module(
+    "@arbesk/asset-core/domain/version-history-store.js",
+    () => ({
+      getState: () => ({
+        entries: versionStore.entries,
+        activeCid: null,
+        publishedCid: null,
+        isLoading: false,
+      }),
+      activeIndex: () => versionStore.active,
+      subscribe: (fn) => {
+        versionStore.subs.add(fn);
+        return () => versionStore.subs.delete(fn);
+      },
     })
   );
   document.body.innerHTML = `
@@ -56,8 +80,14 @@ beforeEach(() => {
   _resetAssets();
   walletState.set({ walletAddress: null });
   libraryState.set({ subjectAddress: null, subjectChainId: null });
+  versionStore.entries = [];
+  versionStore.active = -1;
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
 });
+
+function notifyVersionSubs() {
+  versionStore.subs.forEach((fn) => fn({}));
+}
 
 test("initial state: No asset open, all buttons hidden", () => {
   expect(title()).toBe("No asset open");
@@ -71,7 +101,7 @@ test("named draft without wallet: name shown, buttons still hidden", () => {
   resetForNewAsset();
   renameAsset("My Test Asset");
   expect(title()).toBe("My Test Asset");
-  expect(meta()).toBe("Draft Scene");
+  expect(meta()).toBe("Draft");
   expect(hidden("saveAssetBtn")).toBe(true);
 });
 
@@ -80,7 +110,7 @@ test("loaded asset with wallet: buttons appear", () => {
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
   assetStore.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
   expect(title()).toBe("Chair");
-  expect(meta()).toBe("Draft Scene");
+  expect(meta()).toBe("Draft");
   expect(hidden("saveAssetBtn")).toBe(false);
   expect(hidden("publishAssetBtn")).toBe(false);
   expect(hidden("downloadAssetBtn")).toBe(false);
@@ -138,4 +168,19 @@ test("Properties → Asset section is hidden with no asset and shown once a draf
   expect(section().hidden).toBe(false);
   closeAsset();
   expect(section().hidden).toBe(true);
+});
+
+test("meta shows the 1-based active version and status", () => {
+  assetStore.set({ activeAssetManifestCid: "bafyC", activeAssetName: "Chair" });
+  versionStore.entries = [{ cid: "a" }, { cid: "b" }, { cid: "c" }];
+  versionStore.active = 1;
+  notifyVersionSubs();
+  expect(meta()).toBe("v2 · Draft");
+});
+
+test("meta omits the version when there is no history yet", () => {
+  assetStore.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
+  versionStore.entries = [];
+  notifyVersionSubs();
+  expect(meta()).toBe("Draft");
 });

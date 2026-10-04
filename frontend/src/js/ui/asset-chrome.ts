@@ -7,6 +7,11 @@
  */
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { subscribeAsset, getAssetState } from "@arbesk/asset-core/domain/asset.js";
+import {
+  activeIndex,
+  getState as getVersionState,
+  subscribe as subscribeVersions,
+} from "@arbesk/asset-core/domain/version-history-store.js";
 import { walletState } from "../state/wallet-state.ts";
 import { isLibraryVisitor } from "../state/library-state.ts";
 import { getPendingChildRefs, getPendingSourceOverrides } from "../engine/cleanup.ts";
@@ -38,9 +43,15 @@ function renderChrome(): void {
     else titleEl.textContent = "No asset open";
   }
   if (metaEl) {
-    if (!s.activeAssetName && !hasAsset)
+    if (!s.activeAssetName && !hasAsset) {
       metaEl.textContent = "Create or open an asset";
-    else metaEl.textContent = s.activeAssetTokenId ? "Published" : "Draft Scene";
+    } else {
+      const status = s.activeAssetTokenId ? "Published" : "Draft";
+      const { entries } = getVersionState();
+      metaEl.textContent = entries.length
+        ? `v${activeIndex() + 1} · ${status}`
+        : status;
+    }
   }
 
   // New starts an editable draft — meaningless for anonymous/visitor views.
@@ -55,6 +66,7 @@ function renderChrome(): void {
 }
 
 subscribeAsset(renderChrome);
+subscribeVersions(renderChrome);
 on(EVENTS.WALLET_CONNECTED, renderChrome);
 on(EVENTS.WALLET_DISCONNECTED, renderChrome);
 on(EVENTS.WALLET_STATE_CHANGED, renderChrome);
