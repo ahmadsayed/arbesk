@@ -13,6 +13,23 @@ function readDist(name) {
 // Studio + Library are now a single SPA document (app.html); the Library view
 // lives inside #libraryView and is toggled by the router.
 describe("Library view build (app.html)", () => {
+  test("ships self-hosted fonts with licences and preloads Inter", () => {
+    const fontsDir = path.resolve(__dirname, "../../frontend/dist/fonts");
+    for (const f of [
+      "inter-latin-wght-normal.woff2",
+      "inter-latin-ext-wght-normal.woff2",
+      "jetbrains-mono-latin-wght-normal.woff2",
+      "jetbrains-mono-latin-ext-wght-normal.woff2",
+      "Inter-OFL.txt",
+      "JetBrainsMono-OFL.txt",
+    ]) {
+      expect(fs.existsSync(path.join(fontsDir, f))).toBe(true);
+    }
+    const html = readDist("app.html");
+    expect(html).toMatch(/<link[^>]+rel="preload"[^>]+\/fonts\/inter-latin-wght-normal\.woff2/);
+    expect(readDist("css/styles.css")).toMatch(/font-family:\s*"?Inter"?/);
+  });
+
   test("app.html has the Library view with the wallet gate + main containers", () => {
     const html = readDist("app.html");
     expect(html).toMatch(/id="libraryView"/);

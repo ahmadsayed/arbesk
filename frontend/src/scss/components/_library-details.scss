@@ -92,6 +92,7 @@
 
 .library-details-pill {
   font-family: var(--font-mono);
+  font-feature-settings: var(--font-numeric);
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
   padding: 1px var(--size-1);
@@ -102,6 +103,7 @@
 
 .library-details-mono {
   font-family: var(--font-mono);
+  font-feature-settings: var(--font-numeric);
   font-size: var(--font-size-0);
 }
 

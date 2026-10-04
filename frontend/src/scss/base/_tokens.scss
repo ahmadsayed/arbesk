@@ -43,9 +43,10 @@
 // ── Typography ────────────────────────────────────────────────────────
 
 :root {
-  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
-  --font-mono: "SF Mono", "Cascadia Code", "Fira Mono", ui-monospace, monospace;
+  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+  // Tabular figures for data columns (sizes, versions, CIDs, addresses)
+  --font-numeric: "tnum" 1, "zero" 1;
 
   --font-size-0: 0.75rem; // labels, meta, badge
   --font-size-1: 0.875rem; // body, inputs
@@ -171,4 +172,10 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+// Data readouts: mono + tabular figures
+.tabular {
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-numeric);
 }
