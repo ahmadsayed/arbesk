@@ -154,11 +154,11 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 1. Generates `cowboy` (version 1).
 2. Selects the node in the **Outliner**, which auto-opens the component colour editor.
 3. Changes the colour and **Save**s — asserts a new version `2` whose `prev_asset_manifest_cid` is the generation CID.
-4. Asserts the scene clock (`#sceneClock`) now spans two versions and the badge shows `v2`.
-5. Scrubs the scene clock back to the oldest version and asserts the badge follows to `v1` (and forward again to `v2`).
-6. Selects the outliner node, asserts the model-clock badge (`#modelClockBadge`) shows `v2`, presses `Home` to step the 3D gizmo to the oldest version, and returns to the newest scene version before publishing.
+4. Asserts the version timeline strip (`#versionTimeline`) now spans three ticks and the active tick is `3`.
+5. Scrubs the strip back to the oldest version (focus + `Home`) and asserts the active tick follows to `1` (and forward again to `3`).
+6. Selects the outliner node, asserts the model-clock badge (`#modelClockBadge`) shows `v3`, presses `Home` to step the 3D gizmo to the oldest version, and returns to the newest scene version before publishing.
 
-**Why it matters:** Colour/scale edits are first-class versions, and the scene/model clocks are the app's version-control surfaces. Changes to `parametric-preview.ts`, `version-history-store.ts`, `scene-clock.ts`, `model-clock-gizmo.ts`, the outliner selection path, or version-chain logic can break it.
+**Why it matters:** Colour/scale edits are first-class versions, and the timeline strip plus the per-node model clock are the app's version-control surfaces. Changes to `parametric-preview.ts`, `version-history-store.ts`, `version-timeline.ts`, `model-clock-gizmo.ts`, the outliner selection path, or version-chain logic can break it.
 
 ### 5. Republish existing token (`e2e/specs/05-republish.spec.js`)
 
