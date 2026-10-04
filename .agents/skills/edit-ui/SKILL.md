@@ -1,18 +1,36 @@
 ---
 name: edit-ui
-description: Use when making any user-facing change to the Arbesk Studio frontend (Pug/SCSS/JS) — "add a panel/button/dialog", "add a keyboard shortcut", "update the layout", "style a component", "rebuild the frontend", or any change to app.pug, SCSS, or JS UI modules. Also use when the UI "feels wrong" or must stay consistent with the GNOME HIG design language.
+description: Use when making any user-facing change to the Arbesk Studio frontend (Pug/SCSS/JS) — "add a panel/button/dialog", "add a keyboard shortcut", "update the layout", "style a component", "rebuild the frontend", or any change to app.pug, SCSS, or JS UI modules. Also use when the UI "feels wrong" or must stay consistent with the Arbesk design language (Graphite/Paper themes, WCAG 2.2 AA).
 ---
 
-# Arbesk Studio UI / UX — GNOME HIG
+# Arbesk Studio UI / UX
 
-Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, buttons, controls, viewport, keyboard shortcuts, selection feedback, drag/drop, empty states. Goal: feel like a native GNOME app — minimal chrome, keyboard-driven, immediately responsive.
+Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, buttons, controls, viewport, keyboard shortcuts, selection feedback, drag/drop, empty states. Goal: an asset repository with a viewer — minimal chrome, keyboard-driven, immediately responsive, accessible (WCAG 2.2 AA).
+
+## Design authority
+
+1. **WCAG 2.2 AA** — accessibility truth. Enforced by `test/frontend/theme-contrast.test.js`.
+2. **Web platform conventions** — WAI-ARIA APG patterns (`ui/menu-button.ts` for menus), browser keyboard defaults, `prefers-*` and `forced-colors` media.
+3. **Arbesk design language** — `docs/superpowers/specs/2026-10-04-ui-refresh-roadmap.md`:
+   flat surfaces, `--hairline` structure, one accent used only for the primary action,
+   sentence-case headings, Inter for UI, JetBrains Mono (`.tabular`) only for data.
+
+GNOME HIG layout heuristics (header bar, 4px spacing) are non-binding references.
+
+## Colour rules
+
+- Use only theme-contract tokens (`themes/_graphite.scss`, `themes/_paper.scss`). Never hex in `components/`.
+- New colour role? Add it to **both** theme files and to `CONTRACT` in `theme-contrast.test.js`.
+- Selectors that depend on light vs dark use `[data-scheme="dark|light"]`, never theme names.
+- Text on a `color-mix()` tint you build in a component (badges, banners) goes in `DERIVED_TEXT_PAIRS` in `theme-contrast.test.js` so both themes stay ≥ 4.5:1.
+- `test/frontend/style-guards.test.js` fails on `--gradient-*`, `text-transform: uppercase` or a hand-written mono stack in `components/`.
 
 ## Hard Rules
 
 1. **Minimal chrome** — no in-scene axes, view cube, toolbar overlay. Only grid, gizmo, drop indicator.
 2. **Shortcuts earn their place** — add a chord only if it passes the 4-question bar: (1) frequent enough, (2) the browser/OS doesn't already own it, (3) not better as a visible button, (4) you'll document it in `keyboard-help.ts` + a `title` tooltip. Viewport keys: `F` frame selected, `Home` frame all, `0` reset view, `G` toggle grid, `Esc` deselect; gizmo `T`/`R`/`S`. **The viewport is perspective-only** — `1/3/7` ortho views were removed because they forced custom projection code that broke and became unstable; we reverted to Babylon's default viewer. Never re-add them.
 3. **Form fields steal keystrokes** — every global `keydown` handler guards `document.activeElement` (input/textarea/select/contentEditable). Prefer ONE shared guard helper + ONE dispatcher/keymap over per-module listeners — ~20 listeners across ~17 modules already exist and drift; don't add more.
-4. **Selection feedback = HighlightLayer** (amber `#D4A017`); camera framing = 300ms animation.
+4. **Selection feedback = HighlightLayer** in `--selection` (re-coloured live on `THEME_CHANGED`); background and grid come from `--viewport-bg` / `--viewport-grid` via `readViewportTheme()`; camera framing = 300ms animation.
 5. **All viewport chrome gets `metadata.isViewportChrome = true`** so `clearScene()` preserves it.
 6. **Rebuild after every change** — `bun run build:frontend`; backend serves `dist/`, not `src/`.
 7. **Babylon.js is a CDN global** — never `import` it; loaded via `<script>`.
@@ -22,6 +40,8 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 11. **CSS variables, not raw px** — spacing, colors, radii, durations from tokens.
 12. **E2E is a public contract** — renaming an id/class/label, changing status text, or reordering a flow breaks specs. Update `e2e/helpers/studio-selectors.mjs` + specs and run the suite.
 13. **Stateful panels use Alpine.js** — register via `registerAlpineComponent()` in `ui/alpine.ts`; shared reactive state lives in `Alpine.store(...)` (component factories return getters over the store, `init()` seeds before subscribing). Alpine renders asynchronously — `await Alpine.nextTick()` before imperative post-render DOM work (Babylon canvas mounts), and `Alpine.initTree()`/`Alpine.destroyTree()` for dynamically-injected subtrees. Keep engine DOM (canvases, focus traps) imperative. See `references/alpine.md`.
+14. **Menus use `initMenuButton()`** (`ui/menu-button.ts`, WAI-ARIA APG) with a `.menu-popover` list — never a hand-rolled dropdown. It fixed-positions the menu (the headerbar is `overflow: hidden`), keeps keys inside the open menu, and takes `align: "start" | "end"`.
+15. **Type** — UI text inherits `--font-family` (Inter); data (sizes, CIDs, versions, addresses) uses `.tabular` (JetBrains Mono + tabular figures). Sentence case everywhere; no `text-transform: uppercase`.
 
 ## File Map
 
@@ -48,4 +68,4 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 - Read `references/pitfalls.md` when something feels off (ortho frustum, HighlightLayer stencil, mesh disposal, form guards).
 - Read `references/alpine.md` when converting an imperative panel to Alpine.js (store/getter/template pattern, dynamic components, async render timing, bun test + jsdom testing).
 - Read `references/e2e-sync.md` when changing any button/id/label/flow/status text.
-- Read `references/deep-dive.md` for architecture, shell, HIG principles, state, events, Babylon, and SCSS internals.
+- Read `references/deep-dive.md` for architecture, shell, interaction principles, state, events, Babylon, and SCSS internals.

@@ -1,6 +1,6 @@
 # Deep Dive — Arbesk Studio UI / UX
 
-Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, state management, event flow, Babylon.js integration, and SCSS conventions.
+Full UI architecture: stack, directory map, studio shell, interaction principles, state management, event flow, Babylon.js integration, and SCSS conventions.
 
 ## 1. Project UI Architecture at a Glance
 
@@ -21,7 +21,7 @@ Full UI architecture: stack, directory map, studio shell, GNOME HIG principles, 
 | `frontend/src/pug/app.pug` | SPA shell — includes partials from `frontend/src/pug/includes/*.pug`; real markup lives in the partials |
 | `frontend/src/pug/index.pug` | Landing/marketing page |
 | `frontend/src/scss/components/_viewport.scss` | 3D viewport + gizmo + drop indicator |
-| `frontend/src/scss/components/_headerbar.scss` | GNOME-style header bar (top) |
+| `frontend/src/scss/components/_headerbar.scss` | Header bar (top) |
 | `frontend/src/scss/components/_sidebar.scss` | Left rail: library, outliner |
 | `frontend/src/scss/components/_inspector.scss` | Right rail: selection inspector |
 | `frontend/src/scss/components/_chat.scss` | Chat panel + prompt input (bottom) |
@@ -76,7 +76,7 @@ Always rebuild before testing in the browser. The backend does **not** serve `sr
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ headerbar  [back] [New] [title] [history] [Save] [Pub] [💳]│  ← GNOME-style
+│ headerbar  [back] [New] [title] [history] [Save] [Pub] [💳]│  ← header bar
 ├──────┬─────────────────────────────────────────────┬───────┤
 │      │                                             │       │
 │ left │              3D viewport                    │ right │
@@ -95,7 +95,7 @@ Always rebuild before testing in the browser. The backend does **not** serve `sr
 
 ### Layout CSS
 
-- `.viewport` → `flex: 1`, `background-color: var(--choco-12)`, dark to match 3D canvas
+- `.viewport` → `flex: 1`; the canvas clear colour comes from `--viewport-bg` (a neutral stage, a step apart from the panels in both themes)
 - Sidebars are collapsible; `Ctrl+B` toggles left sidebar
 - Inspector starts `.collapsed` and is shown when a node is selected
 
@@ -117,11 +117,13 @@ button#newAssetTopBtn.btn.btn-secondary.btn-sm.headerbar-new(
 
 ---
 
-## 3. GNOME HIG Principles Applied
+## 3. Interaction Principles
+
+> Design authority is WCAG 2.2 AA → web conventions (WAI-ARIA APG) → the Arbesk design language; see SKILL.md. GNOME HIG layout ideas below are non-binding heuristics.
 
 ### 3.1 Minimal Chrome (no visual clutter)
 
-The 3D viewport shows: a 40×40 wireframe ground grid (α 0.3), a 2D X/Y/Z orientation gizmo in the top-right corner, and a dashed drop indicator on drag. **No in-scene axis cylinders, no view cube, no toolbar overlay.** All viewport chrome carries `metadata.isViewportChrome = true` so `clearScene()` preserves it.
+The 3D viewport shows: a 40×40 wireframe ground grid (opaque, `--viewport-grid`), a 2D X/Y/Z orientation gizmo in the top-right corner, and a dashed drop indicator on drag. **No in-scene axis cylinders, no view cube, no toolbar overlay.** All viewport chrome carries `metadata.isViewportChrome = true` so `clearScene()` preserves it.
 
 ### 3.2 Keyboard — pragmatic, not exhaustive
 
@@ -150,7 +152,7 @@ The viewport is **perspective-only** — there are no `1/3/7` ortho view shortcu
 
 ### 3.3 Responsive Feedback (no silent state changes)
 
-Selection feedback is the **HighlightLayer** (amber `#D4A017` outer glow):
+Selection feedback is the **HighlightLayer** outer glow in the theme's `--selection` colour (`readViewportTheme()`; ≥ 3:1 on `--viewport-bg`, re-coloured live on `THEME_CHANGED`):
 
 - `state.highlightLayer` is created once during `initEngine()`
 - `selectNode(nodeId, mesh)` clears the previous highlight and adds the new node's meshes
@@ -299,11 +301,17 @@ The Studio once had `1`/`3`/`7` orthographic view shortcuts backed by custom ort
 
 | Variable | Role |
 |---|---|
-| `--choco-12` | Viewport dark background (#1e1e1e) |
-| `--choco-2` / `--choco-4` | Body text primary / secondary |
-| `--gold-5` | Accent gold (welcome icon, highlights) |
-| `--accent-bg` | Primary accent (buttons, drop border) |
-| `--border-color` | Default borders |
+Colour tokens are the theme contract in `themes/_graphite.scss` / `themes/_paper.scss` — never hex or raw palette in components.
+
+| `--window-bg` / `--window-fg`, `--sidebar-*`, `--view-*`, `--card-*`, `--popover-*` | Surfaces and their text |
+| `--raised-bg` | Selected/toggled controls, chips, subtle fills |
+| `--dim-fg` | Secondary text, section titles |
+| `--accent-bg` / `--accent-fg` | Primary action only (`.btn-primary`, Generate) |
+| `--accent-text` | Accent as text/icon/focus ring (≥ 4.5:1 on surfaces) |
+| `--hairline` | Structural dividers (panels, rows, cards) |
+| `--border-color` | Control borders (inputs, buttons) — ≥ 3:1 |
+| `--danger-text`, `--destructive-bg`, `--success`, `--warning`, `--info` | Status |
+| `--viewport-bg`, `--viewport-grid`, `--selection` | 3D stage (read by `readViewportTheme()`) |
 | `--size-1` through `--size-8` | Spacing scale (use these, not px) |
 | `--font-size-0` through `--font-size-5` | Type scale |
 | `--radius-3` | Default border radius |
@@ -316,8 +324,8 @@ The Studio once had `1`/`3`/`7` orthographic view shortcuts backed by custom ort
   flex: 1;
   position: relative;
   min-height: 0;
-  background-color: var(--choco-12);
-  border: var(--border-size-1) solid var(--border-color);
+  // canvas clear colour = --viewport-bg (set from JS); the frame is a hairline
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-3);
   overflow: hidden;
 

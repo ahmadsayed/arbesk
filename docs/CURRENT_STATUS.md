@@ -16,6 +16,7 @@
 | Parametric Versions & Babylon.js Rendering | ✅ Complete | `frontend/src/js/engine/parametric-preview.ts`, `frontend/src/js/engine/time-travel.ts` |
 | PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.ts` |
 | UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/app.pug` (unified Studio + Library SPA), 29 SCSS partials, sidebar/outliner/nesting |
+| Themes & Design Language (UI refresh Phase 1) | ✅ Complete | Graphite (dark) and Paper (light) with a System / Graphite / Paper picker (header, `ui/theme-menu.ts` on the APG `ui/menu-button.ts`). Token contract in `frontend/src/scss/themes/`; WCAG 2.2 AA contrast + colour-leak + style guards in `test/frontend/theme-contrast.test.js` / `style-guards.test.js`; 3D stage colours from tokens (`readViewportTheme()`). Self-hosted Inter + JetBrains Mono (`.tabular` for data). |
 | Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.ts`, browser-side thumbnail upload to IPFS, unpin lifecycle |
 | Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.ts`, depth/cycle protection in `scene-graph.ts` |
 | Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
@@ -162,7 +163,7 @@ frontend/src/js/
 │   ├── cleanup.ts              # Node/scene disposal
 │   ├── placeholders.ts         # Loading/error meshes
 │   ├── app-init.ts             # Studio + Library bootstrap (replaces studio-init.js/library-init.js)
-│   ├── theme.ts / theme-init.ts# CSS → Babylon color mapping
+│   ├── theme.ts / theme-init.ts# Theme preference (System/Graphite/Paper), pre-paint init, CSS → Babylon colours
 │   └── viewport-gizmo.ts       # Corner orientation gizmo
 ├── app/
 │   ├── route-parse.ts          # Pathname parser: /, /studio, /library + public-profile subjects (/studio|/library/<base58>)
