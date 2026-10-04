@@ -150,12 +150,29 @@ function _refreshScaleFields() {
 }
 
 /**
+ * Pushes a "Scale" undo entry for `nodeId` when `before` and `after` differ.
+ * @remarks No-op when either matrix is missing or they're equal, so callers
+ *   can stage speculatively without checking first.
+ */
+function _pushScaleUndoIfChanged(
+  nodeId: string,
+  before: number[] | null,
+  after: number[] | null
+) {
+  if (!before || !after || matricesEqual(before, after)) return;
+  pushUndoEntry({
+    type: "transform",
+    label: "Scale",
+    items: [{ nodeId, before, after }],
+  });
+}
+
+/**
  * Applies an absolute uniform scale factor to the active node and stages the
  * transform for Save/Publish.
  * @remarks Keying the same factor into every copy of a model makes them
  *   identical in size.
  */
-// fallow-ignore-next-line complexity
 function _applyUniformScale(factor: number) {
   if (!isEditing()) return;
   const anchor = _getLiveAnchor(activeNodeId);
@@ -167,14 +184,7 @@ function _applyUniformScale(factor: number) {
   anchor.scaling.setAll(factor);
   if (activeNodeId) {
     stageNodeTransform(activeNodeId);
-    const after = readNodeTransformMatrix(activeNodeId);
-    if (before && after && !matricesEqual(before, after)) {
-      pushUndoEntry({
-        type: "transform",
-        label: "Scale",
-        items: [{ nodeId: activeNodeId, before, after }],
-      });
-    }
+    _pushScaleUndoIfChanged(activeNodeId, before, readNodeTransformMatrix(activeNodeId));
   }
   _refreshScaleFields();
 }
