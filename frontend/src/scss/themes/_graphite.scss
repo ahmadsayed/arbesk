@@ -4,9 +4,7 @@
 // Contrast ratios: docs/superpowers/specs/2026-10-04-ui-theme-graphite-paper-design.md §3.2
 // ═══════════════════════════════════════════════════════════════════
 
-// TRANSITIONAL: [data-theme="dark"] is removed in Task 2 once theme.ts writes "graphite".
-:root[data-theme="graphite"],
-:root[data-theme="dark"] {
+:root[data-theme="graphite"] {
   color-scheme: dark;
 
   --window-bg: #141416;

@@ -4,10 +4,8 @@
 // Contrast ratios: docs/superpowers/specs/2026-10-04-ui-theme-graphite-paper-design.md §3.2
 // ═══════════════════════════════════════════════════════════════════
 
-// TRANSITIONAL: [data-theme="light"] is removed in Task 2 once theme.ts writes "paper".
 :root,
-:root[data-theme="paper"],
-:root[data-theme="light"] {
+:root[data-theme="paper"] {
   color-scheme: light;
 
   --window-bg: #f7f7f5;
