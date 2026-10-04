@@ -7,7 +7,7 @@ import { distinctRunStamps, parseArgs, pool, readResults } from "../../scripts/c
 describe("parseArgs", () => {
   it("defaults to the measured variant with Jev and triage on", () => {
     expect(parseArgs([])).toMatchObject({
-      variants: ["measured"], limit: Infinity, ids: null, concurrency: 4, jev: true, triage: true,
+      variants: ["measured"], limit: Infinity, ids: null, concurrency: 8, jev: true, triage: true,
       thinking: null, resume: null, compare: null, agreement: null,
     });
   });

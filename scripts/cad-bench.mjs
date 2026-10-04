@@ -12,7 +12,7 @@
  *
  * Usage:
  *   bun scripts/cad-bench.mjs [--variant measured|abstract|both] [--limit N] [--ids 7,633]
- *                             [--concurrency 4] [--thinking on|off] [--no-jev] [--no-triage]
+ *                             [--concurrency N] [--thinking on|off] [--no-jev] [--no-triage]
  *                             [--resume <runDir>] [--compare <runDir>] [--out <root>]
  *   bun scripts/cad-bench.mjs --agreement <runDir>   score a hand-labelled triage-agreement.md
  *
@@ -41,12 +41,24 @@ const DEFAULT_OUT = path.join(PROJECT_ROOT, "test-results", "cad-bench");
 const MAX_CONSECUTIVE_PROVIDER_ERRORS = 3;
 
 /**
+ * Samples in flight by default.
+ * @remarks Measured on 20 identical prompts: concurrency 1 takes 63 s, concurrency
+ *   12 takes 13 s - 7.3x overlap against 94.8 s of summed per-sample work. The
+ *   limit is the PROVIDER, not this process: a sample spends most of its ~4.7 s
+ *   waiting on DeepSeek, while the kernel and the scoring cost a fraction of a
+ *   second each. Raise it with --concurrency when the provider tolerates it; the
+ *   run aborts after three consecutive provider errors, so pushing too far fails
+ *   loudly rather than skewing the numbers.
+ */
+const DEFAULT_CONCURRENCY = 8;
+
+/**
  * @param {string[]} argv Arguments after the script path.
  */
 export function parseArgs(argv) {
   const opts = {
     variants: /** @type {("measured" | "abstract")[]} */ (["measured"]),
-    limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: 4,
+    limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: DEFAULT_CONCURRENCY,
     jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null),
     resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
     agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
@@ -108,7 +120,8 @@ export function parseArgs(argv) {
 /**
  * Runs fn over items with at most `concurrency` in flight.
  * @remarks The kernel runs synchronously in process, so concurrency overlaps
- *   provider latency, not geometry.
+ *   provider latency rather than geometry - which is where the time is: measured,
+ *   raising concurrency from 1 to 12 took 20 identical prompts from 63 s to 13 s.
  * @template T
  * @param {T[]} items @param {number} concurrency
  * @param {(item: T) => Promise<void>} fn @param {() => boolean} shouldStop
