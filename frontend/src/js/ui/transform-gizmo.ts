@@ -7,13 +7,21 @@
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { state } from "../engine/state.ts";
 import type { TransformMode } from "../engine/state.ts";
-import {
-  stageNodeTransform,
-  readNodeTransformMatrix,
-  matricesEqual,
-} from "../engine/transforms.ts";
 import { undo, redo } from "../engine/undo-controller.ts";
-import { pushUndoEntry } from "../engine/undo-stack.ts";
+import {
+  attachToGroupPivot,
+  startGroupDrag,
+  applyGroupDrag,
+  endGroupDrag,
+  disposeGroupPivot,
+  isGroupDragActive,
+} from "../engine/group-pivot.ts";
+import {
+  selectedIds,
+  snapshotMatrices,
+  commitTransformChange,
+  type MatrixSnapshot,
+} from "../engine/transform-commit.ts";
 
 const TOOLBAR_ID = "transformToolbar";
 
@@ -87,7 +95,7 @@ function initTransformGizmo(
   // Per-frame fan-out for group drags: the gizmo mutates the pivot; each
   // selected anchor follows via its drag-start relative matrix.
   scene.onBeforeRenderObservable?.add(() => {
-    if (state.isGizmoDragging && _groupSnapshot) _applyGroupDrag();
+    if (state.isGizmoDragging && isGroupDragActive()) applyGroupDrag();
   });
 
   createToolbar();
@@ -96,37 +104,6 @@ function initTransformGizmo(
   updateToolbarUI();
 
   console.log("[GIZMO] transform gizmo initialized");
-}
-
-/**
- * Read the current local transform of one anchor and stage it for
- * persistence in the manifest.
- */
-function captureNodeTransform(nodeId: string): void {
-  if (stageNodeTransform(nodeId)) {
-    console.log(`[GIZMO] transform staged | nodeId=${nodeId}`);
-  }
-}
-
-/**
- * Returns the node ids the gizmo acts on: the multi-selection when present,
- * otherwise the single highlighted node.
- */
-function _selectedIds(): string[] {
-  return state.selectedNodeIds.size > 0
-    ? [...state.selectedNodeIds]
-    : state.highlightedNodeId
-      ? [state.highlightedNodeId]
-      : [];
-}
-
-/**
- * Stages the transforms of every selected node.
- */
-function captureSelectedTransform(): void {
-  const ids = _selectedIds();
-  for (const nodeId of ids) captureNodeTransform(nodeId);
-  if (ids.length > 0) emit(EVENTS.TRANSFORM_STAGED, { nodeIds: ids });
 }
 
 // ── Undo capture ──
@@ -139,183 +116,10 @@ const _MODE_LABELS: Record<string, string> = {
   scale: "Scale",
 };
 
-let _dragBefore: Array<{ nodeId: string; matrix: number[] }> | null = null;
+let _dragBefore: MatrixSnapshot | null = null;
 // Transform mode captured at drag start so a mid-drag T/R/S keypress can't
 // mislabel the undo entry.
 let _dragMode: TransformMode = null;
-
-function _snapshotSelectedMatrices(): Array<{
-  nodeId: string;
-  matrix: number[];
-}> {
-  const out = [];
-  for (const nodeId of _selectedIds()) {
-    const matrix = readNodeTransformMatrix(nodeId);
-    if (matrix) out.push({ nodeId, matrix });
-  }
-  return out;
-}
-
-function _pushDragUndoEntry(): void {
-  const before = _dragBefore;
-  _dragBefore = null;
-  const mode = _dragMode;
-  _dragMode = null;
-  if (!before || before.length === 0) return;
-  const items = [];
-  for (const { nodeId, matrix } of before) {
-    const after = readNodeTransformMatrix(nodeId);
-    if (after && !matricesEqual(matrix, after)) {
-      items.push({ nodeId, before: matrix, after });
-    }
-  }
-  if (items.length === 0) return; // click without drag
-  pushUndoEntry({
-    type: "transform",
-    label: _MODE_LABELS[mode || ""] || "Transform",
-    items,
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Group pivot — multi-selection transforms
-//
-// With 2+ nodes selected the gizmo attaches to a synthetic pivot TransformNode
-// at the selection centroid instead of a node anchor. On drag start we
-// snapshot each anchor's world matrix relative to the pivot; every frame the
-// gizmo moves the pivot we re-derive each anchor's local TRS from the new
-// pivot world matrix, so the whole group moves/rotates/scales around the
-// shared centroid (Blender "median point" style).
-// ═══════════════════════════════════════════════════════════════════════════
-
-let _groupPivot: BABYLON.TransformNode | null = null;
-/**
- * Per-drag snapshot: relative world matrices + parent-space inverses for each
- * selected anchor. Null outside an active group drag.
- */
-let _groupSnapshot: Array<{
-  anchor: BABYLON.TransformNode;
-  rel: BABYLON.Matrix;
-  parentInv: BABYLON.Matrix;
-}> | null = null;
-
-function _disposeGroupPivot(): void {
-  _groupSnapshot = null;
-  if (_groupPivot && !_groupPivot.isDisposed()) {
-    _groupPivot.dispose();
-  }
-  _groupPivot = null;
-}
-
-function _ensureGroupPivot(): BABYLON.TransformNode {
-  if (_groupPivot && !_groupPivot.isDisposed()) return _groupPivot;
-  _groupPivot = new BABYLON.TransformNode("groupTransformPivot", state.scene);
-  _groupPivot.rotationQuaternion = BABYLON.Quaternion.Identity();
-  return _groupPivot;
-}
-
-/**
- * Returns selected anchors with no other selected anchor in their parent
- * chain.
- * @remarks Transforming both a parent and its nested child in one group drag
- *   would move the child twice, so only the top-most anchors are driven and
- *   nested ones ride along.
- */
-function _topLevelSelectedAnchors(): BABYLON.TransformNode[] {
-  const anchors = [...state.selectedNodeIds]
-    .map((id) => state.nodeAnchors.get(id))
-    .filter((a) => a && !a.isDisposed());
-  const set = new Set(anchors);
-  return anchors.filter((a) => {
-    for (let p = a.parent; p; p = p.parent) {
-      if (set.has(p)) return false;
-    }
-    return true;
-  });
-}
-
-/**
- * Place the pivot at the centroid of the selected anchors' world positions
- * with identity rotation/scale, and attach the gizmo to it.
- */
-function _attachToGroupPivot(gizmoManager: BABYLON.GizmoManager): void {
-  const anchors = _topLevelSelectedAnchors();
-  if (anchors.length === 0) {
-    gizmoManager.attachToNode(null);
-    return;
-  }
-  // Selection collapses to a single subtree (e.g. a model plus its own
-  // child-asset node): drive that anchor directly, no pivot needed.
-  if (anchors.length === 1) {
-    gizmoManager.attachToNode(anchors[0]);
-    return;
-  }
-
-  const pivot = _ensureGroupPivot();
-  const centroid = anchors
-    .reduce((sum, a) => sum.addInPlace(a.getAbsolutePosition()), BABYLON.Vector3.Zero())
-    .scaleInPlace(1 / anchors.length);
-  pivot.position.copyFrom(centroid);
-  pivot.rotationQuaternion.copyFrom(BABYLON.Quaternion.Identity());
-  pivot.scaling.copyFromFloats(1, 1, 1);
-  pivot.computeWorldMatrix(true);
-
-  gizmoManager.attachToNode(pivot);
-}
-
-function _startGroupDrag(): void {
-  if (!_groupPivot || state.selectedNodeIds.size < 2) return;
-  const topAnchors = _topLevelSelectedAnchors();
-  if (topAnchors.length < 2) return; // gizmo is on the single anchor directly
-  _groupPivot.computeWorldMatrix(true);
-  const pivotInv = BABYLON.Matrix.Invert(_groupPivot.getWorldMatrix());
-  _groupSnapshot = [];
-  for (const anchor of topAnchors) {
-    anchor.computeWorldMatrix(true);
-    // Babylon row-vector convention: A.multiply(B) applies A first, so the
-    // anchor-in-pivot-space matrix is anchorWorld × pivotInv — not the reverse.
-    // The reversed order makes the pivot's offset pre-multiply the anchor's
-    // own scale/rotation (scaled anchors move faster/slower than the gizmo).
-    const rel = anchor.getWorldMatrix().multiply(pivotInv);
-    const parentWorld = anchor.parent
-      ? anchor.parent.getWorldMatrix()
-      : BABYLON.Matrix.Identity();
-    _groupSnapshot.push({
-      anchor,
-      rel,
-      parentInv: BABYLON.Matrix.Invert(parentWorld),
-    });
-  }
-}
-
-/**
- * Re-derives every grouped anchor's local TRS from the pivot's current world
- * matrix.
- */
-function _applyGroupDrag(): void {
-  if (!_groupSnapshot || !_groupPivot) return;
-  _groupPivot.computeWorldMatrix(true);
-  const pivotWorld = _groupPivot.getWorldMatrix();
-  const scale = new BABYLON.Vector3();
-  const rotation = new BABYLON.Quaternion();
-  const position = new BABYLON.Vector3();
-  for (const entry of _groupSnapshot) {
-    if (entry.anchor.isDisposed()) continue;
-    // rel × pivotWorld (apply rel first, then the pivot's new world matrix)
-    // — the matching order to the drag-start snapshot above.
-    const world = entry.rel.multiply(pivotWorld);
-    const local = world.multiply(entry.parentInv);
-    if (!local.decompose(scale, rotation, position)) continue;
-    entry.anchor.scaling.copyFrom(scale);
-    entry.anchor.rotationQuaternion = entry.anchor.rotationQuaternion || new BABYLON.Quaternion();
-    entry.anchor.rotationQuaternion.copyFrom(rotation);
-    entry.anchor.position.copyFrom(position);
-  }
-}
-
-function _endGroupDrag(): void {
-  _groupSnapshot = null;
-}
 
 function createToolbar(): void {
   const viewport = document.getElementById("viewport");
@@ -409,13 +213,13 @@ function wireEvents(gizmoManager: BABYLON.GizmoManager): void {
 
   on(EVENTS.NODE_DESELECTED, () => {
     gizmoManager.attachToNode(null);
-    _disposeGroupPivot();
+    disposeGroupPivot();
     updateToolbarUI();
   });
 
   on(EVENTS.SCENE_CLEARED, () => {
     gizmoManager.attachToNode(null);
-    _disposeGroupPivot();
+    disposeGroupPivot();
     // Do not reset transformMode here: clearing the scene is part of version
     // navigation (loadVersion -> clearScene -> loadAssetManifest), and the user
     // should remain in Time mode so the model clock can rebuild on SCENE_READY.
@@ -498,18 +302,19 @@ function ensureDragEndSubscription(gizmo: any): void {
   if (gizmo.onDragStartObservable) {
     gizmo.onDragStartObservable.add(() => {
       state.isGizmoDragging = true;
-      _dragBefore = _snapshotSelectedMatrices();
+      _dragBefore = snapshotMatrices(selectedIds());
       _dragMode = state.transformMode;
-      if (state.selectedNodeIds.size > 1) _startGroupDrag();
+      if (state.selectedNodeIds.size > 1) startGroupDrag();
     });
     subscribed = true;
   }
   if (gizmo.onDragEndObservable) {
     gizmo.onDragEndObservable.add(() => {
       state.isGizmoDragging = false;
-      _endGroupDrag();
-      captureSelectedTransform();
-      _pushDragUndoEntry();
+      endGroupDrag();
+      commitTransformChange(_MODE_LABELS[_dragMode || ""] || "Transform", _dragBefore);
+      _dragBefore = null;
+      _dragMode = null;
     });
     subscribed = true;
   }
@@ -518,7 +323,7 @@ function ensureDragEndSubscription(gizmo: any): void {
 
 function attachToSelected(gizmoManager: BABYLON.GizmoManager): void {
   if (state.selectedNodeIds.size > 1) {
-    _attachToGroupPivot(gizmoManager);
+    attachToGroupPivot(gizmoManager);
     return;
   }
 
