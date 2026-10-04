@@ -412,6 +412,17 @@ Validates anonymous, read-only access to a wallet's public profile (the profile 
 
 **Why it matters:** Public profiles are the platform's anonymous sharing surface. Changes to the profile URL routing, visitor-mode chrome, the read-only save/publish gating, or the base58 id format can break it.
 
+### 26. CAD generation (`e2e/specs/26-cad-generation.spec.js`)
+
+Validates the Parametric CAD provider end-to-end (the e2e backend spawns with `CAD_MOCK_GENERATION` + `CAD_MOCK_UNSUITABLE`, so the canned design document needs no DeepSeek key):
+
+1. Selects **Parametric CAD** in the composer, generates `a 40 by 30 by 20 mm box`, and waits for the version-card bubble — the worker-rendered 3MF loads a live orbitable preview through the same format-handler pipeline as the Studio.
+2. Clicks **Show in Studio** — the chat reports `Model carved via cad`, the URL flips to the auto-saved manifest CID, and the bubble collapses (snapshot or the `3MF` format chip) with a **Saved** pill.
+3. Asserts the manifest chain: the generation manifest is a raw `asset.3mf` source node with `metadata.cad.summary`; the saved manifest decomposed it and carries `metadata.computed.format === "3mf"`.
+4. Generates `a dragon figurine` — the mock's `CadRequestUnsuitable` refusal surfaces as a choice bubble offering **Retry with Tripo 3D**; picking it flips `#providerSelect` to `tripo3d` and re-dispatches (landing on the BYOK key dialog, since the e2e stack has no Tripo key).
+
+**Why it matters:** This is the only E2E coverage of the design-on-the-wire path: the `/generations` cad task, the `cad-worker` WASM render, the 3MF staging flow, the CAD provenance metadata, and the unsuitable-rejection UX. Changes to `generation-providers.ts`, `cad-render.ts`, the 3MF format handler, or the retry wiring can break it.
+
 ### Chat version restore (`e2e/specs/chat-version-restore.spec.js`)
 
 Validates that a version-card bubble's **Show in Studio** button stays a live restore path:

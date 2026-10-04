@@ -34,6 +34,11 @@ export const SELECTORS = {
   versionBubble: ".chat-bubble-version",
   choiceBubble: ".chat-bubble-choices",
   choiceBtn: ".chat-choice-btn",
+  /**
+   * @param {string} label
+   * @returns {string}
+   */
+  choiceButton: (label) => `.chat-bubble-choices .chat-choice-btn:has-text("${label}")`,
   saveAssetBtn: "#saveAssetBtn",
   publishAssetBtn: "#publishAssetBtn",
   downloadAssetBtn: "#downloadAssetBtn",
