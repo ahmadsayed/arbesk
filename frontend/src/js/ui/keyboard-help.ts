@@ -16,7 +16,10 @@ const SECTIONS = [
     heading: "Navigation",
     rows: [
       [`${MOD}+B`, "Toggle sidebar"],
-      [`${MOD}+1 – 5`, "Switch sidebar panel"],
+      [`${MOD}+1`, "Outline"],
+      [`${MOD}+2`, "Assets (place in scene)"],
+      [`${MOD}+3`, "Create"],
+      [`${MOD}+4`, "Activity"],
       ["Alt+←", "Go up to parent asset"],
     ],
   },

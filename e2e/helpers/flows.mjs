@@ -5,6 +5,25 @@ import { SELECTORS } from "./studio-selectors.mjs";
 import { MANIFEST_URL_REGEX, manifestCidFromUrl } from "./manifest.mjs";
 
 /**
+ * Start Studio pages on the Create panel, as before Phase 2 made Outline the
+ * default. Seeds the stored sidebar view only when it's unset, so a spec that
+ * switches views and reloads still gets its own view restored.
+ *
+ * @param {Page} page
+ */
+export async function startInCreate(page) {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("arbesk-sidebar-view")) {
+        localStorage.setItem("arbesk-sidebar-view", "chat");
+      }
+    } catch {
+      // storage blocked — the app falls back to Outline
+    }
+  });
+}
+
+/**
  * @typedef {import('@playwright/test').Page} Page
  * @typedef {import('@playwright/test').Locator} Locator
  */
@@ -19,6 +38,7 @@ const DEFAULT_PROMPT = "cowboy";
  * @param {Page} page
  */
 export async function connectStudio(page) {
+  await startInCreate(page);
   await injectHardhatProvider(page);
   await page.goto("/studio");
 
@@ -52,6 +72,7 @@ export async function connectStudioAs(page, accountIndex) {
   if (!account) {
     throw new Error(`Unknown Hardhat account index ${accountIndex}`);
   }
+  await startInCreate(page);
   await injectHardhatProvider(page, { accountIndex });
   await page.goto("/studio");
 
@@ -136,6 +157,7 @@ export async function seedDefaultCollection(
 ) {
   const page = await browser.newPage();
   try {
+    await startInCreate(page);
     await injectHardhatProvider(page);
     await page.goto("/studio");
     await ensureStudioConnected(page);

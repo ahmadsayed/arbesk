@@ -217,6 +217,14 @@
   display: block;
 }
 
+// One-line usage hint under a view header (e.g. Assets)
+.sidebar-view-hint {
+  margin: 0;
+  padding: 0 var(--size-3) var(--size-2);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+}
+
 // Show sidebar button (visible when collapsed)
 .sidebar-reveal {
   position: absolute;

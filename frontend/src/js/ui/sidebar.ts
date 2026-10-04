@@ -1,11 +1,11 @@
 /**
- * Sidebar with a 5-view switcher (chat, settings, outline, library, ledger).
+ * Sidebar with a 4-view switcher (outline, library = "Assets", chat = "Create", ledger = "Activity").
  * @remarks Width is user-resizable and persisted, but only on wide layouts.
  */
 
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
-const VIEWS = ["chat", "settings", "outline", "library", "ledger"];
+const VIEWS = ["outline", "library", "chat", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
 const WIDTH_STORAGE_KEY = "arbesk-sidebar-width";
 const MIN_SIDEBAR_WIDTH = 260;
@@ -35,19 +35,16 @@ function initSidebar(): void {
     ) as HTMLElement | null;
   });
 
-  // Restore last view or default to "chat"
+  // Restore last view or default to Outline. Retired views ("settings",
+  // pre-Phase-2) and unknown values fall back to Outline.
   const stored = localStorage.getItem(STORAGE_KEY);
-  switchView(stored && VIEWS.includes(stored) ? stored : "chat");
+  switchView(stored && VIEWS.includes(stored) ? stored : "outline");
 
   // On narrow screens the sidebar overlays the viewport, so it must start
-  // closed or it hides the canvas and prompt input on first visit.
+  // closed or it hides the canvas on first visit.
   if (window.matchMedia("(max-width: 900px)").matches) {
     collapseSidebar();
   }
-
-  // Pulse the chat button as an empty-state hint (JS owns this, not the template)
-  const chatBtn = switcherBtns.find((b) => b.dataset.view === "chat");
-  if (chatBtn) chatBtn.classList.add("pulse");
 
   // Wire switcher buttons
   switcherBtns.forEach((btn) => {
@@ -97,10 +94,10 @@ function initSidebar(): void {
     }
   });
 
-  // Keyboard: Ctrl+1-5 to switch views
+  // Keyboard: Ctrl+1-4 to switch views
   document.addEventListener("keydown", (e) => {
     if (isEditing()) return;
-    if ((e.ctrlKey || e.metaKey) && e.key >= "1" && e.key <= "5") {
+    if ((e.ctrlKey || e.metaKey) && e.key >= "1" && e.key <= "4") {
       e.preventDefault();
       const idx = parseInt(e.key) - 1;
       if (VIEWS[idx]) switchView(VIEWS[idx]);
