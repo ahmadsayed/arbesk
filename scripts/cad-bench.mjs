@@ -1,0 +1,227 @@
+/**
+ * CADPrompt external benchmark for @arbesk/cad-gen.
+ *
+ * NOT part of the server. Runs the public CADPrompt benchmark (Alrashedy et
+ * al., ICLR 2025: 200 text prompts with ground-truth meshes) through the
+ * shipped loop - generate(), then the browser worker's kernel + gates + client
+ * repair - and scores every part against ground truth with the paper's
+ * metrics plus exact IoU. Failed and low-scoring samples are triaged by Jev
+ * into a "where to improve" table. Spec:
+ * docs/superpowers/specs/2026-10-04-cad-bench-cadprompt-design.md
+ *
+ * Usage:
+ *   bun scripts/cad-bench.mjs [--variant measured|abstract|both] [--limit N] [--ids 7,633]
+ *                             [--concurrency 4] [--no-jev] [--no-triage]
+ *                             [--resume <runDir>] [--compare <runDir>] [--out <root>]
+ *   bun scripts/cad-bench.mjs --agreement <runDir>   score a hand-labelled triage-agreement.md
+ *
+ * Reads DEEPSEEK_API_KEY (required) and JEV_API_KEY (optional) from the
+ * project .env. Each run gets test-results/cad-bench/run#N/<variant>/ (gitignored).
+ * The CADPrompt repository has no licence: it is fetched into test-results/
+ * for local evaluation only - never commit it.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { PROJECT_ROOT, generatorConfigFrom, loadCadKernel, requireEnv } from "./lib/cad-harness.mjs";
+import { CADPROMPT_PIN, fetchCadPrompt, loadSamples } from "./lib/cadprompt.mjs";
+import { runSample } from "./lib/bench-sample.mjs";
+import { createScorer } from "./lib/bench-iou.mjs";
+import { needsTriage, triage } from "./lib/bench-triage.mjs";
+import {
+  agreementTemplate, compareSummaries, parseAgreement, renderMarkdown, summarise,
+} from "./lib/bench-summary.mjs";
+import { writeBinaryStl } from "./lib/stl.mjs";
+import { createCadGenerator, DEFAULT_CAD_MODEL } from "../packages/cad-gen/src/backend/index.ts";
+
+const DEFAULT_OUT = path.join(PROJECT_ROOT, "test-results", "cad-bench");
+
+/** Consecutive provider errors that abort a run: likely a key or quota problem. */
+const MAX_CONSECUTIVE_PROVIDER_ERRORS = 3;
+
+/**
+ * @param {string[]} argv Arguments after the script path.
+ */
+export function parseArgs(argv) {
+  const opts = {
+    variants: /** @type {("measured" | "abstract")[]} */ (["measured"]),
+    limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: 4,
+    jev: true, triage: true,
+    resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
+    agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i];
+    const value = () => {
+      const v = argv[++i];
+      if (v === undefined) throw new Error(flag + " needs a value");
+      return v;
+    };
+    switch (flag) {
+      case "--variant": {
+        const v = value();
+        if (!["measured", "abstract", "both"].includes(v)) throw new Error("--variant must be measured, abstract or both");
+        opts.variants = v === "both" ? ["measured", "abstract"] : [/** @type {"measured" | "abstract"} */ (v)];
+        break;
+      }
+      case "--limit": opts.limit = Number(value()); break;
+      case "--ids": opts.ids = value().split(",").map((s) => s.trim().padStart(8, "0")); break;
+      case "--concurrency": opts.concurrency = Math.max(1, Number(value())); break;
+      case "--no-jev": opts.jev = false; break;
+      case "--no-triage": opts.triage = false; break;
+      case "--resume": opts.resume = path.resolve(value()); break;
+      case "--compare": opts.compare = path.resolve(value()); break;
+      case "--agreement": opts.agreement = path.resolve(value()); break;
+      case "--out": opts.out = path.resolve(value()); break;
+      default: throw new Error("unknown argument " + flag);
+    }
+  }
+  return opts;
+}
+
+/**
+ * Runs fn over items with at most `concurrency` in flight.
+ * @remarks The kernel runs synchronously in process, so concurrency overlaps
+ *   provider latency, not geometry.
+ * @template T
+ * @param {T[]} items @param {number} concurrency
+ * @param {(item: T) => Promise<void>} fn @param {() => boolean} shouldStop
+ */
+export async function pool(items, concurrency, fn, shouldStop) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length && !shouldStop()) await fn(items[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+}
+
+/**
+ * Creates the next free run#N directory, like cad-eval's attempt#N.
+ * @param {string} root
+ * @returns {string}
+ */
+function nextRunDir(root) {
+  fs.mkdirSync(root, { recursive: true });
+  const taken = new Set(fs.readdirSync(root));
+  let n = 1;
+  while (taken.has("run#" + n)) n++;
+  const dir = path.join(root, "run#" + n);
+  fs.mkdirSync(dir);
+  return dir;
+}
+
+/**
+ * Writes JSON via a temp file and rename, so an interrupted run never leaves a
+ * half-written result that --resume would then skip.
+ * @param {string} file @param {unknown} value
+ */
+function writeJsonAtomic(file, value) {
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+/** @param {string} file @returns {any} */
+const readJson = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null);
+
+/**
+ * Writes summary.json, summary.md and (first time only) triage-agreement.md.
+ * @param {string} dir Variant directory.
+ * @param {any[]} results @param {any} config @param {string | null} compareRun
+ */
+function writeSummary(dir, results, config, compareRun) {
+  const summary = summarise(results, config);
+  const previous = readJson(path.join(dir, "summary.json"));
+  if (previous?.triageAgreement) summary.triageAgreement = previous.triageAgreement;
+  const other = compareRun ? readJson(path.join(compareRun, config.variant, "summary.json")) : null;
+  if (compareRun && !other) console.warn("no " + config.variant + " summary in " + compareRun + " to compare with");
+  const compare = other ? compareSummaries(summary, other) : null;
+  writeJsonAtomic(path.join(dir, "summary.json"), { ...summary, compare });
+  fs.writeFileSync(path.join(dir, "summary.md"), renderMarkdown(summary, { compare }));
+  const sheet = path.join(dir, "triage-agreement.md");
+  if (summary.triage.triaged > 0 && !fs.existsSync(sheet)) fs.writeFileSync(sheet, agreementTemplate(results));
+  console.log("summary: " + path.join(dir, "summary.md"));
+}
+
+/**
+ * --agreement: score hand labels and re-render each variant's summary.
+ * @param {string} runDir
+ */
+function recordAgreement(runDir) {
+  for (const variant of ["measured", "abstract"]) {
+    const dir = path.join(runDir, variant);
+    const sheet = path.join(dir, "triage-agreement.md");
+    const summary = readJson(path.join(dir, "summary.json"));
+    if (!summary || !fs.existsSync(sheet)) continue;
+    summary.triageAgreement = parseAgreement(fs.readFileSync(sheet, "utf8"));
+    writeJsonAtomic(path.join(dir, "summary.json"), summary);
+    fs.writeFileSync(path.join(dir, "summary.md"), renderMarkdown(summary, { compare: summary.compare ?? null }));
+    console.log(variant + ": agreement " + JSON.stringify(summary.triageAgreement));
+  }
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  if (opts.agreement) return recordAgreement(opts.agreement);
+  const env = requireEnv();
+  if (!env.JEV_API_KEY && (opts.jev || opts.triage)) {
+    console.warn("JEV_API_KEY missing from .env: running as --no-jev --no-triage");
+    opts.jev = false;
+    opts.triage = false;
+  }
+  const dataset = fetchCadPrompt();
+  const runDir = opts.resume ?? nextRunDir(opts.out);
+  console.log("run directory: " + runDir);
+  const { module, kernel } = await loadCadKernel();
+  // The exact generator config the API route builds - one shared reader, so
+  // the benchmark scores what production runs. Jev is stripped for --no-jev.
+  const cfg = generatorConfigFrom(opts.jev ? env : { ...env, JEV_API_KEY: "" });
+  const generator = createCadGenerator(cfg);
+  const score = createScorer(module);
+  const jev = opts.triage ? { apiKey: env.JEV_API_KEY } : null;
+  const config = {
+    dataset: CADPROMPT_PIN, model: cfg.model ?? DEFAULT_CAD_MODEL, thinking: cfg.thinking,
+    maxRepairAttempts: cfg.limits.maxRepairAttempts, jevModel: cfg.jev?.model ?? "jev-latest",
+    jev: opts.jev, triage: opts.triage, samples: 8192, seed: 1,
+  };
+
+  for (const variant of opts.variants) {
+    const dir = path.join(runDir, variant);
+    fs.mkdirSync(dir, { recursive: true });
+    let samples = loadSamples(dataset, variant);
+    if (opts.ids) samples = samples.filter((s) => opts.ids?.includes(s.id));
+    samples = samples.slice(0, opts.limit);
+    const todo = samples.filter((s) => !fs.existsSync(path.join(dir, s.id + ".json")));
+    console.log("\n" + variant + ": " + samples.length + " samples, " + todo.length + " to run");
+
+    let consecutive = 0, aborted = false;
+    await pool(todo, opts.concurrency, async (sample) => {
+      const { result, mesh } = await runSample({ generator, kernel, score, sample });
+      if (mesh) writeBinaryStl(path.join(dir, sample.id + ".stl"), mesh);
+      if (jev && needsTriage(result)) result.triage = await triage(jev, result);
+      writeJsonAtomic(path.join(dir, sample.id + ".json"), result);
+      consecutive = result.outcome === "provider_error" ? consecutive + 1 : 0;
+      if (consecutive >= MAX_CONSECUTIVE_PROVIDER_ERRORS) aborted = true;
+      const m = result.metrics;
+      console.log(sample.id + "  " + result.outcome.padEnd(14) + " iou " + (m.iou ?? NaN).toFixed(3) +
+        "  iogt " + m.iogt.toFixed(3) + "  cd " + m.chamfer.toFixed(3) +
+        (result.triage?.failureCause ? "  -> " + result.triage.failureCause.label : "") +
+        (result.triage?.shapeMismatch ? "  -> " + result.triage.shapeMismatch.label : ""));
+    }, () => aborted);
+
+    if (aborted) {
+      console.error("aborting: " + MAX_CONSECUTIVE_PROVIDER_ERRORS + " consecutive provider errors " +
+        "(key or quota?). Continue with --resume " + runDir);
+      process.exitCode = 1;
+    }
+    const results = samples.map((s) => readJson(path.join(dir, s.id + ".json"))).filter(Boolean);
+    writeSummary(dir, results, { ...config, variant }, opts.compare);
+    if (aborted) return;
+  }
+}
+
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error("HARNESS_FATAL", e);
+    process.exit(1);
+  });
+}
