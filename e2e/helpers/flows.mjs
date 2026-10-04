@@ -54,7 +54,7 @@ export async function startEmptyAsset(page) {
 const DEFAULT_PROMPT = "cowboy";
 
 /**
- * Open the studio with the Hardhat dev wallet injected, click Login / Signup,
+ * Open the studio with the Hardhat dev wallet injected, click Sign in,
  * select the injected wallet, and wait until authenticated (the connect button
  * hides; the wallet button stops showing "Sign In").
  *
@@ -67,7 +67,7 @@ export async function connectStudio(page) {
 
   // The Studio auto-connects a previously authorized / injected wallet on page
   // load. Wait briefly for the connect button to disappear; if it does not,
-  // fall back to the manual Login / Signup flow.
+  // fall back to the manual Sign in flow.
   const connectBtn = page.locator(SELECTORS.connectWalletBtn);
   try {
     await expect(connectBtn).toBeHidden({ timeout: 8000 });
@@ -100,7 +100,7 @@ export async function connectStudioAs(page, accountIndex) {
   await page.goto("/studio");
 
   // Auto-connect on page load: wait for the connect button to hide; if it
-  // stays visible, use the manual Login / Signup fallback.
+  // stays visible, use the manual Sign in fallback.
   const connectBtn = page.locator(SELECTORS.connectWalletBtn);
   try {
     await expect(connectBtn).toBeHidden({ timeout: 8000 });
@@ -133,7 +133,7 @@ export async function ensureStudioConnected(page) {
     await expect(connectBtn).toBeHidden({ timeout: 3000 });
     return;
   } catch {
-    // not connected - use the manual Login / Signup flow
+    // not connected - use the manual Sign in flow
   }
   await connectBtn.click();
   await page.locator(SELECTORS.hardhatWalletOption).click();
@@ -382,7 +382,7 @@ export async function scrubSceneClock(page, position) {
 // ── Library helpers ──────────────────────────────────────────────────────────
 
 /**
- * Open the library with the Hardhat dev wallet injected, click Login / Signup,
+ * Open the library with the Hardhat dev wallet injected, click Sign in,
  * select the injected wallet, and wait until authenticated. Returns once the
  * main browser UI is visible.
  *
@@ -394,7 +394,7 @@ export async function connectLibrary(page) {
   await page.goto("/library");
 
   // The library page auto-connects on page load just like the Studio. Wait for
-  // the wallet gate to disappear; if it does not, use the manual Login / Signup
+  // the wallet gate to disappear; if it does not, use the manual Sign in
   // fallback.
   const libraryGate = page.locator(SELECTORS.libraryGate);
   try {
