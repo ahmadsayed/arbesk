@@ -59,6 +59,7 @@ export const SELECTORS = {
   tierSelect: "#tierSelect",
   assetNameDisplay: "#assetNameDisplay",
   gallerySwitcherBtn: '[data-view="library"]',
+  createSwitcherBtn: '[data-view="chat"]',
   assetLibraryBody: "#assetLibraryBody",
   galleryVisitorBadge: "#galleryVisitorBadge",
   assetCard: ".asset-card",

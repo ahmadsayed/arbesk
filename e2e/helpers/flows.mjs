@@ -24,6 +24,19 @@ export async function startInCreate(page) {
 }
 
 /**
+ * Show the Create panel (rail "Create", data-view="chat") if it isn't the
+ * visible sidebar view — Outline is the Studio default since Phase 2.
+ *
+ * @param {Page} page
+ */
+export async function openCreate(page) {
+  const prompt = page.locator(SELECTORS.promptInput);
+  if (await prompt.isVisible()) return;
+  await page.click(SELECTORS.createSwitcherBtn);
+  await expect(prompt).toBeVisible();
+}
+
+/**
  * @typedef {import('@playwright/test').Page} Page
  * @typedef {import('@playwright/test').Locator} Locator
  */
@@ -203,6 +216,7 @@ export async function sendPendingGenerationToStudio(page) {
  * @returns {Promise<Locator>}
  */
 export async function generateToChatBubble(page, prompt = DEFAULT_PROMPT) {
+  await openCreate(page);
   // Pin the new bubble by index: a `.last()` locator re-resolves as later
   // generations append more bubbles.
   const sendButtons = page.locator(SELECTORS.assetBubbleSend);
@@ -365,6 +379,7 @@ export async function scrubSceneClock(page, position) {
  * @param {Page} page
  */
 export async function connectLibrary(page) {
+  await startInCreate(page);
   await injectHardhatProvider(page);
   await page.goto("/library");
 
