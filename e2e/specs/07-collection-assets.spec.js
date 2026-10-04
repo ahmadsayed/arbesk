@@ -8,7 +8,14 @@ import {
   fetchTokenManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
-import { assetCardLocator, connectStudio, ensureStudioConnected, sendPendingGenerationToStudio, uniqueAssetName } from "../helpers/flows.mjs";
+import {
+  assetCardLocator,
+  connectStudio,
+  ensureStudioConnected,
+  sendPendingGenerationToStudio,
+  uniqueAssetName,
+  startEmptyAsset,
+} from "../helpers/flows.mjs";
 
 const PROMPT_1 = "a wooden chair";
 const PROMPT_2 = "a small round table";
@@ -89,7 +96,7 @@ test.describe.serial("Collection/asset model", () => {
 
     // Start fresh asset. startNewAsset() shows a GNOME HIG name dialog after
     // the native confirm() (which is auto-accepted by beforeEach).
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, "Table");
     await page.click(SELECTORS.dialogConfirmBtn);
@@ -208,7 +215,7 @@ test.describe.serial("Collection/asset model", () => {
     const firstTokenIdHex = tokenIdHexFromUrl(page.url());
     expect(firstTokenIdHex).toBeTruthy();
 
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, "Untitled Asset");
     await page.click(SELECTORS.dialogConfirmBtn);

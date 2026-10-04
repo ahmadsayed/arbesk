@@ -13,6 +13,7 @@ import {
   connectLibrary,
   openLibraryCollection,
   openLibraryAssetInStudio,
+  startEmptyAsset,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -75,7 +76,7 @@ test.describe("cross-window live scene update", () => {
       const childTokenHex = await generateSaveAndPublish(pageA, childName, PROMPT);
       const childTokenDec = BigInt(childTokenHex).toString();
 
-      await pageA.click(SELECTORS.newAssetBtn);
+      await startEmptyAsset(pageA);
       await expect(pageA.locator(SELECTORS.dialogInput)).toBeVisible();
       await pageA.fill(SELECTORS.dialogInput, parentName);
       await pageA.click(SELECTORS.dialogConfirmBtn);

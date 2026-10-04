@@ -29,7 +29,7 @@ beforeAll(async () => {
   document.body.innerHTML = `
     <span id="assetStatusName">No asset open</span>
     <span id="assetStatusMeta">Create or open an asset</span>
-    <button id="newAssetBtn"></button>
+    <button id="newMenuBtn"></button>
     <button id="saveAssetBtn" hidden></button>
     <button id="saveAssetBtnText"></button>
     <button id="publishAssetBtn" hidden></button>
@@ -114,21 +114,21 @@ test("wallet disconnect hides save/publish but keeps download", () => {
 });
 
 test("New is hidden without a wallet, shown for a connected owner", () => {
-  expect(hidden("newAssetBtn")).toBe(true);
+  expect(hidden("newMenuBtn")).toBe(true);
   walletState.set({ walletAddress: "0xabc" });
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
-  expect(hidden("newAssetBtn")).toBe(false);
+  expect(hidden("newMenuBtn")).toBe(false);
 });
 
 test("New is hidden in visitor mode even with a wallet connected", () => {
   walletState.set({ walletAddress: "0xabc" });
   libraryState.set({ subjectAddress: "0xdef" });
   emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
-  expect(hidden("newAssetBtn")).toBe(true);
+  expect(hidden("newMenuBtn")).toBe(true);
   // Subject == wallet is owner mode: New comes back.
   libraryState.set({ subjectAddress: "0xABC" });
   emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
-  expect(hidden("newAssetBtn")).toBe(false);
+  expect(hidden("newMenuBtn")).toBe(false);
 });
 
 test("Properties → Asset section is hidden with no asset and shown once a draft exists", () => {

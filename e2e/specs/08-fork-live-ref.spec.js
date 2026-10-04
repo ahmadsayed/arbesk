@@ -11,6 +11,7 @@ import {
   saveDraft,
   generateSaveAndPublish,
   assetCardLocator,
+  startEmptyAsset,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -36,7 +37,7 @@ test.describe("fork vs live-reference", () => {
     const childTokenDec = BigInt(childTokenHex).toString();
 
     // 2. Start a fresh parent draft.
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, PARENT_NAME_FORK);
     await page.click(SELECTORS.dialogConfirmBtn);
@@ -96,7 +97,7 @@ test.describe("fork vs live-reference", () => {
     expect(firstAssetId).toBeTruthy();
 
     // 2. Start a fresh parent draft.
-    await page.click(SELECTORS.newAssetBtn);
+    await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, PARENT_NAME_LIVE);
     await page.click(SELECTORS.dialogConfirmBtn);

@@ -6,12 +6,15 @@
  */
 import { test, expect } from "../fixtures/coverage.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
-import { connectStudio } from "../helpers/flows.mjs";
+import {
+  connectStudio,
+  startEmptyAsset,
+} from "../helpers/flows.mjs";
 
 test("New asset shows the typed name in the header", async ({ page }) => {
   await connectStudio(page);
 
-  await page.click(SELECTORS.newAssetBtn);
+  await startEmptyAsset(page);
   await page.fill(SELECTORS.dialogInput, "My Test Asset");
   await page.click(SELECTORS.dialogConfirmBtn);
 

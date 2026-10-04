@@ -85,6 +85,8 @@ export const SELECTORS = {
   animationsSection: "#animationsSection",
   animationSelect: "#animationSelect",
   // New asset + nesting (linked child assets)
+  // New ▾ menu; "Empty asset" keeps the #newAssetBtn id inside it.
+  newMenuBtn: "#newMenuBtn",
   newAssetBtn: "#newAssetBtn",
   // Properties → Asset (name, collection, tier, team); hidden with no asset.
   assetSection: "#assetSection",

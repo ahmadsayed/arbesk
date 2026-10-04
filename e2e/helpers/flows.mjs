@@ -37,6 +37,16 @@ export async function openCreate(page) {
 }
 
 /**
+ * New ▾ → Empty asset (the #newAssetBtn item opens the naming dialog).
+ *
+ * @param {Page} page
+ */
+export async function startEmptyAsset(page) {
+  await page.click(SELECTORS.newMenuBtn);
+  await page.click(SELECTORS.newAssetBtn);
+}
+
+/**
  * @typedef {import('@playwright/test').Page} Page
  * @typedef {import('@playwright/test').Locator} Locator
  */
