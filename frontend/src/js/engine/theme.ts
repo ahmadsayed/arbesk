@@ -52,6 +52,36 @@ export function hexToColor4(hex: string, alpha = 1): BABYLON.Color4 | null {
   return new BABYLON.Color4(rgb[0], rgb[1], rgb[2], alpha);
 }
 
+export interface ViewportTheme {
+  bg: string;
+  grid: string;
+  selection: string;
+}
+
+const VIEWPORT_FALLBACK: ViewportTheme = {
+  bg: "#2a2b2f",
+  grid: "#3c3e44",
+  selection: "#f0a64b",
+};
+
+/**
+ * The active theme's 3D viewport colours as "#rrggbb".
+ * @param read token reader (injectable for tests); defaults to getCssVar.
+ */
+export function readViewportTheme(
+  read: (name: string) => string = getCssVar,
+): ViewportTheme {
+  const pick = (name: string, fallback: string) => {
+    const h = normalizeHex(read(name).trim());
+    return h ? `#${h}` : fallback;
+  };
+  return {
+    bg: pick("--viewport-bg", VIEWPORT_FALLBACK.bg),
+    grid: pick("--viewport-grid", VIEWPORT_FALLBACK.grid),
+    selection: pick("--selection", VIEWPORT_FALLBACK.selection),
+  };
+}
+
 /**
  * Strips a leading "#" and requires 6 hex digits.
  * @returns null when invalid.

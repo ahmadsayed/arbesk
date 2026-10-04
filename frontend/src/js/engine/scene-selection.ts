@@ -5,25 +5,26 @@
  *   consumers act only when the set has exactly one entry.
  */
 
-import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { uiState } from "../state/ui-state.ts";
 import { state } from "./state.ts";
-import { getCssVar, hexToColor3 } from "./theme.ts";
+import { hexToColor3, readViewportTheme } from "./theme.ts";
 
-function _amberColor() {
+/** The active theme's selection outline colour (--selection). */
+function _selectionColor() {
   return (
-    hexToColor3(getCssVar("--highlight-amber")) ||
-    BABYLON.Color3.FromHexString("#D4A017")
+    hexToColor3(readViewportTheme().selection) ||
+    BABYLON.Color3.FromHexString("#f0a64b")
   );
 }
 
 function _addNodeHighlight(nodeId: string, meshName: string | null = null) {
   const meshes = state.nodeMeshes.get(nodeId);
   if (!meshes || !state.highlightLayer) return;
-  const amber = _amberColor();
+  const color = _selectionColor();
   for (const m of meshes) {
     if (m && !m.isDisposed() && (!meshName || m.name === meshName)) {
-      state.highlightLayer.addMesh(m, amber);
+      state.highlightLayer.addMesh(m, color);
     }
   }
 }
@@ -42,6 +43,18 @@ function _removeNodeHighlight(nodeId: string | null) {
     }
   }
 }
+
+// Re-add highlighted meshes so they pick up the new theme's colour
+// (HighlightLayer.addMesh on an already-highlighted mesh updates its colour).
+function _recolorSelection() {
+  for (const id of state.selectedNodeIds) {
+    const subMesh =
+      id === state.highlightedNodeId ? state.highlightedSubMeshName : null;
+    _addNodeHighlight(id, subMesh);
+  }
+}
+
+on(EVENTS.THEME_CHANGED, _recolorSelection);
 
 function _emitSelectionChanged() {
   emit(EVENTS.SELECTION_CHANGED, {

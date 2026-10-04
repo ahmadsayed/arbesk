@@ -9,7 +9,7 @@ import { walletState } from "../state/wallet-state.ts";
 import { libraryState } from "../state/library-state.ts";
 import { getReadableContract } from "../blockchain/read-contract.ts";
 import { state } from "./state.ts";
-import { getCssVar, hexToColor4 } from "./theme.ts";
+import { hexToColor3, hexToColor4, readViewportTheme } from "./theme.ts";
 import { clearScene } from "./cleanup.ts";
 import {
   resetForNewAsset,
@@ -106,15 +106,21 @@ export {
 // Theme listener
 // ═══════════════════════════════════════════════════════════════════════════
 
-function _syncViewportBackground() {
+function _syncViewportTheme() {
   if (!state.scene) return;
-  const viewportBg = getCssVar("--viewport-bg") || "#1e1e1e";
+  const vt = readViewportTheme();
   state.scene.clearColor =
-    hexToColor4(viewportBg, 1) || new BABYLON.Color4(0.118, 0.118, 0.118, 1);
+    hexToColor4(vt.bg, 1) || new BABYLON.Color4(0.165, 0.169, 0.184, 1);
+  const gridMat = state.scene.getMaterialByName(
+    "gridMat",
+  ) as BABYLON.StandardMaterial | null;
+  const grid = hexToColor3(vt.grid);
+  if (gridMat && grid) gridMat.emissiveColor = grid;
 }
 
-// Re-sync viewport background when the user toggles light / dark mode.
-on(EVENTS.THEME_CHANGED, _syncViewportBackground);
+// Re-sync viewport colours when the theme changes. (The selection outline
+// re-syncs itself in scene-selection.ts.)
+on(EVENTS.THEME_CHANGED, _syncViewportTheme);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Engine initialization
@@ -163,8 +169,8 @@ export function initEngine() {
   });
 
   state.scene = new BABYLON.Scene(state.engine);
-  // Sync viewport background with the current SCSS theme token.
-  _syncViewportBackground();
+  // Sync viewport colours with the current theme tokens.
+  _syncViewportTheme();
 
   // ArcRotateCamera for orbit controls
   const camera = new BABYLON.ArcRotateCamera(
@@ -211,7 +217,7 @@ export function initEngine() {
   );
   dirLight.intensity = 0.5;
 
-  // Ground plane grid — semi-transparent plane
+  // Ground plane grid — wireframe in the theme's --viewport-grid colour
   try {
     const grid = BABYLON.MeshBuilder.CreateGround(
       "groundGrid",
@@ -223,9 +229,11 @@ export function initEngine() {
 
     const mat = new BABYLON.StandardMaterial("gridMat", state.scene);
     mat.wireframe = true;
-    mat.emissiveColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+    // Token colour is the final on-screen colour (no alpha blend), so the
+    // grid stays a predictable step from --viewport-bg in every theme.
+    mat.emissiveColor =
+      hexToColor3(readViewportTheme().grid) || new BABYLON.Color3(0.235, 0.243, 0.267);
     mat.disableLighting = true;
-    mat.alpha = 0.3;
     mat.backFaceCulling = false;
     grid.material = mat;
     console.log("[SCENE] ground grid created");

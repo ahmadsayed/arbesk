@@ -1319,6 +1319,8 @@ and lines 230 and 894, `color: #fff;` → `color: var(--accent-fg);`. Confirm ea
 
 - [ ] **Step 4: Point selection at the new token**
 
+> **Done in Task 7 (#73):** #73's acceptance needs the outline ≥3:1 in both themes, and the old `#d4a017` was ~1.4:1 on Paper's viewport. `scene-selection.ts` now uses `readViewportTheme().selection` and re-colours live on `THEME_CHANGED`. Skip this step; only confirm `--highlight-amber` has no users before Step 5.
+
 In `frontend/src/js/engine/scene-selection.ts`, replace `_amberColor`:
 
 ```ts
