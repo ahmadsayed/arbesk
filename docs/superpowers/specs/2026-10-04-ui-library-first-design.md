@@ -12,7 +12,7 @@ Make Arbesk read as an **asset repository with a viewer**, not an AI generator:
 - the header belongs to the open asset;
 - creation (Upload / AI / CAD / Empty) lives behind one **New ▾** menu;
 - account and network move out of the spotlight;
-- the Studio rail becomes **Outline · Create · Activity**.
+- the Studio rail becomes **Outline · Assets · Create · Activity**.
 
 ## 2. Non-goals
 
@@ -103,29 +103,30 @@ WAI-ARIA **menu button** pattern, using the `ui/menu-button.ts` helper created i
 | Before | After |
 |---|---|
 | AI Generation (Ctrl+1, default) | **Outline** (Ctrl+1, **default**) |
-| Settings (Ctrl+2) | **Create** (Ctrl+2): the existing chat view, `data-view="chat"`, label "Create" |
-| Outline (Ctrl+3) | **Activity** (Ctrl+3) |
-| Gallery (Ctrl+4) | removed |
+| Settings (Ctrl+2) | **Assets** (Ctrl+2): the former Gallery, `data-view="library"` kept |
+| Outline (Ctrl+3) | **Create** (Ctrl+3): the existing chat view, `data-view="chat"`, label "Create" |
+| Gallery (Ctrl+4) | **Activity** (Ctrl+4) |
 | Activity (Ctrl+5) | — |
 
-- `VIEWS = ["outline", "chat", "ledger"]`. The stored last-view key: values `"settings"` and
-  `"library"` (or anything unknown) migrate to `"outline"`.
-- The shortcut range becomes Ctrl+1–3. Ctrl+4 and Ctrl+5 are no longer intercepted (the browser
-  default applies).
+- `VIEWS = ["outline", "library", "chat", "ledger"]`. The stored last-view key: value
+  `"settings"` (or anything unknown) migrates to `"outline"`.
+- The shortcut range becomes Ctrl+1–4. Ctrl+5 is no longer intercepted (the browser default applies).
 - Keyboard help (`keyboard-help.ts`) and tooltips are updated.
 
-### 7.1 Gallery removal — `asset-library.ts`, `studio-sidebar.pug`, `app-init.ts`
+### 7.1 Gallery → "Assets" (kept; amended 2026-10-04 during planning)
 
-- Remove the `data-view="library"` sidebar view, `#assetLibraryBody`, `#galleryConnectBtn`
-  and `#galleryVisitorBadge`.
-- In `asset-library.ts`, delete only the code whose sole consumer is the sidebar gallery DOM
-  (rendering into `assetLibraryBody`, card replacement, gallery empty states). Keep and leave
-  untouched everything used elsewhere: `openAssetByTokenId`, `fetchOwnedTokenIds`,
-  `expandTokenToAssets`, the re-export of `getReadableContract`, and `refreshAssetLibrary` if
-  the router or live-update code still needs its non-DOM side effects. If `refreshAssetLibrary`
-  becomes DOM-only, delete it and its 10 call sites. The plan determines which case applies by
-  reading the function.
-- `app-init.ts`: drop `galleryConnectBtn` from the connect-button list.
+The Studio Gallery is the **picker for placing assets into the open scene**: its cards carry
+**Add to Scene** and drag-to-viewport/outliner, and Outline's **+ Add child asset** opens it
+(`outliner.ts` `onAddChild`). It is therefore **kept**, not removed. Only its framing changes:
+
+- Rail label and tooltip: "Assets (Ctrl+2)". View header `h3`: "Assets". A one-line hint
+  under the header in `--dim-fg`: "Add to Scene or drag into the viewport to place an asset."
+- The `data-view="library"` attribute and the `#assetLibraryBody`, `#galleryConnectBtn` and
+  `#galleryVisitorBadge` ids are **unchanged**, so `asset-library.ts`, `outliner.ts` and the E2E
+  selector `gallerySwitcherBtn` keep working.
+- The gallery's signed-out empty state stays. Its sign-in button follows the Phase 1/2 button
+  styling (secondary, sentence case "Sign in").
+- Browsing and organising collections stays on the **Library page**. The Assets tab is for placement only.
 
 ### 7.2 Settings → Properties "Asset" section — `studio-main.pug`, `_inspector.scss`
 
@@ -140,9 +141,8 @@ WAI-ARIA **menu button** pattern, using the `ui/menu-button.ts` helper created i
 - New `router-default.test.js`: unrecognised in-app paths fall back to library; `/studio*` → studio;
   `/library*` → library; `initial-view` parity; `?login=1` opens sign-in on both views.
 - New `new-menu.test.js`: menu-button ARIA and keyboard; each item's action; CAD item hidden when the flag is off.
-- New `sidebar-views.test.js`: VIEWS order, Ctrl+1–3, stored-view migration.
-- Update: `asset-library.test.js`, `library-visitor.test.js` (gallery parts),
-  `header-wallet-button.test.js` (avatar / sign-in), `asset-chrome.test.js` (`newMenuBtn`),
+- New `sidebar-views.test.js`: VIEWS order, Ctrl+1–4, stored-view migration (`settings` → `outline`).
+- Update: `header-wallet-button.test.js` (avatar / sign-in), `asset-chrome.test.js` (`newMenuBtn`),
   `create-panel-generate.test.js` and `create-panel-followups.test.js` (if they assert the default
   view), `deployment-integrity.test.js` and `library-build.test.js` (if they list removed ids).
 
@@ -152,7 +152,7 @@ WAI-ARIA **menu button** pattern, using the `ui/menu-button.ts` helper created i
   - New ▾ instead of `#newAssetBtn`;
   - the avatar menu instead of the header wallet buttons;
   - the network select inside the avatar menu;
-  - no Gallery tab (use the Library page);
+  - the gallery tab is labelled "Assets" (selector unchanged);
   - Settings fields under Properties → Asset.
 - Note: E2E reuses any backend on `:9090`. Run against a fresh dev stack (see project memory on stale backends).
 
@@ -164,4 +164,4 @@ open, the avatar menu open, and the Studio rail, in both themes at 1440×900.
 - **E2E churn** is the main cost. Centralising selectors in `studio-selectors.mjs` before touching specs keeps it mechanical.
 - **CAD plan collision:** if this phase starts before the CAD work merges, rebase conflicts in
   `create-panel.ts` and `studio-sidebar.pug` are likely. Section 1's prerequisite exists for this reason.
-- **Muscle memory:** Ctrl+1 now opens Outline instead of AI. Keyboard help and the release notes call this out.
+- **Muscle memory:** Ctrl+1 now opens Outline instead of AI, and Ctrl+3 opens Create. Keyboard help and the release notes call this out.
