@@ -55,6 +55,14 @@ function buildApp(deps = {}) {
 }
 
 /**
+ * The production composition shape: no injected generator, so only
+ * CAD_MOCK_GENERATION (or a real DEEPSEEK_API_KEY) can satisfy the runtime.
+ */
+function buildBareApp() {
+  return mountRoutes("/generations", generateAssetNode({}, {}, { quotaStatePath: statePath }));
+}
+
+/**
  * The real API app (src/api/index.ts) with stub deps, so the /config handler
  * can be exercised at its production path /api/v1/config.
  */
@@ -97,6 +105,7 @@ afterEach(() => {
   delete process.env.CAD_DAILY_REQUEST_LIMIT;
   delete process.env.CAD_GENERATION_ENABLED;
   delete process.env.CAD_MOCK_GENERATION;
+  delete process.env.CAD_MOCK_UNSUITABLE;
 });
 
 describe("POST /api/v1/generations with provider cad", () => {
@@ -259,6 +268,65 @@ describe("CAD_MOCK_GENERATION", () => {
     } finally {
       if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = prevKey;
       if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
+    }
+  });
+
+  test("mock mode settles end-to-end with no injected generator and no DEEPSEEK_API_KEY", async () => {
+    const prevKey = process.env.DEEPSEEK_API_KEY;
+    const prevMock = process.env.CAD_MOCK_GENERATION;
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.CAD_MOCK_GENERATION = "true";
+    try {
+      app = buildBareApp();
+      const res = await post({ provider: "cad", prompt: "a 40x30x20 box", nodeId: "node_mock_bare" });
+      expect(res.status).toBe(202);
+      expect(typeof res.body.taskId).toBe("string");
+
+      let poll;
+      await until(async () => {
+        poll = await request(app)
+          .get("/generations/" + res.body.taskId)
+          .set("Authorization", sessionHeader());
+        return poll.body.status === "success";
+      }, "success poll");
+      expect(poll.status).toBe(200);
+      expect(poll.body.format).toBe("cad-design");
+      expect(poll.body.design.code).toBe("return box(P.width, P.depth, P.height);");
+      expect(poll.body.provider.id).toBe("mock");
+    } finally {
+      if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = prevKey;
+      if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
+    }
+  });
+
+  test("CAD_MOCK_UNSUITABLE makes the mock generator refuse dragon prompts", async () => {
+    const prevKey = process.env.DEEPSEEK_API_KEY;
+    const prevMock = process.env.CAD_MOCK_GENERATION;
+    const prevUnsuitable = process.env.CAD_MOCK_UNSUITABLE;
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.CAD_MOCK_GENERATION = "true";
+    process.env.CAD_MOCK_UNSUITABLE = "true";
+    try {
+      const { createMockCadGenerator } = await import("../../src/api/generation-providers.ts");
+      const generator = createMockCadGenerator();
+
+      let refusal;
+      try {
+        await generator.generate({ prompt: "a dragon" });
+      } catch (err) {
+        refusal = err;
+      }
+      expect(refusal).toBeDefined();
+      expect(refusal.message).toBe("Request unsuitable for CAD generation");
+      expect(refusal.suitability).toBe(0.1);
+      expect(refusal.alternative).toEqual({ kind: "organic-mesh", provider: "tripo3d" });
+
+      const ok = await generator.generate({ prompt: "a plate" });
+      expect(ok.design.summary).toBe("Mock parametric box");
+    } finally {
+      if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = prevKey;
+      if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
+      if (prevUnsuitable === undefined) delete process.env.CAD_MOCK_UNSUITABLE; else process.env.CAD_MOCK_UNSUITABLE = prevUnsuitable;
     }
   });
 

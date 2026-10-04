@@ -36,7 +36,7 @@ import {
   refundCadUnit,
 } from "../cad-quota.ts";
 import { refuseAdmission, setQuotaHeaders as setCadQuotaHeaders, cadConfigFromEnv } from "../routes/cad.ts";
-import type { CadRuntimeConfig } from "../routes/cad.ts";
+import type { CadConfigOutcome, CadRuntimeConfig } from "../routes/cad.ts";
 import authenticate from "../authentication.ts";
 import type { AuthEnv } from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
@@ -767,6 +767,22 @@ function resolveProvider(provider: string | undefined): {
 }
 
 /**
+ * Env-aware cad runtime resolution shared by the POST, poll, and DELETE
+ * branches.
+ * @remarks CAD_MOCK_GENERATION swaps in a canned generator and waives the
+ *   DeepSeek key (cadConfigFromEnv skips the key check when a generator is
+ *   injected). The cad task store is module-level, so each branch may rebuild
+ *   the provider as long as every branch resolves through this helper — the
+ *   poll/DELETE paths must see the same generator the POST branch admitted
+ *   with, or the taskId lookup dies on a 503.
+ */
+function resolveCadRuntimeForRequest(cadDeps: GenerationProvidersDeps): CadConfigOutcome {
+  return process.env.CAD_MOCK_GENERATION === "true"
+    ? cadConfigFromEnv(process.env, { ...cadDeps, generator: createMockCadGenerator() })
+    : resolveCadRuntime(cadDeps);
+}
+
+/**
  * CAD dispatch: server-paid, design-on-the-wire. Admits through the cad
  * quota (daily rounds + one in-flight per wallet), starts the in-process
  * task, and wires settle-time metering (slot release; unsuitable refund).
@@ -786,11 +802,7 @@ async function handleCadRequest(
     }, 400);
   }
 
-  // CAD_MOCK_GENERATION swaps in a canned generator and waives the DeepSeek
-  // key (cadConfigFromEnv skips the key check when a generator is injected).
-  const runtime = process.env.CAD_MOCK_GENERATION === "true"
-    ? cadConfigFromEnv(process.env, { ...cadDeps, generator: createMockCadGenerator() })
-    : resolveCadRuntime(cadDeps);
+  const runtime = resolveCadRuntimeForRequest(cadDeps);
   if (!runtime.ok) {
     return c.json(
       { error: { code: runtime.code, message: runtime.message } },
@@ -1108,7 +1120,7 @@ export default function generateAssetNode(
     evictTask(taskId);
     console.log(`[GEN] task cancelled taskId=${taskId} tripo=${entry.tripoTaskId}`);
     if (entry.provider === "cad") {
-      const runtime = resolveCadRuntime(cadDeps);
+      const runtime = resolveCadRuntimeForRequest(cadDeps);
       const upstreamCancelled = runtime.ok
         ? await createCadGenerationProvider(runtime.config.generator).cancel(entry.tripoTaskId)
         : false;
@@ -1145,7 +1157,7 @@ export default function generateAssetNode(
 
       console.log(`[GEN] polling taskId=${taskId} tripo=${entry.tripoTaskId}`);
       if (entry.provider === "cad") {
-        const runtime = resolveCadRuntime(cadDeps);
+        const runtime = resolveCadRuntimeForRequest(cadDeps);
         if (!runtime.ok) {
           return c.json(
             { error: { code: runtime.code, message: runtime.message } },
