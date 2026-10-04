@@ -11,6 +11,7 @@ import { stageNodeTransform, readNodeTransformMatrix, matricesEqual } from "./tr
 import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
 import { notifyPendingEditsChanged, registerPendingSource } from "../state/unsaved-changes.ts";
+import { isEditing, subscribeEditMode } from "../state/edit-mode.ts";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -34,6 +35,9 @@ const nodeColorInput = document.getElementById("nodeColor");
 const scaleSection = document.getElementById("scaleSection");
 const nodeScaleFactor: HTMLInputElement|null = document.getElementById("nodeScaleFactor") as HTMLInputElement | null;
 const nodeScalePercent: HTMLInputElement|null = document.getElementById("nodeScalePercent") as HTMLInputElement | null;
+const scaleHint = document.getElementById("scaleHint");
+const SCALE_HINT_EDIT = scaleHint?.textContent ?? "";
+const SCALE_HINT_VIEW = "Switch to Edit to change scale.";
 const componentEditor = document.getElementById("componentEditor");
 const selectedComponentName = document.getElementById("selectedComponentName");
 const selectedComponentSwatch = document.getElementById(
@@ -110,6 +114,14 @@ function getMeshMaterialColor(mesh: BABYLON.AbstractMesh) {
 
 const MIN_SCALE = 0.01;
 
+/** Scale is a placement edit: editable in Edit mode only. */
+function _syncScaleEditable(): void {
+  const editable = isEditing();
+  if (nodeScaleFactor) nodeScaleFactor.disabled = !editable;
+  if (nodeScalePercent) nodeScalePercent.disabled = !editable;
+  if (scaleHint) scaleHint.textContent = editable ? SCALE_HINT_EDIT : SCALE_HINT_VIEW;
+}
+
 function _getLiveAnchor(nodeId: string | null) {
   if (!nodeId) return null;
   const anchor = state.nodeAnchors.get(nodeId);
@@ -143,7 +155,9 @@ function _refreshScaleFields() {
  * @remarks Keying the same factor into every copy of a model makes them
  *   identical in size.
  */
+// fallow-ignore-next-line complexity
 function _applyUniformScale(factor: number) {
+  if (!isEditing()) return;
   const anchor = _getLiveAnchor(activeNodeId);
   if (!anchor || !Number.isFinite(factor) || factor < MIN_SCALE) {
     _refreshScaleFields();
@@ -587,5 +601,8 @@ on(EVENTS.TRANSFORM_STAGED, (e: {nodeIds?: string[]}) => {
   if (!activeNodeId || !Array.isArray(e?.nodeIds)) return;
   if (e.nodeIds.includes(activeNodeId)) _refreshScaleFields();
 });
+
+subscribeEditMode(_syncScaleEditable);
+_syncScaleEditable();
 
 export { openInspector };
