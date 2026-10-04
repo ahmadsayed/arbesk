@@ -18,9 +18,12 @@ separate effort.
 ## Decision log (user-approved)
 
 1. **Benchmark**: CADPrompt — 200 samples, text → CAD code, ground-truth meshes.
-2. **Scale**: rewrite measured prompts ×100 into millimetres so cad-gen's mm
-   printability gates see realistic parts. Metrics normalise to the unit cube,
-   so scores stay comparable to the paper.
+2. **Scale**: rewrite measured prompts ×100 into millimetres. Correction found
+   while planning: `evaluateKernelGates` has no printability floors (it checks
+   nonempty, volume, connected, pieces, budget), so the rescale is not about
+   gates. It keeps parts in the millimetre range the system prompt and the
+   prelude helpers are written for. Metrics normalise to the unit cube, so
+   scores stay comparable to the paper.
 3. **Loop**: score the **full product loop** — `generate()` (server static
    repair) → in-process kernel + geometric gates → up to 2 client repair rounds
    with `failures`, exactly as the browser worker does. Also report the
@@ -40,10 +43,12 @@ separate effort.
   (measured), `Ground_Truth.stl` / `.obj`, `Ground_Truth.json` (bbox, volume,
   surface area, `Is_Solid`, face/edge/vertex counts), `Python_Code.py`
   (CadQuery).
-- `Data_Stratification.xlsx`: one sheet, columns `ID`, `Semantic complexity`
-  (Simple / Moderate / Complex / Very Complex), `Mesh complexity`
-  (Simple / Complex), `Compilation difficulty`. Values carry stray leading
-  spaces — trim on read.
+- `Data_Stratification.xlsx`: one sheet, columns `ID` (numeric, e.g. `7` for
+  directory `00000007`), `Semantic complexity` (Simple / Moderate / Complex /
+  Very Complex), `Mesh complexity` (Simple / Complex), `Compilation
+  difficulty` (numeric: how many of the paper's 6 model×prompting attempts
+  compiled; paper §4: **Easy** when ≥ 4, **Hard** otherwise). String values
+  carry stray leading spaces — trim on read.
 - Prompts begin "Write Python code using CADQuery to …". Measured prompts state
   lengths mostly as "N units" (895 occurrences), with a few in meters (25),
   inches (12) and degrees (22), and lists like "A by B units".
@@ -84,13 +89,20 @@ compare against the same rows, noting the ambiguity in the summary.
 scripts/
   cad-bench.mjs              CLI: orchestrates fetch → run → score → triage → summary
   lib/
-    cad-harness.mjs          (existing) + buildWithClientRepair, moved from cad-eval.mjs
+    cad-harness.mjs          (existing, unchanged)
+    stl.mjs                  readStl / writeBinaryStl, moved from cad-eval.mjs
+    client-repair.mjs        buildWithClientRepair, moved from cad-eval.mjs
     cadprompt.mjs            fetch, load samples + stratification, rewrite prompts
     mesh-metrics.mjs         pure maths: sampling, k-d tree, ICP, chamfer, hausdorff, iogt
     bench-iou.mjs            exact volumetric IoU via Manifold
+    bench-sample.mjs         one sample: generate → build → score → outcome
     bench-triage.mjs         Jev triage: state builder, questions, answer reader
     bench-summary.mjs        aggregation (median/IQR, strata, causes) → summary.json/.md
 ```
+
+The moved helpers live in their own small modules rather than in
+`cad-harness.mjs`, because `cad-harness.mjs` imports manifold-3d and the
+backend barrel at load time and the moved code needs neither.
 
 Each unit has one job and is testable alone. `mesh-metrics.mjs` takes plain
 `{ positions, indices }` meshes and touches no I/O or Manifold, so it is the
@@ -99,8 +111,9 @@ easiest to test exhaustively.
 ### Targeted refactor
 
 `buildWithClientRepair` moves from `scripts/cad-eval.mjs` to
-`scripts/lib/cad-harness.mjs` with its logging and design-persistence hooks
-passed in (`onRepair`, `onDesign`), so the benchmark and the eval share exactly
+`scripts/lib/client-repair.mjs` with its logging and design-persistence hooks
+passed in (`onRepair`, `onDesign`), and returns the per-round failures instead
+of `null`, so the benchmark and the eval share exactly
 the browser's client loop (`CLIENT_REPAIR_ROUNDS = 2`, `MAX_TRIANGLES =
 200000`, the same `bodyFloor` / `bodyAllowance` / `evaluateKernelGates`).
 `cad-eval.mjs` behaviour is unchanged.
@@ -126,36 +139,49 @@ cad-eval's `attempt#N` convention.
 ## `cadprompt.mjs`
 
 - **fetch()**: if `test-results/cadprompt/` is absent or at a different
-  commit, `git clone --depth 1` then `git fetch --depth 1 origin <pin>` +
-  `checkout <pin>`. Network is used only here.
+  commit, `git init` it, `git fetch --depth 1 <repo> <pin>` (GitHub serves
+  fetch-by-SHA) and `checkout FETCH_HEAD`. Network is used only here.
 - **loadSamples(variant)** → `{ id, prompt, gtStlPath, gtJson, strata }[]`.
   Strata come from the xlsx, read with `unzip -p` on `xl/sharedStrings.xml` and
   `xl/worksheets/sheet1.xml` (no new dependency). If `unzip` is missing the
   run continues unstratified and says so in the summary.
-- **rewritePrompt(text, variant)** → `{ prompt, suspect }`:
-  1. Replace a leading `/^\s*write (a )?python code using cad ?query to\s*/i`
-     with an imperative ("Create …"), capitalising the first word.
-  2. Measured variant only: multiply by 100 every number in `N unit(s)` and in
-     `A by B [by C] unit(s)` lists, rewriting the unit to `mm`. Leave degrees,
-     meters, inches and bare counts ("4 holes", "6 sides") untouched.
-  3. Append "Dimensions are in millimetres."
-  4. `suspect = true` if any decimal number remains that is not followed by a
-     degree, meter or inch unit — flagged in the sample result and summary for
-     a human to check.
+- **rewritePrompt(text, variant)** → `{ prompt, rewrite, suspect }`:
+  1. Strip the observed prefixes ("Write [a] Python code|script using
+     CADQuery to|for …") and leave an imperative, prepending "Create" when the
+     remainder does not start with a verb.
+  2. Measured variant: multiply by 100 every number in `N unit(s)` and in
+     `A by B [by C] unit(s)` lists, rewriting the unit to `mm`; leave degrees,
+     meters, inches, ratios ("1.5 times") and bare counts alone; append
+     "Dimensions are in millimetres." → `rewrite: "scaled"`.
+  3. **Fallback**: if scaling would be unsafe — a unit number preceded by an
+     arithmetic operator ("0.6 + 0.1*2 units") or a length decimal left
+     unscaled (coordinate tuples, point lists) — keep the original numbers and
+     append "Lengths are given in units where 1 unit = 100 mm; build the part
+     at that scale, in millimetres." → `rewrite: "fallback"`, `suspect: true`.
+     This avoids mixing scaled and unscaled lengths in one request.
+  4. Abstract variant: prefix strip + "Dimensions are in millimetres." →
+     `rewrite: "none"`.
+  Prototyped on all 200 prompts at the pinned commit: measured gives 179 scaled
+  and 21 fallback; abstract gives 200 with no leftover CadQuery wording.
 
 ## Per-sample flow
 
 1. `generator.generate({ prompt })`. On `CadRequestUnsuitable` record
-   `outcome: "refused"`.
+   `outcome: "refused"`; on `CadGenerationFailed` (server static repair
+   exhausted) record `outcome: "static_failed"`.
 2. `buildWithClientRepair` — kernel + gates, up to 2 client repair rounds.
    Record each round's failing gate and error.
 3. On success, export the delivery mesh (`meshFrom`) to `<id>.stl`.
 4. Score (below). On any failure, or a 10-minute per-sample wall clock, apply
-   the paper's penalty (distances √3, IoGT 0, IoU 0).
-5. Write `<id>.json`: variant, the prompt as sent, the `suspect` flag, design,
-   `diagnostics` (selection, attempts, tokens), client repair rounds,
-   `outcome` (`built` | `refused` | `gate_failed` | `kernel_error` |
-   `timeout` | `provider_error`), metrics, triage, and timings.
+   the paper's penalty (distances √3, IoGT 0, IoU 0). The clock aborts
+   `generate()` through its `signal` and is checked between steps; it cannot
+   interrupt a kernel run in progress, because the kernel is synchronous and
+   in process (as in cad-eval).
+5. Write `<variant>/<id>.json`: variant, the prompt as sent, the `suspect`
+   flag, design, `diagnostics` (selection, attempts, tokens), client repair
+   rounds, `outcome` (`built` | `refused` | `static_failed` | `gate_failed` |
+   `kernel_error` | `timeout` | `provider_error`), metrics, triage, and
+   timings.
 
 Concurrency is a simple pool (default 4); the kernel runs in process, as in
 cad-eval.
@@ -164,17 +190,22 @@ cad-eval.
 
 ### `mesh-metrics.mjs`
 
-- **sample(mesh, n = 8192, seed)**: area-weighted surface sampling with a
-  seeded PRNG, so runs are reproducible. The paper does not state its sample
-  count; this is documented as a deviation.
-- **normalise(points)**: translate the bbox centre to the origin, then scale
-  so the longest side is 1.
-- **icp(source, target, { iters = 50, tol = 1e-6 })**: point-to-point
-  rigid ICP (SVD/Kabsch per step, nearest neighbours via a k-d tree), starting
-  from identity after both clouds are normalised. This differs from the paper,
-  which aligns first and normalises after; our part is ~100× the ground truth,
-  so ICP from raw coordinates cannot converge. Re-normalise after alignment.
-  Returns the 4×4 transform and the aligned points.
+- **samplePoints(mesh, n = 8192, seed)**: area-weighted surface sampling with
+  a seeded PRNG, so runs are reproducible. Generated and ground truth use the
+  same seed, so identical meshes score exactly 0. The paper does not state its
+  sample count; this is documented as a deviation.
+- **Pre-normalisation (moment)**: translate the sample centroid to the origin
+  and scale by the inverse RMS radius. This is rotation-invariant, so two
+  copies of a part differing only by a rotation get the same scale, which a
+  bounding-box scale would not give. It differs from the paper, which aligns
+  first and normalises after; our part is ~100× the ground truth, so ICP from
+  raw coordinates cannot converge.
+- **icp(source, target, { iterations = 50, tolerance = 1e-9 })**:
+  point-to-point rigid ICP (Horn's closed-form quaternion fit per step,
+  nearest neighbours via a k-d tree), starting from identity.
+- **Post-normalisation (box)**: after alignment each cloud is mapped into the
+  unit cube by its bounding box (longest side 1), as in the paper. All metrics
+  are taken here.
 - **chamfer(P, Q)** (Eq. 8), **hausdorff(P, Q)** (Eq. 9),
   **iogt(P, Q)**: bounding-box intersection volume over ground-truth bbox
   volume (Eq. 10 as the paper computes it).
@@ -272,8 +303,9 @@ it.
 
 - `bench-metrics.test.js`:
   - identical meshes → chamfer 0, hausdorff 0, iogt 1
-  - a unit cube rotated 20° about Z and translated → ICP recovers it
-    (chamfer < 1e-3)
+  - a box rotated 15° about Z, translated and scaled ×100 → ICP recovers it
+    (chamfer < 0.02, the floor set by sampling two different poses; IoGT > 0.97)
+  - a cube against a flat slab → chamfer > 0.1 (negative control)
   - two unit cubes offset by 0.5 on X → hand-computed IoGT
   - the same seed → identical samples
 - `bench-iou.test.js`: two offset cubes → IoU 1/3; a non-manifold mesh →
