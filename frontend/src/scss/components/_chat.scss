@@ -235,8 +235,8 @@
   margin-left: var(--size-2);
   padding: 0 var(--size-1);
   border-radius: var(--radius-pill, 999px);
-  background: var(--success-bg, #2e7d32);
-  color: #fff;
+  background: var(--success);
+  color: var(--window-bg);
   font-size: 0.75em;
 }
 
@@ -356,14 +356,14 @@
 
   // Tripo 3D selected but no key stored yet.
   &.attention {
-    color: var(--yellow-4);
+    color: var(--warning);
   }
 }
 
 .provider-key-hint {
   margin: 0;
   font-size: var(--font-size-0);
-  color: var(--yellow-4);
+  color: var(--warning);
 
   &[hidden] {
     display: none;

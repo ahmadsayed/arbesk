@@ -155,16 +155,16 @@
 }
 
 .asset-card-error {
-  border-color: var(--error-bg, #c01c28);
-  background-color: color-mix(in srgb, var(--error-bg, #c01c28) 8%, var(--card-bg));
+  border-color: var(--danger-text);
+  background-color: color-mix(in srgb, var(--danger-text) 8%, var(--card-bg));
 
   &:hover {
-    border-color: var(--error-bg, #c01c28);
+    border-color: var(--danger-text);
   }
 }
 
 .asset-card-thumbnail-error {
-  color: var(--error-bg, #c01c28);
+  color: var(--danger-text);
 }
 
 .asset-card-reload {
@@ -202,7 +202,7 @@
   opacity: 0.55;
 
   .asset-card-thumbnail {
-    background: color-mix(in srgb, var(--bs-warning, #ffc107) 8%, var(--card-bg));
-    color: var(--bs-warning, #ffc107);
+    background: color-mix(in srgb, var(--warning) 8%, var(--card-bg));
+    color: var(--warning);
   }
 }

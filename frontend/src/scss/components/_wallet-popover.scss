@@ -70,9 +70,9 @@
   }
 
   &.copied {
-    background-color: var(--green-4);
-    border-color: var(--green-4);
-    color: #ffffff;
+    background-color: var(--success);
+    border-color: var(--success);
+    color: var(--window-bg);
   }
 }
 

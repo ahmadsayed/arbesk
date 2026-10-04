@@ -160,7 +160,7 @@
 }
 
 .status-uploading {
-  background-color: var(--yellow-4);
+  background-color: color-mix(in srgb, var(--warning) 22%, var(--card-bg));
   color: var(--window-fg);
 }
 
@@ -175,7 +175,7 @@
 }
 
 .status-pending {
-  background-color: var(--yellow-4);
+  background-color: color-mix(in srgb, var(--warning) 22%, var(--card-bg));
   color: var(--window-fg);
 }
 
