@@ -21,8 +21,8 @@ Make the `cad` generation provider usable end-to-end from the Studio UI:
 - Parametric re-render UI (the `design.parameters` table is preserved in the 3MF
   sidecar; a future edit panel can re-run the kernel client-side).
 - Client-driven repair flow (`POST /api/v1/cad/repairs` stays backend/CLI-only for now).
-- Provider-availability discovery endpoint (CAD stays an optimistic option; a
-  `CAD_NOT_CONFIGURED` error explains itself — see §7).
+- A dedicated provider-availability endpoint — availability is instead reported
+  through the existing `GET /api/v1/config` (`cadGeneration` flag, see §4.6).
 - glTF/GLB export option for CAD results (the worker protocol leaves room for it).
 - Tripo-style follow-up actions on CAD bubbles (retexture/retopo/rig/animate do not
   apply to parametric meshes).
@@ -131,14 +131,22 @@ requirement is waived. Mirrors the `MOCK_3D_GENERATION` precedent (warn-but-allo
 production; documented in API_SPEC + AGENTS.md). This exists so dev and E2E can exercise
 the full UI flow without a model key.
 
+### 4.6a Backend availability: `cadGeneration` config flag
+
+`GET /api/v1/config` gains `cadGeneration: boolean` (true when `CAD_MOCK_GENERATION`
+is on or a `DEEPSEEK_API_KEY` is present). The create panel hides the Parametric CAD
+option when the flag is false, so an unconfigured deployment never presents a dead end
+(the `CAD_NOT_CONFIGURED` error mapping stays as a safety net).
+
 ### 4.7 Bundle/staging (`frontend/scripts/bundle.js`, `compress.js`)
 
 - New worker entry → `dist/workers/cad-worker.js` (self-contained ESM).
 - Stage `node_modules/manifold-3d/manifold.wasm` next to the worker
   (resolve from `packages/cad-gen` like the brotli-wasm alias; `manifold-3d` glue is ESM
   and worker-aware).
-- `compress.js` must not brotli-precompress the `.wasm` (match existing brotli wasm
-  treatment).
+- `compress.js` brotli-precompresses the `.wasm` like every other asset
+  (`.wasm` is in its COMPRESSIBLE set and `brotli_wasm_bg.wasm` already ships as a `.br`
+  sibling — the backend serves `.br` correctly; no exclusion needed).
 - `test/frontend/deployment-integrity.test.js` asserts the new artifacts exist in dist.
 
 ## 5. Data flow notes
@@ -194,6 +202,5 @@ the full UI flow without a model key.
 |---|---|
 | Worker WASM loading differences (locateFile typing bug in manifold-3d `.d.ts`) | Known pattern from brotli-wasm; typed as `any` per `cad-harness.mjs`; E2E exercises the real bundle |
 | Kernel runaway (no server-side timeout anymore) | 90 s client timeout + worker termination; guard deny-list runs before eval |
-| `manifold.wasm` brotli-compressed by `compress.js` | Explicit exclusion, mirroring `brotli_wasm_bg.wasm` |
 | Success delivered once | Design persisted immediately as the 3MF sidecar at generation time |
 | Unknown-format fallback in `resolveFormatHandler` | Cad results are staged as `format: "3mf"` — a registered handler — before any UI sees them |
