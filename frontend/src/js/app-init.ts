@@ -98,7 +98,7 @@ for (const id of ["connectWalletBtn", "libraryConnectBtn", "galleryConnectBtn"])
 }
 initWalletPopover();
 
-// Deep link from the landing page "Log in" (/studio?login=1): open the
+// Deep link from the landing page "Log in" (/library?login=1; any view works): open the
 // connect modal immediately. If a previous session gets silently restored
 // while the modal is open, close it — the user is already in.
 if (new URLSearchParams(location.search).has("login")) {

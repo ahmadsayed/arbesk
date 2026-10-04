@@ -46,12 +46,26 @@ beforeEach(() => {
 });
 
 describe("pathToView", () => {
-  test("maps paths to views, defaulting unknown/root to studio", async () => {
+  test("maps paths to views, defaulting unknown/root to library", async () => {
     const { pathToView } = await loadRouter();
     expect(pathToView("/studio")).toBe("studio");
     expect(pathToView("/library")).toBe("library");
-    expect(pathToView("/")).toBe("studio");
-    expect(pathToView("/anything-else")).toBe("studio");
+    expect(pathToView("/")).toBe("library");
+    expect(pathToView("/anything-else")).toBe("library");
+  });
+});
+
+describe("?login=1 deep link", () => {
+  // The landing page's "Log in" now points at /library?login=1; app-init must
+  // read only the query string so the sign-in prompt opens on any view.
+  test("app-init opens sign-in for ?login=1 regardless of view path", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const url = await import("url");
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    const src = fs.readFileSync(path.resolve(here, "../../frontend/src/js/app-init.ts"), "utf-8");
+    expect(src).toMatch(/new URLSearchParams\(location\.search\)\.has\("login"\)/);
+    expect(src).not.toMatch(/pathname[^\n]*login/);
   });
 });
 

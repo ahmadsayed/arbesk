@@ -82,10 +82,22 @@
   // Segmented control: the selected tab is cut out of the track in the
   // header's own surface colour, with a hairline edge.
   &.active {
-    background-color: var(--headerbar-bg);
-    color: var(--headerbar-fg);
-    box-shadow: inset 0 0 0 var(--border-size-1) var(--hairline), var(--shadow-1);
+    @extend %page-switcher-tab-selected;
   }
+}
+
+%page-switcher-tab-selected {
+  background-color: var(--headerbar-bg);
+  color: var(--headerbar-fg);
+  box-shadow: inset 0 0 0 var(--border-size-1) var(--hairline), var(--shadow-1);
+}
+
+// Pre-router paint: no tab carries .active in the markup; until the router
+// sets it, select the tab matching <html data-initial-view> (see
+// app/initial-view.ts) so the switcher never flashes the wrong view.
+html[data-initial-view='library'] .page-switcher-tab[href='/library'],
+html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
+  @extend %page-switcher-tab-selected;
 }
 
 // Back button (nested only)

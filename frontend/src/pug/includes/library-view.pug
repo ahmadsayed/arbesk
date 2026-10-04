@@ -6,7 +6,9 @@
           use(href="/icons.svg#wallet")
       h2.empty-state-title Sign in to continue
       p.empty-state-sub Sign in to browse your collections and assets.
-      button#libraryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Login / Signup
+      .empty-state-actions
+        button#libraryConnectBtn.empty-state-action.btn.btn-primary.btn-sm(type="button") Sign in
+        a.empty-state-action.btn.btn-secondary.btn-sm(href="/studio" data-nav) Open Studio
 
   #libraryMain.hidden
     .library-toolbar

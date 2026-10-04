@@ -6,10 +6,10 @@ const ADDRESS = "0xccc626354a2ea985d4abdc1173597a46afc63595";
 const BASE58 = "3rTyYaQADATmQkvr5vkTteihpSHz";
 
 describe("parseAppPath", () => {
-  test("root and unknown paths resolve to studio with no subject", () => {
+  test("root and unknown paths resolve to library with no subject", () => {
     for (const path of ["/", "/anything-else", "/foo/bar"]) {
       expect(parseAppPath(path)).toEqual({
-        view: "studio",
+        view: "library",
         subjectAddress: null,
         invalidSubject: false,
       });

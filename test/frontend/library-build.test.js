@@ -35,6 +35,8 @@ describe("Library view build (app.html)", () => {
     expect(html).toMatch(/id="libraryView"/);
     expect(html).toMatch(/id="libraryGate"/);
     expect(html).toMatch(/id="libraryConnectBtn"/);
+    // Signed-out gate offers the Studio as a client-side (data-nav) link.
+    expect(html).toMatch(/id="libraryGate"[\s\S]*href="\/studio"[^>]*data-nav/);
     expect(html).toMatch(/id="libraryMain"/);
     expect(html).toMatch(
       /class="[^"]*hidden[^"]*"\s+id="libraryMain"|id="libraryMain"\s+class="[^"]*hidden/
