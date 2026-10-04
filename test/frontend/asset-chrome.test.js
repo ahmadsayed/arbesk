@@ -34,7 +34,8 @@ beforeAll(async () => {
     <button id="saveAssetBtnText"></button>
     <button id="publishAssetBtn" hidden></button>
     <button id="publishAssetBtnText"></button>
-    <button id="downloadAssetBtn" hidden></button>`;
+    <button id="downloadAssetBtn" hidden></button>
+    <section id="assetSection" hidden></section>`;
   ({ assetStore, _resetForTesting: _resetAssets } = await import(
     "@arbesk/asset-core/domain/asset-store.js"
   ));
@@ -128,4 +129,13 @@ test("New is hidden in visitor mode even with a wallet connected", () => {
   libraryState.set({ subjectAddress: "0xABC" });
   emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
   expect(hidden("newAssetBtn")).toBe(false);
+});
+
+test("Properties → Asset section is hidden with no asset and shown once a draft exists", () => {
+  const section = () => document.getElementById("assetSection");
+  expect(section().hidden).toBe(true);
+  assetStore.set({ activeAssetManifestCid: "bafyX", activeAssetName: "Chair" });
+  expect(section().hidden).toBe(false);
+  closeAsset();
+  expect(section().hidden).toBe(true);
 });

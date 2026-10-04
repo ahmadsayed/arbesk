@@ -85,7 +85,8 @@ export const SELECTORS = {
   animationSelect: "#animationSelect",
   // New asset + nesting (linked child assets)
   newAssetBtn: "#newAssetBtn",
-  settingsSwitcherBtn: '[data-view="settings"]',
+  // Properties → Asset (name, collection, tier, team); hidden with no asset.
+  assetSection: "#assetSection",
   collectionSelect: "#collectionSelect",
   assetTokenIdLabel: "#assetStatusMeta",
   inspectorDiveBtn: "#inspectorDiveBtn",

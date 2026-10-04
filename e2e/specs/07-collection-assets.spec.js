@@ -305,11 +305,11 @@ test.describe.serial("Collection/asset model", () => {
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
-    // The sidebar defaults to Chat; open Settings to reveal the collection select.
-    await page.click(SELECTORS.settingsSwitcherBtn);
-
+    // The collection select lives in Properties → Asset, which stays hidden
+    // until an asset is open. It is still populated on connect, so check its
+    // options directly rather than its visibility.
+    await expect(page.locator(SELECTORS.assetSection)).toBeHidden();
     const collectionSelect = page.locator(SELECTORS.collectionSelect);
-    await expect(collectionSelect).toBeVisible();
 
     const options = collectionSelect.locator("option");
     await expect(options).toHaveCount(1);
