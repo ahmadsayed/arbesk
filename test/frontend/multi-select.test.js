@@ -26,7 +26,10 @@ function collectEvents() {
 }
 
 beforeEach(() => {
-  global.BABYLON = { Color3: { FromHexString: () => ({}) } };
+  // Constructible like the real Color3 (hexToColor3 calls `new Color3(r, g, b)`).
+  const Color3 = function (r, g, b) { Object.assign(this, { r, g, b }); };
+  Color3.FromHexString = () => new Color3(0, 0, 0);
+  global.BABYLON = { Color3 };
   state.highlightLayer = { addMesh: jest.fn(), removeMesh: jest.fn() };
   state.nodeMeshes = new Map();
   state.highlightedNodeId = null;

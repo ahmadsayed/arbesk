@@ -152,3 +152,26 @@ describe("theme-init (pre-paint)", () => {
     expect(html().getAttribute("data-scheme")).toBe("light");
   });
 });
+
+describe("readViewportTheme", () => {
+  test("reads tokens and normalizes them", async () => {
+    stubMatchMedia(false);
+    const { theme } = await load();
+    const vals = { "--viewport-bg": " #C9CACC ", "--viewport-grid": "#b3b4b7", "--selection": "a35a12" };
+    expect(theme.readViewportTheme((n) => vals[n] ?? "")).toEqual({
+      bg: "#c9cacc",
+      grid: "#b3b4b7",
+      selection: "#a35a12",
+    });
+  });
+
+  test("falls back to Graphite values when tokens are missing or invalid", async () => {
+    stubMatchMedia(false);
+    const { theme } = await load();
+    expect(theme.readViewportTheme(() => "nope")).toEqual({
+      bg: "#2a2b2f",
+      grid: "#3c3e44",
+      selection: "#f0a64b",
+    });
+  });
+});
