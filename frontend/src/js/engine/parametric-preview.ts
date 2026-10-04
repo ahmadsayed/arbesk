@@ -10,6 +10,7 @@ import { applyColor } from "./time-travel.ts";
 import { stageNodeTransform, readNodeTransformMatrix, matricesEqual } from "./transforms.ts";
 import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
+import { notifyPendingEditsChanged, registerPendingSource } from "../state/unsaved-changes.ts";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -54,6 +55,7 @@ let activeMeshName: string|null = null;
 let originalMaterialColors: Record<string, string> = {};
 // Pending direct source color edits: Map<nodeId, Map<meshName, hexColor>>
 const pendingSourceColorEdits = new Map();
+registerPendingSource(() => pendingSourceColorEdits.size > 0);
 
 // ── Undo / Redo ──────────────────────────────────────────────────────────────
 // Color and inspector-scale edits push snapshot entries into the shared scene
@@ -84,6 +86,7 @@ registerUndoApplier("color", (item, direction) => {
     pendingSourceColorEdits.set(item.nodeId, nodeEdits);
   }
   nodeEdits.set(meshName, color);
+  notifyPendingEditsChanged();
 });
 
 /**
@@ -431,6 +434,7 @@ function onComponentColorChange(e: Event) {
     pendingSourceColorEdits.set(activeNodeId, nodeEdits);
   }
   nodeEdits.set(meshName, color);
+  notifyPendingEditsChanged();
 }
 
 // Pending source color edit accessors (consumed by asset-save.js).
@@ -440,10 +444,12 @@ export function getPendingSourceColorEdits() {
 
 export function clearPendingSourceColorEdits() {
   pendingSourceColorEdits.clear();
+  notifyPendingEditsChanged();
 }
 
 export function clearPendingSourceColorEdit(nodeId: string) {
   pendingSourceColorEdits.delete(nodeId);
+  notifyPendingEditsChanged();
 }
 
 // Event bindings

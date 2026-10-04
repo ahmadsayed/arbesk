@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_WOOD_COLOR, state } from "./state.ts";
+import { notifyPendingEditsChanged } from "../state/unsaved-changes.ts";
 
 /**
  * Extract a CID from a source reference.
@@ -88,6 +89,7 @@ export function stageNodeTransform(nodeId: string): boolean {
   const matrix = readNodeTransformMatrix(nodeId);
   if (!matrix) return false;
   state.pendingTransformEdits.set(nodeId, matrix);
+  notifyPendingEditsChanged();
   return true;
 }
 

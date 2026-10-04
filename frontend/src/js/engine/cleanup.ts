@@ -8,9 +8,11 @@ import { state } from "./state.ts";
 import type { PendingSourceOverride } from "./state.ts";
 import { setActiveManifestCid, clearAssetManifestCids } from "@arbesk/asset-core/domain/asset.js";
 import { uiState } from "../state/ui-state.ts";
+import { notifyPendingEditsChanged } from "../state/unsaved-changes.ts";
 
 export function clearPendingChildRefs() {
   state.pendingChildRefs.length = 0;
+  notifyPendingEditsChanged();
 }
 
 export function getPendingChildRefs() {
@@ -23,6 +25,7 @@ export function getPendingChildRefRemovals() {
 
 export function clearPendingChildRefRemovals() {
   state.pendingChildRefRemovals.clear();
+  notifyPendingEditsChanged();
 }
 
 /**
@@ -34,10 +37,12 @@ export function getPendingPostProcessorEdits() {
 
 export function clearPendingPostProcessorEdits() {
   state.pendingPostProcessorEdits.clear();
+  notifyPendingEditsChanged();
 }
 
 export function clearPendingPostProcessorEdit(nodeId: string) {
   state.pendingPostProcessorEdits.delete(nodeId);
+  notifyPendingEditsChanged();
 }
 
 export function getPendingTransformEdits() {
@@ -46,10 +51,12 @@ export function getPendingTransformEdits() {
 
 export function clearPendingTransformEdits() {
   state.pendingTransformEdits.clear();
+  notifyPendingEditsChanged();
 }
 
 export function clearPendingTransformEdit(nodeId: string) {
   state.pendingTransformEdits.delete(nodeId);
+  notifyPendingEditsChanged();
 }
 
 export function getPendingSourceOverrides() {
@@ -58,6 +65,7 @@ export function getPendingSourceOverrides() {
 
 export function clearPendingSourceOverrides() {
   state.pendingSourceOverrides.clear();
+  notifyPendingEditsChanged();
 }
 
 export function stagePendingSourceOverride(
@@ -65,10 +73,12 @@ export function stagePendingSourceOverride(
   entry: PendingSourceOverride
 ) {
   state.pendingSourceOverrides.set(nodeId, entry);
+  notifyPendingEditsChanged();
 }
 
 export function clearPendingSourceOverride(nodeId: string) {
   state.pendingSourceOverrides.delete(nodeId);
+  notifyPendingEditsChanged();
 }
 
 /**
@@ -262,6 +272,7 @@ export function clearScene() {
   state.pendingPostProcessorEdits.clear();
   state.pendingTransformEdits.clear();
   state.pendingSourceOverrides.clear();
+  notifyPendingEditsChanged();
 
   // Invalidate cached mesh filter
   state._nonChromeMeshCache = null;
