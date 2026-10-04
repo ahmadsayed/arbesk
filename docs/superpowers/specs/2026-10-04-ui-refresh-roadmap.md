@@ -36,7 +36,7 @@ GNOME HIG is **no longer authoritative**. Order of precedence:
 | 2 | Library-first layout (landing, New ▾, avatar menu, status dot, Outline/Assets/Create/Activity rail, Settings → Properties) | `2026-10-04-ui-library-first-design.md` — **done** (#100–#106) | Phase 1; **CAD frontend plan (`2026-10-04-cad-frontend-integration.md`) merged** |
 | 3 | Asset info readouts: bounding box in mm, triangle count, format/size, print-ready (manifold) badge; metadata fields for licence/material/print notes replacing "Notes for the AI" | `2026-10-04-asset-info-readouts-design.md` — **done** | Phase 2 |
 | 4 | Version timeline strip under the viewport (replaces V-key time mode as the main entry) | to write | Phase 2 |
-| 5 | View / Edit mode: view by default, explicit Edit toggle, snap-to-ground move/rotate, no scale gizmo by default, visible unsaved state; free the `G` key | to write | Phase 2 |
+| 5 | View / Edit mode: view by default, explicit Edit toggle, snap-to-ground move/rotate, no scale gizmo by default, visible unsaved state; free the `G` key | `2026-10-04-view-edit-mode-design.md` — **done** | Phase 2 |
 
 Phases 3–5 each get their own brainstorm → spec → plan cycle.
 

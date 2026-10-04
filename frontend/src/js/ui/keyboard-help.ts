@@ -8,8 +8,19 @@ const SECTIONS = [
       ["F", "Frame selected"],
       ["Home", "Frame all"],
       ["0", "Reset view (forget saved camera position)"],
-      ["G", "Toggle grid & axes"],
+      ["V", "Time travel for the selected node"],
       ["Esc", "Deselect"],
+    ],
+  },
+  {
+    heading: "Edit placement",
+    rows: [
+      ["E", "Enter / leave Edit mode"],
+      ["T", "Move (on the floor plane)"],
+      ["R", "Rotate (15° steps)"],
+      ["G", "Drop to floor"],
+      ["Shift+R", "Reset transform (keeps scale)"],
+      ["Alt (hold while dragging)", "Turn snapping off"],
     ],
   },
   {
