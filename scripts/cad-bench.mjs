@@ -13,6 +13,7 @@
  * Usage:
  *   bun scripts/cad-bench.mjs [--variant measured|abstract|both] [--limit N] [--ids 7,633]
  *                             [--concurrency N] [--thinking on|off] [--no-jev] [--no-triage]
+ *                             [--no-render]      skip the best-effort PNG renders
  *                             [--resume <runDir>] [--compare <runDir>] [--out <root>]
  *   bun scripts/cad-bench.mjs --agreement <runDir>   score a hand-labelled triage-agreement.md
  *
@@ -23,6 +24,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { PROJECT_ROOT, generatorConfigFrom, loadCadKernel, requireEnv } from "./lib/cad-harness.mjs";
 import { CADPROMPT_PIN, fetchCadPrompt, loadSamples } from "./lib/cadprompt.mjs";
 import { runSample } from "./lib/bench-sample.mjs";
@@ -59,7 +61,7 @@ export function parseArgs(argv) {
   const opts = {
     variants: /** @type {("measured" | "abstract")[]} */ (["measured"]),
     limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: DEFAULT_CONCURRENCY,
-    jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null),
+    jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null), render: true,
     resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
     agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
   };
@@ -100,6 +102,8 @@ export function parseArgs(argv) {
         break;
       }
       case "--no-jev": opts.jev = false; break;
+      case "--render": opts.render = true; break;
+      case "--no-render": opts.render = false; break;
       case "--thinking": {
         const v = value();
         if (v !== "on" && v !== "off") throw new Error("--thinking must be on or off, got " + v);
@@ -188,6 +192,43 @@ export function readResults(dir) {
  */
 export function distinctRunStamps(results) {
   return new Set(results.map((r) => JSON.stringify(r.run ?? null))).size;
+}
+
+/**
+ * Renders one STL to a PNG with cad-eval's reference mode.
+ * @remarks Best-effort: a render is an artifact for the eye, not a measurement,
+ *   so it never sits on the critical path and a failure to render must not fail
+ *   the run. Spawned rather than imported because the renderer lives in
+ *   scripts/cad-eval.mjs, which is a CLI; the images are byte-identical to the
+ *   ones that command writes by hand.
+ * @param {string} stl @param {string} png
+ * @returns {Promise<void>}
+ */
+function renderStl(stl, png) {
+  fs.mkdirSync(path.dirname(png), { recursive: true });
+  return new Promise((resolve) => {
+    const proc = spawn("bun", [path.join(PROJECT_ROOT, "scripts", "cad-eval.mjs"), "--stl", stl, png], {
+      cwd: PROJECT_ROOT, stdio: "ignore",
+    });
+    proc.on("error", () => resolve());
+    proc.on("close", () => resolve());
+  });
+}
+
+/**
+ * Renders a sample's delivered part and, once per prompt id, its ground truth.
+ * @remarks Runs INSIDE the sample's pool slot, so the render overlaps the other
+ *   samples' provider calls instead of being a separate pass over the run. The
+ *   ground truth is shared by both prompt variants, so it is written once.
+ * @param {string} dir The variant directory.
+ * @param {any} sample @param {boolean} delivered
+ */
+async function renderSample(dir, sample, delivered) {
+  const truth = path.join(path.dirname(dir), "truth", sample.id + ".png");
+  await Promise.all([
+    delivered ? renderStl(path.join(dir, sample.id + ".stl"), path.join(dir, sample.id + ".generated.png")) : null,
+    fs.existsSync(truth) ? null : renderStl(sample.gtStlPath, truth),
+  ]);
 }
 
 /**
@@ -284,12 +325,16 @@ async function main() {
     await pool(todo, opts.concurrency, async (sample) => {
       const { result, mesh } = await runSample({ generator, kernel, score, sample });
       if (mesh) writeBinaryStl(path.join(dir, sample.id + ".stl"), mesh);
+      // Fired here, not after the run, so it overlaps the other samples' provider
+      // calls; the result is awaited only after the sample is durable on disk.
+      const rendering = opts.render ? renderSample(dir, sample, Boolean(mesh)) : Promise.resolve();
       // Asked AFTER the sample so failures get a band too: the table must
       // describe the requests, not only the parts that built.
       if (complexityJev) result.complexity = await askComplexity(complexityJev, result.prompt);
       result.run = runStamp;
       if (jev && needsTriage(result)) result.triage = await triage(jev, result);
       writeJsonAtomic(path.join(dir, sample.id + ".json"), result);
+      await rendering;
       consecutive = result.outcome === "provider_error" ? consecutive + 1 : 0;
       if (consecutive >= MAX_CONSECUTIVE_PROVIDER_ERRORS) aborted = true;
       const m = result.metrics;
