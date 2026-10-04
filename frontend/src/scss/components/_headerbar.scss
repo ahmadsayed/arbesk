@@ -79,9 +79,12 @@
     box-shadow: var(--focus-ring);
   }
 
+  // Segmented control: the selected tab is cut out of the track in the
+  // header's own surface colour, with a hairline edge.
   &.active {
-    background-color: var(--raised-bg);
+    background-color: var(--headerbar-bg);
     color: var(--headerbar-fg);
+    box-shadow: inset 0 0 0 var(--border-size-1) var(--hairline), var(--shadow-1);
   }
 }
 

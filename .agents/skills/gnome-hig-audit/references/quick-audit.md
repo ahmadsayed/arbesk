@@ -1,25 +1,25 @@
-# Quick Audit — GNOME HIG UI/UX Audit
+# Quick Audit — Arbesk UI/UX Audit
 
-5-minute triage checklist and GNOME reference application comparisons.
+5-minute triage checklist, plus GNOME reference apps as optional layout heuristics.
 
 ## 16. Quick Audit (5-Minute Triage)
 
-For a fast first-pass, check only these items — they reveal the most about overall HIG health:
+For a fast first-pass, check only these items — they reveal the most about overall UI health:
 
-1. **A.1.1** Body text contrast (WCAG AA) — the most fundamental accessibility requirement.
+1. **A.1.2** Text contrast in both themes (WCAG AA) — run `test/frontend/theme-contrast.test.js`; the most fundamental accessibility requirement.
 2. **D.1.1** Button touch targets ≥ 36px — indicates whether mobile/touch was considered.
 3. **E.1.11** Tab focus order — reveals if keyboard-only users can navigate.
 4. **F.1.1** ARIA labels on all icon-only buttons — the minimum screen reader bar.
 5. **F.3.1** `prefers-reduced-motion` support — shows whether accessibility was designed-in or bolted-on.
 6. **H.2.3** Dialog focus trap — the most common modal bug that traps keyboard users.
 7. **J.1.1** Welcome/empty state exists — shows whether idle states were designed.
-8. **K.1.3** Wallet signature intent — does the user know *what* they're signing? (the Web3 gap GNOME HIG can't see)
+8. **K.1.3** Wallet signature intent — does the user know *what* they're signing? (the Web3 gap generic UI guidelines can't see)
 
 If any of these 8 fail, the audit score will almost certainly be below 70.
 
 ---
 
-## 17. Known HIG Patterns to Compare Against
+## 17. Layout Heuristics (optional, non-binding)
 
 When assessing the Arbesk Studio, compare it to these GNOME reference applications:
 

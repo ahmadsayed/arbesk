@@ -1,4 +1,4 @@
-# Report Template — GNOME HIG UI/UX Audit
+# Report Template — Arbesk UI/UX Audit
 
 Markdown template for producing scored audit reports.
 
@@ -65,7 +65,7 @@ When the audit is complete, produce a report in this format:
 
 ---
 
-## GNOME HIG Principles Scoring
+## Design Principles Scoring
 
 | Principle | Adherence | Notes |
 |-----------|-----------|-------|
@@ -77,4 +77,5 @@ When the audit is complete, produce a report in this format:
 | Responsive feedback | ```/10``` | |
 | Forgiving | ```/10``` | |
 | Minimal chrome | ```/10``` | |
+| Accent discipline (one accent, primary action only) | ```/10``` | |
 ```

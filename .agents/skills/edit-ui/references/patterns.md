@@ -14,7 +14,7 @@ Reusable UI patterns: empty states, drop zones, and spinners.
     p Create, compose, and publish tokenized 3D assets.
     .viewport-empty-actions
       button.btn.btn-primary Start New Asset
-      p(style="font-size:var(--font-size-0);color:var(--choco-4);margin-top:var(--size-2)")
+      p(style="font-size:var(--font-size-0);color:var(--dim-fg);margin-top:var(--size-2)")
         | Generate an asset, open one from your library, or drag an asset into the scene.
 ```
 

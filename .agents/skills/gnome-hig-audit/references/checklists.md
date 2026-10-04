@@ -1,4 +1,4 @@
-# Checklists — GNOME HIG UI/UX Audit
+# Checklists — Arbesk UI/UX Audit
 
 Full 11-category audit checklists (A–K), scoring rubric, and step-by-step audit procedure.
 
@@ -8,7 +8,7 @@ Each category is scored 0–100. The final score is the average across all categ
 
 | # | Category | Weight | What it covers |
 |---|----------|--------|----------------|
-| A | Color & Theming | 1.0 | Contrast ratios (WCAG AA/AAA — primary standard), dark/light parity, semantic color use, `prefers-color-scheme` and `prefers-contrast` support |
+| A | Color & Theming | 1.0 | Contrast ratios (WCAG AA/AAA — primary standard), Graphite/Paper parity, theme contract, accent discipline, semantic color, `prefers-contrast` / `forced-colors` support |
 | B | Typography | 0.8 | Font hierarchy, line heights, monospace usage, heading levels, readable measure lengths |
 | C | Layout & Spacing | 1.0 | GNOME shell conventions, panel sizing, spacing scale, grid alignment, overflow handling |
 | D | Buttons & Interactive Controls | 1.0 | Sizing (min 36×36px touch target), state coverage (hover/focus/active/disabled), icon-only patterns, primary/secondary distinction |
@@ -26,7 +26,7 @@ Each category is scored 0–100. The final score is the average across all categ
 | 90–100 | ✅ Excellent | Minor polish only |
 | 80–89 | 👍 Good | A few improvements recommended |
 | 65–79 | ⚠️ Fair | Several violations need attention |
-| 50–64 | 🔶 Poor | Significant HIG gaps |
+| 50–64 | 🔶 Poor | Significant design-language or accessibility gaps |
 | <50 | 🔴 Critical | Major rework needed |
 
 ---
@@ -41,7 +41,7 @@ For each surface listed in the scope table, read the relevant SCSS and JS files.
 
 ### Step 2: Open the running app
 
-Start the app (`./scripts/start-dev.sh`) and inspect at `http://localhost:9090`. Toggle dark/light mode (browser DevTools → Rendering → `prefers-color-scheme`).
+Start the app (`./scripts/start-dev.sh`) and inspect at `http://localhost:9090`. Switch themes with the header theme menu (System / Graphite / Paper); for System, emulate `prefers-color-scheme` in DevTools → Rendering.
 
 ### Step 3: Run the checklist
 
@@ -53,62 +53,46 @@ Count PASS items. Score = (PASS / (PASS + FAIL)) × 100.
 
 ### Step 5: Write findings
 
-For each FAIL, write a 1–2 sentence recommendation naming the specific reference (GNOME HIG / WCAG 2.2 / Web3) and the file(s) that need changing. **Evidence rule**: record measured values (contrast ratios, px) or mark the item "unverified" — never invent a number or report a FAIL you didn't actually check.
+For each FAIL, write a 1–2 sentence recommendation naming the specific reference (WCAG 2.2 / web conventions / Arbesk design language / Web3) and the file(s) that need changing. **Evidence rule**: record measured values (contrast ratios, px) or mark the item "unverified" — never invent a number or report a FAIL you didn't actually check.
 
 ---
 
 ## 4. Category A: Color & Theming Audit Checklist
 
-**Files**: `frontend/src/scss/base/_tokens.scss`
+**Files**: `frontend/src/scss/themes/_graphite.scss`, `frontend/src/scss/themes/_paper.scss` (the token contract — literal hex only), `frontend/src/scss/base/_tokens.scss` (scales + derived tokens), `test/frontend/theme-contrast.test.js`, `test/frontend/style-guards.test.js`.
+
+**Evidence**: run `bun scripts/run-tests.mjs test/frontend/theme-contrast.test.js test/frontend/style-guards.test.js` and cite its output. Measure anything the tests don't cover; never copy ratios from an older audit — the palette changes.
 
 ### A.1 Contrast Ratios (WCAG)
 
-- [ ] **A.1.1** Body text (`--window-fg` on `--window-bg`) achieves at least 4.5:1 (AA for normal text).  
-  *Check*: Light `#2a1a0e` on `#faf6f2` = ~13:1 ✅. Dark `#f0e6d8` on `#2a1a0e` = ~11:1 ✅.
+- [ ] **A.1.1** Every contract token is defined in both themes (test: "defines every contract token").
+- [ ] **A.1.2** Text tokens (`--window-fg`, `--dim-fg`, `--accent-text`, `--danger-text`, `--success`, `--info`) ≥ 4.5:1 on every surface (`--window-bg`, `--sidebar-bg`, `--raised-bg`, `--popover-bg`) in both themes.
+- [ ] **A.1.3** `--accent-fg` on `--accent-bg` and `--destructive-fg` on `--destructive-bg` ≥ 4.5:1.
+- [ ] **A.1.4** `--border-color` (control borders) ≥ 3:1 on every surface.
+- [ ] **A.1.5** Focus ring (`--focus-ring` = 2px gap + 2px `--accent-text`) ≥ 3:1 on `--window-bg`.
+- [ ] **A.1.6** Text on component `color-mix()` tints (badges, banners, card states, landing bands) ≥ 4.5:1 — listed in `DERIVED_TEXT_PAIRS`. Any tint in the code that is **not** listed there is unverified: measure it.
+- [ ] **A.1.7** No block-level `opacity` < 1 on containers holding text (it silently lowers contrast below the tested pairs).
 
-- [ ] **A.1.2** Dim text (`--dim-fg` on `--window-bg`) achieves at least 3:1 (AA for large/incidental text).  
-  *Check*: Light `#8c6a4a` on `#faf6f2` ≈ 3.5:1 ✅. Dark `#a28060` on `#2a1a0e` ≈ 3.2:1 ✅.
+### A.2 Theme Parity & Contract
 
-- [ ] **A.1.3** Accent text (`--accent-fg` on `--accent-bg`) achieves at least 4.5:1.  
-  *Check*: `#2a1a0e` on `#c19a6b` ≈ 5.5:1 ✅.
+- [ ] **A.2.1** Graphite (dark) and Paper (light) both exist; the header theme menu offers System / Graphite / Paper and the choice persists.
+- [ ] **A.2.2** No hex literals or raw-palette tokens in `scss/components/` (test: "component colour leaks").
+- [ ] **A.2.3** Light/dark-dependent selectors use `[data-scheme="dark|light"]`, never theme names.
+- [ ] **A.2.4** Surfaces form a calm depth order in each theme (Graphite: window → sidebar/view → raised/popover get lighter; Paper: raised is a step darker than the white panels).
+- [ ] **A.2.5** `prefers-contrast: more` drops shadows and uses `currentColor` borders; `forced-colors: active` gives focus a real `outline`.
 
-- [ ] **A.1.4** Destructive text (`--destructive-fg` on `--destructive-bg`) achieves at least 4.5:1.  
-  *Check*: White on `#e01b24` ≈ 5:1 ✅. White on `#c01c28` ≈ 5.5:1 ✅.
+### A.3 Semantic Color & Accent Discipline
 
-- [ ] **A.1.5** Card text (`--card-fg` on `--card-bg`) achieves at least 4.5:1.  
-  *Check*: Light `#3d2a18` on `#faf6f2` ≈ ~13:1 ✅. Dark `#e0d0bc` on `#523a22` ≈ ~5:1 ✅.
-
-- [ ] **A.1.6** Input text (`--view-fg` on `--view-bg`) achieves at least 4.5:1.  
-  *Check*: Light `#2a1a0e` on `#f0e6d8` ≈ ~11:1 ✅. Dark `#f0e6d8` on `#3d2a18` ≈ ~8:1 ✅.
-
-- [ ] **A.1.7** Focus ring color differs from the background by at least 3:1.  
-  *Check*: `--accent-bg` (`#c19a6b`) on `--view-bg` (`#f0e6d8`) ≈ 2.2:1 — **FAIL** for light mode.
-
-- [ ] **A.1.8** Border color (`--border-color`) has sufficient contrast to distinguish surfaces.  
-  *Check*: Light `#cdb89a` on `#faf6f2` ≈ 1.5:1 — **FAIL** (borders are barely visible).
-
-### A.2 Dark/Light Mode Parity
-
-- [ ] **A.2.1** Both `:root` (light) and `@media (prefers-color-scheme: dark)` blocks exist. ✅
-- [ ] **A.2.2** Every surface variant (`window`, `view`, `headerbar`, `sidebar`, `card`, `popover`) has both light and dark values. ✅
-- [ ] **A.2.3** Theme-agnostic aliases are the only variables used in component SCSS (never `-light`/`-dark` suffixes in component files). ✅
-- [ ] **A.2.4** Dark mode background surfaces form a logical depth hierarchy (deeper = lighter, not darker). ⚠️ Check: `--window-bg-dark` `#2a1a0e` → `--view-bg-dark` `#3d2a18` → `--card-bg-dark` `#523a22` — this is inverted (cards get *darker*). **FAIL**: GNOME dark adwaita goes deeper = lighter.
-
-- [ ] **A.2.5** `prefers-contrast: more` media query removes shadows and uses `currentColor` for borders. ✅
-- [ ] **A.2.6** No hardcoded hex values in component SCSS (all colors come from tokens). ✅
-
-### A.3 Semantic Color
-
-- [ ] **A.3.1** Destructive actions use `--destructive-bg` / `--destructive-fg`. ✅
-- [ ] **A.3.2** Success states have a dedicated color token. ✅ (`--green-4`)
-- [ ] **A.3.3** Warning states have a dedicated color token. ✅ (`--yellow-4`)
-- [ ] **A.3.4** Accent does not conflict semantically (e.g., accent should not also mean "success"). ✅
+- [ ] **A.3.1** Destructive actions use `--destructive-bg` / `--destructive-fg`; error text uses `--danger-text`.
+- [ ] **A.3.2** Success, warning and info use `--success`, `--warning`, `--info`.
+- [ ] **A.3.3** A solid `--accent-bg` fill appears only on primary actions (`.btn-primary`, Generate) and state/progress indicators — not on hovers, selected tabs, chips or avatars (those use `--raised-bg`, an accent tint, or `--accent-text`).
+- [ ] **A.3.4** Accent does not conflict semantically (e.g., accent should not also mean "success").
 
 ### A.4 3D Viewport Colors
 
-- [ ] **A.4.1** `--viewport-bg` is a neutral dark gray (`#1e1e1e`) independent of the light/dark theme — Matches Babylon.js canvas background convention. ✅
-- [ ] **A.4.2** Axis colors follow Blender convention (X=red, Y=green, Z=blue). ✅
-- [ ] **A.4.3** Selection highlight (`--highlight-amber`) is distinct from the accent color. ✅
+- [ ] **A.4.1** The canvas clear colour is `--viewport-bg` (via `readViewportTheme()`), a neutral stage ≥ 1.15:1 apart from `--window-bg` and `--sidebar-bg` so it never blends into the chrome.
+- [ ] **A.4.2** Axis colors follow Blender convention (X=red, Y=green, Z=blue; `--axis-*`, theme-independent).
+- [ ] **A.4.3** Selection highlight uses `--selection` (≥ 3:1 on `--viewport-bg`) and re-colours live when the theme changes.
 
 ---
 
@@ -118,9 +102,10 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 
 ### B.1 Font Stack
 
-- [ ] **B.1.1** `--font-family` starts with `system-ui` (GNOME native look). ✅
-- [ ] **B.1.2** Monospace font stack includes `ui-monospace` before specific fonts. ✅
-- [ ] **B.1.3** No web font downloads (performance). ✅
+- [ ] **B.1.1** `--font-family` is self-hosted Inter (with system fallbacks); Inter latin is preloaded.
+- [ ] **B.1.2** `--font-mono` is JetBrains Mono, used only for data (sizes, CIDs, versions, addresses) via `.tabular` (tabular figures).
+- [ ] **B.1.3** Fonts are self-hosted under `/fonts` with OFL licences; no third-party font CDN; `unicode-range` subsets keep the first load to one file.
+- [ ] **B.1.4** Headings and section titles are sentence case — no `text-transform: uppercase` (test: style guards).
 
 ### B.2 Type Scale
 
@@ -138,7 +123,7 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 ### B.4 Heading Hierarchy
 
 - [ ] **B.4.1** Heading elements (`h1`–`h6`) follow a logical nesting order in the Pug template.  
-  *Check*: `app.pug` has `h2` (Welcome), `h2` (sidebar views), `h5` (Inspector) — skipping `h1`. **FAIL**: GNOME HIG requires `h1` as the page/modal title, descending without gaps.
+  *Check*: `app.pug` has `h2` (Welcome), `h2` (sidebar views), `h5` (Inspector) — skipping `h1`. **FAIL**: WCAG 1.3.1 / 2.4.6 expect a logical heading outline — an `h1` page/modal title, descending without gaps.
 
 - [ ] **B.4.2** Welcome overlay uses `h2` with no preceding `h1`. **FAIL**: Should start with `h1`.
 
@@ -182,7 +167,7 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 - [ ] **C.4.1** Sidebar width (280px) is reasonable — GNOME sidebars are typically 240–320px. ✅
 - [ ] **C.4.2** Inspector width (260px) is reasonable. ✅
 - [ ] **C.4.3** Sidebar and inspector widths are defined via CSS custom properties (not hardcoded). ✅
-- [ ] **C.4.4** Resizer affordances exist to suggest panels are resizable. **FAIL**: No drag-to-resize handle on sidebar or inspector edges. GNOME HIG panels should at minimum show a `col-resize` cursor on the edge, ideally support drag resize.
+- [ ] **C.4.4** Resizer affordances exist to suggest panels are resizable. **FAIL**: No drag-to-resize handle on sidebar or inspector edges. Layout heuristic (non-binding): panels should at minimum show a `col-resize` cursor on the edge, ideally support drag resize.
 
 ### C.5 Grid / Ground Plane
 
@@ -217,7 +202,7 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 - [ ] **D.3.3** Outline (transparent with accent border). ✅
 - [ ] **D.3.4** Destructive (red). ✅
 - [ ] **D.3.5** Flat / text-only (no background, no border). ✅
-- [ ] **D.3.6** Suggested action pattern exists (default button in dialogs). **FAIL**: Dialog actions use `btn` classes but there's no mechanism to mark one as the "suggested" (default) action. In GNOME HIG, the primary/suggested button in a dialog should be rightmost and have `btn-primary`, while the cancel is `btn-secondary`.
+- [ ] **D.3.6** Suggested action pattern exists (default button in dialogs). **FAIL**: Dialog actions use `btn` classes but there's no mechanism to mark one as the "suggested" (default) action. Web/dialog convention and the Arbesk accent rule: the primary (suggested) action is the one `btn-primary` (the only accent fill), placed last; cancel is `btn-secondary`.
 
 ### D.4 Icon-Only Buttons
 
@@ -302,7 +287,7 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 
 - [ ] **F.2.1** All interactive elements have a visible `:focus-visible` outline. ✅ (buttons, form inputs, switcher buttons)
 - [ ] **F.2.2** Focus ring is at least 2px wide. ✅
-- [ ] **F.2.3** Focus ring color contrasts with the background. ⚠️ Same issue as A.1.7 — gold on light background may not be visible enough.
+- [ ] **F.2.3** Focus ring color contrasts with the background (see A.1.5; check menus and popovers too, which use `--popover-bg`).
 - [ ] **F.2.4** Custom focus styles do not remove `:focus-visible` in favor of `:focus`. ✅ (uses `:focus-visible` everywhere)
 
 ### F.3 Reduced Motion
@@ -330,7 +315,7 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 ### G.1 Labels
 
 - [ ] **G.1.1** Every form input has an associated `<label>` element or `aria-label`.  
-  *Check*: `#promptInput` has no visible label — uses `placeholder`. **FAIL**: GNOME HIG requires a persistent label or `aria-label`. A placeholder is not a label.
+  *Check*: `#promptInput` has no visible label — uses `placeholder`. **FAIL**: WCAG 3.3.2 / 1.3.1 require a persistent label or `aria-label`. A placeholder is not a label.
 - [ ] **G.1.2** Labels use `.form-label` styling (dim, small, bold). ✅ (for inspector form groups)
 - [ ] **G.1.3** Labels are positioned above their inputs. ✅
 
@@ -431,7 +416,7 @@ For each FAIL, write a 1–2 sentence recommendation naming the specific referen
 - [ ] **J.1.1** Welcome overlay is shown when no asset is loaded. ✅
 - [ ] **J.1.2** Welcome overlay has a title, description, and primary action. ✅
 - [ ] **J.1.3** Welcome overlay can be dismissed (Escape or clicking backdrop). ⚠️ Escape dismisses (in scene-graph), but clicking the overlay itself does nothing.
-- [ ] **J.1.4** Welcome overlay uses the accent color for its icon/graphic. ✅ (`.viewport-empty-icon` likely uses gold)
+- [ ] **J.1.4** Empty states keep the accent to the icon only (`--accent-text`); title and text use normal tokens at full opacity.
 
 ### J.2 Loading States
 
