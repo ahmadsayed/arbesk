@@ -7,7 +7,7 @@ import { distinctRunStamps, parseArgs, pool, readResults } from "../../scripts/c
 describe("parseArgs", () => {
   it("defaults to the measured variant with Jev and triage on", () => {
     expect(parseArgs([])).toMatchObject({
-      variants: ["measured"], limit: Infinity, ids: null, concurrency: 8, jev: true, triage: true, render: true,
+      variants: ["measured"], limit: Infinity, ids: null, concurrency: 8, jev: true, triage: true, render: true, report: true,
       thinking: null, resume: null, compare: null, agreement: null,
     });
   });
@@ -37,6 +37,11 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["--ids", ""])).toThrow("--ids");
     expect(() => parseArgs(["--ids", "7,x"])).toThrow("--ids");
     expect(parseArgs(["--limit", "3"]).limit).toBe(3);
+  });
+
+  it("writes the HTML report by default and can be told not to", () => {
+    expect(parseArgs([]).report).toBe(true);
+    expect(parseArgs(["--no-report"]).report).toBe(false);
   });
 
   it("renders by default and can be told not to", () => {

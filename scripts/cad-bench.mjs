@@ -14,6 +14,7 @@
  *   bun scripts/cad-bench.mjs [--variant measured|abstract|both] [--limit N] [--ids 7,633]
  *                             [--concurrency N] [--thinking on|off] [--no-jev] [--no-triage]
  *                             [--no-render]      skip the best-effort PNG renders
+ *                             [--no-report]      skip the HTML galleries
  *                             [--resume <runDir>] [--compare <runDir>] [--out <root>]
  *   bun scripts/cad-bench.mjs --agreement <runDir>   score a hand-labelled triage-agreement.md
  *
@@ -35,6 +36,7 @@ import {
   agreementTemplate, compareSummaries, parseAgreement, renderMarkdown, summarise,
 } from "./lib/bench-summary.mjs";
 import { writeBinaryStl } from "./lib/stl.mjs";
+import { writeRunOverview, writeSampleText, writeVariantReport } from "./lib/bench-report.mjs";
 import { createCadGenerator, DEFAULT_CAD_MODEL } from "../packages/cad-gen/src/backend/index.ts";
 
 const DEFAULT_OUT = path.join(PROJECT_ROOT, "test-results", "cad-bench");
@@ -61,7 +63,7 @@ export function parseArgs(argv) {
   const opts = {
     variants: /** @type {("measured" | "abstract")[]} */ (["measured"]),
     limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: DEFAULT_CONCURRENCY,
-    jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null), render: true,
+    jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null), render: true, report: true,
     resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
     agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
   };
@@ -104,6 +106,8 @@ export function parseArgs(argv) {
       case "--no-jev": opts.jev = false; break;
       case "--render": opts.render = true; break;
       case "--no-render": opts.render = false; break;
+      case "--report": opts.report = true; break;
+      case "--no-report": opts.report = false; break;
       case "--thinking": {
         const v = value();
         if (v !== "on" && v !== "off") throw new Error("--thinking must be on or off, got " + v);
@@ -334,6 +338,9 @@ async function main() {
       result.run = runStamp;
       if (jev && needsTriage(result)) result.triage = await triage(jev, result);
       writeJsonAtomic(path.join(dir, sample.id + ".json"), result);
+      // The prompt as sent and the script the model wrote, for whoever opens a
+      // sample by hand; the gallery links both.
+      writeSampleText(dir, sample, result);
       await rendering;
       consecutive = result.outcome === "provider_error" ? consecutive + 1 : 0;
       if (consecutive >= MAX_CONSECUTIVE_PROVIDER_ERRORS) aborted = true;
@@ -356,6 +363,12 @@ async function main() {
         "(a resume with changed flags, or a changed .env); the summary mixes them.");
     }
     writeSummary(dir, results, { ...config, variant, mixedRuns: stamps > 1 }, opts.compare);
+    if (opts.report) {
+      // The galleries read the records on disk, so they run after the summary is written.
+      const written = readJson(path.join(dir, "summary.json"));
+      console.log("report: " + writeVariantReport(dir, written));
+      writeRunOverview(runDir, opts.variants.map((v) => [v, readJson(path.join(runDir, v, "summary.json"))]));
+    }
     if (aborted) return;
   }
 }
