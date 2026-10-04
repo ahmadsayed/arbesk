@@ -86,6 +86,13 @@ export const SELECTORS = {
   redoButton: "#redoBtn",
   scaleFactorInput: "#nodeScaleFactor",
   scaleSectionSummary: "#scaleSection summary",
+  // View / Edit mode (viewport toolbar) + unsaved marker (header)
+  editModeButton: "#editModeBtn",
+  dropToFloorButton: "#dropToFloorBtn",
+  resetTransformButton: "#resetTransformBtn",
+  lockFloorToggle: "#lockFloorBtn",
+  unsavedMarker: "#saveAssetBtn.has-unsaved",
+  assetMeta: "#assetStatusMeta",
   animationsSection: "#animationsSection",
   animationSelect: "#animationSelect",
   // New ▾ menu ("Empty asset" keeps the #newAssetBtn id inside it) + nesting

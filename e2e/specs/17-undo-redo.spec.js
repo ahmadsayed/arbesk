@@ -1,6 +1,6 @@
 import { test, expect } from "../fixtures/coverage.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
-import { connectStudio, generate } from "../helpers/flows.mjs";
+import { connectStudio, enterEditMode, generate } from "../helpers/flows.mjs";
 
 test.describe("undo/redo", () => {
   test("inspector scale edit undoes via Ctrl+Z and redoes via toolbar", async ({
@@ -12,6 +12,8 @@ test.describe("undo/redo", () => {
     // Select the first node in the Outliner → inspector opens with scale fields.
     await page.click(SELECTORS.outlinerSwitcherBtn);
     await page.locator(SELECTORS.outlinerNode).first().click();
+    // Inspector scale is editable only in Edit mode.
+    await enterEditMode(page);
     // The Scale inspector section starts collapsed — expand it to reveal the field.
     await page.click(SELECTORS.scaleSectionSummary);
     const scaleInput = page.locator(SELECTORS.scaleFactorInput);
