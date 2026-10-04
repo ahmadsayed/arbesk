@@ -107,3 +107,28 @@
   font-size: var(--font-size-0);
   color: var(--dim-fg);
 }
+
+.metadata-print {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  margin-top: var(--size-2);
+}
+
+.print-badge {
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  padding: 1px var(--size-2);
+  border-radius: var(--radius-round);
+  // Text stays window-fg (the label carries the meaning); the tint does the
+  // colour coding — the testnet-banner idiom, which passes AA in both themes.
+  color: var(--window-fg);
+
+  &.print-badge-ok {
+    background: color-mix(in srgb, var(--success) 18%, transparent);
+  }
+
+  &.print-badge-warn {
+    background: color-mix(in srgb, var(--warning) 18%, transparent);
+  }
+}

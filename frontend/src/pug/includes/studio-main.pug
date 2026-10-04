@@ -100,6 +100,9 @@ aside#inspector.inspector
         summary.inspector-section-title Auto-detected
         div
           dl#metadataComputedList.metadata-list
+          .metadata-print
+            button#printCheckBtn.btn.btn-secondary.btn-sm(type="button" hidden) Check printability
+            span#printBadge.print-badge(hidden aria-live="polite")
       details.metadata-subsection(open)
         summary.inspector-section-title Print & Provenance
         div
