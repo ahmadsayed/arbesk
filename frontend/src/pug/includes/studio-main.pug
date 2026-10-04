@@ -24,6 +24,28 @@ aside#inspector.inspector
   .inspector-header
     h3 Properties
   .inspector-body
+    section#assetSection.inspector-section(hidden)
+      details(open)
+        summary.inspector-section-title Asset
+        #assetSettings.inspector-section-body
+          .form-group
+            label.form-label Asset name
+            #assetNameDisplay.form-input Untitled Asset
+          .form-group
+            label.form-label(for="collectionSelect") Collection
+            select#collectionSelect.form-select
+              option(value="") Default
+          .form-group
+            label.form-label(for="tierSelect") Quality tier
+            select#tierSelect.form-select(aria-describedby="tierHelp")
+              option(value="0" selected) Free — ~$0.0001 gas
+            .form-help#tierHelp Higher tiers produce better quality meshes.
+          #teamPanel.team-section(hidden)
+            .team-header
+              h5 Collection collaborators
+              span.owner-badge Owner
+            .team-list
+            p.team-help Open this collection in the Library to add or remove collaborators.
     section#tokenChildInfo.inspector-section.inspector-token-child(hidden)
       details
         summary.inspector-section-title Token Info

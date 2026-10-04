@@ -777,12 +777,17 @@ describe("AI Generation sidebar", () => {
     );
   });
 
-  test("AI Generation is the first rail button with an explicit AI label", () => {
-    const content = pug();
-    expect(content).toContain('aria-label="AI Generation"');
-    expect(content.indexOf('data-view="chat"')).toBeLessThan(
-      content.indexOf('data-view="settings"'),
+  // Phase 2: library-first rail — Outline · Assets · Create · Activity, with
+  // no Settings button (asset settings live in Properties).
+  test("rail is Outline · Assets · Create · Activity with a plain Create label", () => {
+    const rail = pug().split(".sidebar-switcher-bottom")[0];
+    const order = ["outline", "library", "chat", "ledger"].map((v) =>
+      rail.indexOf(`button.sidebar-switcher-btn${v === "outline" ? ".active" : ""}(data-view="${v}"`),
     );
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(rail).toContain('aria-label="Create"');
+    expect(rail).not.toContain('data-view="settings"');
   });
 
   test("provider row has a configure-key button and a missing-key hint", () => {
@@ -799,21 +804,24 @@ describe("AI Generation sidebar", () => {
     expect(pug()).toContain("span#bottomBarProvider");
   });
 
-  test("sidebar view order puts chat first", () => {
+  test("sidebar view order is Outline, Assets, Create, Activity", () => {
     const src = readFileSync(
       resolve(ROOT_DIR, "frontend/src/js/ui/sidebar.ts"),
       "utf-8",
     );
     expect(src).toContain(
-      'const VIEWS = ["chat", "settings", "outline", "library", "ledger"]',
+      'const VIEWS = ["outline", "library", "chat", "ledger"]',
     );
   });
 
-  test("keyboard help lists all five sidebar shortcuts", () => {
+  test("keyboard help lists the four sidebar shortcuts by name", () => {
     const src = readFileSync(
       resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.ts"),
       "utf-8",
     );
-    expect(src).toContain("1 – 5");
+    for (const [n, label] of [[1, "Outline"], [2, "Assets"], [3, "Create"], [4, "Activity"]]) {
+      expect(src).toMatch(new RegExp("\\$\\{MOD\\}\\+" + n + "`, \"" + label));
+    }
+    expect(src).not.toContain("1 – 5");
   });
 });

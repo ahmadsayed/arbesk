@@ -1,17 +1,14 @@
 .sidebar-switcher(role="tablist")
-  button.sidebar-switcher-btn.active(data-view="chat" role="tab" aria-selected="true" tabindex="0" aria-label="AI Generation" title="AI Generation (Ctrl+1)")
-    svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#sparkle")
-  button.sidebar-switcher-btn(data-view="settings" role="tab" aria-selected="false" tabindex="-1" aria-label="Settings" title="Settings (Ctrl+2)")
-    svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#settings")
-  button.sidebar-switcher-btn(data-view="outline" role="tab" aria-selected="false" tabindex="-1" aria-label="Outline" title="Outline (Ctrl+3)")
+  button.sidebar-switcher-btn.active(data-view="outline" role="tab" aria-selected="true" tabindex="0" aria-label="Outline" title="Outline (Ctrl+1)")
     svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
       use(href="/icons.svg#crosshair")
-  button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Gallery" title="Gallery (Ctrl+4)")
+  button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Assets" title="Assets (Ctrl+2)")
     svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
       use(href="/icons.svg#book")
-  button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+5)")
+  button.sidebar-switcher-btn(data-view="chat" role="tab" aria-selected="false" tabindex="-1" aria-label="Create" title="Create (Ctrl+3)")
+    svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+      use(href="/icons.svg#sparkle")
+  button.sidebar-switcher-btn(data-view="ledger" role="tab" aria-selected="false" tabindex="-1" aria-label="Activity" title="Activity (Ctrl+4)")
     svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
       use(href="/icons.svg#file-text")
   .sidebar-switcher-bottom
@@ -19,35 +16,10 @@
       svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true")
         use(href="/icons.svg#chevron-left")
 .sidebar-content
-  //- View: Settings
-  .sidebar-view(data-view="settings" hidden)
-    .sidebar-view-header
-      h3 Settings
-    .sidebar-view-body
-      #assetSettings
-        .form-group
-          label.form-label Asset Name
-          #assetNameDisplay.form-input Untitled Asset
-        .form-group
-          label.form-label(for="collectionSelect") Collection
-          select#collectionSelect.form-select
-            option(value="") Default
-        .form-group
-          label.form-label(for="tierSelect") Quality Tier
-          select#tierSelect.form-select(aria-describedby="tierHelp")
-            option(value="0" selected) Free — ~$0.0001 gas
-          .form-help#tierHelp Higher tiers produce better quality meshes.
-        #teamPanel.team-section(hidden)
-          .team-header
-            h5 Collection Collaborators
-            span.owner-badge Owner
-          .team-list
-          p.team-help Open this collection in the Library to add or remove collaborators.
-
   //- View: AI Generation (data-view kept as "chat" for selector stability)
-  .sidebar-view(data-view="chat")
+  .sidebar-view(data-view="chat" hidden)
     .sidebar-view-header
-      h3 AI Generation
+      h3 Create
       .outliner-toolbar
         button#clearChatBtn.btn.btn-icon.btn-sm(type="button" aria-label="Clear chat" title="Clear chat — start new model")
           svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
@@ -177,7 +149,7 @@
           span Sign in to start generating assets.
 
   //- View: Outline
-  .sidebar-view(data-view="outline" hidden)
+  .sidebar-view(data-view="outline")
     .sidebar-view-header
       h3 Outline
       .outliner-toolbar
@@ -195,8 +167,9 @@
   //- View: Library
   .sidebar-view(data-view="library" hidden)
     .sidebar-view-header
-      h3 Gallery
+      h3 Assets
       span#galleryVisitorBadge.library-visitor-badge(hidden)
+    p.sidebar-view-hint Add to Scene or drag into the viewport to place an asset.
     .sidebar-view-body
       #assetLibraryBody.asset-library-body
         .empty-state

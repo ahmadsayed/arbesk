@@ -5,6 +5,38 @@ import { SELECTORS } from "./studio-selectors.mjs";
 import { MANIFEST_URL_REGEX, manifestCidFromUrl } from "./manifest.mjs";
 
 /**
+ * Start Studio pages on the Create panel, as before Phase 2 made Outline the
+ * default. Seeds the stored sidebar view only when it's unset, so a spec that
+ * switches views and reloads still gets its own view restored.
+ *
+ * @param {Page} page
+ */
+export async function startInCreate(page) {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("arbesk-sidebar-view")) {
+        localStorage.setItem("arbesk-sidebar-view", "chat");
+      }
+    } catch {
+      // storage blocked — the app falls back to Outline
+    }
+  });
+}
+
+/**
+ * Show the Create panel (rail "Create", data-view="chat") if it isn't the
+ * visible sidebar view — Outline is the Studio default since Phase 2.
+ *
+ * @param {Page} page
+ */
+export async function openCreate(page) {
+  const prompt = page.locator(SELECTORS.promptInput);
+  if (await prompt.isVisible()) return;
+  await page.click(SELECTORS.createSwitcherBtn);
+  await expect(prompt).toBeVisible();
+}
+
+/**
  * @typedef {import('@playwright/test').Page} Page
  * @typedef {import('@playwright/test').Locator} Locator
  */
@@ -19,6 +51,7 @@ const DEFAULT_PROMPT = "cowboy";
  * @param {Page} page
  */
 export async function connectStudio(page) {
+  await startInCreate(page);
   await injectHardhatProvider(page);
   await page.goto("/studio");
 
@@ -52,6 +85,7 @@ export async function connectStudioAs(page, accountIndex) {
   if (!account) {
     throw new Error(`Unknown Hardhat account index ${accountIndex}`);
   }
+  await startInCreate(page);
   await injectHardhatProvider(page, { accountIndex });
   await page.goto("/studio");
 
@@ -136,6 +170,7 @@ export async function seedDefaultCollection(
 ) {
   const page = await browser.newPage();
   try {
+    await startInCreate(page);
     await injectHardhatProvider(page);
     await page.goto("/studio");
     await ensureStudioConnected(page);
@@ -181,6 +216,7 @@ export async function sendPendingGenerationToStudio(page) {
  * @returns {Promise<Locator>}
  */
 export async function generateToChatBubble(page, prompt = DEFAULT_PROMPT) {
+  await openCreate(page);
   // Pin the new bubble by index: a `.last()` locator re-resolves as later
   // generations append more bubbles.
   const sendButtons = page.locator(SELECTORS.assetBubbleSend);
@@ -343,6 +379,7 @@ export async function scrubSceneClock(page, position) {
  * @param {Page} page
  */
 export async function connectLibrary(page) {
+  await startInCreate(page);
   await injectHardhatProvider(page);
   await page.goto("/library");
 

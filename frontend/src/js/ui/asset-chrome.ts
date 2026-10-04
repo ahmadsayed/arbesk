@@ -1,6 +1,6 @@
 /**
- * Sole writer of the header title/meta and the save/publish/download buttons'
- * visibility.
+ * Sole writer of the header title/meta, the save/publish/download buttons'
+ * visibility, and the Properties → Asset section's visibility.
  * @remarks Renders purely from store state; feature modules never touch these
  *   elements, so render order cannot clobber a name (the SCENE_EMPTY header
  *   bug).
@@ -17,6 +17,7 @@ const newBtn = document.getElementById("newAssetBtn");
 const saveBtn = document.getElementById("saveAssetBtn");
 const publishBtn = document.getElementById("publishAssetBtn");
 const downloadBtn = document.getElementById("downloadAssetBtn");
+const assetSection = document.getElementById("assetSection");
 
 /**
  * Renders the chrome from current state.
@@ -48,6 +49,9 @@ function renderChrome(): void {
   if (publishBtn) publishBtn.hidden = !(hasAsset && hasWallet);
   // Downloads are read-only — no wallet/session required.
   if (downloadBtn) downloadBtn.hidden = !hasAsset;
+  // Properties → Asset (name, collection, tier, team): only meaningful once
+  // there is something to name/save.
+  if (assetSection) assetSection.hidden = !hasAsset;
 }
 
 subscribeAsset(renderChrome);
