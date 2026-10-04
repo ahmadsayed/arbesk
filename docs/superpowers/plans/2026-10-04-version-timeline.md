@@ -696,3 +696,27 @@ Playwright MCP against the dev stack (`./scripts/start-dev.sh`): generate 3+ ver
 - [ ] **Step 6: Handover**
 
 Update `.worktrees/HANDOVER-ui-refresh-phase2.md`: #85 done (PR number), epic 19/20, only #86 (View/Edit mode) remains.
+
+---
+
+## As built
+
+- **Published marker needed a host-side CID fix.** E2E showed that
+  `fetchPublishedCid` returned the tokenURI *collection* manifest CID, which
+  never matches an entry in the asset's version chain — so the published marker
+  could never render. Fixed in `frontend/src/js/engine/version-history-deps.ts`:
+  the new pure export `assetCidFromTokenUriManifest(manifest, tokenUriCid,
+  assetId)` resolves collection → active asset manifest CID (asset manifests
+  pass through unchanged; fetch failure falls back to the tokenURI CID).
+  Unit-tested in `version-history-deps.test.js` (3 cases).
+- **Task 7 Step 4 (live browser check) skipped.** The tooltip is
+  `position: fixed`, so the strip's `overflow-x: auto` cannot clip it, and
+  spec 04 already covers hover tooltip, published marker, and keyboard scrub.
+- **Verification:** unit failing set = the 17-file `origin/main` frontend
+  baseline + `test/library-grid.test.js` + `test/library-toolbar.test.js`, no
+  growth. Full chromium E2E: 57 passed, 3 flaky, 1 failed (`25-public-profile`,
+  the known order flake — passes solo). Spec 04 solo: 2 passed.
+- **Observed, not caused here:** spec 04 *retries* twice failed at
+  `prev_asset_manifest_cid === saveCid` because the dev wallet's token already
+  exists after a failed first attempt, so publish takes the "Republished." path.
+  First attempts pass; this branch does not touch save/publish version math.
