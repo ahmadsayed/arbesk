@@ -247,41 +247,23 @@ html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
   }
 }
 
-// Network selector — always-visible dropdown in headerbar
-.headerbar-network-select {
-  appearance: none;
-  -webkit-appearance: none;
-  height: 36px;
-  padding: 0 var(--size-5) 0 var(--size-6);
-  font-size: var(--font-size-1);
-  font-weight: var(--font-weight-6);
-  font-family: var(--font-family);
-  color: var(--headerbar-fg);
-  background-color: var(--raised-bg);
-  background-repeat: no-repeat;
-  background-position: right 10px center, 14px center;
-  background-size: 12px, 8px;
-  border: var(--border-size-1) solid var(--hairline);
+// Network status — dot + visible text label (WCAG 1.4.1), opens the account
+// menu where the network select now lives
+.network-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-1);
+  height: 28px;
+  padding: 0 var(--size-2);
+  border: 0;
   border-radius: var(--radius-round);
+  background: transparent;
+  color: var(--dim-fg);
+  font-size: var(--font-size-0);
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background-color var(--duration-quick) var(--ease-out-3);
-
-  // Chevron dropdown arrow + disconnected gray dot
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Ccircle cx='4' cy='4' r='4' fill='%23adb5bd'/%3E%3C/svg%3E");
-
-  &.connected {
-    // Green dot when wallet is connected
-    background-image:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Ccircle cx='4' cy='4' r='4' fill='%2328a745'/%3E%3C/svg%3E");
-  }
 
   &:hover {
-    background-color: color-mix(in srgb, var(--raised-bg) 85%, var(--headerbar-fg));
+    background: var(--surface-overlay-hover);
   }
 
   &:focus-visible {
@@ -289,10 +271,16 @@ html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
     box-shadow: var(--focus-ring);
   }
 
-  option {
-    color: var(--view-fg);
-    background-color: var(--view-bg);
+  &[hidden] {
+    display: none;
   }
+}
+
+.network-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
 }
 
 // Doc-action button group (New / Save / Besk it) — always visible in headerbar

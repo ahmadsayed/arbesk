@@ -225,6 +225,8 @@ function onDocumentKey(e: KeyboardEvent): void {
   if (e.key === "Escape") {
     e.preventDefault();
     closeState();
+    // Menu semantics: Esc returns focus to the avatar that opened the popover.
+    document.getElementById("disconnectWalletBtn")?.focus();
   }
 }
 

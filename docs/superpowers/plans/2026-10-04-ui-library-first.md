@@ -1444,6 +1444,21 @@ git add frontend/src test/frontend
 git commit -m "feat(header): network select moves into the account menu; labelled status dot"
 ```
 
+**As built (#81, PR pending):**
+- `initNetworkStatus` guards double-init with a synchronous
+  `dataset.networkStatusInit` claim and attaches the click listener *before*
+  the first `await` — the plan's code appended the listener after
+  `await getConfig()`, so the module self-init plus an explicit call
+  double-registered it (caught by the click test: two listener firings).
+- Esc in the wallet popover now always returns focus to the avatar
+  (spec §6.1); the plan had this as a conditional follow-up.
+- `wallet-popover.test.js`'s 3 pre-existing baseline failures are fixed by
+  this task's changes — the file is fully green.
+- `_responsive.scss` also drops the now-dead `.headerbar-network-select`
+  <480px rule.
+- The popover Network section's border uses `--border-hairline` (the file's
+  convention), not `--hairline`.
+
 ---
 
 ### Task 8: E2E updates

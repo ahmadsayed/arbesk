@@ -62,6 +62,7 @@ describe("Library view build (app.html)", () => {
     expect(html).toMatch(/id="themeMenuBtn"/);
     expect(html).toMatch(/id="themeMenu"/);
     expect(html).toMatch(/id="headerbarNetworkSelect"/);
+    expect(html).toMatch(/id="networkStatus"/);
     expect(html).toMatch(/id="connectWalletBtn"/);
     expect(html).toMatch(/id="disconnectWalletBtn"/);
     expect(html).toMatch(/id="walletPopover"/);
