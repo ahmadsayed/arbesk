@@ -7,13 +7,14 @@
  */
 import type { CadDesign } from "@arbesk/cad-gen";
 import { CadRenderError } from "../workers/cad-render-core.ts";
+import type { CadStats } from "@arbesk/cad-gen";
 
 export { CadRenderError };
 
 export interface CadRenderResult {
   bytes: Uint8Array;
   summary: string;
-  stats: unknown;
+  stats: CadStats;
 }
 
 const DEFAULT_TIMEOUT_MS = 90_000;
