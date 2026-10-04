@@ -2,7 +2,12 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { state } from "../../frontend/src/js/engine/state.js";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
-import { initTransformGizmo } from "../../frontend/src/js/ui/transform-gizmo.js";
+import {
+  initTransformGizmo,
+  dropSelectionToFloor,
+  resetSelectionTransform,
+} from "../../frontend/src/js/ui/transform-gizmo.js";
+import { popUndoEntry, clearUndoStacks } from "../../frontend/src/js/engine/undo-stack.js";
 import {
   isEditing,
   setEditing,
@@ -34,8 +39,19 @@ describe("transform-gizmo toolbar", () => {
             return { add: (f) => fns.push(f), fire: () => fns.forEach((f) => f()) };
           };
           this.gizmos = {
-            positionGizmo: { onDragStartObservable: obs(), onDragEndObservable: obs() },
-            rotationGizmo: { onDragStartObservable: obs(), onDragEndObservable: obs() },
+            positionGizmo: {
+              onDragStartObservable: obs(),
+              onDragEndObservable: obs(),
+              snapDistance: 0,
+              yGizmo: { isEnabled: true },
+              xPlaneGizmo: { isEnabled: true },
+              zPlaneGizmo: { isEnabled: true },
+            },
+            rotationGizmo: {
+              onDragStartObservable: obs(),
+              onDragEndObservable: obs(),
+              snapDistance: 0,
+            },
           };
         }
         attachToNode() {}
@@ -52,16 +68,29 @@ describe("transform-gizmo toolbar", () => {
         computeWorldMatrix() {}
         dispose() {}
       },
-      Vector3: {
-        Zero: () => {
+      Vector3: class {
+        constructor(x, y, z) {
+          Object.assign(this, { x, y, z });
+        }
+        static Zero() {
           const chain = {
             addInPlace: () => chain,
             scaleInPlace: () => chain,
           };
           return chain;
-        },
+        }
+        static TransformNormal(v) {
+          return v;
+        }
       },
-      Quaternion: { Identity: () => ({ copyFrom: () => {} }) },
+      Matrix: {
+        Invert: (m) => m,
+        // Enough of a matrix that any move/rotation/scale changes the snapshot.
+        Compose: (s, r, p) => ({
+          m: [s.x, r.w, p.x, p.y, p.z, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        }),
+      },
+      Quaternion: { Identity: () => ({ w: 1, copyFrom() {} }) },
     };
 
     viewport = document.createElement("div");
@@ -273,5 +302,122 @@ describe("transform-gizmo toolbar", () => {
     state.isGizmoDragging = false;
     dragEnd(); // fires the position gizmo's onDragEndObservable
     expect(state.transformMode).toBe(null);
+  });
+
+  test("re-entering Edit mid-drag (E,E) is not undone at drag end", () => {
+    state.nodeAnchors.set("node-1", { isDisposed: () => false });
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    state.isGizmoDragging = true;
+    setEditing(false);
+    setEditing(true);
+    state.isGizmoDragging = false;
+    dragEnd();
+    expect(state.transformMode).toBe("translate");
+  });
+
+  // An anchor the real readNodeTransformMatrix + placement adapter can drive.
+  function liveAnchor(y) {
+    const a = {
+      parent: null,
+      isDisposed: () => false,
+      scaling: { x: 1, y: 1, z: 1 },
+      rotationQuaternion: { w: 1 },
+      position: {
+        x: 0,
+        y,
+        z: 0,
+        addInPlace(v) {
+          this.x += v.x;
+          this.y += v.y;
+          this.z += v.z;
+          return this;
+        },
+      },
+      computeWorldMatrix() {},
+      getHierarchyBoundingVectors: () => ({
+        min: { x: 0, y: a.position.y, z: 0 },
+        max: { x: 1, y: a.position.y + 1, z: 1 },
+      }),
+    };
+    return a;
+  }
+
+  test("Edit applies floor lock and snapping to the position gizmo", () => {
+    state.nodeAnchors.set("node-1", liveAnchor(0));
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    const pg = state.gizmoManager.gizmos.positionGizmo;
+    expect(pg.yGizmo.isEnabled).toBe(false);
+    expect(pg.xPlaneGizmo.isEnabled).toBe(false);
+    expect(pg.zPlaneGizmo.isEnabled).toBe(false);
+    expect(pg.snapDistance).toBe(2); // grid scale 1 (no groundGrid in the mock scene)
+
+    document.getElementById("lockFloorBtn").click();
+    expect(document.getElementById("lockFloorBtn").getAttribute("aria-pressed")).toBe("false");
+    expect(pg.yGizmo.isEnabled).toBe(true);
+    document.getElementById("lockFloorBtn").click(); // restore the module default
+  });
+
+  test("Alt disables snapping until released", () => {
+    state.nodeAnchors.set("node-1", liveAnchor(0));
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    const pg = state.gizmoManager.gizmos.positionGizmo;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", altKey: true }));
+    expect(pg.snapDistance).toBe(0);
+    document.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }));
+    expect(pg.snapDistance).toBe(2);
+  });
+
+  test("G drops the selection to the floor as one undo step", () => {
+    clearUndoStacks();
+    const a = liveAnchor(4);
+    state.nodeAnchors.set("node-1", a);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "g" }));
+    expect(a.position.y).toBe(4); // View mode: G does nothing
+    enterEditForTest();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "g" }));
+    expect(a.position.y).toBe(0);
+    expect(popUndoEntry().label).toBe("Drop to floor");
+  });
+
+  test("Shift+R resets rotation/position but not scale", () => {
+    clearUndoStacks();
+    const a = liveAnchor(3);
+    a.position.x = 5;
+    a.rotationQuaternion = { w: 0.5 };
+    a.scaling = { x: 2, y: 2, z: 2 };
+    state.nodeAnchors.set("node-1", a);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "R", shiftKey: true }));
+    expect(a.rotationQuaternion.w).toBe(1);
+    expect(a.position.y).toBe(0);
+    expect(a.scaling).toEqual({ x: 2, y: 2, z: 2 });
+    expect(popUndoEntry().label).toBe("Reset transform");
+  });
+
+  test("placement buttons are disabled with no selection", () => {
+    enterEditForTest();
+    expect(document.getElementById("dropToFloorBtn").disabled).toBe(true);
+    expect(document.getElementById("resetTransformBtn").disabled).toBe(true);
+  });
+
+  test("exported placement actions are no-ops outside Edit", () => {
+    clearUndoStacks();
+    const a = liveAnchor(4);
+    state.nodeAnchors.set("node-1", a);
+    state.highlightedNodeId = "node-1";
+    dropSelectionToFloor();
+    resetSelectionTransform();
+    expect(a.position.y).toBe(4);
+    expect(popUndoEntry()).toBeNull();
   });
 });

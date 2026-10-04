@@ -142,3 +142,11 @@ export function applyGroupDrag(): void {
 export function endGroupDrag(): void {
   _groupSnapshot = null;
 }
+
+/** Keeps the pivot glued to its group after the group was grounded. */
+export function shiftGroupPivotY(dy: number): void {
+  if (_groupPivot && !_groupPivot.isDisposed()) {
+    _groupPivot.position.y += dy;
+    _groupPivot.computeWorldMatrix(true);
+  }
+}

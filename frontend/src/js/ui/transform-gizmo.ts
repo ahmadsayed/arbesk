@@ -2,7 +2,9 @@
  * Viewport placement controls: the View/Edit toggle, the Move/Rotate gizmo,
  * and the side Undo/Redo/Grid strip.
  * @remarks View-only by default — the gizmo attaches only in Edit mode
- *   (state/edit-mode.ts). Transform edits are staged and persisted on the
+ *   (state/edit-mode.ts). In Edit, Move is floor-locked and snapped (grid
+ *   cell / 15°, Alt suspends snapping); Drop to floor and Reset transform
+ *   act on the selection as one undo step each. Transform edits are staged and persisted on the
  *   next Save Draft / Publish. There is deliberately no scale gizmo: scale is
  *   a numeric Inspector edit, protecting print dimensions.
  */
@@ -18,7 +20,11 @@ import {
   endGroupDrag,
   disposeGroupPivot,
   isGroupDragActive,
+  topLevelAnchorsFor,
+  shiftGroupPivotY,
 } from "../engine/group-pivot.ts";
+import { groundAnchors, resetAnchor } from "../engine/placement-actions.ts";
+import { moveSnapStep, ROTATE_SNAP } from "../engine/placement.ts";
 import {
   selectedIds,
   snapshotMatrices,
@@ -67,6 +73,12 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg>',
   grid:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>',
+  floorLock:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="7" y="9" width="10" height="8"/><path d="M12 3v3"/></svg>',
+  dropToFloor:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/></svg>',
+  resetTransform:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
 };
 
 /**
@@ -127,6 +139,74 @@ let _dragBefore: MatrixSnapshot | null = null;
 // mislabel the undo entry.
 let _dragMode: TransformMode = null;
 
+// ── Placement constraints (Edit mode) ──
+// Floor lock: Move drags on the XZ plane only; Rotate re-grounds on release.
+// Snapping: one grid cell / 15°, suspended while Alt is held.
+
+let _floorLocked = true;
+let _altHeld = false;
+
+function _gridScale(): number {
+  return state.scene?.getMeshByName?.("groundGrid")?.scaling?.x ?? 1;
+}
+
+/** Sub-gizmos that leave the XZ plane: Y axis and the XY / YZ planes. */
+const _OFF_FLOOR_SUBGIZMOS = ["yGizmo", "xPlaneGizmo", "zPlaneGizmo"];
+
+function _constrainPositionGizmo(pg: any): void {
+  for (const name of _OFF_FLOOR_SUBGIZMOS) {
+    if (pg[name]) pg[name].isEnabled = !_floorLocked;
+  }
+  pg.snapDistance = _altHeld ? 0 : moveSnapStep(_gridScale());
+}
+
+/** Re-applied after setMode because Babylon creates sub-gizmos lazily. */
+function _applyGizmoConstraints(): void {
+  const g = state.gizmoManager?.gizmos || {};
+  if (g.positionGizmo) _constrainPositionGizmo(g.positionGizmo);
+  if (g.rotationGizmo) g.rotationGizmo.snapDistance = _altHeld ? 0 : ROTATE_SNAP;
+}
+
+function _setAltHeld(held: boolean): void {
+  if (_altHeld === held) return;
+  _altHeld = held;
+  _applyGizmoConstraints();
+}
+
+function _toggleFloorLock(): void {
+  _floorLocked = !_floorLocked;
+  _applyGizmoConstraints();
+  updateToolbarUI();
+}
+
+function _selectionAnchors(): any[] {
+  return topLevelAnchorsFor(selectedIds());
+}
+
+/** Runs one placement action on the selection as a single undo step. */
+function _runPlacementAction(label: string, act: (anchors: any[]) => void): void {
+  if (!isEditing()) return;
+  const anchors = _selectionAnchors();
+  if (anchors.length === 0) return;
+  const before = snapshotMatrices(selectedIds());
+  act(anchors);
+  commitTransformChange(label, before);
+  // Re-centre the multi-selection pivot on the moved group.
+  if (state.selectedNodeIds.size > 1 && state.gizmoManager) attachToGroupPivot(state.gizmoManager);
+}
+
+export function dropSelectionToFloor(): void {
+  _runPlacementAction("Drop to floor", (anchors) => {
+    groundAnchors(anchors);
+  });
+}
+
+export function resetSelectionTransform(): void {
+  _runPlacementAction("Reset transform", (anchors) => {
+    for (const a of anchors) resetAnchor(a);
+  });
+}
+
 const ACTIONS: Record<string, () => void> = {
   undo,
   redo,
@@ -136,6 +216,9 @@ const ACTIONS: Record<string, () => void> = {
   toggleEdit: () => {
     toggleEditing();
   },
+  toggleFloorLock: _toggleFloorLock,
+  dropToFloor: dropSelectionToFloor,
+  resetTransform: resetSelectionTransform,
 };
 
 function createToolbar(): void {
@@ -155,6 +238,16 @@ function createToolbar(): void {
     </button>
     <button class="btn btn-flat btn-sm transform-tool" data-mode="rotate" data-edit-only aria-label="Rotate (R)" title="Rotate (R)">
       ${ICONS.rotate}
+    </button>
+    <span class="transform-toolbar-sep" data-edit-only aria-hidden="true"></span>
+    <button id="lockFloorBtn" class="btn btn-flat btn-sm active" data-action="toggleFloorLock" data-edit-only aria-pressed="true" aria-label="Lock to floor" title="Lock to floor">
+      ${ICONS.floorLock}
+    </button>
+    <button id="dropToFloorBtn" class="btn btn-flat btn-sm placement-action" data-action="dropToFloor" data-edit-only aria-label="Drop to floor (G)" title="Drop to floor (G)">
+      ${ICONS.dropToFloor}
+    </button>
+    <button id="resetTransformBtn" class="btn btn-flat btn-sm placement-action" data-action="resetTransform" data-edit-only aria-label="Reset transform (Shift+R)" title="Reset transform (Shift+R)">
+      ${ICONS.resetTransform}
     </button>
     <span class="transform-toolbar-sep" data-edit-only aria-hidden="true"></span>
     <button id="editModeBtn" class="btn btn-flat btn-sm edit-mode-toggle" data-action="toggleEdit" aria-label="Edit placement (E)" title="Edit placement (E)" hidden>Edit</button>
@@ -259,15 +352,29 @@ const KEYS_ANY: Record<string, () => void> = {
 const KEYS_EDIT: Record<string, () => void> = {
   t: () => setMode("translate"),
   r: () => setMode("rotate"),
+  g: dropSelectionToFloor,
+};
+
+const KEYS_EDIT_SHIFT: Record<string, () => void> = {
+  r: resetSelectionTransform,
 };
 
 function _keyAction(e: KeyboardEvent): (() => void) | undefined {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return undefined;
+  if (e.ctrlKey || e.metaKey || e.altKey) return undefined;
   const key = e.key.toLowerCase();
+  if (e.shiftKey) return isEditing() ? KEYS_EDIT_SHIFT[key] : undefined;
   return KEYS_ANY[key] ?? (isEditing() ? KEYS_EDIT[key] : undefined);
 }
 
 function wireKeyboard(): void {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Alt") _setAltHeld(true);
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Alt") _setAltHeld(false);
+  });
+  // A modifier released outside the window must not leave snapping off.
+  window.addEventListener("blur", () => _setAltHeld(false));
   document.addEventListener("keydown", (e) => {
     if (_isEditableFocus()) return;
     const action = _keyAction(e);
@@ -327,6 +434,8 @@ function _refreshAttachment(gm: BABYLON.GizmoManager): void {
  */
 function setMode(mode: TransformMode): void {
   if (!state.gizmoManager) return;
+  // An explicit mode choice supersedes a deferred mid-drag Edit exit.
+  _detachAfterDrag = false;
   // Placement tools exist only in Edit mode.
   if (_isPlacementMode(mode) && !isEditing()) return;
   // Per-node time-travel is a single-selection feature.
@@ -343,6 +452,7 @@ function setMode(mode: TransformMode): void {
   const gizmos = state.gizmoManager.gizmos || {};
   ensureDragEndSubscription(gizmos.positionGizmo);
   ensureDragEndSubscription(gizmos.rotationGizmo);
+  _applyGizmoConstraints();
 
   attachToSelected(state.gizmoManager);
   updateToolbarUI();
@@ -362,6 +472,12 @@ function ensureDragEndSubscription(gizmo: any): void {
       state.isGizmoDragging = true;
       _dragBefore = snapshotMatrices(selectedIds());
       _dragMode = state.transformMode;
+      _applyGizmoConstraints(); // grid may have rescaled since the last drag
+      // Floor-locked Move starts grounded (fixes floating legacy assets);
+      // the correction rides in this drag's undo entry.
+      if (_floorLocked && _dragMode === "translate") {
+        shiftGroupPivotY(groundAnchors(_selectionAnchors()));
+      }
       if (state.selectedNodeIds.size > 1) startGroupDrag();
     });
     subscribed = true;
@@ -370,12 +486,15 @@ function ensureDragEndSubscription(gizmo: any): void {
     gizmo.onDragEndObservable.add(() => {
       state.isGizmoDragging = false;
       endGroupDrag();
+      // Rotating a long part tips it through the floor — re-ground it.
+      if (_floorLocked && _dragMode === "rotate") groundAnchors(_selectionAnchors());
+      _setAltHeld(false);
       commitTransformChange(_MODE_LABELS[_dragMode || ""] || "Transform", _dragBefore);
       _dragBefore = null;
       _dragMode = null;
       if (_detachAfterDrag) {
         _detachAfterDrag = false;
-        _clearMode();
+        if (!isEditing() && _isPlacementMode(state.transformMode)) _clearMode();
       }
     });
     subscribed = true;
@@ -429,6 +548,17 @@ function _renderToolButton(
   }
 }
 
+function _renderPlacementButtons(toolbar: HTMLElement, hasSelection: boolean): void {
+  for (const btn of toolbar.querySelectorAll<HTMLButtonElement>(".placement-action")) {
+    btn.disabled = !hasSelection;
+  }
+  const lock = document.getElementById("lockFloorBtn");
+  if (lock) {
+    lock.classList.toggle("active", _floorLocked);
+    lock.setAttribute("aria-pressed", String(_floorLocked));
+  }
+}
+
 function updateToolbarUI(): void {
   const toolbar = document.getElementById(TOOLBAR_ID);
   if (!toolbar) return;
@@ -443,6 +573,7 @@ function updateToolbarUI(): void {
   for (const btn of toolbar.querySelectorAll<HTMLButtonElement>(".transform-tool")) {
     _renderToolButton(btn, activeMode, hasSelection, isMulti);
   }
+  _renderPlacementButtons(toolbar, hasSelection);
 }
 
 export { initTransformGizmo };
