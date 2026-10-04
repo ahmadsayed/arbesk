@@ -424,7 +424,7 @@ git commit -m "feat(theme): Graphite/Paper token contract with WCAG contrast tes
 **Files:**
 - Modify: `frontend/src/js/engine/theme.ts` (the "Theme toggle" section, lines ~66–115)
 - Modify: `frontend/src/js/engine/theme-init.ts`
-- Modify: `frontend/src/scss/components/_headerbar.scss:42` and `_sidebar.scss:213,217` (scheme selectors). `_testnet-banner.scss:25` is handled in Task 4.
+- Modify: `frontend/src/scss/components/_headerbar.scss:42` and `_sidebar.scss:213,217` (scheme selectors). `_testnet-banner.scss:25` also moves to `data-scheme` (it would otherwise go unreadable in Graphite); Task 4 deletes the rule.
 - Modify: `frontend/src/scss/themes/_graphite.scss`, `_paper.scss` (remove the transitional legacy selectors)
 - Test: `test/frontend/theme.test.js` (new)
 
@@ -707,7 +707,7 @@ Then remove the transitional selectors: delete the line `:root[data-theme="dark"
 - [ ] **Step 6: Verify no `data-theme="dark|light"` selectors remain, except the testnet banner (Task 4)**
 
 Run: `grep -rn 'data-theme="\(dark\|light\)"' frontend/src/scss`
-Expected: only `components/_testnet-banner.scss:25`.
+Expected: no matches (the testnet banner moved to `data-scheme` too).
 
 - [ ] **Step 7: Run tests**
 
@@ -1297,7 +1297,7 @@ Make exactly these edits. Each line on the left is the current text; the right i
   border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
 ```
 
-and delete the whole `[data-theme="dark"] .testnet-banner { … }` rule (lines 25–27). The mix is theme-aware now: `--window-fg` on an 18% warning tint stays ≥ 4.5:1 in both themes.
+and delete the whole `[data-scheme="dark"] .testnet-banner { … }` rule (lines 25–27). The mix is theme-aware now: `--window-fg` on an 18% warning tint stays ≥ 4.5:1 in both themes.
 
 **Landing** (`_landing.scss`): lines 8–15 become
 

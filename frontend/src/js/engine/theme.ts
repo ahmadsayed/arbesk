@@ -63,51 +63,95 @@ function normalizeHex(hex: string): string | null {
   return h.toLowerCase();
 }
 
-// ── Theme toggle ─────────────────────────────────────────────────────
+// ── Theme preference ─────────────────────────────────────────────────
 
 const THEME_STORAGE_KEY = "arbesk-theme";
 
-type ThemeName = "light" | "dark";
+export type ThemeName = "graphite" | "paper";
+export type ThemePref = "system" | ThemeName;
+
+const THEME_SCHEME: Record<ThemeName, "dark" | "light"> = {
+  graphite: "dark",
+  paper: "light",
+};
+
+// Pre-Graphite builds stored "dark" / "light".
+const LEGACY_THEME = new Map<string, ThemeName>([
+  ["dark", "graphite"],
+  ["light", "paper"],
+]);
+
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+let _pref: ThemePref = "system";
 
 /**
- * Initializes the theme on page load.
+ * Reads the stored preference, migrating legacy values in place.
+ * @returns "system" when storage is empty, invalid, or unavailable.
  */
-export function initTheme() {
-  const saved = localStorage.getItem(THEME_STORAGE_KEY);
-  if (saved === "light" || saved === "dark") {
-    applyTheme(saved);
-  } else {
-    applySystemTheme();
+export function readStoredPref(): ThemePref {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(THEME_STORAGE_KEY);
+  } catch {
+    return "system";
   }
-
-  window
-    .matchMedia("(prefers-color-scheme: dark)")
-    .addEventListener("change", () => {
-      if (!localStorage.getItem(THEME_STORAGE_KEY)) {
-        applySystemTheme();
-      }
-    });
+  const migrated = LEGACY_THEME.get(raw ?? "");
+  if (migrated) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, migrated);
+    } catch {
+      // storage blocked — the in-memory value still applies
+    }
+    return migrated;
+  }
+  if (raw === "graphite" || raw === "paper") return raw;
+  return "system";
 }
 
-function applySystemTheme() {
-  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  applyTheme(isDark ? "dark" : "light");
+/** Resolves "system" against the OS colour scheme. */
+export function resolveTheme(pref: ThemePref): ThemeName {
+  if (pref !== "system") return pref;
+  return window.matchMedia(DARK_QUERY).matches ? "graphite" : "paper";
+}
+
+/** The user's current preference (not the resolved theme). */
+export function getThemePref(): ThemePref {
+  return _pref;
 }
 
 function applyTheme(theme: ThemeName) {
-  document.documentElement.setAttribute("data-theme", theme);
-  emit(EVENTS.THEME_CHANGED, { theme });
+  const root = document.documentElement;
+  root.setAttribute("data-theme", theme);
+  root.setAttribute("data-scheme", THEME_SCHEME[theme]);
+  emit(EVENTS.THEME_CHANGED, { theme, pref: _pref });
 }
 
-/** Persist and apply a specific theme ("light" or "dark"). */
-function setTheme(theme: ThemeName) {
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
-  applyTheme(theme);
+/** Persist and apply a preference; "system" clears storage. */
+export function setThemePref(pref: ThemePref) {
+  _pref = pref;
+  try {
+    if (pref === "system") localStorage.removeItem(THEME_STORAGE_KEY);
+    else localStorage.setItem(THEME_STORAGE_KEY, pref);
+  } catch {
+    // storage blocked — preference lasts for this page only
+  }
+  applyTheme(resolveTheme(pref));
 }
 
-/** Toggle between light and dark. */
+/** Initializes the theme on page load and follows OS changes while on "system". */
+export function initTheme() {
+  _pref = readStoredPref();
+  applyTheme(resolveTheme(_pref));
+  window.matchMedia(DARK_QUERY).addEventListener("change", () => {
+    if (_pref === "system") applyTheme(resolveTheme("system"));
+  });
+}
+
+/**
+ * TRANSITIONAL — removed in Task 3 with its only caller (#themeToggle).
+ * Flips between the two concrete themes.
+ */
 export function toggleTheme() {
-  const current =
-    document.documentElement.getAttribute("data-theme") || "light";
-  setTheme(current === "dark" ? "light" : "dark");
+  setThemePref(resolveTheme(_pref) === "graphite" ? "paper" : "graphite");
 }
