@@ -487,7 +487,9 @@ function ensureDragEndSubscription(gizmo: any): void {
       state.isGizmoDragging = false;
       endGroupDrag();
       // Rotating a long part tips it through the floor — re-ground it.
-      if (_floorLocked && _dragMode === "rotate") groundAnchors(_selectionAnchors());
+      if (_floorLocked && _dragMode === "rotate") {
+        shiftGroupPivotY(groundAnchors(_selectionAnchors()));
+      }
       _setAltHeld(false);
       commitTransformChange(_MODE_LABELS[_dragMode || ""] || "Transform", _dragBefore);
       _dragBefore = null;

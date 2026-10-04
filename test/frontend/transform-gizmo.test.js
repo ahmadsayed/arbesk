@@ -358,6 +358,8 @@ describe("transform-gizmo toolbar", () => {
     document.getElementById("lockFloorBtn").click();
     expect(document.getElementById("lockFloorBtn").getAttribute("aria-pressed")).toBe("false");
     expect(pg.yGizmo.isEnabled).toBe(true);
+    expect(pg.xPlaneGizmo.isEnabled).toBe(true);
+    expect(pg.zPlaneGizmo.isEnabled).toBe(true);
     document.getElementById("lockFloorBtn").click(); // restore the module default
   });
 
@@ -371,6 +373,64 @@ describe("transform-gizmo toolbar", () => {
     expect(pg.snapDistance).toBe(0);
     document.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }));
     expect(pg.snapDistance).toBe(2);
+  });
+
+  test("rotation snap mirrors the 15° step; Alt suspends both; window blur restores both", () => {
+    state.nodeAnchors.set("node-1", liveAnchor(0));
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    const pg = state.gizmoManager.gizmos.positionGizmo;
+    const rg = state.gizmoManager.gizmos.rotationGizmo;
+    expect(rg.snapDistance).toBe(Math.PI / 12);
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", altKey: true }));
+    expect(rg.snapDistance).toBe(0);
+
+    window.dispatchEvent(new Event("blur"));
+    expect(pg.snapDistance).toBe(2);
+    expect(rg.snapDistance).toBe(Math.PI / 12);
+  });
+
+  test("floor-locked Move grounds a floating selection at drag start, in the Move entry", () => {
+    clearUndoStacks();
+    const a = liveAnchor(4);
+    state.nodeAnchors.set("node-1", a);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+
+    state.gizmoManager.gizmos.positionGizmo.onDragStartObservable.fire();
+    expect(a.position.y).toBe(0);
+
+    state.gizmoManager.gizmos.positionGizmo.onDragEndObservable.fire();
+    const entry = popUndoEntry();
+    expect(entry.label).toBe("Move");
+    // Matrix.Compose(scale, rotation, position) mock layout: m[3] is position.y.
+    expect(entry.items[0].before[3]).toBe(4);
+    expect(entry.items[0].after[3]).toBe(0);
+    expect(entry.items[0].before).not.toEqual(entry.items[0].after);
+  });
+
+  test("Rotate re-grounds on drag end, in the Rotate entry", () => {
+    clearUndoStacks();
+    const a = liveAnchor(0);
+    state.nodeAnchors.set("node-1", a);
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "r" }));
+    expect(state.transformMode).toBe("rotate");
+
+    state.gizmoManager.gizmos.rotationGizmo.onDragStartObservable.fire();
+    // Mid-drag: the rotation tips the part, pushing it through the floor.
+    a.rotationQuaternion.w = 0.5;
+    a.position.y = 3;
+    state.gizmoManager.gizmos.rotationGizmo.onDragEndObservable.fire();
+
+    expect(a.position.y).toBe(0);
+    const entry = popUndoEntry();
+    expect(entry.label).toBe("Rotate");
   });
 
   test("G drops the selection to the floor as one undo step", () => {
