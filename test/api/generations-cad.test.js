@@ -8,15 +8,17 @@ import request from "supertest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Hono } from "hono";
 
 import { createSession } from "../../src/api/sessions.ts";
 import { _resetCadQuota } from "../../src/api/cad-quota.ts";
 import { _resetRateLimiters } from "../../src/api/rate-limiter.ts";
 import { _resetRegistry } from "../../src/api/generation-tasks.ts";
 import { CadRequestUnsuitable } from "@arbesk/cad-gen";
-import { mountRoutes } from "../helpers/hono.js";
+import { mountRoutes, toListener } from "../helpers/hono.js";
 
 const { default: generateAssetNode } = await import("../../src/api/assets/generate-node.ts");
+const { default: createApi } = await import("../../src/api/index.ts");
 
 const WALLET = "0x1234567890123456789012345678901234567890";
 
@@ -52,6 +54,20 @@ function buildApp(deps = {}) {
   return mountRoutes("/generations", generateAssetNode({}, {}, { quotaStatePath: statePath, generator: { generate }, ...deps }));
 }
 
+/**
+ * The real API app (src/api/index.ts) with stub deps, so the /config handler
+ * can be exercised at its production path /api/v1/config.
+ */
+function buildConfigApp() {
+  const api = createApi({
+    storage: { backend: "kubo", gatewayBase: () => "http://127.0.0.1:8080/ipfs/" },
+    core: {},
+  });
+  const wrapped = new Hono();
+  wrapped.route("/api", api);
+  return toListener(wrapped);
+}
+
 function sessionHeader(address = WALLET) {
   return "Session " + createSession(address);
 }
@@ -80,6 +96,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.CAD_DAILY_REQUEST_LIMIT;
   delete process.env.CAD_GENERATION_ENABLED;
+  delete process.env.CAD_MOCK_GENERATION;
 });
 
 describe("POST /api/v1/generations with provider cad", () => {
@@ -213,5 +230,47 @@ describe("POST /api/v1/generations with provider cad", () => {
     expect(del.body.status).toBe("cancelled");
     expect(del.body.upstreamCancelled).toBe(true);
     release();
+  });
+});
+
+describe("CAD_MOCK_GENERATION", () => {
+  test("mock mode settles a canned design without DEEPSEEK_API_KEY", async () => {
+    const prevKey = process.env.DEEPSEEK_API_KEY;
+    const prevMock = process.env.CAD_MOCK_GENERATION;
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.CAD_MOCK_GENERATION = "true";
+    try {
+      const res = await post({ provider: "cad", prompt: "a 40x30x20 box", nodeId: "node_1" });
+      expect(res.status).toBe(202);
+      expect(typeof res.body.taskId).toBe("string");
+
+      let poll;
+      await until(async () => {
+        poll = await request(app)
+          .get("/generations/" + res.body.taskId)
+          .set("Authorization", sessionHeader());
+        return poll.body.status === "success";
+      }, "success poll");
+      expect(poll.status).toBe(200);
+      expect(poll.body.format).toBe("cad-design");
+      expect(poll.body.design.code).toBe("return box(P.width, P.depth, P.height);");
+      expect(poll.body.provider.id).toBe("mock");
+      expect(poll.body.attribution).toEqual([]);
+    } finally {
+      if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = prevKey;
+      if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
+    }
+  });
+
+  test("config endpoint reports cadGeneration", async () => {
+    const prevMock = process.env.CAD_MOCK_GENERATION;
+    process.env.CAD_MOCK_GENERATION = "true";
+    try {
+      const res = await request(buildConfigApp()).get("/api/v1/config");
+      expect(res.status).toBe(200);
+      expect(res.body.cadGeneration).toBe(true);
+    } finally {
+      if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
+    }
   });
 });

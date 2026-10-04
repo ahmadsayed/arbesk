@@ -1046,6 +1046,10 @@
             "description": "Whether mock 3D generation is enabled",
             "example": true
           },
+          "cadGeneration": {
+            "type": "boolean",
+            "description": "Parametric CAD generation provider availability (CAD_MOCK_GENERATION or DEEPSEEK_API_KEY configured)"
+          },
           "defaultChainId": {
             "type": "integer",
             "description": "Deployment default chain ID (DEFAULT_CHAIN_ID env, falls back to Hardhat local). Anonymous chain reads use this chain.",

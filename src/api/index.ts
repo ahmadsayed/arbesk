@@ -52,6 +52,9 @@ export default (deps: ApiDeps) => {
       ipfsGatewayUrl: storage.gatewayBase(),
       hardhatRpcUrl: HARDHAT_RPC_URL,
       mockGeneration: process.env.MOCK_3D_GENERATION === "true",
+      cadGeneration:
+        process.env.CAD_MOCK_GENERATION === "true" ||
+        (process.env.DEEPSEEK_API_KEY ?? "").trim().length > 0,
       cdpProjectId: process.env.CDP_PROJECT_ID || null,
       nostrPublicUrl: process.env.PUBLIC_NOSTR_URL || null,
     }),

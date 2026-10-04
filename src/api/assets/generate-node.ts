@@ -28,14 +28,14 @@ import {
 } from "../generation-tasks.ts";
 import type { TaskEntry } from "../generation-tasks.ts";
 import type { StorageAdapter } from "../storage/index.ts";
-import { resolveCadRuntime, createCadGenerationProvider } from "../generation-providers.ts";
+import { resolveCadRuntime, createCadGenerationProvider, createMockCadGenerator } from "../generation-providers.ts";
 import type { GenerationProvidersDeps } from "../generation-providers.ts";
 import {
   acquireCadSlot,
   releaseCadSlot,
   refundCadUnit,
 } from "../cad-quota.ts";
-import { refuseAdmission, setQuotaHeaders as setCadQuotaHeaders } from "../routes/cad.ts";
+import { refuseAdmission, setQuotaHeaders as setCadQuotaHeaders, cadConfigFromEnv } from "../routes/cad.ts";
 import type { CadRuntimeConfig } from "../routes/cad.ts";
 import authenticate from "../authentication.ts";
 import type { AuthEnv } from "../authentication.ts";
@@ -786,7 +786,11 @@ async function handleCadRequest(
     }, 400);
   }
 
-  const runtime = resolveCadRuntime(cadDeps);
+  // CAD_MOCK_GENERATION swaps in a canned generator and waives the DeepSeek
+  // key (cadConfigFromEnv skips the key check when a generator is injected).
+  const runtime = process.env.CAD_MOCK_GENERATION === "true"
+    ? cadConfigFromEnv(process.env, { ...cadDeps, generator: createMockCadGenerator() })
+    : resolveCadRuntime(cadDeps);
   if (!runtime.ok) {
     return c.json(
       { error: { code: runtime.code, message: runtime.message } },
