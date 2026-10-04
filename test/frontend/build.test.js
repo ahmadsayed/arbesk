@@ -9,7 +9,7 @@
  * structure-level guards read dist/ directly.
  *
  *   - All JS files pass syntax check
- *   - dist/js ships only app.js + worker + two head scripts (no tests/bench)
+ *   - dist/js ships only app.js + workers + two head scripts (no tests/bench)
  *   - app.js bundles third-party deps (no esm.sh / import map)
  *   - worker bundle is self-contained (no bare @arbesk/ imports)
  *   - api.ts exposes functions via ES exports (no window.* assignments)
@@ -83,7 +83,7 @@ describe("Frontend Build", () => {
   // ── P0: Bundle structure — single minified entry, no cruft ───────────────
 
   describe("bundle structure", () => {
-    test("dist/js ships exactly app.js + 2 vendor bundles + worker + head scripts", () => {
+    test("dist/js ships exactly app.js + 2 vendor bundles + 2 workers + head scripts", () => {
       const rel = walkJsFiles(DIST_JS)
         .map((f) => path.relative(DIST_JS, f).split(path.sep).join("/"))
         .sort();
@@ -93,6 +93,7 @@ describe("Frontend Build", () => {
         "engine/theme-init.js",
         "vendor/cdp-core.js",
         "vendor/viem.js",
+        "workers/cad-worker.js",
         "workers/gltf-worker.js",
       ]);
     });
@@ -117,9 +118,11 @@ describe("Frontend Build", () => {
       expect(readBundle("vendor/cdp-core.js")).toMatch(/froms*"viem/);
     });
 
-    test("worker bundle is self-contained (no bare @arbesk/ imports)", () => {
-      const worker = readBundle("workers/gltf-worker.js");
-      expect(worker).not.toMatch(/from\s*["']@arbesk\//);
+    test("worker bundles are self-contained (no bare @arbesk/ imports)", () => {
+      for (const name of ["workers/gltf-worker.js", "workers/cad-worker.js"]) {
+        const worker = readBundle(name);
+        expect(worker).not.toMatch(/from\s*["']@arbesk\//);
+      }
     });
   });
 

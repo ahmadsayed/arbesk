@@ -488,6 +488,45 @@ describe("Deployment Pipeline Integrity", () => {
   });
 
   // ================================================================
+  // 6c. CAD render worker bundling
+  //
+  // The CAD render worker (Manifold WASM kernel) is a second self-contained
+  // module worker, built and staged exactly like the glTF worker: bundle.js
+  // compiles it to dist/js/workers/ and stages manifold.wasm next to it
+  // (the glue fetches it relative to the worker's own URL via locateFile).
+  // Module workers get no import map, so the bundle must not rely on one.
+  // ================================================================
+
+  describe("cad worker bundling", () => {
+    const WORKER_PATH = resolve(
+      ROOT_DIR,
+      "frontend/src/js/workers/cad-worker.ts",
+    );
+    const CORE_PATH = resolve(
+      ROOT_DIR,
+      "frontend/src/js/workers/cad-render-core.ts",
+    );
+    const BUNDLE_PATH = resolve(ROOT_DIR, "frontend/scripts/bundle.js");
+
+    test("cad worker exists and renders via the shared core", () => {
+      expect(existsSync(WORKER_PATH)).toBe(true);
+      expect(readFileSync(WORKER_PATH, "utf-8")).toContain("renderCadDesign");
+    });
+
+    test("cad render core stays browser-safe (no backend subpath, no node builtins)", () => {
+      const content = readFileSync(CORE_PATH, "utf-8");
+      expect(content).not.toContain("/backend/");
+      expect(content).not.toMatch(/\bnode:(fs|path|child_process)\b/);
+    });
+
+    test("bundle.js builds the cad worker and stages manifold.wasm", () => {
+      const content = readFileSync(BUNDLE_PATH, "utf-8");
+      expect(content).toContain("cad-worker.js");
+      expect(content).toContain("manifold.wasm");
+    });
+  });
+
+  // ================================================================
   // 7. On-chain contract verification
   // ================================================================
 

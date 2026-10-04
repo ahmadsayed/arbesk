@@ -281,6 +281,7 @@ async function startBackend(i) {
       if (cfg.ipfsBackend !== "kubo")
         mismatches.push(`ipfsBackend=${cfg.ipfsBackend}`);
       if (cfg.mockGeneration !== true) mismatches.push("mockGeneration off");
+      if (cfg.cadGeneration !== true) mismatches.push("cadGeneration off");
       if (cfg.hardhatRpcUrl !== ports.hardhatRpc)
         mismatches.push(`hardhatRpcUrl=${cfg.hardhatRpcUrl}`);
     }
@@ -313,6 +314,11 @@ async function startBackend(i) {
         PUBLIC_NOSTR_URL: ports.nostrUrl,
         IPFS_BACKEND: "kubo",
         MOCK_3D_GENERATION: "true",
+        // Parametric CAD mock provider (deterministic canned box); the
+        // unsuitable toggle lets the CAD rejection/retry UX spec exercise the
+        // CadRequestUnsuitable path without a DeepSeek key.
+        CAD_MOCK_GENERATION: "true",
+        CAD_MOCK_UNSUITABLE: "true",
         // E2E repeatedly decomposes glTF nodes and mints upload credentials;
         // keep the per-minute credential limit from blocking the suite.
         UPLOAD_URL_RATE_LIMIT_MAX: "9999",

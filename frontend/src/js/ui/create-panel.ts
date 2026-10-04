@@ -32,6 +32,12 @@ import {
   getOrCreateSession,
   getProviderBalance,
 } from "../services/api.ts";
+// generateCadAsset rides a namespace import: Bun's test mock.module
+// link-checks named imports against each mock factory's exports, and the
+// pre-existing create-panel suites mock this barrel without the CAD export.
+// Only the cad branch in onGenerate ever calls it.
+import * as api from "../services/api.ts";
+import { getConfig } from "../services/app-config.ts";
 import {
   createChatPreview,
   disposeChatPreview,
@@ -85,11 +91,11 @@ const providerKeyBtn = document.getElementById("providerKeyBtn");
 const providerKeyHint = document.getElementById("providerKeyHint");
 const bottomBarProvider = document.getElementById("bottomBarProvider");
 
-// BYOK (Bring Your Own Key): a user-supplied generation provider key. Real
-// providers require a key - the user pays the provider directly, bypassing the
-// on-chain quota/payment gate. The mock provider needs no key. The key lives in
-// localStorage and is sent per-request to the backend; it is never persisted
-// server-side.
+// BYOK (Bring Your Own Key): a user-supplied generation provider key. Tripo
+// 3D requires a key - the user pays the provider directly, bypassing the
+// on-chain quota/payment gate. The mock and Parametric CAD providers need no
+// key. The key lives in localStorage and is sent per-request to the backend;
+// it is never persisted server-side.
 const BYOK_KEY_STORAGE = "arbesk-byok-key";
 
 /**
@@ -100,11 +106,22 @@ function getByokKey(): string {
 }
 
 /**
- * Returns true when the selected provider is real (non-mock).
- * @remarks Real providers require a BYOK key; the mock provider does not.
+ * Returns true when the provider bills a user-supplied API key (BYOK).
+ * @remarks "Real" means bring-your-own-key: only Tripo 3D qualifies.
+ *   Parametric CAD is server-paid like the mock provider, so it needs no key.
  */
-function isRealProvider(): boolean {
-  return getProvider() !== "mock";
+export function isRealProvider(provider: string): boolean {
+  return provider === "tripo3d";
+}
+
+/**
+ * Returns true when generation runs as an async backend task that can be
+ * stopped mid-flight.
+ * @remarks Only the mock provider resolves synchronously; Tripo 3D and
+ *   Parametric CAD both poll a cancellable backend task.
+ */
+export function shouldUseStoppable(provider: string): boolean {
+  return provider !== "mock";
 }
 
 // ─── Provider Balance (BYOK) ───
@@ -367,11 +384,11 @@ const PROVIDER_STORAGE = "arbesk-provider";
 
 /**
  * Sync provider-dependent UI for the current selection: the key configure
- * button only applies to real providers, the hint + attention state flag a
- * missing key, and the bottom bar mirrors the active selection.
+ * button only applies to BYOK providers (Tripo 3D), the hint + attention
+ * state flag a missing key, and the bottom bar mirrors the active selection.
  */
 function syncProviderUI() {
-  const real = isRealProvider();
+  const real = isRealProvider(getProvider());
   const missingKey = real && getByokKey().length === 0;
   if (providerKeyBtn) {
     providerKeyBtn.hidden = !real;
@@ -399,6 +416,15 @@ if (providerSelect) {
     localStorage.setItem(PROVIDER_STORAGE, providerSelect.value);
     syncProviderUI();
     syncImageAttachUI();
+  });
+  // Parametric CAD is only listed when the deployment can serve it
+  // (CAD_MOCK_GENERATION or DEEPSEEK_API_KEY) — otherwise it's a dead end.
+  // Config arrives async; the option defaults to visible and is removed only
+  // on an explicit false.
+  void getConfig().then((config) => {
+    if (config?.cadGeneration === false) {
+      providerSelect.querySelector('option[value="cad"]')?.remove();
+    }
   });
 }
 
@@ -799,8 +825,8 @@ function showStopTaskDialog(): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     const wrap = document.createElement("div");
     wrap.innerHTML = `
-      <p style="margin:0 0 var(--size-2)">Stop this task? Credits already spent with Tripo 3D are <strong>not</strong> refunded — you will lose them, and the partial result is discarded.</p>
-      <button id="stopTaskConfirm" class="btn btn-danger" type="button">Stop task — lose the credits</button>`;
+      <p style="margin:0 0 var(--size-2)">Stop this task? Provider credits already spent are <strong>not</strong> refunded — you will lose them, and the partial result is discarded.</p>
+      <button id="stopTaskConfirm" class="btn btn-danger" type="button">Stop task</button>`;
     (wrap.querySelector("#stopTaskConfirm") as HTMLElement).addEventListener("click", () => {
       const w = wrap as any;
       if (typeof w.closeDialog === "function") w.closeDialog(true);
@@ -856,7 +882,11 @@ function addStoppableWorkingMessage(workingText: string): {
     onProgress: ({ stage, progress }) => {
       // Stage labels ("Rigging skeleton", …) reflect the current chain phase
       // more accurately than the initial text; fall back to it otherwise.
-      working?.setProgress(progress / 100, stage || undefined);
+      // progress 0 means "no data" (cad polls always report 0) — setText
+      // keeps the bar indeterminate; the bubble only renders indeterminate
+      // while progress stays null, and setProgress(undefined) would be NaN.
+      if (progress > 0) working?.setProgress(progress / 100, stage || undefined);
+      else if (stage) working?.setText(stage);
     },
   };
 }
@@ -1839,10 +1869,32 @@ async function onAnimate(generationId: string) {
 }
 
 /**
+ * User-facing copy for the Parametric CAD provider's error codes.
+ * @returns null for non-CAD errors so the caller falls through to the
+ *   generic status-code mapping.
+ */
+function cadErrorMessage(err: ApiError): string | null {
+  switch (err.code) {
+    case "CAD_REQUEST_UNSUITABLE":
+      return "Parametric CAD can't model this request — it suits mechanical/printable shapes, not organic or freeform ones. Try Tripo 3D for mesh generation.";
+    case "CAD_NOT_CONFIGURED":
+      return "Parametric CAD isn't enabled on this deployment.";
+    case "CAD_PRELUDE_MISMATCH":
+      return err.message || "CAD runtime is out of date — refresh the page.";
+    case "CAD_RENDER_TIMEOUT":
+      return "CAD rendering timed out — try a simpler request.";
+    default:
+      return null;
+  }
+}
+
+/**
  * Maps a generation failure to user-facing chat copy.
  */
 function generationErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
+    const cadMessage = cadErrorMessage(err);
+    if (cadMessage) return cadMessage;
     if (err.status === 400) {
       return err.message || "Missing required generation parameter.";
     } else if (err.status === 429) {
@@ -1860,6 +1912,55 @@ function generationErrorMessage(err: unknown): string {
     return (err as any).message;
   }
   return "Generation failed. Please try again.";
+}
+
+/**
+ * CAD rejected the request as unmodelable but suggests a mesh provider —
+ * offer a one-click retry with Tripo 3D instead of a dead-end error bubble.
+ * @returns true when the choice bubble was posted (the caller skips the
+ *   generic error message).
+ */
+function offerCadTripoRetry(err: unknown, effectivePrompt: string): boolean {
+  if (
+    !(err instanceof ApiError) ||
+    err.code !== "CAD_REQUEST_UNSUITABLE" ||
+    err.details?.alternative?.provider !== "tripo3d"
+  ) {
+    return false;
+  }
+  addChoiceMessage(
+    generationErrorMessage(err),
+    [
+      { label: "Retry with Tripo 3D", value: "tripo3d" },
+      { label: "Not now", value: "dismiss" },
+    ],
+    (value) => {
+      if (value !== "tripo3d") return;
+      if (providerSelect) {
+        providerSelect.value = "tripo3d";
+        localStorage.setItem(PROVIDER_STORAGE, "tripo3d");
+        syncProviderUI();
+      }
+      promptInput.value = effectivePrompt;
+      void onGenerate();
+    },
+  );
+  return true;
+}
+
+/**
+ * Error bookkeeping for a failed generation: a user stop and a CAD
+ * retry-with-Tripo offer both end the flow here; anything else falls through
+ * to the generic error message.
+ * @returns true when the failure was already handled (the caller skips the
+ *   generic copy).
+ */
+function reportGenerationFailure(err: unknown, effectivePrompt: string): boolean {
+  if (isGenerationCancelled(err)) {
+    addChatMessage("system", "Generation stopped.");
+    return true;
+  }
+  return offerCadTripoRetry(err, effectivePrompt);
 }
 
 interface SingleImagePayload {
@@ -1964,6 +2065,23 @@ function echoPromptInChat({
 }
 
 /**
+ * The full argument set a provider dispatch needs: the shared request fields
+ * plus the save-context fields the mesh path threads into generateAsset.
+ */
+interface GenerationRequestArgs {
+  effectivePrompt: string;
+  nodeId: string;
+  prevAssetManifestCid: string | undefined;
+  transformMatrix: number[];
+  tier: number;
+  provider: string;
+  providerKey: string;
+  retextureSource: ActiveVersion | null;
+  imagePayload: SingleImagePayload | MultiviewImagePayload | null;
+  stoppable: ReturnType<typeof addStoppableWorkingMessage> | null;
+}
+
+/**
  * Assembles the generateAsset request body.
  */
 function buildGenerateAssetArgs({
@@ -1977,18 +2095,7 @@ function buildGenerateAssetArgs({
   retextureSource,
   imagePayload,
   stoppable,
-}: {
-  effectivePrompt: string;
-  nodeId: string;
-  prevAssetManifestCid: string | undefined;
-  transformMatrix: number[];
-  tier: number;
-  provider: string;
-  providerKey: string;
-  retextureSource: ActiveVersion | null;
-  imagePayload: SingleImagePayload | MultiviewImagePayload | null;
-  stoppable: ReturnType<typeof addStoppableWorkingMessage> | null;
-}) {
+}: GenerationRequestArgs) {
   return {
     prompt: effectivePrompt,
     nodeId,
@@ -1997,12 +2104,33 @@ function buildGenerateAssetArgs({
     prevAssetManifestCid,
     transformMatrix,
     tier,
-    ...(isRealProvider() && { providerKey }),
+    ...(isRealProvider(provider) && { providerKey }),
     ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
     ...(imagePayload && (imagePayload as any)),
     ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
     ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId, onProgress: stoppable.onProgress }),
   };
+}
+
+/**
+ * Dispatches a generation to the selected provider.
+ * @remarks CAD v1 starts a fresh asset — prevAssetManifestCid/transformMatrix
+ *   (typed follow-up chaining) are mesh-generation concepts and stay on the
+ *   generateAsset path.
+ */
+async function dispatchGeneration(args: GenerationRequestArgs) {
+  if (args.provider === "cad") {
+    return api.generateCadAsset({
+      prompt: args.effectivePrompt,
+      nodeId: args.nodeId,
+      ...(args.stoppable && {
+        signal: args.stoppable.signal,
+        onTaskId: args.stoppable.onTaskId,
+        onProgress: args.stoppable.onProgress,
+      }),
+    });
+  }
+  return generateAsset(buildGenerateAssetArgs(args));
 }
 
 async function onGenerate() {
@@ -2031,8 +2159,9 @@ async function onGenerate() {
 
   setGenerating(true);
   // Stop button only makes sense for async providers — the mock returns
-  // synchronously, so there is nothing to cancel.
-  const stoppable = isRealProvider()
+  // synchronously, so there is nothing to cancel. Tripo 3D and Parametric
+  // CAD both poll a cancellable backend task.
+  const stoppable = shouldUseStoppable(getProvider())
     ? addStoppableWorkingMessage("Carving your model…")
     : null;
   const working = stoppable?.working ?? addWorkingMessage("Carving your model…");
@@ -2050,9 +2179,10 @@ async function onGenerate() {
     const provider = getProvider();
     const providerKey = getByokKey();
 
-    // Real providers require a BYOK key; mock does not. A missing key opens
-    // the key dialog directly — a guided flow, not a dead-end toast.
-    if (isRealProvider() && providerKey.length === 0) {
+    // BYOK providers (Tripo 3D) require a key; mock and Parametric CAD do
+    // not. A missing key opens the key dialog directly — a guided flow, not a
+    // dead-end toast.
+    if (isRealProvider(provider) && providerKey.length === 0) {
       showProviderKeyDialog();
       setGenerating(false);
       return;
@@ -2068,20 +2198,18 @@ async function onGenerate() {
       addChatMessage("system", `Refining "${retextureSource.name}" (texture/material only — geometry unchanged)…`);
     }
 
-    const result = await generateAsset(
-      buildGenerateAssetArgs({
-        effectivePrompt,
-        nodeId,
-        prevAssetManifestCid,
-        transformMatrix,
-        tier,
-        provider,
-        providerKey,
-        retextureSource,
-        imagePayload,
-        stoppable,
-      })
-    );
+    const result = await dispatchGeneration({
+      effectivePrompt,
+      nodeId,
+      prevAssetManifestCid,
+      transformMatrix,
+      tier,
+      provider,
+      providerKey,
+      retextureSource,
+      imagePayload,
+      stoppable,
+    });
 
     // Defer the Studio viewport load: register the result, show an asset
     // bubble with a live preview, and let the user send it explicitly.
@@ -2096,10 +2224,7 @@ async function onGenerate() {
     // A completed generation consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
   } catch (err) {
-    if (isGenerationCancelled(err)) {
-      addChatMessage("system", "Generation stopped.");
-      return;
-    }
+    if (reportGenerationFailure(err, effectivePrompt)) return;
     console.error("Generation failed:", err);
     addChatMessage("system", generationErrorMessage(err));
   } finally {
@@ -2236,4 +2361,4 @@ if (walletState.get().walletAddress) {
 }
 
 // ─── Exports ───
-export { addChatMessage };
+export { addChatMessage, generationErrorMessage };

@@ -10,7 +10,10 @@ let _configPromise: Promise<any> | null = null;
  * GET /api/v1/config
  * @remarks Config is immutable for the page lifetime, so the result is
  *   memoized; a failed fetch clears the cache so the next call can retry.
- * @returns { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration }
+ * @returns { contractAddress, ipfsGatewayUrl, hardhatRpcUrl, mockGeneration,
+ *   cadGeneration } — `cadGeneration: false` means the deployment cannot
+ *   serve the Parametric CAD provider (no CAD_MOCK_GENERATION and no
+ *   DEEPSEEK_API_KEY); absent/true means it can.
  */
 export async function getConfig(): Promise<any> {
   if (_configPromise) return _configPromise;

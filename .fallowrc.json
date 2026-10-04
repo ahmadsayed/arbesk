@@ -11,6 +11,10 @@
     "frontend/src/js/app/initial-view.ts",
     "frontend/src/js/engine/theme-init.ts",
     "frontend/src/js/workers/gltf-worker.ts",
+    // CAD render worker: same fixed-asset reasoning as the gltf worker entry
+    // above — frontend/scripts/bundle.js references it by path string, which
+    // the import graph cannot see.
+    "frontend/src/js/workers/cad-worker.ts",
     "frontend/scripts/*.js",
     "frontend/src/scss/**/*.scss",
     "blockchain/hardhat.config.js",
@@ -173,6 +177,10 @@
     {
       "file": "src/api/authz.ts",
       "exports": ["createAuthzInstance"]
+    },
+    {
+      "file": "frontend/src/js/services/cad-render.ts",
+      "exports": ["CadRenderError"]
     },
 
     // Re-exported types from the API client barrel (type-only consumers).
