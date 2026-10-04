@@ -390,6 +390,18 @@ function clearBakedChildRefs(baked: any[]) {
 }
 
 /**
+ * CAD parts are millimetre-native: default the units annotation to mm
+ * unless the user picked one explicitly.
+ */
+function stampCadUnits(manifest: any): void {
+  if (!manifest.metadata?.cad) return;
+  manifest.metadata.annotations ||= {};
+  if (!manifest.metadata.annotations.units) {
+    manifest.metadata.annotations.units = "mm";
+  }
+}
+
+/**
  * Bakes pending linked-child refs and drops unlinked child assets.
  * @remarks Must run after the prevManifest snapshot so a link/remove-child
  *   save on an unchanged draft is still detected and written.
@@ -797,6 +809,8 @@ export async function prepareManifestForWrite(assetName: string) {
     manifest.metadata ||= {};
     manifest.metadata.annotations = pendingAnnotations;
   }
+
+  stampCadUnits(manifest);
 
   // Recompute deterministic model facts (metadata.computed) from the root
   // source. Best-effort: a failure must never block the save.

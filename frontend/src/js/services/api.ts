@@ -772,12 +772,18 @@ export interface GenerateCadAssetParams {
  * Upload the rendered 3MF + generation manifest to IPFS — the same staging
  * flow as generateAsset — and record the CAD provenance on the manifest.
  * @remarks The manifest gains `metadata.cad` (summary/provider/attribution/
- *   providerTaskId). The browser IPFS writer stringifies the manifest as-is —
- *   nothing on this write path runs the zod manifest schema (which would strip
- *   the unknown key), so it round-trips in the pinned bytes.
+ *   providerTaskId/stats — stats carry the kernel's exact triangles + bboxMm,
+ *   giving 3MF roots real mm dimensions without parsing the payload). The
+ *   browser IPFS writer stringifies the manifest as-is — nothing on this
+ *   write path runs the zod manifest schema (which would strip the unknown
+ *   key), so it round-trips in the pinned bytes.
  */
 async function stageCadAsset(
-  rendered: { bytes: Uint8Array; summary: string },
+  rendered: {
+    bytes: Uint8Array;
+    summary: string;
+    stats?: { triangles?: number; bboxMm?: { min: number[]; max: number[] } };
+  },
   final: any,
   manifestArgs: {
     prompt: string;
@@ -809,6 +815,14 @@ async function stageCadAsset(
       provider: final.provider ?? null,
       attribution: final.attribution ?? [],
       providerTaskId: final.providerTaskId ?? null,
+      ...(rendered.stats?.bboxMm
+        ? {
+            stats: {
+              triangles: rendered.stats.triangles ?? 0,
+              bboxMm: rendered.stats.bboxMm,
+            },
+          }
+        : {}),
     },
   };
 

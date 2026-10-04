@@ -17,7 +17,19 @@ export async function computeAssetStats(
   );
   if (!root?.source?.cid) return null;
   const { cid, format } = root.source;
-  if (format === "3mf") return { format: "3mf" };
+  if (format === "3mf") {
+    // CAD-generated 3MF carries exact kernel stats in mm (Z-up: height = Z).
+    const cadStats = manifest?.metadata?.cad?.stats;
+    const bbox = cadStats?.bboxMm;
+    if (!bbox) return { format: "3mf" };
+    const size = bbox.max.map((v: number, k: number) => v - bbox.min[k]);
+    return {
+      format: "3mf",
+      dimensions: { width: size[0], depth: size[1], height: size[2], unit: "mm" },
+      triangle_count:
+        typeof cadStats.triangles === "number" ? cadStats.triangles : undefined,
+    };
+  }
   if (format !== "gltf") return { format };
   try {
     const json = await readJson(cid);

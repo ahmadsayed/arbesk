@@ -457,6 +457,40 @@ describe("prepareManifestForWrite", () => {
     ).toBe("#ff0000");
   });
 
+  it("CAD save defaults annotations.units to mm when unset", async () => {
+    const manifest = {
+      ...makeManifest([
+        makeNode({ cid: "bafy3mf", path: "asset.3mf", format: "3mf" }),
+      ]),
+      metadata: { cad: { summary: "box" } },
+    };
+    assetStore.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("CAD mm");
+
+    expect(result.manifest.metadata.annotations.units).toBe("mm");
+  });
+
+  it("explicit units annotation wins over the CAD mm default", async () => {
+    const manifest = {
+      ...makeManifest([
+        makeNode({ cid: "bafy3mf", path: "asset.3mf", format: "3mf" }),
+      ]),
+      metadata: { cad: { summary: "box" }, annotations: { units: "m" } },
+    };
+    assetStore.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("CAD m");
+
+    expect(result.manifest.metadata.annotations.units).toBe("m");
+  });
+
   // Regression: pending linked-child refs must be baked into the manifest
   // AFTER the prevManifest no-op baseline snapshot. When the bake happened
   // before the snapshot, the baseline already contained the child, so
