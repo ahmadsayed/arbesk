@@ -87,11 +87,11 @@
 
 .task-progress.error {
   .task-progress-label {
-    color: var(--red-3);
+    color: var(--danger-text);
   }
 
   .task-progress-fill {
-    background-color: var(--red-3);
+    background-color: var(--destructive-bg);
   }
 }
 

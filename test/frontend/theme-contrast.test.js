@@ -98,3 +98,69 @@ for (const name of THEMES) {
     });
   });
 }
+
+/** color-mix(in srgb, a p%, b) for two #rrggbb values. */
+function mix(a, b, p) {
+  return "#" + [1, 3, 5]
+    .map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * p + parseInt(b.slice(i, i + 2), 16) * (1 - p)))
+    .map((v) => v.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// Text pairs that components build with color-mix(): keep in step with the SCSS.
+const DERIVED_TEXT_PAIRS = [
+  // _library-grid .status-uploading/.status-pending, _version-clock hover badge
+  ["window-fg on warning 22% tint", (t) => [t["window-fg"], mix(t.warning, t["card-bg"], 0.22)]],
+  // _testnet-banner
+  ["window-fg on warning 18% banner", (t) => [t["window-fg"], mix(t.warning, t["window-bg"], 0.18)]],
+  // _cards warning / error states
+  ["warning on warning 8% card", (t) => [t.warning, mix(t.warning, t["card-bg"], 0.08)]],
+  ["danger-text on danger 8% card", (t) => [t["danger-text"], mix(t["danger-text"], t["card-bg"], 0.08)]],
+  // _chat success chip, _wallet-popover connected state
+  ["window-bg on success", (t) => [t["window-bg"], t.success]],
+  // _landing bands: --landing-on-dark text / hint line on --landing-dark
+  ["landing band text", (t) => [band(t).onDark, band(t).bg]],
+  ["landing band hint line", (t) => [mix(band(t).onDark, t["accent-text"], 0.45), band(t).bg]],
+];
+
+/** _landing.scss band colours: inverted on light themes, one step up on dark. */
+function band(t) {
+  const dark = luminance(t["window-bg"]) < 0.5;
+  return dark
+    ? { bg: t["view-bg"], onDark: t["window-fg"] }
+    : { bg: t["window-fg"], onDark: t["window-bg"] };
+}
+
+for (const name of THEMES) {
+  describe(`derived text pairs: ${name}`, () => {
+    const t = parseTheme(name);
+    for (const [label, pair] of DERIVED_TEXT_PAIRS) {
+      test(`${label} ≥ 4.5:1`, () => {
+        const [fg, bg] = pair(t);
+        expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+    // Band headings are large text (≥ 2.2rem bold): 3:1.
+    test("landing band heading (accent-text) ≥ 3:1", () => {
+      expect(contrast(t["accent-text"], band(t).bg)).toBeGreaterThanOrEqual(3);
+    });
+  });
+}
+
+describe("component colour leaks", () => {
+  const dir = path.join(SCSS, "components");
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".scss"));
+  const RAW = /var\(--(choco|gold|red|green|yellow)-\d+|--accent-bg-rgb|--highlight-amber|--error-bg|--success-bg|--bs-warning/;
+  const HEX = /#[0-9a-fA-F]{3,8}\b/;
+
+  for (const f of files) {
+    test(`${f} uses only theme tokens`, () => {
+      const lines = fs.readFileSync(path.join(dir, f), "utf-8").split("\n");
+      const bad = lines
+        .map((l, i) => ({ l: l.replace(/\/\/.*$/, ""), n: i + 1 }))
+        .filter(({ l }) => HEX.test(l) || RAW.test(l))
+        .map(({ l, n }) => `${f}:${n}: ${l.trim()}`);
+      expect(bad).toEqual([]);
+    });
+  }
+});

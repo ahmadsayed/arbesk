@@ -8,9 +8,9 @@
   padding: 3px 12px;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--choco-11);
-  background: color-mix(in srgb, var(--yellow-4) 22%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--yellow-4) 45%, transparent);
+  color: var(--window-fg);
+  background: color-mix(in srgb, var(--warning) 18%, var(--window-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
 
   &.visible {
     display: flex;
@@ -20,8 +20,4 @@
     color: inherit;
     text-decoration: underline;
   }
-}
-
-[data-scheme="dark"] .testnet-banner {
-  color: var(--choco-1);
 }

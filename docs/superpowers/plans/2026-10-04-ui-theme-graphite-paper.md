@@ -1290,6 +1290,8 @@ Make exactly these edits. Each line on the left is the current text; the right i
 | `_viewport.scss:90` | `color: var(--red-3);` | `color: var(--danger-text);` |
 | `_viewport.scss:94` | `background-color: var(--red-3);` | `background-color: var(--destructive-bg);` |
 
+> **As built (#70):** `_library-grid.scss:163,178` and `_version-clock.scss:201` use a tint, `color-mix(in srgb, var(--warning) 22%, var(--card-bg))`, not a solid `var(--warning)`: their `--window-fg` text was 1.64:1 (Graphite) / 3.30:1 (Paper) on solid warning, and 8.7:1 / 12.7:1 on the tint. The landing bands also got scheme-aware tokens (`--landing-dark`, `--landing-on-dark`; see below), because mapping `--landing-dark` to `--window-fg` alone turned the band light in Graphite with a 1.6:1 amber heading. `theme-contrast.test.js` now checks these derived pairs.
+
 **Testnet banner** (`_testnet-banner.scss`): lines 11–13 become
 
 ```scss

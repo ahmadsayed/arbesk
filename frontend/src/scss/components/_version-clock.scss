@@ -56,7 +56,7 @@
 
   .vc-published-ring {
     fill: none;
-    stroke: var(--green-4);
+    stroke: var(--success);
     stroke-width: 1.5;
   }
 
@@ -84,7 +84,7 @@
   }
 
   &.published .vc-badge {
-    fill: var(--green-4);
+    fill: var(--success);
   }
 
   &.loading .vc-hand {
@@ -178,7 +178,7 @@
   // Published stays plain text (brightened, no chip) so it doesn't compete
   // with the active/hover chips, which sit where the knob or drag cursor is.
   &.published {
-    color: var(--green-4);
+    color: var(--success);
     opacity: 1;
   }
 
@@ -198,7 +198,7 @@
 
   &.hover {
     color: var(--window-fg);
-    background: var(--yellow-4);
+    background: color-mix(in srgb, var(--warning) 22%, var(--card-bg));
     z-index: 2;
   }
 }
