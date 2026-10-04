@@ -479,7 +479,7 @@ git commit -m "feat(studio): Settings moves into Properties → Asset; Settings 
 - Test: `test/frontend/new-menu.test.js` (new)
 
 **Interfaces:**
-- Consumes: `initMenuButton(button, menu, { onSelect, onOpen })` (Phase 1); `navigate(path)` from `app/router.ts`; `switchView` from `ui/sidebar.ts`; `clearScene` from `engine/cleanup.ts`; `closeAsset`, `getActiveAssetManifestCid` from `@arbesk/asset-core/domain/asset.js`; `emit`, `EVENTS` (`ASSET_FILE_DROPPED`, `SCENE_EMPTY`); `state.scene` from `engine/state.ts`.
+- Consumes: `initMenuButton(button, menu, { onSelect, onOpen, align })` (Phase 1); `navigate(path)` from `app/router.ts`; `switchView` from `ui/sidebar.ts`; `clearScene` from `engine/cleanup.ts`; `closeAsset`, `getActiveAssetManifestCid` from `@arbesk/asset-core/domain/asset.js`; `emit`, `EVENTS` (`ASSET_FILE_DROPPED`, `SCENE_EMPTY`); `state.scene` from `engine/state.ts`.
 - Produces: `initNewMenu(): void`; ids `#newMenuBtn`, `#newMenu`, `#newMenuUpload`, `#newMenuAi`, `#newMenuCad`, `#newAssetBtn` (the "Empty asset" item, keeping the id so the existing `scene-graph.ts` click listener and Ctrl+N keep working), `#newMenuUploadInput`.
 
 - [ ] **Step 1: Write the failing test**
@@ -696,6 +696,7 @@ export function initNewMenu(): void {
   if (!button || !menu) return;
 
   initMenuButton(button, menu, {
+    align: "start",
     onOpen() {
       const cad = document.getElementById("newMenuCad");
       if (cad) cad.hidden = !cadAvailable();
@@ -789,7 +790,7 @@ In `frontend/src/pug/includes/header.pug`, replace the `button#newAssetBtn…` b
       span New
       svg(width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
         use(href="/icons.svg#chevron-down")
-    ul#newMenu.menu-popover.menu-popover--start(role="menu" aria-label="New" hidden)
+    ul#newMenu.menu-popover(role="menu" aria-label="New" hidden)
       li#newMenuUpload.menu-item(role="menuitem" tabindex="-1")
         span Upload model…
         kbd Ctrl+O
@@ -806,14 +807,7 @@ In `frontend/src/pug/includes/header.pug`, replace the `button#newAssetBtn…` b
 
 Move this `.menu-anchor` so it sits **directly after `nav.page-switcher`** and before `#backBtn` (spec §4 order: logo · switcher · New ▾ · title …). Remove the now-empty `.headerbar-doc-actions` wrapper only if `New` was its sole remaining child; Save, Besk it and Download stay in it.
 
-Add to `frontend/src/scss/components/_menu.scss` (Phase 1 file):
-
-```scss
-.menu-popover--start {
-  right: auto;
-  left: 0;
-}
-```
+The menu opens left-aligned with its button: pass `align: "start"` to `initMenuButton` (Phase 1's helper fixed-positions the menu in JS, because the headerbar is `overflow: hidden`, so a CSS `left`/`right` modifier has no effect).
 
 In `frontend/src/js/ui/asset-chrome.ts`:
 - `const newBtn = document.getElementById("newAssetBtn");` → `const newBtn = document.getElementById("newMenuBtn");`

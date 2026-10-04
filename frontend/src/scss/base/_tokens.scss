@@ -18,6 +18,12 @@
   // 5.2:1 with white text (AA normal size).
   --clock-accent: #2563eb;
   --clock-accent-fg: #ffffff;
+
+  // Theme-picker swatches (previews of each theme regardless of the active one)
+  --theme-preview-graphite-bg: #141416;
+  --theme-preview-graphite-accent: #f0a64b;
+  --theme-preview-paper-bg: #f7f7f5;
+  --theme-preview-paper-accent: #a35a12;
 }
 
 // ── LEGACY raw palette — REMOVED IN TASK 4 (only leaking components use it) ──

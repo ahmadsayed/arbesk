@@ -147,11 +147,3 @@ export function initTheme() {
     if (_pref === "system") applyTheme(resolveTheme("system"));
   });
 }
-
-/**
- * TRANSITIONAL — removed in Task 3 with its only caller (#themeToggle).
- * Flips between the two concrete themes.
- */
-export function toggleTheme() {
-  setThemePref(resolveTheme(_pref) === "graphite" ? "paper" : "graphite");
-}
