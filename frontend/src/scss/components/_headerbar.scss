@@ -183,34 +183,31 @@ html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
   }
 }
 
-// Wallet button — docked top-right per dapp/crypto convention
-.headerbar-wallet {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--size-1);
-  height: 36px;
-  padding: 0 var(--size-3);
-  font-size: var(--font-size-1);
-  font-weight: var(--font-weight-6);
-  font-family: var(--font-family);
-  color: var(--headerbar-fg);
-  background: var(--raised-bg);
+// Account controls — quiet Sign in when disconnected, identicon avatar when
+// connected (the avatar is the wallet-popover toggle)
+.headerbar-signin {
+  height: 32px;
+  min-height: 32px; // .btn sets min-height: 36px, which would win over height alone
+
+  &.hidden {
+    display: none;
+  }
+}
+
+.headerbar-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-round);
-  box-shadow: none;
+  background: var(--raised-bg);
   cursor: pointer;
-  white-space: nowrap;
-  transition: filter var(--duration-quick) var(--ease-out-3),
-              background-color var(--duration-quick) var(--ease-out-3),
-              box-shadow var(--duration-quick) var(--ease-out-3),
-              color var(--duration-quick) var(--ease-out-3);
-
-  svg {
-    flex-shrink: 0;
-  }
 
   &:hover {
-    background-color: color-mix(in srgb, var(--raised-bg) 85%, var(--headerbar-fg));
+    background: var(--surface-overlay-hover);
   }
 
   &:focus-visible {
@@ -218,17 +215,31 @@ html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
     box-shadow: var(--focus-ring);
   }
 
-  // Disconnected (idle) state — outlined, not filled
-  &.disconnected {
-    color: var(--accent-text);
-    background: transparent;
-    box-shadow: none;
+  .headerbar-avatar-img {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    overflow: hidden;
+    border-radius: var(--radius-1);
 
-    &:hover {
-      filter: none;
-      box-shadow: none;
-      background-color: var(--surface-overlay-hover);
+    svg {
+      width: 100%;
+      height: 100%;
     }
+  }
+
+  // Injected wallet connected but SIWE not done: a badge, plus the label
+  // (sr-only + title) carries "• Sign In" for non-visual users.
+  &.auth-required::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--warning);
+    border: 2px solid var(--headerbar-bg);
   }
 
   &.hidden {

@@ -71,11 +71,8 @@ button#backBtn.headerbar-back.hidden(aria-label="Go back to parent asset", title
   select#headerbarNetworkSelect.headerbar-network-select(:class="{ connected: connected && !isCdp, hidden: isCdp }" aria-label="Select network" title="Select network")
     option(value="baseSepolia" selected) Base Sepolia Testnet
     option(value="hardhat") Hardhat Local
-  button#connectWalletBtn.headerbar-wallet.disconnected(:class="{ hidden: connected, disconnected: !connected }" aria-label="Login or sign up")
-    svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#log-in")
-    span Login / Signup
-  button#disconnectWalletBtn.headerbar-wallet.hidden(:class="{ hidden: !connected, 'auth-required': showAuthRequired }" aria-label="Wallet menu")
-    svg(width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#wallet")
-    span#disconnectWalletBtnText(x-text="label") Disconnect
+  button#connectWalletBtn.btn.btn-secondary.headerbar-signin.disconnected(:class="{ hidden: connected, disconnected: !connected }" type="button" aria-label="Sign in")
+    span Sign in
+  button#disconnectWalletBtn.headerbar-avatar.hidden(:class="{ hidden: !connected, 'auth-required': showAuthRequired }" type="button" aria-label="Account menu" :title="label")
+    span.headerbar-avatar-img(x-html="identicon" aria-hidden="true")
+    span#disconnectWalletBtnText.sr-only(x-text="label") Disconnect

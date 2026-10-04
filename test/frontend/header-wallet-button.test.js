@@ -21,8 +21,8 @@ const FRAGMENT = `
       <option value="baseSepolia" selected>Base Sepolia Testnet</option>
       <option value="hardhat">Hardhat Local</option>
     </select>
-    <button id="connectWalletBtn" class="headerbar-wallet disconnected" :class="{ hidden: connected, disconnected: !connected }" aria-label="Login or sign up"><span>Login / Signup</span></button>
-    <button id="disconnectWalletBtn" class="headerbar-wallet hidden" :class="{ hidden: !connected, 'auth-required': showAuthRequired }" aria-label="Wallet menu"><span id="disconnectWalletBtnText" x-text="label">Disconnect</span></button>
+    <button id="connectWalletBtn" class="btn btn-secondary headerbar-signin disconnected" :class="{ hidden: connected, disconnected: !connected }" type="button" aria-label="Sign in"><span>Sign in</span></button>
+    <button id="disconnectWalletBtn" class="headerbar-avatar hidden" :class="{ hidden: !connected, 'auth-required': showAuthRequired }" type="button" aria-label="Account menu" :title="label"><span class="headerbar-avatar-img" x-html="identicon" aria-hidden="true"></span><span id="disconnectWalletBtnText" class="sr-only" x-text="label">Disconnect</span></button>
   </div>`;
 
 function flush() {
@@ -156,4 +156,16 @@ test("regression: seeds from walletState set BEFORE the component initializes (a
   await setup({ walletAddress: ADDRESS, walletSource: "injected" });
   expect(connectBtn().classList.contains("hidden")).toBe(true);
   expect(textEl().textContent).toContain(TRUNCATED);
+});
+
+test("connected state renders an identicon in the avatar", async () => {
+  await setup({ walletAddress: ADDRESS, walletSource: "injected" });
+  const img = document.querySelector("#disconnectWalletBtn .headerbar-avatar-img");
+  expect(img?.innerHTML).toMatch(/^<svg/);
+});
+
+test("disconnected state renders no identicon", async () => {
+  await setup();
+  const img = document.querySelector("#disconnectWalletBtn .headerbar-avatar-img");
+  expect(img?.innerHTML).toBe("");
 });
