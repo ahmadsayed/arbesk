@@ -51,8 +51,17 @@ export function exactIoU(module, generated, truth, frame) {
       return { iou: null, reason: (a ? "ground truth" : "generated") + " not manifold: " + (e instanceof Error ? e.message : String(e)) };
     }
     const [x, y] = owned;
-    const union = keep(x.add(y)).volume();
-    const inter = keep(x.intersect(y)).volume();
+    // A boolean can still fail on a self-intersecting or degenerate solid even
+    // though both operands constructed; that is a measurement we cannot make,
+    // not a reason to abort the whole run.
+    let union;
+    let inter;
+    try {
+      union = keep(x.add(y)).volume();
+      inter = keep(x.intersect(y)).volume();
+    } catch (e) {
+      return { iou: null, reason: "boolean failed: " + (e instanceof Error ? e.message : String(e)) };
+    }
     return { iou: union > 0 ? inter / union : 0, reason: null };
   } finally {
     for (const m of owned) m.delete();

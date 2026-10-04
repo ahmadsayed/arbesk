@@ -135,6 +135,18 @@ describe("complexity bands", () => {
     expect(md).toContain("| " + COMPLEXITY_LEVELS[2] + " | 1 |");
   });
 
+  it("flags a mixed-config directory and prints counts as integers", () => {
+    const md = renderMarkdown(summarise(banded, { variant: "measured", mixedRuns: true }), {
+      compare: {
+        wrongRefusals: { current: 0, other: 1, delta: -1 },
+        iou: { current: 0.5, other: 0.25, delta: 0.25 },
+      },
+    });
+    expect(md).toContain("**Mixed run**");
+    expect(md).toContain("| wrongRefusals | 0 | 1 | -1 |");
+    expect(md).toContain("| iou | 0.500 | 0.250 | +0.250 |");
+  });
+
   it("says so instead of rendering empty tables when nothing was scored", () => {
     const md = renderMarkdown(summarise(RESULTS, { variant: "measured", thinking: true }), {});
     expect(md).toContain("thinking on");

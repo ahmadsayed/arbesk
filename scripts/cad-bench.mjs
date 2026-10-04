@@ -65,9 +65,28 @@ export function parseArgs(argv) {
         opts.variants = v === "both" ? ["measured", "abstract"] : [/** @type {"measured" | "abstract"} */ (v)];
         break;
       }
-      case "--limit": opts.limit = Number(value()); break;
-      case "--ids": opts.ids = value().split(",").map((s) => s.trim().padStart(8, "0")); break;
-      case "--concurrency": opts.concurrency = Math.max(1, Number(value())); break;
+      case "--limit": {
+        const raw = value();
+        const n = Number(raw);
+        if (!Number.isInteger(n) || n < 1) throw new Error("--limit must be a positive integer, got " + raw);
+        opts.limit = n;
+        break;
+      }
+      case "--ids": {
+        const raw = value().split(",").map((s) => s.trim());
+        if (!raw.length || raw.some((s) => !/^\d{1,8}$/.test(s))) {
+          throw new Error("--ids must be a comma-separated list of numeric prompt ids");
+        }
+        opts.ids = raw.map((s) => s.padStart(8, "0"));
+        break;
+      }
+      case "--concurrency": {
+        const raw = value();
+        const n = Number(raw);
+        if (!Number.isInteger(n) || n < 1) throw new Error("--concurrency must be a positive integer, got " + raw);
+        opts.concurrency = n;
+        break;
+      }
       case "--no-jev": opts.jev = false; break;
       case "--thinking": {
         const v = value();
@@ -132,6 +151,33 @@ function writeJsonAtomic(file, value) {
 const readJson = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null);
 
 /**
+ * Every sample result written in a variant directory, in id order.
+ * @remarks The summary must describe the DIRECTORY, not the current
+ *   invocation's selection: a --resume with different --ids/--limit/--thinking
+ *   would otherwise relabel results produced under other flags, and the
+ *   per-sample file is the only record of what was actually run.
+ * @param {string} dir
+ * @returns {any[]}
+ */
+export function readResults(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => /^\d{8}\.json$/.test(f)).sort()
+    .map((f) => readJson(path.join(dir, f))).filter(Boolean);
+}
+
+/**
+ * How many distinct run stamps a result set carries.
+ * @remarks More than one means the directory mixes configurations (a resume
+ *   with changed flags, or a changed .env), so the summary says so instead of
+ *   presenting the mixture as a single run.
+ * @param {any[]} results
+ * @returns {number}
+ */
+export function distinctRunStamps(results) {
+  return new Set(results.map((r) => JSON.stringify(r.run ?? null))).size;
+}
+
+/**
  * Writes summary.json, summary.md and (first time only) triage-agreement.md.
  * @param {string} dir Variant directory.
  * @param {any[]} results @param {any} config @param {string | null} compareRun
@@ -190,19 +236,32 @@ async function main() {
   // The complexity score describes the REQUEST, so it is asked whenever a Jev
   // key exists: --no-jev only blanks the key for the generator, and
   // --no-triage only skips the failure triage.
-  const complexityJev = env.JEV_API_KEY ? (generatorConfigFrom(env).jev ?? null) : null;
+  // One Jev config for both observe-only asks - the failure triage and the
+  // complexity score - so JEV_BASE_URL/JEV_MODEL apply to both and the echoed
+  // jevModel names the model that actually answered.
+  const jevCfg = generatorConfigFrom(env).jev ?? null;
+  const complexityJev = env.JEV_API_KEY ? jevCfg : null;
   const score = createScorer(module);
-  const jev = opts.triage ? { apiKey: env.JEV_API_KEY } : null;
+  const jev = opts.triage ? jevCfg : null;
   const config = {
     dataset: CADPROMPT_PIN, model: cfg.model ?? DEFAULT_CAD_MODEL, thinking: cfg.thinking,
-    maxRepairAttempts: cfg.limits.maxRepairAttempts, jevModel: cfg.jev?.model ?? "jev-latest",
+    maxRepairAttempts: cfg.limits.maxRepairAttempts, jevModel: (jevCfg ?? cfg.jev)?.model ?? "jev-latest",
     jev: opts.jev, triage: opts.triage, complexity: Boolean(complexityJev), samples: 8192, seed: 1,
+  };
+
+  const runStamp = {
+    model: config.model, thinking: config.thinking, maxRepairAttempts: config.maxRepairAttempts,
+    jevModel: config.jevModel, jev: opts.jev, triage: opts.triage,
   };
 
   for (const variant of opts.variants) {
     const dir = path.join(runDir, variant);
     fs.mkdirSync(dir, { recursive: true });
     let samples = loadSamples(dataset, variant);
+    if (samples.length !== 200) {
+      console.warn("WARNING: the pinned dataset yielded " + samples.length + " " + variant +
+        " samples, not 200 - the paper comparison assumes the full set.");
+    }
     if (opts.ids) samples = samples.filter((s) => opts.ids?.includes(s.id));
     samples = samples.slice(0, opts.limit);
     const todo = samples.filter((s) => !fs.existsSync(path.join(dir, s.id + ".json")));
@@ -215,6 +274,7 @@ async function main() {
       // Asked AFTER the sample so failures get a band too: the table must
       // describe the requests, not only the parts that built.
       if (complexityJev) result.complexity = await askComplexity(complexityJev, result.prompt);
+      result.run = runStamp;
       if (jev && needsTriage(result)) result.triage = await triage(jev, result);
       writeJsonAtomic(path.join(dir, sample.id + ".json"), result);
       consecutive = result.outcome === "provider_error" ? consecutive + 1 : 0;
@@ -231,8 +291,13 @@ async function main() {
         "(key or quota?). Continue with --resume " + runDir);
       process.exitCode = 1;
     }
-    const results = samples.map((s) => readJson(path.join(dir, s.id + ".json"))).filter(Boolean);
-    writeSummary(dir, results, { ...config, variant }, opts.compare);
+    const results = readResults(dir);
+    const stamps = distinctRunStamps(results);
+    if (stamps > 1) {
+      console.warn("WARNING: " + dir + " holds results from " + stamps + " run configurations " +
+        "(a resume with changed flags, or a changed .env); the summary mixes them.");
+    }
+    writeSummary(dir, results, { ...config, variant, mixedRuns: stamps > 1 }, opts.compare);
     if (aborted) return;
   }
 }

@@ -22,9 +22,11 @@ const STRATA = /** @type {const} */ ([
 
 const DEVIATIONS = [
   "Measured prompts are rewritten into millimetres (x100); prompts with coordinate tuples or length arithmetic keep their numbers and state 1 unit = 100 mm instead (`rewrite: fallback`).",
-  "Scores are for cad-gen's full product loop: server static repair plus up to 2 client kernel repairs. The first-pass rate is the closest analogue of the paper's \"Generated\" rows.",
+  "Scores are for the HARDENED loop the harness composes: the server's static repair, then the harness's own kernel gates and up to 2 client repair rounds. The shipped browser worker currently renders once (guard, kernel, 3MF) with no geometric gates and no repair round, so compile and first-pass here are an upper bound on what the product does today; the server's /cad/repair contract is the path that would close the gap. The first-pass rate is the closest analogue of the paper's \"Generated\" rows.",
   "Both clouds are normalised by centroid and RMS radius before ICP (our parts are ~100x the ground truth); the paper aligns raw clouds. Metrics are taken after the paper's unit-cube normalisation.",
   "8192 area-weighted surface samples, seed 1; the paper does not state its sample count.",
+  "Every metric is scale- and rotation-invariant by construction (both clouds are normalised before ICP and scored in the unit cube), so a part built 100x too small or too large still scores perfect: a unit or scale error shows up only in the design's own dimensions.",
+  "The Jev complexity band in the report is an observe-only measurement of the request; nothing in production routes on it yet.",
   "The paper does not say which prompt variant Table 2 used; both are compared against the same rows.",
   "Exact IoU (Manifold booleans) is our addition; the paper's IoGT is a bounding-box ratio.",
 ];
@@ -240,6 +242,8 @@ export function parseAgreement(markdown) {
 const mi = (m) => (Number.isFinite(m.median) ? m.median.toFixed(3) + " (" + m.iqr.toFixed(3) + ")" : "-");
 /** @param {number} x */
 const pct = (x) => (x * 100).toFixed(1) + "%";
+/** Counts stay integers; rates and metrics keep three decimals. */
+const num = (/** @type {number} */ x) => (Number.isInteger(x) ? String(x) : x.toFixed(3));
 
 /**
  * Renders the human report.
@@ -270,10 +274,14 @@ export function renderMarkdown(s, { compare = null } = {}) {
     "Median (IQR); failures are penalised (distance √3, IoGT 0, IoU 0).",
     "",
   ];
+  if (s.config.mixedRuns) {
+    lines.push("**Mixed run**: this directory holds results from more than one run configuration " +
+      "(a resume with changed flags, or a changed .env); the numbers below are not one run.", "");
+  }
   if (compare) {
     lines.push("## Compared with the other run", "", "| metric | this run | other | delta |", "|---|---|---|---|",
-      ...Object.entries(compare).map(([k, v]) => "| " + k + " | " + v.current.toFixed(3) + " | " + v.other.toFixed(3) +
-        " | " + (v.delta >= 0 ? "+" : "") + v.delta.toFixed(3) + " |"), "");
+      ...Object.entries(compare).map(([k, v]) => "| " + k + " | " + num(v.current) + " | " + num(v.other) +
+        " | " + (v.delta >= 0 ? "+" : "") + num(v.delta) + " |"), "");
   }
   lines.push("## By stratum", "");
   if (!s.stratified) lines.push("_Unstratified: `unzip` or Data_Stratification.xlsx was unavailable._", "");

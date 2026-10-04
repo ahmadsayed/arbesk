@@ -79,8 +79,10 @@ describe("alignAndScore", () => {
     expect(metrics.iogt).toBeGreaterThan(0.97);
   });
 
+  // 8192 samples take 4-6 s; without an explicit timeout Bun's 5 s default makes
+  // this file intermittently red when the runner is loaded.
   it("scores a cube against a flat slab as far apart (negative control)", () => {
     const { metrics } = alignAndScore(box([1, 1, 1]), box([1, 1, 0.1]));
     expect(metrics.chamfer).toBeGreaterThan(0.1);
-  });
+  }, 30000);
 });

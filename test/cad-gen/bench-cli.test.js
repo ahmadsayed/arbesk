@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { parseArgs, pool } from "../../scripts/cad-bench.mjs";
+import { distinctRunStamps, parseArgs, pool, readResults } from "../../scripts/cad-bench.mjs";
 
 describe("parseArgs", () => {
   it("defaults to the measured variant with Jev and triage on", () => {
@@ -27,9 +29,36 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["--thinking"])).toThrow("needs a value");
   });
 
+  it("refuses values that would quietly run nothing or the wrong set", () => {
+    expect(() => parseArgs(["--concurrency", "abc"])).toThrow("--concurrency");
+    expect(() => parseArgs(["--concurrency", "0"])).toThrow("--concurrency");
+    expect(() => parseArgs(["--limit", "NaN"])).toThrow("--limit");
+    expect(() => parseArgs(["--limit", "-3"])).toThrow("--limit");
+    expect(() => parseArgs(["--ids", ""])).toThrow("--ids");
+    expect(() => parseArgs(["--ids", "7,x"])).toThrow("--ids");
+    expect(parseArgs(["--limit", "3"]).limit).toBe(3);
+  });
+
   it("rejects unknown flags and bad variants", () => {
     expect(() => parseArgs(["--nope"])).toThrow("unknown argument --nope");
     expect(() => parseArgs(["--variant", "x"])).toThrow("--variant");
+  });
+});
+
+describe("readResults", () => {
+  it("describes the directory, not the current selection, and flags mixed run configs", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cad-bench-cli-"));
+    const write = (/** @type {string} */ name, /** @type {any} */ body) =>
+      fs.writeFileSync(path.join(dir, name), JSON.stringify(body));
+    write("00000002.json", { id: "00000002", run: { thinking: false } });
+    write("00000001.json", { id: "00000001", run: { thinking: false } });
+    write("summary.json", { config: {} });
+    write("00000003.json.tmp", { id: "00000003" });
+    expect(readResults(dir).map((r) => r.id)).toEqual(["00000001", "00000002"]);
+    expect(distinctRunStamps(readResults(dir))).toBe(1);
+    write("00000004.json", { id: "00000004", run: { thinking: true } });
+    expect(distinctRunStamps(readResults(dir))).toBe(2);
+    expect(readResults(path.join(dir, "missing"))).toEqual([]);
   });
 });
 
