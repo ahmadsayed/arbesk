@@ -17,6 +17,21 @@ Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, butto
 
 GNOME HIG layout heuristics (header bar, 4px spacing) are non-binding references.
 
+## Layout (library-first, Phase 2)
+
+App entry links land in the Library. Studio header, left to right: page
+switcher, New ▾ (Upload Ctrl+O / Generate with AI / Parametric CAD / Empty
+asset Ctrl+N), asset name + `v<N> · Draft|Published`, Save, Besk it (the only
+filled accent), network status dot + label, theme menu, account avatar (the
+network select lives inside the avatar's wallet popover). Studio rail:
+Outline (Ctrl+1) · Assets — placement picker (Ctrl+2) · Create (Ctrl+3) ·
+Activity (Ctrl+4). Asset name/collection/tier/team live in Properties →
+Asset.
+
+- Header element ids are load-bearing for E2E: `#newAssetBtn` is the New ▾
+  "Empty asset" item, `#disconnectWalletBtn` is the avatar,
+  `#headerbarNetworkSelect` lives in the wallet popover.
+
 ## Colour rules
 
 - Use only theme-contract tokens (`themes/_graphite.scss`, `themes/_paper.scss`). Never hex in `components/`.

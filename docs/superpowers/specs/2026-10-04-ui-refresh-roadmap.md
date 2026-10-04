@@ -1,6 +1,6 @@
 # UI Refresh — Roadmap
 
-**Date:** 2026-10-04 · **Status:** approved direction; phases 1–2 specced
+**Date:** 2026-10-04 · **Status:** approved direction; phases 1–2 done, 3–5 to spec
 
 ## Why
 
@@ -33,7 +33,7 @@ GNOME HIG is **no longer authoritative**. Order of precedence:
 | # | Phase | Spec | Depends on |
 |---|-------|------|------------|
 | 1 | Theme system & re-skin (Graphite / Paper, picker, Inter + JetBrains Mono, neutral viewport) | `2026-10-04-ui-theme-graphite-paper-design.md` — **done** (#92–#98) | — |
-| 2 | Library-first layout (landing, New ▾, avatar menu, status dot, Outline/Assets/Create/Activity rail, Settings → Properties) | `2026-10-04-ui-library-first-design.md` | Phase 1; **CAD frontend plan (`2026-10-04-cad-frontend-integration.md`) merged** |
+| 2 | Library-first layout (landing, New ▾, avatar menu, status dot, Outline/Assets/Create/Activity rail, Settings → Properties) | `2026-10-04-ui-library-first-design.md` — **done** (#100–#106) | Phase 1; **CAD frontend plan (`2026-10-04-cad-frontend-integration.md`) merged** |
 | 3 | Asset info readouts: bounding box in mm, triangle count, format/size, print-ready (manifold) badge; metadata fields for licence/material/print notes replacing "Notes for the AI" | to write | Phase 2 |
 | 4 | Version timeline strip under the viewport (replaces V-key time mode as the main entry) | to write | Phase 2 |
 | 5 | View / Edit mode: view by default, explicit Edit toggle, snap-to-ground move/rotate, no scale gizmo by default, visible unsaved state; free the `G` key | to write | Phase 2 |
