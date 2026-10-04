@@ -18,6 +18,7 @@
  *   dist/js/vendor/viem.js            - shared viem bundle
  *   dist/js/vendor/cdp-core.js        - cdp-core bundle (imports viem)
  *   dist/js/workers/gltf-worker.js    - self-contained module worker
+ *   dist/js/workers/cad-worker.js     - self-contained CAD render worker
  *   dist/js/engine/theme-init.js      - classic head script
  *   dist/js/app/initial-view.js       - classic head script
  */
@@ -92,6 +93,22 @@ const BROTLI_PKG_DIR = path.dirname(
 const BROTLI_ALIAS = { 'brotli-wasm': path.join(BROTLI_PKG_DIR, 'index.web.js') };
 const BROTLI_WASM_FILE = path.join(BROTLI_PKG_DIR, 'pkg.web', 'brotli_wasm_bg.wasm');
 
+// manifold-3d is a dependency of @arbesk/cad-gen (not of the frontend), and
+// bun's isolated installs don't expose it at the root — resolve it from the
+// cad-gen workspace like brotli-wasm above. The package is ESM-only (the bare
+// main can't be require.resolve'd from CJS), so resolve package.json and join
+// manifold.wasm; build() stages that file next to the CAD worker, whose glue
+// fetches its WASM relative to locateFile's return (the worker resolves it
+// against its own bundle URL).
+const MANIFOLD_WASM_FILE = path.join(
+  path.dirname(
+    require.resolve('manifold-3d/package.json', {
+      paths: [path.resolve(__dirname, '../../packages/cad-gen')],
+    }),
+  ),
+  'manifold.wasm',
+);
+
 const common = {
   target: 'browser',
   minify: true,
@@ -161,6 +178,23 @@ async function build() {
     fs.copyFileSync(BROTLI_WASM_FILE, path.join(dir, 'brotli_wasm_bg.wasm'));
   }
   console.log('[BUNDLE] brotli_wasm_bg.wasm staged next to app.js + worker');
+
+  // 3c. Self-contained CAD render worker (guard → Manifold WASM kernel →
+  //     3MF export). Same no-import-map constraint as the glTF worker.
+  await run({
+    ...common,
+    entrypoints: [path.join(srcRoot, 'workers/cad-worker.ts')],
+    outdir: path.join(distRoot, 'workers'),
+    naming: 'cad-worker.js',
+    format: 'esm',
+    plugins: [nodeBuiltinsStub],
+  }, 'workers/cad-worker.js');
+
+  // manifold-3d's glue loads its WASM relative to locateFile's return — the
+  // worker resolves that against its own URL, so the file must sit next to
+  // the bundle (compress.js emits the .br sibling at build time).
+  fs.copyFileSync(MANIFOLD_WASM_FILE, path.join(distRoot, 'workers', 'manifold.wasm'));
+  console.log('[BUNDLE] manifold.wasm staged next to cad-worker.js');
 
   // 4. Classic (non-module) synchronous head scripts.
   for (const rel of ['engine/theme-init', 'app/initial-view']) {
