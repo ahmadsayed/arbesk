@@ -5,6 +5,7 @@
  *   median by failing the hard cases. Exact IoU is the exception: a null (a
  *   non-manifold mesh) is excluded and counted, never treated as 0.
  */
+import { COMPLEXITY_LEVELS, complexityBand } from "./bench-complexity.mjs";
 
 /** Table 2 of the paper: median (IQR) and compile rate. */
 export const PAPER_BASELINES = [
@@ -125,11 +126,24 @@ export function summarise(results, config) {
     byStratum[key] = Object.fromEntries(Object.keys(groups).sort().map((k) => [k, aggregate(groups[k])]));
   }
   const triaged = results.filter((r) => r.triage && !r.triage.error);
+  // Complexity bands are over the samples Jev scored; an unscored sample is
+  // counted, never quietly dropped into a band it was not measured for.
+  const scored = results.filter((r) => typeof r.complexity?.score === "number");
+  /** @type {Record<string, any[]>} */
+  const bands = {};
+  for (const r of scored) (bands[complexityBand(r.complexity.score)] ??= []).push(r);
+  const geometric = [...new Set(results.map((r) => r.strata?.geometric).filter((v) => v !== undefined))].sort();
   return {
     config,
     overall: aggregate(results),
     stratified: results.some((r) => r.strata),
     byStratum,
+    byComplexity: Object.fromEntries(COMPLEXITY_LEVELS.map((label) => [label, aggregate(bands[label] ?? [])])),
+    complexityUnscored: results.length - scored.length,
+    complexityCrosstab: geometric.length
+      ? Object.fromEntries(COMPLEXITY_LEVELS.map((label) => [label, Object.fromEntries(
+        geometric.map((g) => [g, (bands[label] ?? []).filter((r) => r.strata?.geometric === g).length]))]))
+      : null,
     outcomes: countBy(results, (r) => r.outcome),
     failedGates: countBy(results.filter((r) => r.outcome === "gate_failed"),
       (r) => r.clientFailures[r.clientFailures.length - 1]?.gate ?? "unknown"),
@@ -147,7 +161,7 @@ export function summarise(results, config) {
     triageAgreement: null,
     cost: {
       deepseek: sumTokens(results.map((r) => r.tokens)),
-      jev: sumTokens(results.flatMap((r) => [r.jevTokens, r.triage?.usage])),
+      jev: sumTokens(results.flatMap((r) => [r.jevTokens, r.triage?.usage, r.complexity?.usage])),
       durationMs: results.reduce((s, r) => s + (r.durationMs ?? 0), 0),
     },
   };
@@ -238,7 +252,9 @@ export function renderMarkdown(s, { compare = null } = {}) {
   const lines = [
     "# CADPrompt benchmark - " + (s.config.variant ?? "") + " prompts",
     "",
-    "Model `" + (s.config.model ?? "?") + "`, Jev selector " + (s.config.jev === false ? "off" : "on") +
+    "Model `" + (s.config.model ?? "?") +
+      (s.config.thinking === undefined ? "" : ", thinking " + (s.config.thinking ? "on" : "off")) +
+      ", Jev selector " + (s.config.jev === false ? "off" : "on") +
       ", " + o.n + " samples, dataset `" + (s.config.dataset ?? "?") + "`.",
     "",
     "## Headline",
@@ -267,6 +283,27 @@ export function renderMarkdown(s, { compare = null } = {}) {
     lines.push("**" + title + "**", "", "| group | n | IoGT | PC dist | Compile | Exact IoU |", "|---|---|---|---|---|---|",
       ...Object.entries(groups).map(([g, a]) => "| " + g + " | " + a.n + " | " + mi(a.iogt) + " | " + mi(a.chamfer) +
         " | " + pct(a.compileRate) + " | " + mi(a.iou) + " |"), "");
+  }
+  lines.push("## By complexity (Jev)", "");
+  const complexityBands = Object.entries(s.byComplexity ?? {});
+  if (!complexityBands.some(([, a]) => a.n > 0)) {
+    lines.push("_No complexity scores: JEV_API_KEY was unset, or every Jev call failed._", "");
+  } else {
+    if (s.complexityUnscored) {
+      lines.push(s.complexityUnscored + " samples have no complexity score and are left out of the bands.", "");
+    }
+    lines.push("| band | n | compile | first pass | IoU median (IQR) |", "|---|---|---|---|---|",
+      ...complexityBands.map(([band, a]) => "| " + band + " | " + (a.n
+        ? a.n + " | " + pct(a.compileRate) + " | " + pct(a.firstPassRate) + " | " + mi(a.iou)
+        : "0 | - | - | -") + " |"), "");
+    const crosstab = s.complexityCrosstab;
+    if (crosstab) {
+      const columns = Object.keys(Object.values(crosstab)[0] ?? {});
+      lines.push("**Band x geometric stratum**", "", "| band | " + columns.join(" | ") + " |",
+        "|" + "---|".repeat(columns.length + 1),
+        ...Object.entries(crosstab).map(([band, counts]) =>
+          "| " + band + " | " + columns.map((c) => counts[c]).join(" | ") + " |"), "");
+    }
   }
   lines.push("## Outcomes", "", "| outcome | count |", "|---|---|",
     ...Object.entries(s.outcomes).map(([k, v]) => "| " + k + " | " + v + " |"), "");

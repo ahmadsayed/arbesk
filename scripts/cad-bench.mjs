@@ -6,12 +6,13 @@
  * shipped loop - generate(), then the browser worker's kernel + gates + client
  * repair - and scores every part against ground truth with the paper's
  * metrics plus exact IoU. Failed and low-scoring samples are triaged by Jev
- * into a "where to improve" table. Spec:
+ * into a "where to improve" table, and records an observe-only Jev complexity
+ * score per sample. Spec:
  * docs/superpowers/specs/2026-10-04-cad-bench-cadprompt-design.md
  *
  * Usage:
  *   bun scripts/cad-bench.mjs [--variant measured|abstract|both] [--limit N] [--ids 7,633]
- *                             [--concurrency 4] [--no-jev] [--no-triage]
+ *                             [--concurrency 4] [--thinking on|off] [--no-jev] [--no-triage]
  *                             [--resume <runDir>] [--compare <runDir>] [--out <root>]
  *   bun scripts/cad-bench.mjs --agreement <runDir>   score a hand-labelled triage-agreement.md
  *
@@ -27,6 +28,7 @@ import { CADPROMPT_PIN, fetchCadPrompt, loadSamples } from "./lib/cadprompt.mjs"
 import { runSample } from "./lib/bench-sample.mjs";
 import { createScorer } from "./lib/bench-iou.mjs";
 import { needsTriage, triage } from "./lib/bench-triage.mjs";
+import { askComplexity } from "./lib/bench-complexity.mjs";
 import {
   agreementTemplate, compareSummaries, parseAgreement, renderMarkdown, summarise,
 } from "./lib/bench-summary.mjs";
@@ -45,7 +47,7 @@ export function parseArgs(argv) {
   const opts = {
     variants: /** @type {("measured" | "abstract")[]} */ (["measured"]),
     limit: Infinity, ids: /** @type {string[] | null} */ (null), concurrency: 4,
-    jev: true, triage: true,
+    jev: true, triage: true, thinking: /** @type {"on" | "off" | null} */ (null),
     resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
     agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
   };
@@ -67,6 +69,12 @@ export function parseArgs(argv) {
       case "--ids": opts.ids = value().split(",").map((s) => s.trim().padStart(8, "0")); break;
       case "--concurrency": opts.concurrency = Math.max(1, Number(value())); break;
       case "--no-jev": opts.jev = false; break;
+      case "--thinking": {
+        const v = value();
+        if (v !== "on" && v !== "off") throw new Error("--thinking must be on or off, got " + v);
+        opts.thinking = v;
+        break;
+      }
       case "--no-triage": opts.triage = false; break;
       case "--resume": opts.resume = path.resolve(value()); break;
       case "--compare": opts.compare = path.resolve(value()); break;
@@ -163,6 +171,9 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.agreement) return recordAgreement(opts.agreement);
   const env = requireEnv();
+  // --thinking overrides CAD_THINKING for this run only. The harness reads
+  // .env, not process.env, so a shell variable would never reach the reader.
+  if (opts.thinking) env.CAD_THINKING = opts.thinking === "on" ? "true" : "false";
   if (!env.JEV_API_KEY && (opts.jev || opts.triage)) {
     console.warn("JEV_API_KEY missing from .env: running as --no-jev --no-triage");
     opts.jev = false;
@@ -176,12 +187,16 @@ async function main() {
   // the benchmark scores what production runs. Jev is stripped for --no-jev.
   const cfg = generatorConfigFrom(opts.jev ? env : { ...env, JEV_API_KEY: "" });
   const generator = createCadGenerator(cfg);
+  // The complexity score describes the REQUEST, so it is asked whenever a Jev
+  // key exists: --no-jev only blanks the key for the generator, and
+  // --no-triage only skips the failure triage.
+  const complexityJev = env.JEV_API_KEY ? (generatorConfigFrom(env).jev ?? null) : null;
   const score = createScorer(module);
   const jev = opts.triage ? { apiKey: env.JEV_API_KEY } : null;
   const config = {
     dataset: CADPROMPT_PIN, model: cfg.model ?? DEFAULT_CAD_MODEL, thinking: cfg.thinking,
     maxRepairAttempts: cfg.limits.maxRepairAttempts, jevModel: cfg.jev?.model ?? "jev-latest",
-    jev: opts.jev, triage: opts.triage, samples: 8192, seed: 1,
+    jev: opts.jev, triage: opts.triage, complexity: Boolean(complexityJev), samples: 8192, seed: 1,
   };
 
   for (const variant of opts.variants) {
@@ -197,6 +212,9 @@ async function main() {
     await pool(todo, opts.concurrency, async (sample) => {
       const { result, mesh } = await runSample({ generator, kernel, score, sample });
       if (mesh) writeBinaryStl(path.join(dir, sample.id + ".stl"), mesh);
+      // Asked AFTER the sample so failures get a band too: the table must
+      // describe the requests, not only the parts that built.
+      if (complexityJev) result.complexity = await askComplexity(complexityJev, result.prompt);
       if (jev && needsTriage(result)) result.triage = await triage(jev, result);
       writeJsonAtomic(path.join(dir, sample.id + ".json"), result);
       consecutive = result.outcome === "provider_error" ? consecutive + 1 : 0;

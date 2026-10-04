@@ -6,17 +6,25 @@ describe("parseArgs", () => {
   it("defaults to the measured variant with Jev and triage on", () => {
     expect(parseArgs([])).toMatchObject({
       variants: ["measured"], limit: Infinity, ids: null, concurrency: 4, jev: true, triage: true,
-      resume: null, compare: null, agreement: null,
+      thinking: null, resume: null, compare: null, agreement: null,
     });
   });
 
   it("reads every flag", () => {
     const o = parseArgs(["--variant", "both", "--limit", "5", "--ids", "7,633", "--concurrency", "2",
-      "--no-jev", "--no-triage", "--resume", "r", "--compare", "c", "--out", "o"]);
+      "--thinking", "on", "--no-jev", "--no-triage", "--resume", "r", "--compare", "c", "--out", "o"]);
     expect(o).toMatchObject({
       variants: ["measured", "abstract"], limit: 5, ids: ["00000007", "00000633"], concurrency: 2,
-      jev: false, triage: false, resume: path.resolve("r"), compare: path.resolve("c"), out: path.resolve("o"),
+      thinking: "on", jev: false, triage: false, resume: path.resolve("r"), compare: path.resolve("c"),
+      out: path.resolve("o"),
     });
+  });
+
+  it("reads --thinking on and off, and rejects anything else", () => {
+    expect(parseArgs(["--thinking", "on"]).thinking).toBe("on");
+    expect(parseArgs(["--thinking", "off"]).thinking).toBe("off");
+    expect(() => parseArgs(["--thinking", "maybe"])).toThrow("--thinking");
+    expect(() => parseArgs(["--thinking"])).toThrow("needs a value");
   });
 
   it("rejects unknown flags and bad variants", () => {

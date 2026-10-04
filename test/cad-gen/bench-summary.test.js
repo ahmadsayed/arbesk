@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { COMPLEXITY_LEVELS } from "../../scripts/lib/bench-complexity.mjs";
 import {
   agreementTemplate, compareSummaries, medianIqr, parseAgreement, renderMarkdown, summarise,
 } from "../../scripts/lib/bench-summary.mjs";
@@ -10,6 +11,7 @@ const r = (/** @type {any} */ over) => ({
   strata: { geometric: "Simple", mesh: "Simple", compiled: 6, difficulty: "Easy" },
   metrics: { chamfer: 0.1, hausdorff: 0.2, iogt: 0.9, iou: 0.8, iouReason: null },
   clientFailures: [], tokens, jevTokens: { prompt: 5, completion: 0 }, durationMs: 1000, triage: null,
+  complexity: null,
   ...over,
 });
 const RESULTS = [
@@ -88,6 +90,55 @@ describe("agreement", () => {
       .replace("| c | failure_cause | gate_too_strict |  |", "| c | failure_cause | gate_too_strict | gate_too_strict |")
       .replace("| d | failure_cause | wrong_refusal |  |", "| d | failure_cause | wrong_refusal | other |");
     expect(parseAgreement(filled)).toEqual({ labelled: 2, agreed: 1, rate: 0.5 });
+  });
+});
+
+describe("complexity bands", () => {
+  const score = (/** @type {number} */ s) => ({ score: s, confidence: 0.8, usage: { prompt: 8, completion: 0 } });
+  const banded = [
+    r({ id: "e", complexity: score(0) }),
+    r({ id: "f", complexity: score(1.5) }),
+    r({
+      id: "g", outcome: "gate_failed", firstPass: false, metrics: PENALTY,
+      strata: { geometric: "Complex", mesh: "Complex", compiled: 2, difficulty: "Hard" },
+      clientFailures: [{ gate: "connected", error: "e" }], complexity: score(3.4),
+    }),
+    r({ id: "h" }),
+  ];
+  const s = summarise(banded, { variant: "measured", thinking: false });
+
+  it("bands by rounded score, clamped, and counts the unscored", () => {
+    expect(Object.keys(s.byComplexity)).toEqual([...COMPLEXITY_LEVELS]);
+    expect(s.byComplexity[COMPLEXITY_LEVELS[0]].n).toBe(1);
+    expect(s.byComplexity[COMPLEXITY_LEVELS[1]].n).toBe(0);
+    expect(s.byComplexity[COMPLEXITY_LEVELS[2]].n).toBe(1);
+    expect(s.byComplexity[COMPLEXITY_LEVELS[3]].n).toBe(1);
+    expect(s.complexityUnscored).toBe(1);
+    expect(summarise(RESULTS, {}).complexityUnscored).toBe(4);
+  });
+
+  it("cross-tabulates band against the geometric stratum", () => {
+    expect(s.complexityCrosstab[COMPLEXITY_LEVELS[0]]).toEqual({ Complex: 0, Simple: 1 });
+    expect(s.complexityCrosstab[COMPLEXITY_LEVELS[3]].Complex).toBe(1);
+    expect(summarise([r({ strata: undefined })], {}).complexityCrosstab).toBeNull();
+  });
+
+  it("counts complexity calls in the Jev cost", () => {
+    expect(s.cost.jev.prompt).toBe(4 * 5 + 3 * 8);
+  });
+
+  it("renders the band table, the cross-tab and the thinking echo", () => {
+    const md = renderMarkdown(s, {});
+    expect(md).toContain("thinking off");
+    expect(md).toContain("## By complexity (Jev)");
+    expect(md).toContain("1 samples have no complexity score");
+    expect(md).toContain("| " + COMPLEXITY_LEVELS[2] + " | 1 |");
+  });
+
+  it("says so instead of rendering empty tables when nothing was scored", () => {
+    const md = renderMarkdown(summarise(RESULTS, { variant: "measured", thinking: true }), {});
+    expect(md).toContain("thinking on");
+    expect(md).toContain("No complexity scores");
   });
 });
 

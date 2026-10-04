@@ -283,8 +283,11 @@ the UI should offer the Tripo3D generator instead. Measured: engineering parts
   benchmark (200 prompts with ground-truth meshes, ICLR 2025) through the
   shipped loop and writes `summary.md` beside the paper's GPT-4/Gemini rows,
   plus exact IoU and a Jev-triaged "where to improve" table, under
-  `test-results/cad-bench/run#N/`. CADPrompt has **no licence**: it is fetched
-  into `test-results/` for local evaluation and must never be committed.
+  `test-results/cad-bench/run#N/`. It also records an observe-only Jev
+  complexity score per sample, banded in the summary, and `--thinking on|off`
+  selects DeepSeek thinking mode for an A/B. CADPrompt has **no licence**: it
+  is fetched into `test-results/` for local evaluation and must never be
+  committed.
   Spec: `docs/superpowers/specs/2026-10-04-cad-bench-cadprompt-design.md`.
 - `scripts/cad-scad-port.mjs` — ports a `polygon(points, paths)` OpenSCAD
   profile into Manifold JS. See the `openscad-reference-port` skill.
