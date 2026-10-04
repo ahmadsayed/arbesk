@@ -13,7 +13,10 @@
     "types": ["node"],
     "strict": true,
     "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true
+    "erasableSyntaxOnly": true,
+    "paths": {
+      "@arbesk/cad-gen/backend/index.js": ["./packages/cad-gen/src/backend/index.ts"]
+    }
   },
   "include": [
     "src/**/*",
