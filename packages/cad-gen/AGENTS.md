@@ -120,7 +120,9 @@ route.
   no normals and no design sidecar — exactly the drift a shared core prevents.)
 - `meshToGltf(mesh, design)` — self-contained glTF JSON (the binary chunk as
   a base64 data URI), same `buildPartDocument` as the GLB, so the two cannot
-  drift. This is the client-side render target of the generation pipeline.
+  drift. (The generation pipeline's client-side render target is 3MF via
+  `meshTo3mf` — the browser worker exports the part as `asset.3mf`; this
+  glTF exporter serves previews and harnesses.)
 - `meshTo3mf(mesh, design)` — hand-written OPC package, millimetres, Z-up.
   Deliberately not manifold's `lib/export-3mf.js`: that path pulls
   `@jscadui/3mf-export`, a second `@gltf-transform` and an esbuild-wasm peer,
@@ -166,8 +168,10 @@ never lift code or prose from a copyleft file.
 Because the attribution is a pure function of the code, and the code is embedded
 in every export, a saved or published part keeps its credit after the
 conversation is gone — and a correction to the table reaches every existing
-part rather than freezing a wrong credit. Persisting it into a manifest's
-`metadata.chat` block is the client's job (milestone 2).
+part rather than freezing a wrong credit. Persisting it into the manifest is
+the client's job: the browser CAD seam stamps
+`metadata.cad = { summary, provider, attribution, providerTaskId }` on the
+generation manifest (`stageCadAsset` in `frontend/src/js/services/api.ts`).
 
 ## The two endpoints
 

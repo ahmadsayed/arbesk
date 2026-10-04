@@ -117,7 +117,7 @@ Parametric edits, manifest saves, manifest chain reads, ABI reads, and token man
 
 ### `GET /api/v1/config`
 
-Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, the CDP Project ID used by the browser to initialise email-login wallets, and `defaultChainId` — the deployment's default chain (`DEFAULT_CHAIN_ID` env, falls back to Hardhat local), which anonymous chain reads use.
+Returns the configured contract address, network configs, IPFS backend, gateway URL, Hardhat RPC URL, mock-generation flag, CAD-generation availability, the CDP Project ID used by the browser to initialise email-login wallets, and `defaultChainId` — the deployment's default chain (`DEFAULT_CHAIN_ID` env, falls back to Hardhat local), which anonymous chain reads use. `cadGeneration` is `true` when the parametric CAD provider is usable on this deployment (`CAD_MOCK_GENERATION=true` or a `DEEPSEEK_API_KEY` is configured) — the create panel only offers the Parametric CAD option when it is.
 
 **Response**
 
@@ -144,6 +144,7 @@ Returns the configured contract address, network configs, IPFS backend, gateway 
   "ipfsGatewayUrl": "http://127.0.0.1:8080/ipfs/",
   "hardhatRpcUrl": "http://127.0.0.1:8545",
   "mockGeneration": true,
+  "cadGeneration": true,
   "cdpProjectId": null,
   "defaultChainId": 31415822
 }
@@ -189,7 +190,7 @@ Generates or mocks a 3D asset from a text prompt. The browser handles IPFS uploa
 - Accepts optional `sourceAssetCid` + `retexture` (`tripo3d` only): re-textures the referenced GLB via Tripo's v3 re-texture endpoint (`POST /models/texture`; texture/material only — geometry unchanged; Tripo's `refine_model` endpoint is unsupported upstream). Requires `prompt` as the texture description; the `202` response includes `"refined": true`. Accepts optional `sourceAssetCid` + `retopo` for smart retopology (`mesh/decimate` v2.0, optional `faceLimit` 500–20000, adaptive when omitted); the `202` response includes `"retopo": true`. `sourceAssetCid` requires exactly one of `retexture`, `retopo`, or `animate`. A CID that cannot be fetched from IPFS → `400 SOURCE_ASSET_UNAVAILABLE`. Optional `textureQuality` (`standard`/`detailed`/`extreme`) applies to generation and retexture.
 - If `MOCK_3D_GENERATION=true` or `provider` is `"mock"`, uses the `@arbesk/ai-asset-gen` mock provider and returns the raw asset bytes immediately (`200`).
 - If `provider` is `"tripo3d"`, the backend starts an asynchronous task via the Tripo3D v3 REST API and returns a task ID (`202`). The browser polls `GET /api/v1/generations/:taskId` until the task completes.
-- If `provider` is `"cad"`, the backend runs the parametric-CAD pipeline (`@arbesk/cad-gen`) as a server-paid, design-on-the-wire task: it admits the request through the CAD quota (daily rounds + one in-flight per wallet), starts an in-process task, and returns a task ID (`202`). No `providerKey` is required — the server holds the model key (any supplied key is ignored). `prompt` is required. The browser polls `GET /api/v1/generations/:taskId` until the task completes.
+- If `provider` is `"cad"`, the backend runs the parametric-CAD pipeline (`@arbesk/cad-gen`) as a server-paid, design-on-the-wire task: it admits the request through the CAD quota (daily rounds + one in-flight per wallet), starts an in-process task, and returns a task ID (`202`). No `providerKey` is required — the server holds the model key (any supplied key is ignored). `prompt` is required. The browser polls `GET /api/v1/generations/:taskId` until the task completes. `CAD_MOCK_GENERATION=true` swaps in a canned parametric box design and waives the `DEEPSEEK_API_KEY` requirement (dev/E2E; `CAD_MOCK_UNSUITABLE=true` makes prompts containing "dragon" reject as unsuitable so the rejection UX is testable without a model key). The client — never the server — then executes the design: the browser render worker (`frontend/src/js/workers/cad-worker.ts`, `manifold.wasm` staged alongside) re-runs the guard, kernels it with `manifold-3d`, and exports **3MF** via `meshTo3mf` (`services/cad-render.ts`, seam: `generateCadAsset` in `services/api.ts`). The rendered part is uploaded to IPFS and saved as a normal `format: "3mf"` asset node (composite-3mf at save, IPFS part dedup); the generation manifest carries the provenance block `metadata.cad = { summary, provider, attribution, providerTaskId }`.
 - **No on-chain transaction validation** — the backend does not accept or validate `txHash`. The UI handles contract calls (`recordGeneration()` / `payForGenerationWithUSDC()`) independently.
 - **No IPFS writes** — completed tasks return raw asset bytes (base64). The browser (`api.ts` → `generateAsset()`) uploads the asset to IPFS, constructs the manifest, and uploads the manifest.
 
@@ -308,7 +309,7 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
 }
 ```
 
-- No `assetData`/`path` — `design` is the CAD design document the client executes (guard → kernel → `meshToGltf`). The server never runs the kernel, so there is deliberately no `validation` claim either: what the server guarantees is that the design passed every static gate, which is what `diagnostics.attempts` records. `attribution` is always present (possibly empty) and never model-authored.
+- No `assetData`/`path` — `design` is the CAD design document the client executes in the browser render worker (guard → kernel → 3MF export via `manifold-3d`; see `POST /generations` above). The server never runs the kernel, so there is deliberately no `validation` claim either: what the server guarantees is that the design passed every static gate, which is what `diagnostics.attempts` records. `attribution` is always present (possibly empty) and never model-authored.
 
 **Response `200` — failed**
 
@@ -336,7 +337,7 @@ Polls the status of an asynchronous generation task started by `POST /api/v1/gen
 }
 ```
 
-- `CAD_REQUEST_UNSUITABLE` (`cad` only) — the prompt is unsuitable for parametric CAD. `suitability` is the gate score and `alternative` points at a mesh provider instead. The quota unit is refunded (the server refused before any model call), so the task is evicted after this response.
+- `CAD_REQUEST_UNSUITABLE` (`cad` only) — the prompt is unsuitable for parametric CAD. `suitability` is the gate score and `alternative` points at a mesh provider instead. The quota unit is refunded (the server refused before any model call), so the task is evicted after this response. The browser surfaces `suitability`/`alternative` on `ApiError.details` and the create panel posts a choice bubble offering **Retry with Tripo 3D** (switching the provider select and resubmitting the same prompt).
 
 **Errors**
 

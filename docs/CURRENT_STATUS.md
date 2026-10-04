@@ -382,7 +382,7 @@ frontend/src/js/
 | Merkle editor collaboration | ✅ | ✅ |
 | Token burn | ✅ | ✅ |
 | Real 3D generation (Tripo3D BYOK) | ✅ text + image-to-3D, HD texture, retopo, rig & animate | ✅ |
-| Engineering CAD generation (`POST /api/v1/cad/*`, `@arbesk/cad-gen`) | ✅ server generates Manifold JS + static gates; client runs the kernel | ✅ |
+| Engineering CAD generation (`POST /api/v1/cad/*`, `@arbesk/cad-gen`) | ✅ server generates Manifold JS + static gates; browser worker runs the kernel and exports 3MF | ✅ |
 
 ### Beta blockers
 
@@ -406,7 +406,7 @@ frontend/src/js/
 | CDP email login on Hardhat | `smart-wallet-support.ts` | 🟡 Smart wallets only supported on Base Sepolia |
 | Health check endpoint | — | 🟢 Ops convenience |
 | OpenSCAD WASM | — | ⚪ Explicitly deferred (superseded in practice by `@arbesk/cad-gen`, which generates Manifold JS directly) |
-| Browser CAD worker (client kernel + render + repair round trip) | `packages/cad-gen` | 🟡 Milestone 2 — the two REST endpoints and the exporters it calls are done; `scripts/cad-smoke.mjs` is its reference implementation |
+| Browser CAD worker (client kernel + render via `provider: "cad"` on `/generations`) | `frontend/src/js/workers/cad-worker.ts` | ✅ Done 2026-10-04 — design-on-the-wire → worker guard/kernel → 3MF → normal `format: "3mf"` save flow; client repair round trip (`POST /api/v1/cad/repairs`) still server-only, not wired from the browser |
 
 ---
 
@@ -453,6 +453,8 @@ returns geometry and never produces a file.
 | `CAD_MAX_IMAGE_BYTES` | `8388608` | Largest decoded attachment; checked **before** the wallet is charged (413) |
 | `CAD_MAX_REQUEST_MS` | derived | In-flight lock TTL. The default is derived, not fixed: `attempts × 120000 + 30000` = **390 000 ms** |
 | `CAD_RATE_LIMIT_MAX` | `20` | Hourly wallet-keyed limiter, bounding bursts inside the daily round quota |
+| `CAD_MOCK_GENERATION` | unset | `true` swaps a canned parametric box for the DeepSeek facade on `/generations` `provider: "cad"` (waives `DEEPSEEK_API_KEY`; dev/E2E). Also makes `/api/v1/config.cadGeneration` `true` |
+| `CAD_MOCK_UNSUITABLE` | unset | With the mock: prompts containing "dragon" refuse as `CAD_REQUEST_UNSUITABLE` before any model call, so the create panel's "Retry with Tripo 3D" flow is E2E-testable without a key |
 
 `CAD_EXEC_TIMEOUT_MS` and `CAD_MAX_TRIANGLES` are **gone**: there is no
 server-side kernel to time out or to bound, so those limits moved to the client
