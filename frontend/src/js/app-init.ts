@@ -41,6 +41,8 @@ import { initNesting } from "./ui/nesting.ts";
 import { initCollaborators } from "./ui/collaborators.ts";
 import { initCommentsPanel } from "./ui/comments-panel.ts";
 import { initMetadataEditor } from "./ui/metadata-editor.ts";
+import { initPrintability } from "./ui/printability.ts";
+import { initBottombarInfo } from "./ui/bottombar-info.ts";
 import { rewriteShortcutTitles } from "./utils/platform.ts";
 import "./ui/keyboard-help.ts";
 import "./engine/undo-controller.ts";
@@ -84,6 +86,8 @@ initNesting();
 initCollaborators();
 initCommentsPanel();
 initMetadataEditor();
+initPrintability();
+initBottombarInfo();
 rewriteShortcutTitles();
 
 // ─── Theme ───

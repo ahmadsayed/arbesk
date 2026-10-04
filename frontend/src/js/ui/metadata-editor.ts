@@ -6,6 +6,7 @@
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { getAssetState, getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
 import { getPendingAnnotations, setPendingAnnotations, clearPendingAnnotations } from "../services/asset-save/annotations.ts";
+import { readUnits, formatDimensions as formatDimsWithUnits } from "../utils/units.ts";
 
 function el(id: string): HTMLElement | null {
   return document.getElementById(id);
@@ -62,14 +63,6 @@ function formatVector(v: unknown): string {
   return "(" + v.map((n) => trim(Number(n))).join(", ") + ")";
 }
 
-function formatDimensions(v: unknown): string {
-  const d = (v ?? {}) as { width?: number; height?: number; depth?: number; unit?: string };
-  const dims = [d.width, d.height, d.depth]
-    .map((n) => (typeof n === "number" ? trim(n) : "—"))
-    .join(" × ");
-  return dims + (d.unit ? " " + d.unit : "");
-}
-
 function formatBounds(v: unknown): string {
   const b = (v ?? {}) as { min?: number[]; max?: number[] };
   const min = Array.isArray(b.min) ? b.min.map((n) => trim(Number(n))).join(", ") : "—";
@@ -90,9 +83,40 @@ function formatBoolean(v: unknown): string {
   return v ? "Yes" : "No";
 }
 
+/** Typed Print & Provenance fields: element id ↔ annotation key. */
+const TYPED_FIELDS = [
+  { id: "metaLicence", key: "licence" },
+  { id: "metaMaterial", key: "material" },
+  { id: "metaUnits", key: "units" },
+  { id: "metaPrintNotes", key: "print_notes" },
+  { id: "metaSource", key: "source" },
+] as const;
+
+const TYPED_KEYS = new Set<string>(TYPED_FIELDS.map((f) => f.key));
+
+function renderTypedFields(): void {
+  const annotations = readAnnotations();
+  for (const { id, key } of TYPED_FIELDS) {
+    const input = el(id) as HTMLInputElement | HTMLSelectElement | null;
+    if (!input) continue;
+    const v = annotations[key];
+    input.value = typeof v === "string" ? v : v == null ? "" : String(v);
+  }
+}
+
+function writeTypedField(key: string, value: string): void {
+  const annotations = { ...readAnnotations() };
+  if (value === "") delete annotations[key];
+  else annotations[key] = value;
+  writeAnnotations(annotations);
+}
+
 const COMPUTED_FIELDS: Record<string, ComputedFieldDef> = {
   format: { label: "Format", format: (v) => String(v).toUpperCase() },
-  dimensions: { label: "Dimensions", format: formatDimensions },
+  dimensions: {
+    label: "Dimensions",
+    format: (v) => formatDimsWithUnits(v as any, readUnits(readAnnotations())),
+  },
   bounds: { label: "Bounds", format: formatBounds },
   center: { label: "Center", format: formatVector },
   origin: { label: "Origin", format: formatVector },
@@ -209,6 +233,7 @@ function renderAnnotations(): void {
   list.textContent = "";
   const annotations = readAnnotations();
   for (const [k, v] of Object.entries(annotations)) {
+    if (TYPED_KEYS.has(k)) continue;
     list.appendChild(rowHtml(k, v));
   }
 }
@@ -221,6 +246,7 @@ function render(): void {
   if (!hasAsset) return;
   const manifest = getCurrentManifest() as any;
   renderComputed(manifest?.metadata?.computed);
+  renderTypedFields();
   renderAnnotations();
 }
 
@@ -228,13 +254,12 @@ export function initMetadataEditor(): void {
   el("metadataAddBtn")?.addEventListener("click", () => {
     el("metadataAnnotationsList")?.appendChild(rowHtml("", ""));
   });
-  document.querySelectorAll(".metadata-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const key = (chip as HTMLElement).dataset.key || "";
-      el("metadataAnnotationsList")?.appendChild(rowHtml(key, ""));
-      collect();
+  for (const { id, key } of TYPED_FIELDS) {
+    el(id)?.addEventListener("input", (e) => {
+      writeTypedField(key, (e.target as HTMLInputElement).value);
+      if (key === "units") render(); // re-render unit-aware dimensions
     });
-  });
+  }
   on(EVENTS.ASSET_STATE_CHANGED, render);
   on(EVENTS.SCENE_CLEARED, () => {
     clearPendingAnnotations();

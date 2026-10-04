@@ -128,6 +128,12 @@ export const SELECTORS = {
   metadataSection: "#metadataSection",
   metadataAddBtn: "#metadataAddBtn",
   metadataAnnotationsList: "#metadataAnnotationsList",
+  // Print & Provenance typed fields + printability + status-bar readout
+  metaLicence: "#metaLicence",
+  metaUnits: "#metaUnits",
+  printCheckBtn: "#printCheckBtn",
+  printBadge: "#printBadge",
+  bottomBarAssetInfo: "#bottomBarAssetInfo",
   // Library / collection browser
   libraryGate: "#libraryGate",
   libraryMain: "#libraryMain",

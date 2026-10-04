@@ -44,6 +44,30 @@ describe("computeAssetStats", () => {
     expect(stats).toEqual({ format: "3mf" });
   });
 
+  test("3MF root with CAD stats maps bboxMm to mm dimensions (height = Z)", async () => {
+    const manifest = {
+      scene: { nodes: [{ node_id: "r", source: { cid: "bafy3mf", format: "3mf" } }] },
+      metadata: {
+        cad: {
+          stats: {
+            triangles: 12400,
+            bboxMm: { min: [0, 0, 0], max: [85, 54, 12] },
+          },
+        },
+      },
+    };
+    const readJson = async () => { throw new Error("should not fetch"); };
+    const stats = await computeAssetStats(manifest, readJson);
+    expect(stats.format).toBe("3mf");
+    expect(stats.dimensions).toEqual({
+      width: 85,
+      depth: 54,
+      height: 12,
+      unit: "mm",
+    });
+    expect(stats.triangle_count).toBe(12400);
+  });
+
   test("returns null when there is no root source node", async () => {
     const stats = await computeAssetStats({ scene: { nodes: [] } }, async () => ({}));
     expect(stats).toBeNull();

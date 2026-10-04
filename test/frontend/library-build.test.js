@@ -68,6 +68,18 @@ describe("Library view build (app.html)", () => {
     expect(html).toMatch(/id="walletPopover"/);
   });
 
+  test("app.html has the Print & Provenance fields and no character chips", () => {
+    const html = readDist("app.html");
+    expect(html).toMatch(/id="metaLicence"/);
+    expect(html).toMatch(/id="metaMaterial"/);
+    expect(html).toMatch(/id="metaUnits"/);
+    expect(html).toMatch(/id="metaPrintNotes"/);
+    expect(html).toMatch(/id="metaSource"/);
+    expect(html).toMatch(/Print & Provenance/);
+    expect(html).not.toMatch(/metadata-chip/);
+    expect(html).not.toMatch(/Notes for the AI/);
+  });
+
   test("app.html loads app.js as the single module entry", () => {
     const html = readDist("app.html");
     expect(html).toMatch(

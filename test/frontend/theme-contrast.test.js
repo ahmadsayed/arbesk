@@ -120,6 +120,9 @@ const DERIVED_TEXT_PAIRS = [
   ["danger-text on danger 8% card", (t) => [t["danger-text"], mix(t["danger-text"], t["card-bg"], 0.08)]],
   // _chat success chip, _wallet-popover connected state
   ["window-bg on success", (t) => [t["window-bg"], t.success]],
+  // _metadata-editor print badge (window-fg text on ok/warn tint, banner idiom)
+  ["window-fg on success 18% sidebar tint", (t) => [t["window-fg"], mix(t.success, t["sidebar-bg"], 0.18)]],
+  ["window-fg on warning 18% sidebar tint", (t) => [t["window-fg"], mix(t.warning, t["sidebar-bg"], 0.18)]],
   // _landing bands: --landing-on-dark text / hint line on --landing-dark
   ["landing band text", (t) => [band(t).onDark, band(t).bg]],
   ["landing band hint line", (t) => [mix(band(t).onDark, t["accent-text"], 0.45), band(t).bg]],
