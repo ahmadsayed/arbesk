@@ -34,8 +34,9 @@ type View = "studio" | "library";
 let _currentView: View | null = null;
 
 /**
- * Map a pathname to a view. Studio is the default so "/" and any unknown path
- * (plus the deep-link forms "/studio?asset=…") resolve to the editor.
+ * Map a pathname to a view. Library is the default, so any unknown in-app path
+ * resolves to the asset browser; "/studio…" (including "/studio?asset=…") opens
+ * the editor.
  */
 export function pathToView(pathname: string): View {
   return parseAppPath(pathname).view;
@@ -157,7 +158,7 @@ export function setView(
   view: View,
   { updateHistory = false, href = null }: { updateHistory?: boolean; href?: string | null } = {}
 ): void {
-  if (view !== "studio" && view !== "library") view = "studio";
+  if (view !== "studio" && view !== "library") view = "library";
   const viewChanged = view !== _currentView;
   _currentView = view;
 

@@ -17,7 +17,7 @@ export interface AppRoute {
 
 /**
  * Parse an SPA pathname.
- * @remarks `/` and unknown paths resolve to Studio with no subject.
+ * @remarks `/` and unknown paths resolve to the Library with no subject.
  *   `/library/<base58>` (and `/studio/<base58>`, parsed for future use) carry
  *   a profile subject; an undecodable segment sets `invalidSubject`.
  */
@@ -25,7 +25,7 @@ export function parseAppPath(pathname: string): AppRoute {
   const segments = pathname.split("/").filter(Boolean);
   const root = segments[0];
   if (root !== "studio" && root !== "library") {
-    return { view: "studio", subjectAddress: null, invalidSubject: false };
+    return { view: "library", subjectAddress: null, invalidSubject: false };
   }
 
   const subjectSegment = segments[1];

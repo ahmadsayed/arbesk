@@ -51,4 +51,11 @@
   .empty-state-action {
     margin-top: var(--size-2);
   }
+
+  // Primary action + a secondary one side by side
+  .empty-state-actions {
+    display: flex;
+    gap: var(--size-2);
+    justify-content: center;
+  }
 }
