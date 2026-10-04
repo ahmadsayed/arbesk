@@ -1590,3 +1590,10 @@ Append ` — **done**` to Phase 2's Spec cell in the roadmap table.
 git add docs .agents/skills/edit-ui
 git commit -m "docs: library-first layout; Phase 2 done"
 ```
+
+**As built (#83, PR pending):** the visual pass ran on the local dev stack, so
+the network label reads "Local" rather than "Testnet" (same component, same
+dot+label styling). Screenshots live in `.playwright-mcp/phase2-*.png`
+(gitignored, not attachable to the PR via `gh`); the signed-in states were
+driven with the E2E Hardhat test-wallet provider injected by init script.
+Esc → focus-return-to-avatar was verified live during the pass.

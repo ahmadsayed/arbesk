@@ -17,6 +17,7 @@
 | PayGo Smart Contract & On-Chain Integration | ✅ Complete | `blockchain/contracts/ArbeskAsset.sol`, `frontend/src/js/blockchain/wallet.ts` |
 | UI Assembly & Consolidated Workspace Studio | ✅ Complete | `frontend/src/pug/app.pug` (unified Studio + Library SPA), 29 SCSS partials, sidebar/outliner/nesting |
 | Themes & Design Language (UI refresh Phase 1) | ✅ Complete | Graphite (dark) and Paper (light) with a System / Graphite / Paper picker (header, `ui/theme-menu.ts` on the APG `ui/menu-button.ts`). Token contract in `frontend/src/scss/themes/`; WCAG 2.2 AA contrast + colour-leak + style guards in `test/frontend/theme-contrast.test.js` / `style-guards.test.js`; 3D stage colours from tokens (`readViewportTheme()`). Self-hosted Inter + JetBrains Mono (`.tabular` for data). |
+| Library-First Layout (UI refresh Phase 2) | ✅ Complete | App entry links land in the Library. Studio header: New ▾ (Upload Ctrl+O / Generate with AI / Parametric CAD / Empty asset Ctrl+N, `ui/new-menu.ts`), asset name + `v<N> · Draft|Published` (`ui/asset-chrome.ts` on the version-history store), Save, Besk it, labelled network status (`ui/testnet-banner.ts` `initNetworkStatus`), theme menu, identicon account avatar (`utils/identicon.ts`; network select inside the wallet popover). Studio rail: Outline (Ctrl+1) · Assets — placement picker (Ctrl+2) · Create (Ctrl+3) · Activity (Ctrl+4). Asset name/collection/tier/team live in Properties → Asset. |
 | Publishing Polish & Runtime Cache | ✅ Complete | Thumbnail capture in `scene-graph.ts`, browser-side thumbnail upload to IPFS, unpin lifecycle |
 | Token ID-Based Child Assets | ✅ Complete | `child_ref` resolution in `token-resolver.ts`, depth/cycle protection in `scene-graph.ts` |
 | Free Tier Contract | ✅ Complete | `ArbeskAssetFree.sol` deployed as default, `ArbeskAsset.sol` kept as paid tier |
@@ -179,7 +180,7 @@ frontend/src/js/
 │   ├── ledger-panel.ts         # Activity feed derived from manifest chain
 │   ├── outliner.ts             # Scene hierarchy tree, select, double-click dive
 │   ├── nesting.ts              # Breadcrumbs, dive/ascend, depth gating
-│   ├── sidebar.ts              # 5-view switcher (AI Generation/Settings/Outline/Gallery/Activity)
+│   ├── sidebar.ts              # 4-view rail switcher (Outline/Assets/Create/Activity)
 │   ├── library-controller.ts   # Library view orchestration, data loading, and Studio handoff
 │   ├── library-grid.ts         # Library grid/list rendering, selection, keyboard, rubber-band; minting/besked/wip status badges
 │   ├── library-toolbar.ts      # Breadcrumb, search, sort, view toggle, New Collection, Upload
