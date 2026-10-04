@@ -10,8 +10,15 @@ import { bodyAllowance, bodyFloor, evaluateKernelGates } from "../../packages/ca
 /** The delivery triangle budget the browser worker enforces. */
 export const MAX_TRIANGLES = 200000;
 
-/** Client repair rounds after the first build, as the browser worker spends. */
-export const CLIENT_REPAIR_ROUNDS = 2;
+/**
+ * Client repair rounds after the first build.
+ * @remarks Three, raised from two on the owner's call after the first CADPrompt
+ *   run showed the `connected` gate firing in 29 of 200 samples and still being
+ *   the final cause of 20: two rounds rescued nine of them, so the third is a bet
+ *   that the remaining ones are fixable given one more turn. This is the policy
+ *   the browser worker must follow too - see the render path's repair loop.
+ */
+export const CLIENT_REPAIR_ROUNDS = 3;
 
 /** One failed build: `gate` is "kernel" when the script threw. @typedef {{ gate: string, error: string }} RoundFailure */
 
