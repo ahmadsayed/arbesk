@@ -90,8 +90,8 @@ Ratios were computed with the WCAG 2.x relative-luminance formula. Surfaces are 
 | success | `#7fd88f` | 10.6 / 9.8 / 8.6 |
 | warning | `#f0a64b` | = accent-text |
 | info | `#5ccfe6` | 10.1 / 9.4 / 8.2 |
-| viewport-bg | `#1a1b1e` | |
-| viewport-grid | `#2e3035` | decorative |
+| viewport-bg | `#2a2b2f` | 1.20:1 vs sidebar, 1.30:1 vs window — stage reads as its own surface |
+| viewport-grid | `#3c3e44` | decorative |
 | selection | `#f0a64b` | 8.4 vs viewport-bg |
 
 **Paper (`color-scheme: light`)**
