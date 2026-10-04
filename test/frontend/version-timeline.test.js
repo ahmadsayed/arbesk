@@ -108,3 +108,31 @@ test("isLoading disables all ticks and sets aria-busy", () => {
   expect(ticks().every((t) => t.disabled)).toBe(true);
   expect(strip().getAttribute("aria-busy")).toBe("true");
 });
+
+test("slider aria attributes track the store", () => {
+  setChain(3, { active: 1 });
+  expect(strip().getAttribute("aria-valuemin")).toBe("1");
+  expect(strip().getAttribute("aria-valuemax")).toBe("3");
+  expect(strip().getAttribute("aria-valuenow")).toBe("2");
+  // Local TZ is not pinned in the test env — assert the shape, not the wall time.
+  expect(strip().getAttribute("aria-valuetext")).toMatch(
+    /^v2 of 3 · saved \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
+  );
+});
+
+test("arrow keys move and commit; Home/End jump to the ends", () => {
+  setChain(3, { active: 1 });
+  strip().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  expect(versionStore.loads).toEqual(["cid-1"]);
+  versionStore.active = 0;
+  notify();
+  strip().dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  expect(versionStore.loads).toEqual(["cid-1", "cid-3"]);
+});
+
+test("keys at the ends are no-ops; unhandled keys are ignored", () => {
+  setChain(2, { active: 0 });
+  strip().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  strip().dispatchEvent(new KeyboardEvent("keydown", { key: "x", bubbles: true }));
+  expect(versionStore.loads).toEqual([]);
+});
