@@ -45,3 +45,49 @@ describe("initTestnetBanner", () => {
     await expect(mod.initTestnetBanner()).resolves.toBeUndefined();
   });
 });
+
+describe("initNetworkStatus", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <button id="networkStatus" class="network-status" hidden><span class="network-status-dot"></span><span class="network-status-label"></span></button>
+      <button id="disconnectWalletBtn" class="hidden"></button>
+      <button id="connectWalletBtn"></button>`;
+  });
+
+  test("Base Sepolia shows a visible 'Testnet' label with the full name as title", async () => {
+    const mod = await loadModule({ defaultChainId: 84532 });
+    await mod.initNetworkStatus();
+    const el = document.getElementById("networkStatus");
+    expect(el.hidden).toBe(false);
+    expect(el.querySelector(".network-status-label").textContent).toBe("Testnet");
+    expect(el.title).toBe("Base Sepolia Testnet");
+    expect(el.getAttribute("aria-label")).toBe("Network: Base Sepolia Testnet");
+  });
+
+  test("Hardhat local shows 'Local'", async () => {
+    const mod = await loadModule({ defaultChainId: 31415822 });
+    await mod.initNetworkStatus();
+    expect(document.querySelector(".network-status-label").textContent).toBe("Local");
+  });
+
+  test("unknown or missing chain stays hidden", async () => {
+    const mod = await loadModule(null);
+    await mod.initNetworkStatus();
+    expect(document.getElementById("networkStatus").hidden).toBe(true);
+  });
+
+  test("click opens the account menu when signed in, else sign-in", async () => {
+    const mod = await loadModule({ defaultChainId: 84532 });
+    await mod.initNetworkStatus();
+    const avatar = document.getElementById("disconnectWalletBtn");
+    const signin = document.getElementById("connectWalletBtn");
+    const a = jest.fn(); const s = jest.fn();
+    avatar.addEventListener("click", a);
+    signin.addEventListener("click", s);
+    document.getElementById("networkStatus").click();
+    expect(s).toHaveBeenCalledTimes(1);
+    avatar.classList.remove("hidden");
+    document.getElementById("networkStatus").click();
+    expect(a).toHaveBeenCalledTimes(1);
+  });
+});

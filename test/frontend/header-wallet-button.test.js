@@ -17,12 +17,16 @@ const TRUNCATED = "0x1234…5678";
 // Mirrors app.pug .headerbar-actions (directives included; ids/classes identical).
 const FRAGMENT = `
   <div class="headerbar-actions" x-data="headerWallet">
-    <select id="headerbarNetworkSelect" class="headerbar-network-select" :class="{ connected: connected && !isCdp, hidden: isCdp }" aria-label="Select network" title="Select network">
+    <button id="connectWalletBtn" class="btn btn-secondary headerbar-signin disconnected" :class="{ hidden: connected, disconnected: !connected }" type="button" aria-label="Sign in"><span>Sign in</span></button>
+    <button id="disconnectWalletBtn" class="headerbar-avatar hidden" :class="{ hidden: !connected, 'auth-required': showAuthRequired }" type="button" aria-label="Account menu" :title="label"><span class="headerbar-avatar-img" x-html="identicon" aria-hidden="true"></span><span id="disconnectWalletBtnText" class="sr-only" x-text="label">Disconnect</span></button>
+  </div>
+  <div class="wallet-popover-section" x-data="headerWallet">
+    <label class="wallet-popover-label" for="headerbarNetworkSelect">Network</label>
+    <select id="headerbarNetworkSelect" class="form-select wallet-popover-network" :class="{ hidden: isCdp }" aria-label="Select network">
       <option value="baseSepolia" selected>Base Sepolia Testnet</option>
       <option value="hardhat">Hardhat Local</option>
     </select>
-    <button id="connectWalletBtn" class="btn btn-secondary headerbar-signin disconnected" :class="{ hidden: connected, disconnected: !connected }" type="button" aria-label="Sign in"><span>Sign in</span></button>
-    <button id="disconnectWalletBtn" class="headerbar-avatar hidden" :class="{ hidden: !connected, 'auth-required': showAuthRequired }" type="button" aria-label="Account menu" :title="label"><span class="headerbar-avatar-img" x-html="identicon" aria-hidden="true"></span><span id="disconnectWalletBtnText" class="sr-only" x-text="label">Disconnect</span></button>
+    <p class="wallet-popover-note" x-show="isCdp">Email accounts use Base Sepolia.</p>
   </div>`;
 
 function flush() {
@@ -74,7 +78,6 @@ test("disconnected: connect button visible, wallet button hidden, label Disconne
   expect(disconnectBtn().classList.contains("auth-required")).toBe(false);
   expect(textEl().textContent).toBe("Disconnect");
   expect(netSel().classList.contains("hidden")).toBe(false);
-  expect(netSel().classList.contains("connected")).toBe(false);
 });
 
 test("unauthenticated crypto wallet: truncated address with Sign In reminder", async () => {
@@ -85,7 +88,6 @@ test("unauthenticated crypto wallet: truncated address with Sign In reminder", a
   expect(disconnectBtn().classList.contains("hidden")).toBe(false);
   expect(textEl().textContent).toBe(`${TRUNCATED} • Sign In`);
   expect(disconnectBtn().classList.contains("auth-required")).toBe(true);
-  expect(netSel().classList.contains("connected")).toBe(true);
   expect(netSel().classList.contains("hidden")).toBe(false);
 });
 

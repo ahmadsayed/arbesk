@@ -102,6 +102,27 @@
   }
 }
 
+// ── Network section ──────────────────────────────────────────────────
+
+.wallet-popover-section {
+  display: grid;
+  gap: var(--size-1);
+  padding: var(--size-2) 0;
+  border-top: var(--border-size-1) solid var(--border-hairline);
+}
+
+.wallet-popover-label {
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
+  color: var(--dim-fg);
+}
+
+.wallet-popover-note {
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+}
+
 // ── Actions ──────────────────────────────────────────────────────────
 
 .wallet-popover-actions {
