@@ -26,21 +26,22 @@
   gap: var(--size-2);
 }
 
+// Same language as .empty-state: full opacity (a block-level opacity drops
+// --dim-fg below 4.5:1), accent only on the icon.
 .chat-welcome {
   text-align: center;
   padding: var(--size-7) var(--size-2);
-  opacity: 0.7;
 
   .welcome-icon {
     font-size: var(--size-7);
-    color: var(--accent-bg);
+    color: var(--accent-text);
     margin-bottom: var(--size-3);
   }
 
   .welcome-text {
     font-size: var(--font-size-2);
     font-weight: var(--font-weight-6);
-    color: var(--accent-bg);
+    color: var(--sidebar-fg);
     margin: 0 0 var(--size-2);
   }
 
@@ -62,8 +63,8 @@
 
   &-user {
     align-self: flex-end;
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--raised-bg);
+    color: var(--window-fg);
     border-bottom-right-radius: var(--size-1);
     font-weight: var(--font-weight-6);
   }
@@ -204,9 +205,7 @@
 .chat-asset-badge {
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
-  letter-spacing: var(--font-letterspacing-1, 0.05em);
   color: var(--dim-fg);
-  text-transform: uppercase;
 }
 
 .chat-asset-caption {
@@ -383,7 +382,7 @@
 }
 
 // Collapsible provider/quality settings — native <details>, same expander
-// language as the inspector sections (dim uppercase title, ▸ chevron).
+// language as the inspector sections (dim sentence-case title, ▸ chevron).
 .composer-settings {
   border: var(--border-size-1) solid var(--border-hairline);
   border-radius: var(--radius-2);
@@ -395,11 +394,9 @@
     justify-content: space-between;
     cursor: pointer;
     padding: var(--size-1) var(--size-2);
-    font-size: var(--font-size-0);
-    font-weight: var(--font-weight-7);
+    font-size: var(--font-size-1);
+    font-weight: var(--font-weight-6);
     color: var(--dim-fg);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     list-style: none;
 
     &::-webkit-details-marker {
@@ -648,7 +645,7 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--size-2) center;
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-pill, 999px);
   cursor: pointer;
   flex-shrink: 0;

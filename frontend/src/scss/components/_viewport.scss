@@ -7,7 +7,7 @@
   position: relative;
   min-height: 0;
   background-color: var(--viewport-bg); // matches Babylon scene clearColor
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-3);
   overflow: hidden;
 
@@ -47,7 +47,7 @@
   pointer-events: none;
   padding: var(--size-2) var(--size-3);
   background-color: var(--view-bg);
-  border-bottom: var(--border-size-1) solid var(--border-color);
+  border-bottom: var(--border-size-1) solid var(--hairline);
   opacity: 1;
   transition: opacity var(--duration-quick) var(--ease-out-3);
 
@@ -155,28 +155,31 @@
   align-items: center;
   gap: var(--size-1);
   padding: var(--size-1);
-  background-color: var(--surface-overlay);
-  border: var(--border-size-1) solid var(--border-color);
+  // --surface-overlay was never defined, so this rendered transparent.
+  background-color: var(--sidebar-bg);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-3);
   z-index: 20;
 
   .btn {
-    color: var(--dim-fg);
+    color: var(--sidebar-fg);
 
     &:hover:not(:disabled) {
-      color: var(--sidebar-fg);
+      background-color: var(--surface-overlay-hover);
     }
 
+    // Readable but clearly inactive: dim colour, not a low opacity.
     &:disabled {
-      opacity: 0.35;
+      color: var(--dim-fg);
+      opacity: 1;
       cursor: not-allowed;
     }
 
     &.active {
-      background-color: var(--accent-bg);
-      color: var(--accent-fg);
-      border-color: var(--accent-bg);
+      background-color: var(--raised-bg);
+      color: var(--accent-text);
+      border-color: var(--accent-text);
 
       &:hover:not(:disabled) {
         filter: brightness(1.05);

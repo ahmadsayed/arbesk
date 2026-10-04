@@ -5,7 +5,7 @@
 .card {
   background-color: var(--card-bg);
   color: var(--card-fg);
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
   padding: var(--size-3);
   box-shadow: var(--shadow-1);
@@ -17,10 +17,8 @@
 }
 
 .asset-library-section-title {
-  font-size: var(--font-size-0);
+  font-size: var(--font-size-1);
   font-weight: var(--font-weight-6);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--dim-fg);
   margin-bottom: var(--size-3);
   padding-bottom: var(--size-1);
@@ -43,7 +41,7 @@
 // Asset library card
 .asset-card {
   background-color: var(--card-bg);
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
   padding: var(--size-3);
   cursor: pointer;
@@ -120,8 +118,6 @@
 .asset-card-badge {
   font-size: var(--font-size-0);
   font-weight: var(--font-weight-6);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   padding: 2px var(--size-2);
   border-radius: var(--radius-round);
   border: var(--border-size-1) solid var(--border-color);

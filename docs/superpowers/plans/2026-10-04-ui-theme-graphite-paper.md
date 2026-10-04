@@ -1503,6 +1503,15 @@ Expected: "no gradient" and "no uppercase" PASS; "no hand-written monospace" FAI
 Run: `bun run test:frontend`
 Expected: everything else PASS.
 
+> **As built (#71):**
+> - The 4 hand-written mono stacks moved to `var(--font-mono)` here, so the mono guard is green from this task on (Task 6 only changes what `--font-mono` resolves to).
+> - `_settings.scss:36` (`.owner-badge`), `:88` (`.team-role-badge`), `_cards.scss:123` (`.asset-card-badge`) and `_library-details.scss:81` (`.library-details-badge`) are badges, not section titles: they lost uppercase but keep `--font-size-0`.
+> - `create-panel.ts` set an uppercase animate-preset group header inline; fixed like `keyboard-help.ts`.
+> - Accent fills: hovers on secondary controls → `--surface-overlay-hover` + `--accent-text`; selected/toggled states (page switcher, transform toggle) and decorative fills (user chat bubble, avatars) → `--raised-bg`; badges (owner, metadata chip, `.status-besked`) → 18% accent tint + `--window-fg`. Kept: primary buttons, `.messagebar-submit`, progress fills, range thumbs, resize-handle highlight, `.status-check`.
+> - Network select (removed in Phase 2 #81) is a neutral raised pill; its chevron SVG stroke is `#85858b` (≥3:1 on `--raised-bg` in both themes).
+> - `--surface-overlay` was never defined (transparent) in `_viewport` (transform toolbar), `_comments` (disabled composer) and `_wallet-modal` (Google option); now `--sidebar-bg` / `--raised-bg`.
+> - `.chat-welcome` lost its block `opacity: 0.7` (dropped `--dim-fg` below 4.5:1); its title uses `--sidebar-fg`, accent only on the icon.
+
 - [ ] **Step 8: Commit**
 
 ```bash

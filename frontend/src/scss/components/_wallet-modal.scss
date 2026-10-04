@@ -130,8 +130,6 @@
   font-weight: var(--font-weight-6);
   color: var(--dim-fg);
   margin: 0;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
 }
 
 // Individual wallet option row
@@ -181,8 +179,8 @@
     width: 28px;
     height: 28px;
     border-radius: var(--radius-2);
-    background: var(--accent-bg);
-    color: var(--accent-fg);
+    background: var(--raised-bg);
+    color: var(--accent-text);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -231,7 +229,7 @@
 .wallet-option-google {
   justify-content: center;
   border: var(--border-size-1) solid var(--border-color);
-  background: var(--surface-overlay);
+  background: var(--raised-bg);
 
   &:hover {
     background-color: var(--surface-overlay-hover);

@@ -7,7 +7,7 @@
 .inspector {
   width: var(--inspector-width);
   flex-shrink: 0;
-  background: var(--gradient-sidebar);
+  background: var(--sidebar-bg);
   color: var(--sidebar-fg);
   border-left: var(--border-size-1) solid var(--border-hairline);
   display: flex;
@@ -78,11 +78,9 @@
 }
 
 .inspector-section-title {
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-7);
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-6);
   color: var(--dim-fg);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   padding-bottom: var(--size-1);
   border-bottom: var(--border-size-1) solid var(--border-hairline);
 }
@@ -193,8 +191,8 @@
   box-shadow: var(--shadow-2);
 
   &:hover {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--surface-overlay-hover);
+    color: var(--accent-text);
     width: 36px;
   }
 
@@ -235,7 +233,7 @@
   width: 100%;
   height: 44px;
   padding: 0;
-  border: var(--border-size-1) solid var(--border-color);
+  border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
   cursor: pointer;
   background: none;

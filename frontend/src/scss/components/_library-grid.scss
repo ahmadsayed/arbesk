@@ -155,8 +155,6 @@
   font-weight: var(--font-weight-6);
   padding: 2px 8px;
   border-radius: var(--radius-round);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 
 .status-uploading {
@@ -170,8 +168,8 @@
 }
 
 .status-besked {
-  background-color: var(--accent-bg);
-  color: var(--accent-fg);
+  background-color: color-mix(in srgb, var(--accent-bg) 18%, var(--card-bg));
+  color: var(--window-fg);
 }
 
 .status-pending {

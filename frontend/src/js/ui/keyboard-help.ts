@@ -52,7 +52,7 @@ function buildHtml(): string {
       )
       .join("");
     return `
-      <p style="margin:var(--size-3) 0 var(--size-1);font-size:var(--font-size-0);font-weight:var(--font-weight-6);color:var(--dim-fg);text-transform:uppercase;letter-spacing:0.05em">${heading}</p>
+      <p style="margin:var(--size-3) 0 var(--size-1);font-size:var(--font-size-1);font-weight:var(--font-weight-6);color:var(--dim-fg)">${heading}</p>
       <table style="width:100%;border-collapse:collapse">${rowsHtml}</table>`;
   }).join("");
 
