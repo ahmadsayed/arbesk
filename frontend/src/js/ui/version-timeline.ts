@@ -8,8 +8,52 @@
 
 import * as store from "@arbesk/asset-core/domain/version-history-store.js";
 import type { VersionHistoryState } from "@arbesk/asset-core/domain/version-history-store.js";
+import { gatewayBase } from "../ipfs/remote-ipfs.ts";
 
 const ROOT_ID = "versionTimeline";
+
+let tooltip: HTMLElement | null = null;
+
+function hideTooltip(): void {
+  tooltip?.remove();
+  tooltip = null;
+}
+
+/** Fixed-position card above a tick — never inside the scrollable strip. */
+async function showTooltip(
+  tick: HTMLElement,
+  entry: any,
+  n: number
+): Promise<void> {
+  hideTooltip();
+  const tip = document.createElement("div");
+  tip.className = "vt-tooltip";
+  tip.setAttribute("role", "tooltip");
+  const title = document.createElement("div");
+  title.className = "vt-tooltip-title tabular";
+  const ts = formatTimestamp(entry.timestamp);
+  title.textContent = `v${n}${ts ? ` · ${ts}` : ""}`;
+  tip.appendChild(title);
+  const prompt = entry.chat?.[0]?.prompt?.split("\n")[0];
+  if (prompt) {
+    const p = document.createElement("div");
+    p.className = "vt-tooltip-prompt";
+    p.textContent = prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt;
+    tip.appendChild(p);
+  }
+  document.body.appendChild(tip);
+  const r = tick.getBoundingClientRect();
+  tip.style.left = `${r.left + r.width / 2}px`;
+  tip.style.bottom = `${window.innerHeight - r.top + 8}px`;
+  tooltip = tip;
+  // Thumbnail last: async gateway resolution must not block the card.
+  if (entry.thumbnail?.cid) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = `${await gatewayBase()}${entry.thumbnail.cid}`;
+    tip.prepend(img);
+  }
+}
 
 /** @returns `YYYY-MM-DD HH:MM` local time, or "" for missing/invalid input. */
 function formatTimestamp(ts: unknown): string {
@@ -30,6 +74,11 @@ const KEYS: Record<string, (i: number, n: number) => number> = {
 };
 
 function onKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") {
+    if (tooltip) e.preventDefault();
+    hideTooltip();
+    return;
+  }
   const move = KEYS[e.key];
   if (!move) return;
   const { entries, activeCid } = store.getState();
@@ -70,6 +119,10 @@ function render(root: HTMLElement, s: VersionHistoryState): void {
       tick.addEventListener("click", () => {
         if (entry.cid !== s.activeCid) store.loadVersion(entry.cid);
       });
+      tick.addEventListener("pointerenter", () => showTooltip(tick, entry, i + 1));
+      tick.addEventListener("focus", () => showTooltip(tick, entry, i + 1));
+      tick.addEventListener("pointerleave", hideTooltip);
+      tick.addEventListener("blur", hideTooltip);
       return tick;
     })
   );

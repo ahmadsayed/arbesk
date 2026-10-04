@@ -35,6 +35,7 @@ function setChain(n, { active = n - 1, published = null } = {}) {
     version: i + 1,
     timestamp: "2026-10-04T14:32:00Z",
     chat: null,
+    thumbnail: null,
   }));
   versionStore.active = active;
   versionStore.publishedCid = published;
@@ -57,6 +58,10 @@ beforeAll(async () => {
         return () => versionStore.subs.delete(fn);
       },
     })
+  );
+  await mock.module(
+    "../../frontend/src/js/ipfs/remote-ipfs.js",
+    () => ({ gatewayBase: async () => "http://gw/ipfs/" })
   );
   document.body.innerHTML = `<div id="versionTimeline" hidden role="slider" tabindex="0"></div>`;
   await import("../../frontend/src/js/ui/version-timeline.js");
@@ -135,4 +140,42 @@ test("keys at the ends are no-ops; unhandled keys are ignored", () => {
   strip().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
   strip().dispatchEvent(new KeyboardEvent("keydown", { key: "x", bubbles: true }));
   expect(versionStore.loads).toEqual([]);
+});
+
+test("tooltip shows on hover with version, timestamp, and chat prompt", async () => {
+  setChain(2);
+  versionStore.entries[0].chat = [
+    { prompt: "a cowboy with a very long description that keeps going and going and going and going", provider: "mock", task: "text-to-3d" },
+  ];
+  notify();
+  ticks()[0].dispatchEvent(new Event("pointerenter", { bubbles: true }));
+  const tip = document.querySelector(".vt-tooltip");
+  expect(tip).toBeTruthy();
+  expect(tip.textContent).toContain("v1");
+  expect(tip.textContent).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  const prompt = tip.querySelector(".vt-tooltip-prompt").textContent;
+  expect(prompt.length).toBeLessThanOrEqual(81); // 80 chars + ellipsis
+  expect(prompt).toContain("…");
+});
+
+test("tooltip shows the thumbnail img when the entry has one", async () => {
+  setChain(1);
+  versionStore.entries[0].thumbnail = { cid: "bafy-thumb" };
+  notify();
+  ticks()[0].dispatchEvent(new Event("pointerenter", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0)); // let gatewayBase resolve
+  const img = document.querySelector(".vt-tooltip img");
+  expect(img.getAttribute("src")).toBe("http://gw/ipfs/bafy-thumb");
+});
+
+test("tooltip dismisses on pointerleave and Escape", () => {
+  setChain(2);
+  ticks()[1].dispatchEvent(new Event("pointerenter", { bubbles: true }));
+  expect(document.querySelector(".vt-tooltip")).toBeTruthy();
+  ticks()[1].dispatchEvent(new Event("pointerleave", { bubbles: true }));
+  expect(document.querySelector(".vt-tooltip")).toBeNull();
+  ticks()[0].dispatchEvent(new Event("pointerenter", { bubbles: true }));
+  expect(document.querySelector(".vt-tooltip")).toBeTruthy();
+  strip().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  expect(document.querySelector(".vt-tooltip")).toBeNull();
 });
