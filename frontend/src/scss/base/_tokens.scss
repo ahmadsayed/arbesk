@@ -1,144 +1,41 @@
 // ═══════════════════════════════════════════════════════════════════
-// Arbesk Design Tokens
-// libadwaita surface model + Open Props scales + Arabesque palette
+// Arbesk Design Tokens — scales + derived tokens
 //
-// Three-layer theme system:
-//   Layer 1 — raw palette
-//   Layer 2 — per-surface light/dark variants
-//   Layer 3 — theme-agnostic aliases (all components use these)
+// Colours live in themes/_graphite.scss and themes/_paper.scss (the token
+// contract). This file holds theme-independent scales and tokens derived
+// from the contract via color-mix().
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Layer 1: Raw palette ────────────────────────────────────────────
+// ── Theme-independent colour tokens ─────────────────────────────────
 
 :root {
-  // choco scale ≈ Arabesque warm-wood
-  --choco-1: #faf6f2; // warm white
-  --choco-2: #f0e6d8;
-  --choco-3: #e0d0bc;
-  --choco-4: #cdb89a;
-  --choco-5: #b89a7a;
-  --choco-6: #a28060; // ≈ --arabesque-accent-muted
-  --choco-7: #8c6a4a;
-  --choco-8: #7a5c3e; // ≈ --arabesque-panel
-  --choco-9: #664a30; // ≈ --arabesque-bg
-  --choco-10: #523a22;
-  --choco-11: #3d2a18;
-  --choco-12: #2a1a0e; // ≈ --arabesque-void
+  // Blender axis convention — not chrome, identical in every theme.
+  --axis-x: #e22b30;
+  --axis-y: #43c142;
+  --axis-z: #3478eb;
 
-  // Accent: warm gold
-  --gold-3: #d4a574; // ≈ --arabesque-accent-light
-  --gold-5: #a07848; // ≈ --arabesque-accent (darkened for 3:1 focus contrast)
-  --gold-6: #8c673c; // accent surface — 5.1:1 with white text (AA normal size)
-  --gold-7: #a07848;
-
-  // Semantic
-  --red-3: #e01b24; // destructive (libadwaita)
-  --red-4: #c01c28;
-  --green-4: #2ec27e; // success
-  --yellow-4: #e5a50a; // warning
-
-  // 3D viewport + Babylon-specific tokens
-  --viewport-bg: #1e1e1e; // neutral dark gray; stable across modes
-  --highlight-amber: #d4a017; // selection glow color
-  --axis-x: #e22b30; // Blender convention — red
-  --axis-y: #43c142; // Blender convention — green
-  --axis-z: #3478eb; // Blender convention — blue
-
-  // Model-clock badge/label accent: matches COLOR_ACTIVE in
-  // model-clock-gizmo.js (the knob/arc blue) so the DOM badge doesn't clash
-  // with the app's gold --accent-bg. 5.2:1 with white text (AA normal size).
+  // Model-clock badge: matches COLOR_ACTIVE in model-clock-gizmo.ts.
+  // 5.2:1 with white text (AA normal size).
   --clock-accent: #2563eb;
   --clock-accent-fg: #ffffff;
 }
 
-// ── Layer 2: Per-surface variants ────────────────────────────────────
+// ── LEGACY raw palette — REMOVED IN TASK 4 (only leaking components use it) ──
 
 :root {
-  // Light
-  --window-bg-light: var(--choco-1);
-  --window-fg-light: var(--choco-12);
-  --view-bg-light: var(--choco-2);
-  --view-fg-light: var(--choco-12);
-  --headerbar-bg-light: var(--choco-2);
-  --headerbar-fg-light: var(--choco-12);
-  --sidebar-bg-light: var(--choco-1);
-  --sidebar-fg-light: var(--choco-11);
-  --card-bg-light: var(--choco-1);
-  --card-fg-light: var(--choco-11);
-  --popover-bg-light: var(--choco-2);
-  --popover-fg-light: var(--choco-12);
-  --border-light: #b89a7a; // darkened for visible surface separation
-  --accent-bg-light: var(--gold-6);
-  --accent-fg-light: #ffffff;
-  --destructive-bg-light: var(--red-3);
-  --destructive-fg-light: #ffffff;
-  --dim-fg-light: var(--choco-7);
-
-  // Dark
-  --window-bg-dark: var(--choco-12);
-  --window-fg-dark: var(--choco-2);
-  --view-bg-dark: var(--choco-11);
-  --view-fg-dark: var(--choco-2);
-  --headerbar-bg-dark: var(--choco-11);
-  --headerbar-fg-dark: var(--choco-2);
-  --sidebar-bg-dark: var(--choco-12);
-  --sidebar-fg-dark: var(--choco-3);
-  --card-bg-dark: var(--choco-10);
-  --card-fg-dark: var(--choco-3);
-  --popover-bg-dark: var(--choco-10);
-  --popover-fg-dark: var(--choco-2);
-  --border-dark: var(--choco-9);
-  --accent-bg-dark: var(--gold-6);
-  --accent-fg-dark: #ffffff;
-  --destructive-bg-dark: var(--red-4);
-  --destructive-fg-dark: #ffffff;
-  --dim-fg-dark: var(--choco-6);
-}
-
-// ── Layer 3: Theme-agnostic aliases ──────────────────────────────────
-
-:root {
-  --window-bg: var(--window-bg-light);
-  --window-fg: var(--window-fg-light);
-  --view-bg: var(--view-bg-light);
-  --view-fg: var(--view-fg-light);
-  --headerbar-bg: var(--headerbar-bg-light);
-  --headerbar-fg: var(--headerbar-fg-light);
-  --sidebar-bg: var(--sidebar-bg-light);
-  --sidebar-fg: var(--sidebar-fg-light);
-  --card-bg: var(--card-bg-light);
-  --card-fg: var(--card-fg-light);
-  --popover-bg: var(--popover-bg-light);
-  --popover-fg: var(--popover-fg-light);
-  --border-color: var(--border-light);
-  --accent-bg: var(--accent-bg-light);
-  --accent-fg: var(--accent-fg-light);
-  --destructive-bg: var(--destructive-bg-light);
-  --destructive-fg: var(--destructive-fg-light);
-  --dim-fg: var(--dim-fg-light);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --window-bg: var(--window-bg-dark);
-    --window-fg: var(--window-fg-dark);
-    --view-bg: var(--view-bg-dark);
-    --view-fg: var(--view-fg-dark);
-    --headerbar-bg: var(--headerbar-bg-dark);
-    --headerbar-fg: var(--headerbar-fg-dark);
-    --sidebar-bg: var(--sidebar-bg-dark);
-    --sidebar-fg: var(--sidebar-fg-dark);
-    --card-bg: var(--card-bg-dark);
-    --card-fg: var(--card-fg-dark);
-    --popover-bg: var(--popover-bg-dark);
-    --popover-fg: var(--popover-fg-dark);
-    --border-color: var(--border-dark);
-    --accent-bg: var(--accent-bg-dark);
-    --accent-fg: var(--accent-fg-dark);
-    --destructive-bg: var(--destructive-bg-dark);
-    --destructive-fg: var(--destructive-fg-dark);
-    --dim-fg: var(--dim-fg-dark);
-  }
+  --choco-1: #faf6f2;
+  --choco-2: #f0e6d8;
+  --choco-5: #b89a7a;
+  --choco-7: #8c6a4a;
+  --choco-11: #3d2a18;
+  --choco-12: #2a1a0e;
+  --gold-6: #8c673c;
+  --gold-7: #a07848;
+  --red-3: #e01b24;
+  --green-4: #2ec27e;
+  --yellow-4: #e5a50a;
+  --accent-bg-rgb: 140 103 60;
+  --highlight-amber: #d4a017;
 }
 
 // ── Spacing (4px base, rem) ──────────────────────────────────────────
@@ -196,48 +93,29 @@
   --shadow-5: 0 12px 24px -8px rgb(0 0 0 / 25%); // dialog, modal
 }
 
-// ── Hybrid web2/web3 flourish — glass, overlays, glow, gradients ──────
-//
-// All derived from the Layer-3 theme aliases via var(), so they resolve
-// per-element at computed-value time and track light/dark automatically.
+// ── Derived tokens (resolve per element; track the active theme) ────
 
 :root {
-  // RGB channels of the gold accent (gold-6 #8c673c) for rgba() composition.
-  --accent-bg-rgb: 140 103 60;
-
-  // Glass / elevated floating surfaces
+  // Floating surfaces (popovers, floating viewport toolbar)
   --glass-blur: 12px;
-  --popover-glass-bg: color-mix(in srgb, var(--popover-bg) 86%, transparent);
+  --popover-glass-bg: color-mix(in srgb, var(--popover-bg) 92%, transparent);
 
-  // libadwaita-style translucent hover/active overlays (theme-aware tint)
+  // Translucent hover/active overlays
   --surface-overlay-hover: color-mix(in srgb, var(--window-fg) 6%, transparent);
   --surface-overlay-active: color-mix(in srgb, var(--window-fg) 10%, transparent);
 
-  // Calmer low-contrast separator (prefer over full --border-color for dividers)
-  --border-hairline: color-mix(in srgb, var(--border-color) 50%, transparent);
+  // Decorative divider (alias kept for existing component usage)
+  --border-hairline: var(--hairline);
 
-  // Standardized focus ring + soft accent glow (consolidates inline glows)
-  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 35%, transparent);
-  --glow-accent: 0 0 0 3px color-mix(in srgb, var(--accent-bg) 25%, transparent);
-  --accent-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent-bg) 55%, transparent);
+  // Focus indicator: solid 2px ring with a 2px gap (WCAG 2.4.7 / 2.4.13 ≥3:1 via --accent-text)
+  --focus-ring: 0 0 0 2px var(--window-bg), 0 0 0 4px var(--accent-text);
+  --glow-accent: none;
+  --accent-shadow: none;
 
-  // Subtle warm gradients (a few % lightness shift — not neon)
-  // Accent mixes only 4% white so the top edge keeps ≥4.5:1 with white text.
-  --gradient-accent: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent-bg) 96%, white),
-    var(--accent-bg)
-  );
-  --gradient-headerbar: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--headerbar-bg) 97%, white),
-    var(--headerbar-bg)
-  );
-  --gradient-sidebar: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--sidebar-bg) 97%, white),
-    var(--sidebar-bg)
-  );
+  // TRANSITIONAL flat aliases — usages and these tokens are removed in Task 5.
+  --gradient-accent: var(--accent-bg);
+  --gradient-headerbar: var(--headerbar-bg);
+  --gradient-sidebar: var(--sidebar-bg);
 }
 
 // ── Borders ───────────────────────────────────────────────────────────
@@ -278,22 +156,23 @@
 @media (prefers-contrast: more) {
   :root {
     --border-color: currentColor;
+    --hairline: currentColor;
     --shadow-1: none;
     --shadow-2: none;
     --shadow-3: none;
     --shadow-4: none;
     --shadow-5: none;
-
-    // Flatten the web2/web3 flourishes: gradients collapse to their flat
-    // base surface, decorative glow/shadow drop, but keep a solid focus ring.
-    --gradient-accent: var(--accent-bg);
-    --gradient-headerbar: var(--headerbar-bg);
-    --gradient-sidebar: var(--sidebar-bg);
-    --glow-accent: none;
-    --accent-shadow: none;
     --popover-glass-bg: var(--popover-bg);
-    --focus-ring: 0 0 0 3px var(--accent-bg);
-    --border-hairline: currentColor;
+    --focus-ring: 0 0 0 3px var(--window-fg);
+  }
+}
+
+// Forced colours (Windows High Contrast): box-shadows are stripped, so focus
+// must use outline, and selection must use system colours.
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText !important;
+    outline-offset: 2px;
   }
 }
 
@@ -309,48 +188,4 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-// ── Manual override (takes precedence over system preference) ────────
-
-:root[data-theme="light"] {
-  --window-bg: var(--window-bg-light);
-  --window-fg: var(--window-fg-light);
-  --view-bg: var(--view-bg-light);
-  --view-fg: var(--view-fg-light);
-  --headerbar-bg: var(--headerbar-bg-light);
-  --headerbar-fg: var(--headerbar-fg-light);
-  --sidebar-bg: var(--sidebar-bg-light);
-  --sidebar-fg: var(--sidebar-fg-light);
-  --card-bg: var(--card-bg-light);
-  --card-fg: var(--card-fg-light);
-  --popover-bg: var(--popover-bg-light);
-  --popover-fg: var(--popover-fg-light);
-  --border-color: var(--border-light);
-  --accent-bg: var(--accent-bg-light);
-  --accent-fg: var(--accent-fg-light);
-  --destructive-bg: var(--destructive-bg-light);
-  --destructive-fg: var(--destructive-fg-light);
-  --dim-fg: var(--dim-fg-light);
-}
-
-:root[data-theme="dark"] {
-  --window-bg: var(--window-bg-dark);
-  --window-fg: var(--window-fg-dark);
-  --view-bg: var(--view-bg-dark);
-  --view-fg: var(--view-fg-dark);
-  --headerbar-bg: var(--headerbar-bg-dark);
-  --headerbar-fg: var(--headerbar-fg-dark);
-  --sidebar-bg: var(--sidebar-bg-dark);
-  --sidebar-fg: var(--sidebar-fg-dark);
-  --card-bg: var(--card-bg-dark);
-  --card-fg: var(--card-fg-dark);
-  --popover-bg: var(--popover-bg-dark);
-  --popover-fg: var(--popover-fg-dark);
-  --border-color: var(--border-dark);
-  --accent-bg: var(--accent-bg-dark);
-  --accent-fg: var(--accent-fg-dark);
-  --destructive-bg: var(--destructive-bg-dark);
-  --destructive-fg: var(--destructive-fg-dark);
-  --dim-fg: var(--dim-fg-dark);
 }

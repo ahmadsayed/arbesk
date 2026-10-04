@@ -1,0 +1,44 @@
+// ═══════════════════════════════════════════════════════════════════
+// Graphite — dark theme
+// Literal #rrggbb only: test/frontend/theme-contrast.test.js parses this file.
+// Contrast ratios: docs/superpowers/specs/2026-10-04-ui-theme-graphite-paper-design.md §3.2
+// ═══════════════════════════════════════════════════════════════════
+
+// TRANSITIONAL: [data-theme="dark"] is removed in Task 2 once theme.ts writes "graphite".
+:root[data-theme="graphite"],
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --window-bg: #141416;
+  --window-fg: #e6e6e3;
+  --view-bg: #1b1c1f;
+  --view-fg: #e6e6e3;
+  --headerbar-bg: #1b1c1f;
+  --headerbar-fg: #e6e6e3;
+  --sidebar-bg: #1b1c1f;
+  --sidebar-fg: #e6e6e3;
+  --card-bg: #1b1c1f;
+  --card-fg: #e6e6e3;
+  --popover-bg: #26272b;
+  --popover-fg: #e6e6e3;
+  --raised-bg: #26272b;
+
+  --border-color: #70737b;
+  --hairline: #2c2e33;
+  --dim-fg: #8f9197;
+
+  --accent-bg: #f0a64b;
+  --accent-fg: #1a1206;
+  --accent-text: #f0a64b;
+
+  --destructive-bg: #c9343a;
+  --destructive-fg: #ffffff;
+  --danger-text: #ff6b6b;
+  --success: #7fd88f;
+  --warning: #f0a64b;
+  --info: #5ccfe6;
+
+  --viewport-bg: #1a1b1e;
+  --viewport-grid: #2e3035;
+  --selection: #f0a64b;
+}

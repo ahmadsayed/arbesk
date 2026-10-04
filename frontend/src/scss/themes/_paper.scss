@@ -1,0 +1,45 @@
+// ═══════════════════════════════════════════════════════════════════
+// Paper — light theme (also the fallback when <html> has no data-theme)
+// Literal #rrggbb only: test/frontend/theme-contrast.test.js parses this file.
+// Contrast ratios: docs/superpowers/specs/2026-10-04-ui-theme-graphite-paper-design.md §3.2
+// ═══════════════════════════════════════════════════════════════════
+
+// TRANSITIONAL: [data-theme="light"] is removed in Task 2 once theme.ts writes "paper".
+:root,
+:root[data-theme="paper"],
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --window-bg: #f7f7f5;
+  --window-fg: #1b1b1d;
+  --view-bg: #ffffff;
+  --view-fg: #1b1b1d;
+  --headerbar-bg: #ffffff;
+  --headerbar-fg: #1b1b1d;
+  --sidebar-bg: #ffffff;
+  --sidebar-fg: #1b1b1d;
+  --card-bg: #ffffff;
+  --card-fg: #1b1b1d;
+  --popover-bg: #ffffff;
+  --popover-fg: #1b1b1d;
+  --raised-bg: #f0f0ed;
+
+  --border-color: #85858b;
+  --hairline: #e4e4e0;
+  --dim-fg: #6b6b70;
+
+  --accent-bg: #a35a12;
+  --accent-fg: #ffffff;
+  --accent-text: #a35a12;
+
+  --destructive-bg: #c01c28;
+  --destructive-fg: #ffffff;
+  --danger-text: #c01c28;
+  --success: #2a7036;
+  --warning: #a35a12;
+  --info: #0e7490;
+
+  --viewport-bg: #c9cacc;
+  --viewport-grid: #b3b4b7;
+  --selection: #a35a12;
+}
