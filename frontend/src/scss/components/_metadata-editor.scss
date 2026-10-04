@@ -95,35 +95,15 @@
   gap: var(--size-2);
 }
 
-.metadata-quick-add {
-  display: flex;
-  flex-wrap: wrap;
+.metadata-typed {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  gap: var(--size-1) var(--size-2);
   align-items: center;
-  gap: var(--size-1);
+  margin-bottom: var(--size-2);
 }
 
-.metadata-quick-label {
+.metadata-typed-label {
   font-size: var(--font-size-0);
   color: var(--dim-fg);
-}
-
-.metadata-chip {
-  font-size: var(--font-size-0);
-  color: var(--window-fg);
-  background-color: color-mix(in srgb, var(--accent-bg) 18%, var(--card-bg));
-  border: var(--border-size-1) solid transparent;
-  border-radius: var(--radius-round);
-  padding: 2px var(--size-2);
-  cursor: pointer;
-  transition: filter var(--duration-quick) var(--ease-out-3),
-              background-color var(--duration-quick) var(--ease-out-3);
-
-  &:hover {
-    filter: brightness(1.1);
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-  }
 }

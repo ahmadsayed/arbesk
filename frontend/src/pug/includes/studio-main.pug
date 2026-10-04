@@ -101,19 +101,25 @@ aside#inspector.inspector
         div
           dl#metadataComputedList.metadata-list
       details.metadata-subsection(open)
-        summary.inspector-section-title Notes for the AI
+        summary.inspector-section-title Print & Provenance
         div
+          .metadata-typed
+            label.metadata-typed-label(for="metaLicence") Licence
+            input#metaLicence.form-input(type="text" placeholder="CC-BY-4.0" aria-label="Licence")
+            label.metadata-typed-label(for="metaMaterial") Material
+            input#metaMaterial.form-input(type="text" placeholder="PLA, resin, …" aria-label="Material")
+            label.metadata-typed-label(for="metaUnits") Units
+            select#metaUnits.form-select(aria-label="Units")
+              option(value="m") meters
+              option(value="cm") centimetres
+              option(value="mm") millimetres
+            label.metadata-typed-label(for="metaPrintNotes") Print notes
+            textarea#metaPrintNotes.form-textarea(rows="2" aria-label="Print notes")
+            label.metadata-typed-label(for="metaSource") Source / Credits
+            input#metaSource.form-input(type="text" placeholder="URL or attribution" aria-label="Source or credits")
           #metadataAnnotationsList.metadata-kv
           .metadata-actions
             button#metadataAddBtn.btn.btn-secondary.btn-sm(type="button") + Add field
-          .metadata-quick-add
-            span.metadata-quick-label Quick add:
-            button.metadata-chip(type="button" data-key="character_name") character_name
-            button.metadata-chip(type="button" data-key="role") role
-            button.metadata-chip(type="button" data-key="species") species
-            button.metadata-chip(type="button" data-key="tags") tags
-            button.metadata-chip(type="button" data-key="lore") lore
-            button.metadata-chip(type="button" data-key="pivot") pivot
     section#commentsSection.inspector-section.comments-section(hidden x-data="commentsPanel" :hidden="!sectionVisible")
       h3#commentsTitle.inspector-section-title Comments ·
         span#commentsCount(x-text="count") 0
