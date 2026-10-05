@@ -45,7 +45,11 @@ export function groundAnchors(anchors: any[]): number {
   return dy;
 }
 
-/** Rotation → identity, then centre on X/Z = 0 and ground. Scale untouched. */
+/**
+ * Rotation → identity, then centre on X/Z = 0 and ground. Scale untouched.
+ * @remarks Rotation identity is LOCAL: a child of a rotated, unselected parent
+ *   keeps the parent's rotation in world space.
+ */
 export function resetAnchor(anchor: any): void {
   anchor.rotationQuaternion = BABYLON.Quaternion.Identity();
   anchor.computeWorldMatrix?.(true);

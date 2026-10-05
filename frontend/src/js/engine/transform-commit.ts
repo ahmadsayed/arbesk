@@ -38,7 +38,7 @@ export function commitTransformChange(
   label: string,
   before: MatrixSnapshot | null
 ): string[] {
-  const items = [];
+  const items: Array<{ nodeId: string; before: number[]; after: number[] }> = [];
   for (const { nodeId, matrix } of before || []) {
     const after = readNodeTransformMatrix(nodeId);
     if (after && !matricesEqual(matrix, after)) items.push({ nodeId, before: matrix, after });

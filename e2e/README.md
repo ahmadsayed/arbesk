@@ -318,7 +318,7 @@ Validates the 3MF format path end to end:
 
 Validates the undo/redo stack for parametric edits:
 
-1. Generates `cowboy` and selects the node in the **Outliner** to open the inspector.
+1. Generates `cowboy`, selects the node in the **Outliner** to open the inspector, and enters **Edit** mode (the inspector scale field is editable only in Edit).
 2. Expands the collapsed **Scale** section and asserts undo/redo start disabled.
 3. Commits a scale edit through the inspector field — undo enables.
 4. Blurs the field (the shortcut is intentionally blocked while a text input is focused) and presses `Ctrl+Z` — the original scale is restored and redo enables.
@@ -422,6 +422,19 @@ Validates the Parametric CAD provider end-to-end (the e2e backend spawns with `C
 4. Generates `a dragon figurine` — the mock's `CadRequestUnsuitable` refusal surfaces as a choice bubble offering **Retry with Tripo 3D**; picking it flips `#providerSelect` to `tripo3d` and re-dispatches (landing on the BYOK key dialog, since the e2e stack has no Tripo key).
 
 **Why it matters:** This is the only E2E coverage of the design-on-the-wire path: the `/generations` cad task, the `cad-worker` WASM render, the 3MF staging flow, the CAD provenance metadata, and the unsuitable-rejection UX. Changes to `generation-providers.ts`, `cad-render.ts`, the 3MF format handler, or the retry wiring can break it.
+
+### 27. View / Edit mode (`e2e/specs/27-edit-mode.spec.js`)
+
+Validates the view-by-default Studio viewport and the Edit-mode placement tools:
+
+1. With no asset open the **Edit** button is hidden; after generating `cowboy` and selecting its node the header meta shows no `Unsaved changes` (false-dirty guard), and View mode shows **Edit** and **Time** but no Drop to floor, Reset or Lock to floor.
+2. Enters **Edit** — Lock to floor starts pressed and **Time** hides.
+3. **Drop to floor** (button) lands a floating model on Y = 0 and lights the `· Unsaved changes` meta segment and the Save dot.
+4. **Reset transform** restores identity rotation, centres on X/Z, grounds, and keeps scale.
+5. Presses **G** with focus off the toolbar — the keyboard path also grounds a floating model.
+6. Leaves Edit with **E** — staged edits survive (marker stays); **Save draft** clears the marker.
+
+**Why it matters:** This is the only E2E coverage of the View/Edit split, the placement actions on a real Babylon scene, and the unsaved marker lifecycle. Changes to `transform-gizmo.ts`, `edit-mode.ts`, `placement-actions.ts`, `unsaved-changes.ts`, or `asset-chrome.ts` can break it.
 
 ### Chat version restore (`e2e/specs/chat-version-restore.spec.js`)
 

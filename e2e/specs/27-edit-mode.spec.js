@@ -18,10 +18,14 @@ test.describe("view / edit mode", () => {
     const cid = await generate(page, "cowboy");
     await page.click(SELECTORS.outlinerSwitcherBtn);
     await page.locator(SELECTORS.outlinerNode).first().click();
+    // Generating and selecting must not stage anything (false-dirty guard).
+    await expect(page.locator(SELECTORS.assetMeta)).not.toContainText("Unsaved changes");
 
     // View mode: selection shows no placement tools.
     await expect(page.locator(SELECTORS.editModeButton)).toBeVisible();
     await expect(page.locator(SELECTORS.dropToFloorButton)).toBeHidden();
+    await expect(page.locator(SELECTORS.resetTransformButton)).toBeHidden();
+    await expect(page.locator(SELECTORS.lockFloorToggle)).toBeHidden();
     await expect(page.locator(SELECTORS.timeModeButton)).toBeVisible();
 
     await enterEditMode(page);
@@ -45,6 +49,12 @@ test.describe("view / edit mode", () => {
     expect(reset.cz).toBeCloseTo(0, 3);
     expect(reset.minY).toBeCloseTo(0, 3);
     expect(reset.sx).toBeCloseTo(before.sx, 6);
+
+    // G drops to the floor from the keyboard (focus off the toolbar buttons).
+    await perturbFirstAnchor(page, { dy: 2 });
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press("g");
+    expect((await firstAnchorState(page)).minY).toBeCloseTo(0, 3);
 
     // Leaving Edit keeps the staged edits; Save draft clears the marker.
     await page.evaluate(() => document.activeElement?.blur());
