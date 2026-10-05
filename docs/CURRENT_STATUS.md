@@ -410,7 +410,7 @@ frontend/src/js/
 | CDP email login on Hardhat | `smart-wallet-support.ts` | 🟡 Smart wallets only supported on Base Sepolia |
 | Health check endpoint | — | 🟢 Ops convenience |
 | OpenSCAD WASM | — | ⚪ Explicitly deferred (superseded in practice by `@arbesk/cad-gen`, which generates Manifold JS directly) |
-| Browser CAD worker (client kernel + render via `provider: "cad"` on `/generations`) | `frontend/src/js/workers/cad-worker.ts` | ✅ Done 2026-10-04 — design-on-the-wire → worker guard/kernel → 3MF → normal `format: "3mf"` save flow; client repair round trip (`POST /api/v1/cad/repairs`) still server-only, not wired from the browser |
+| Browser CAD worker (client kernel + render via `provider: "cad"` on `/generations`) | `frontend/src/js/workers/cad-worker.ts` | ✅ Done 2026-10-04 — design-on-the-wire → worker guard/kernel → 3MF → normal `format: "3mf"` save flow; typed follow-ups edit the active CAD part (`priorDesign`) — the result is the next version; client repair round trip (`POST /api/v1/cad/repairs`) still server-only, not wired from the browser |
 
 ---
 

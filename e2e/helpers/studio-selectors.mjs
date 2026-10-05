@@ -34,6 +34,8 @@ export const SELECTORS = {
   assetBubbleAction: (action) => `.chat-bubble-asset [data-action="${action}"]`,
   assetBubbleSaved: ".chat-bubble-asset.chat-bubble-asset-saved",
   refineIndicator: "#refineIndicator",
+  refineIndicatorText: "#refineIndicatorText",
+  refineIndicatorDetach: "#refineIndicatorDetach",
   versionBubble: ".chat-bubble-version",
   choiceBubble: ".chat-bubble-choices",
   choiceBtn: ".chat-choice-btn",

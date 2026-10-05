@@ -436,6 +436,17 @@ Validates the view-by-default Studio viewport and the Edit-mode placement tools:
 
 **Why it matters:** This is the only E2E coverage of the View/Edit split, the placement actions on a real Babylon scene, and the unsaved marker lifecycle. Changes to `transform-gizmo.ts`, `edit-mode.ts`, `placement-actions.ts`, `unsaved-changes.ts`, or `asset-chrome.ts` can break it.
 
+### 28. CAD incremental edit (`e2e/specs/28-cad-edit.spec.js`)
+
+Validates typed follow-ups on a Parametric CAD part (the e2e backend spawns with `CAD_MOCK_GENERATION`; the mock echoes the prior design one `turn` later, so an arriving `priorDesign` is observable without a DeepSeek key):
+
+1. Selects **Parametric CAD**, generates `a 40 by 30 by 20 mm box` — the POST body carries no `priorDesign` — and clicks **Show in Studio**.
+2. The **Refining** chip is attached (`Refining: a 40 by 30 by 20 mm box`) and `#providerSelect` is locked to CAD: disabled, value `cad`.
+3. A typed follow-up (`make it 5 mm taller`) posts `priorDesign` carrying the first design's code and `turn: 1`, announces `Editing "a 40 by 30 by 20 mm box"…`, and chains onto the sent version: the new saved manifest's `prev_asset_manifest_cid` is the edit's generation manifest, whose own `prev_asset_manifest_cid` is the first saved CID.
+4. The chip's detach button unlocks the provider selector and the next prompt starts a fresh part (no `priorDesign`).
+
+**Why it matters:** This is the only E2E coverage of CAD incremental editing: the `#refineIndicator` chip lifecycle, the provider lock while a chip is attached, the `priorDesign` request wiring, and version chaining for design edits. Changes to `refine-target.ts`, the `create-panel.ts` generation routing, or the CAD edit manifest chain can break it.
+
 ### Chat version restore (`e2e/specs/chat-version-restore.spec.js`)
 
 Validates that a version-card bubble's **Show in Studio** button stays a live restore path:
