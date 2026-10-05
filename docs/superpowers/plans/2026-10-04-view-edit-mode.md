@@ -2629,3 +2629,29 @@ Merging is the user's call — do not run `gh pr merge`.
 - [ ] **Step 6: As built + handover**
 
 Append an "As built" section to this plan (deviations, verification numbers). Update `.worktrees/HANDOVER-ui-refresh-phase2.md`: #86 PR number, epic status (all 20 sub-issues implemented once #109 and this PR merge).
+
+---
+
+## As built
+
+Executed with subagent-driven development: one implementer + one spec/quality review per task, then a whole-branch review and one fix wave.
+
+**Changes beyond the plan text**
+- **Unsaved marker gated on `canEdit()`** (final review, owner decision): the header `· Unsaved changes`, the Save dot and the leave-site prompt appear only when the user can save. Signed-out users and library visitors can still make some View-mode edits (decision 1), but never see the marker. Spec §14 amendment 5.
+- **XZ plane handle** (final review): Babylon creates `positionGizmo` lazily, so the init-time `planarGizmoEnabled = true` was dead and the floor-plane handle never appeared. `_constrainPositionGizmo` now enables planar handles and `yPlaneGizmo` before applying the lock. The mocks hid this; the live check confirmed the fix.
+- **Missed notify site** (Task 2 review): `clearBakedChildRefs` in `manifest-builder.ts` mutates `pendingChildRefs` through a getter alias and now notifies.
+- **Stale drag-exit guard** (Task 6 review → Task 7): a deferred exit after leaving Edit mid-drag no longer wipes Time mode or a re-entered Edit (`_detachAfterDrag` checked against current state, reset in `setMode`).
+- **Group pivot after rotate re-ground** (Task 7 review): the rotate drag-end path shifts the pivot like the drag-start path.
+- **No complexity suppressions**: Task 8 first used `fallow-ignore-next-line`; replaced by extracting `_pushScaleUndoIfChanged`.
+- **Keyboard wiring once per page** (`_keyboardWired`) and `e.repeat` ignored for E/T/R/G/Shift+R.
+- `.fallowrc.json`: `test/frontend/helpers/*.js` entry + `_resetEditModeForTesting` ignoreExport.
+
+**Environment findings (not code)**
+- A stale Bun runtime transpiler cache (`~/.bun/install/cache/@t@`) produced deterministic fake unit failures, including the old "17-file baseline". With it moved aside the whole unit suite is green.
+- The worktree's root `node_modules` symlink resolved `@arbesk/*` to the main checkout's built packages, hiding the new `PENDING_EDITS_CHANGED` from typecheck and the bundle. Only `@arbesk/asset-core` (the one package this branch changes) is relinked to the worktree; relinking all packages double-loaded `cad-gen`.
+
+**Verification**
+- Unit: 248/248 files, 2787/2787 tests. Frontend typecheck, backend+e2e typecheck, lint and frontend build all clean.
+- E2E (chromium, full suite): 62/62 passed in 5.1 min. Spec 27 is new; spec 17 enters Edit before scaling.
+- Live check (Babylon 9.12, 1440×900): 11/11 pass. Locked Move shows only the X/Z arrows and the floor plane; move snap is 2 × grid scale; rotate snaps 15°; Alt disables snapping; drag start and rotate release re-ground, each one Ctrl+Z; multi-select rotate keeps the pivot on the group; G and Shift+R work; marker and Save dot show in Graphite and Paper; E leaves Edit and keeps the marker; Save draft clears it; no console errors.
+- Known, not changed: the multi-select pivot sits at the average of node origins, not the bounds centre.
