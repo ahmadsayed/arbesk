@@ -18,6 +18,7 @@ export interface ManifestChainVersion {
   sourceCid: string | null;
   nodes: Record<string, string>;
   chat: Array<any> | null;
+  thumbnail: { cid?: string } | null;
 }
 
 // Cache of manifest chain versions for each starting CID
@@ -163,6 +164,7 @@ async function walkManifestChain(
         nodeCount: (manifest.scene?.nodes || []).length,
         timestamp: manifest.timestamp || null,
         chat: manifest.metadata?.chat || null,
+        thumbnail: manifest.thumbnail ?? null,
         color: firstNode.post_processor?.color || null,
         scale: firstNode.post_processor?.scale || { x: 1, y: 1, z: 1 },
         sourceCid: firstNode.source?.cid || null,

@@ -176,7 +176,7 @@ frontend/src/js/
 │   ├── asset-save.ts           # Save Draft / Publish UI; delegates building to services/asset-save/
 │   ├── asset-library.ts        # Token gallery (owned + shared), collection expansion, thumbnails, drag; inaccessible token cards with Burn action
 │   ├── asset-drop-zone.ts      # Viewport drag/drop overlay
-│   ├── scene-clock.ts / model-clock-gizmo.ts / version-clock.ts  # Viewport version clock gizmos (scene + selected-node 3D ring)
+│   ├── version-timeline.ts / model-clock-gizmo.ts  # Version timeline strip under the viewport + selected-node 3D ring
 │   ├── collaborators-panel.ts  # Team panel (add/remove editors, owner badge)
 │   ├── comments-panel.ts       # Asset-level comment thread UI
 │   ├── ledger-panel.ts         # Activity feed derived from manifest chain

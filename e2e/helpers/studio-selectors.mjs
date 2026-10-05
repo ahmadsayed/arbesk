@@ -76,9 +76,10 @@ export const SELECTORS = {
   componentEditor: "#componentEditor",
   componentColorInput: "#selectedComponentColor",
   // Version history / time-travel
-  sceneClock: "#sceneClock",
-  sceneClockDial: "#sceneClock .version-clock",
-  sceneClockBadge: "#sceneClock .vc-badge",
+  versionTimeline: "#versionTimeline",
+  vtTicks: "#versionTimeline .vt-tick",
+  vtActiveTick: "#versionTimeline .vt-tick[aria-current='true']",
+  vtTooltip: ".vt-tooltip",
   modelClockBadge: "#modelClockBadge",
   timeModeButton: '#transformToolbar [data-mode="time"]',
   // Undo/redo (viewport toolbar) + inspector scale field

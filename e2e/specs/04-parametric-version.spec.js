@@ -13,7 +13,7 @@ import {
   generate,
   saveDraft,
   editFirstNodeColor,
-  scrubSceneClock,
+  scrubVersionTimeline,
   publishWithName,
 } from "../helpers/flows.mjs";
 
@@ -46,17 +46,22 @@ test.describe("parametric versioning + time-travel", () => {
     expect(savedManifest.version).toBe(3);
     expect(savedManifest.prev_asset_manifest_cid).toBe(autoSaveCid);
 
-    // 5. The scene clock now spans three versions and sits on the newest.
-    await expect(page.locator(SELECTORS.sceneClock)).toBeVisible();
-    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v3");
-    await expect(page.locator(SELECTORS.sceneClockDial)).toHaveAttribute(
+    // 5. The version timeline now spans three versions and sits on the newest.
+    await expect(page.locator(SELECTORS.versionTimeline)).toBeVisible();
+    await expect(page.locator(SELECTORS.vtTicks)).toHaveCount(3);
+    await expect(page.locator(SELECTORS.vtActiveTick)).toHaveText("3");
+    await expect(page.locator(SELECTORS.versionTimeline)).toHaveAttribute(
       "aria-valuemax",
-      "2",
+      "3",
+    );
+    await expect(page.locator(SELECTORS.versionTimeline)).toHaveAttribute(
+      "aria-valuenow",
+      "3",
     );
 
-    // Record scene:ready per loaded version. The badge updates from the slider
-    // position *before* the manifest loads and the .loading class clears in a
-    // finally regardless of success, so neither proves the version re-rendered.
+    // Record scene:ready per loaded version. The active tick updates before
+    // the manifest loads and aria-busy clears in a finally regardless of
+    // success, so neither proves the version re-rendered.
     // scene:ready only fires when every node loads (scene-graph emits it after
     // the node loop), so it is the signal that the version actually rendered.
     // The bus is exposed on window.__arbeskBus by app-entry.ts (the esbuild
@@ -71,10 +76,11 @@ test.describe("parametric versioning + time-travel", () => {
     });
 
     // 6. Time-travel back to v1 (oldest): the original GLB source re-renders.
-    await scrubSceneClock(page, "oldest");
-    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v1");
-    await expect(page.locator(SELECTORS.sceneClockDial)).not.toHaveClass(
-      /loading/,
+    await scrubVersionTimeline(page, "oldest");
+    await expect(page.locator(SELECTORS.vtActiveTick)).toHaveText("1");
+    await expect(page.locator(SELECTORS.versionTimeline)).toHaveAttribute(
+      "aria-busy",
+      "false",
     );
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
@@ -85,8 +91,8 @@ test.describe("parametric versioning + time-travel", () => {
     // edit; if its node still claimed format:"glb" while holding glTF JSON,
     // loadAssetManifest would throw in the binary-GLB loader and scene:ready
     // would never fire for v3.
-    await scrubSceneClock(page, "newest");
-    await expect(page.locator(SELECTORS.sceneClockBadge)).toHaveText("v3");
+    await scrubVersionTimeline(page, "newest");
+    await expect(page.locator(SELECTORS.vtActiveTick)).toHaveText("3");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);
@@ -108,8 +114,8 @@ test.describe("parametric versioning + time-travel", () => {
     await expect(page.locator(SELECTORS.modelClockBadge)).toBeVisible();
     await expect(page.locator(SELECTORS.modelClockBadge)).toHaveText("v1");
 
-    // Return to the newest version via the scene clock before publishing.
-    await scrubSceneClock(page, "newest");
+    // Return to the newest version via the timeline strip before publishing.
+    await scrubVersionTimeline(page, "newest");
     await expect
       .poll(() => page.evaluate(() => window.__sceneReadyCids.at(-1)))
       .toBe(saveCid);
@@ -134,6 +140,16 @@ test.describe("parametric versioning + time-travel", () => {
     expect(assetManifest.name).toBe(ASSET_NAME);
     expect(assetManifest.version).toBe(4);
     expect(assetManifest.prev_asset_manifest_cid).toBe(saveCid);
+
+    // 9. Strip after publish: four ticks, the published version carries the
+    // marker, and hovering it shows the tooltip with the version label.
+    await expect(page.locator(SELECTORS.vtTicks)).toHaveCount(4);
+    await expect(
+      page.locator(`${SELECTORS.vtTicks}.vt-tick-published`),
+    ).toHaveCount(1);
+    await page.locator(SELECTORS.vtTicks).nth(3).hover();
+    await expect(page.locator(SELECTORS.vtTooltip)).toBeVisible();
+    await expect(page.locator(SELECTORS.vtTooltip)).toContainText("v4");
   });
 
   test("model clock billboards to the camera while orbiting", async ({

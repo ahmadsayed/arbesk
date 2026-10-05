@@ -425,16 +425,14 @@ export async function editFirstNodeColor(page, color) {
 }
 
 /**
- * Scrub the scene clock to the oldest or newest version. Focusing the dial
- * expands the collapsed watch face; Home/End commit the version load
- * immediately (keyboard contract of version-clock.js).
+ * Jump the version timeline to the oldest or newest version. The strip is an
+ * APG slider: focus it, then Home/End commit the version load immediately.
  *
  * @param {Page} page
  * @param {"oldest" | "newest"} position
  */
-export async function scrubSceneClock(page, position) {
-  const dial = page.locator(SELECTORS.sceneClockDial);
-  await dial.focus();
+export async function scrubVersionTimeline(page, position) {
+  await page.locator(SELECTORS.versionTimeline).focus();
   await page.keyboard.press(position === "oldest" ? "Home" : "End");
 }
 
