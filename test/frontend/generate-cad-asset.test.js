@@ -159,6 +159,7 @@ describe("generateCadAsset", () => {
     expect(result.assetManifestCid).toBe("bafyAssetManifest");
     expect(result.taskId).toBe("t1");
     expect(result.providerTaskId).toBe("cad-1");
+    expect(result.design).toEqual(CAD_SUCCESS.design);
     expect(renderCadDesignInWorker).toHaveBeenCalledTimes(1);
     expect(calls.renders[0].design.code).toContain("box(");
     expect(calls.renders[0].runtime.preludeVersion).toBe("2026-10-04.3");
@@ -232,5 +233,31 @@ describe("generateCadAsset", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.code).toBe("CAD_NOT_CONFIGURED");
     expect(err.status).toBe(503);
+  });
+
+  test("an edit sends priorDesign and chains onto the previous version", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(buildResponse({ status: 202, body: { taskId: "t2", provider: "cad", status: "running" } }))
+      .mockResolvedValueOnce(buildResponse({ body: CAD_SUCCESS }));
+    const { generateCadAsset } = await loadApi({ fetchMock });
+    localStorage.setItem("arbesk_session", makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS));
+    const prior = { code: "return box(1,1,1);", parameters: { s: { value: 1, unit: "mm" } }, summary: "cube", turn: 1 };
+
+    await generateCadAsset({ prompt: "taller", nodeId: "n_2", priorDesign: prior, prevAssetManifestCid: "bafyPrev" });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).toMatchObject({ provider: "cad", prompt: "taller", nodeId: "n_2", priorDesign: prior });
+  });
+
+  test("a fresh generation sends no priorDesign", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(buildResponse({ status: 202, body: { taskId: "t3", provider: "cad", status: "running" } }))
+      .mockResolvedValueOnce(buildResponse({ body: CAD_SUCCESS }));
+    const { generateCadAsset } = await loadApi({ fetchMock });
+    localStorage.setItem("arbesk_session", makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS));
+    await generateCadAsset({ prompt: "a box", nodeId: "n_3" });
+    expect("priorDesign" in JSON.parse(fetchMock.mock.calls[0][1].body)).toBe(false);
   });
 });

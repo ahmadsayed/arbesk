@@ -10,6 +10,7 @@ import { walletState } from "../state/wallet-state.ts";
 import { log, warn, error } from "../utils/log.ts";
 import { base64ToBytes } from "@arbesk/asset-core/utils/encoding.js";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
+import type { CadDesign } from "@arbesk/cad-gen";
 import {
   API_BASE,
   ApiError,
@@ -380,6 +381,8 @@ export interface GenerateAssetResult {
   tier?: number;
   taskId?: string;
   providerTaskId?: string;
+  /** CAD only: the design this asset was rendered from. */
+  design?: CadDesign;
 }
 
 interface ReferenceImage {
@@ -763,6 +766,8 @@ export interface GenerateCadAssetParams {
   assetId?: string;
   prevAssetManifestCid?: string;
   transformMatrix?: number[];
+  /** Incremental edit: the active version's design. */
+  priorDesign?: CadDesign;
   signal?: AbortSignal;
   onTaskId?: (taskId: string) => void;
   onProgress?: (update: GenerationProgress) => void;
@@ -846,13 +851,14 @@ export async function generateCadAsset({
   assetId,
   prevAssetManifestCid,
   transformMatrix,
+  priorDesign,
   signal,
   onTaskId,
   onProgress,
 }: GenerateCadAssetParams): Promise<GenerateAssetResult> {
   announceStatus("Generating parametric CAD design…");
   const response = await fetchWithSession("/generations", {
-    body: { provider: "cad", prompt, nodeId },
+    body: { provider: "cad", prompt, nodeId, ...(priorDesign && { priorDesign }) },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -888,6 +894,7 @@ export async function generateCadAsset({
     path: "asset.3mf",
     taskId: data.taskId,
     ...(final.providerTaskId && { providerTaskId: final.providerTaskId }),
+    design: final.design,
   };
 }
 
