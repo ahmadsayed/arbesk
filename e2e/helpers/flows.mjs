@@ -293,9 +293,13 @@ export async function enterEditMode(page) {
  */
 export async function firstAnchorState(page) {
   return page.evaluate(() => {
-    const scenes = BABYLON.EngineStore.Instances[0].scenes;
-    const scene = scenes.find((s) => s.transformNodes.some((n) => n.name.startsWith("anchor_")));
-    const a = scene.transformNodes.find((n) => n.name.startsWith("anchor_"));
+    // Babylon is a CDN global on the page (no types in the E2E harness).
+    const B = /** @type {any} */ (globalThis).BABYLON;
+    /** @type {any[]} */
+    const scenes = B.EngineStore.Instances[0].scenes;
+    const isAnchor = (/** @type {any} */ n) => n.name.startsWith("anchor_");
+    const scene = scenes.find((s) => s.transformNodes.some(isAnchor));
+    const a = scene.transformNodes.find(isAnchor);
     a.computeWorldMatrix(true);
     const { min, max } = a.getHierarchyBoundingVectors(true);
     return {
@@ -316,13 +320,17 @@ export async function firstAnchorState(page) {
  */
 export async function perturbFirstAnchor(page, change) {
   await page.evaluate(({ dx = 0, dy = 0, rotateZ = 0 }) => {
-    const scenes = BABYLON.EngineStore.Instances[0].scenes;
-    const scene = scenes.find((s) => s.transformNodes.some((n) => n.name.startsWith("anchor_")));
-    const a = scene.transformNodes.find((n) => n.name.startsWith("anchor_"));
+    // Babylon is a CDN global on the page (no types in the E2E harness).
+    const B = /** @type {any} */ (globalThis).BABYLON;
+    /** @type {any[]} */
+    const scenes = B.EngineStore.Instances[0].scenes;
+    const isAnchor = (/** @type {any} */ n) => n.name.startsWith("anchor_");
+    const scene = scenes.find((s) => s.transformNodes.some(isAnchor));
+    const a = scene.transformNodes.find(isAnchor);
     a.position.x += dx;
     a.position.y += dy;
     if (rotateZ) {
-      a.rotationQuaternion = BABYLON.Quaternion.RotationAxis(new BABYLON.Vector3(0, 0, 1), rotateZ);
+      a.rotationQuaternion = B.Quaternion.RotationAxis(new B.Vector3(0, 0, 1), rotateZ);
     }
     a.computeWorldMatrix(true);
   }, change);
