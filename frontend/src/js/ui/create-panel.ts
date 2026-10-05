@@ -65,8 +65,15 @@ import {
 } from "@arbesk/asset-core/domain/asset.js";
 import { selectCollection } from "@arbesk/asset-core/domain/collection.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { chipProvider, cadChipFromManifest } from "./refine-target.ts";
+import {
+  chipProvider,
+  cadChipFromManifest,
+  decideGenerationRoute,
+  resolveActiveDesign,
+  isPriorDesignRejection,
+} from "./refine-target.ts";
 import type { ActiveVersion, RefineKind } from "./refine-target.ts";
+import type { CadDesign } from "@arbesk/cad-gen";
 
 // ─── DOM References ───
 // The SPA shell (app.pug) always renders these elements, so non-null casts.
@@ -1999,6 +2006,7 @@ function generationErrorMessage(err: unknown): string {
  */
 function offerCadTripoRetry(err: unknown, effectivePrompt: string): boolean {
   if (
+    editingCad || // switching provider would discard the part being edited
     !(err instanceof ApiError) ||
     err.code !== "CAD_REQUEST_UNSUITABLE" ||
     err.details?.alternative?.provider !== "tripo3d"
@@ -2038,6 +2046,14 @@ function offerCadTripoRetry(err: unknown, effectivePrompt: string): boolean {
 function reportGenerationFailure(err: unknown, effectivePrompt: string): boolean {
   if (isGenerationCancelled(err)) {
     addChatMessage("system", "Generation stopped.");
+    return true;
+  }
+  if (editingCad && isPriorDesignRejection(err)) {
+    showToast({
+      type: "warning",
+      title: "Can't edit this part",
+      message: "This design is too large to edit. Detach to start a new part.",
+    });
     return true;
   }
   return offerCadTripoRetry(err, effectivePrompt);
@@ -2157,6 +2173,7 @@ interface GenerationRequestArgs {
   provider: string;
   providerKey: string;
   retextureSource: ActiveVersion | null;
+  priorDesign?: CadDesign;
   imagePayload: SingleImagePayload | MultiviewImagePayload | null;
   stoppable: ReturnType<typeof addStoppableWorkingMessage> | null;
 }
@@ -2194,15 +2211,22 @@ function buildGenerateAssetArgs({
 
 /**
  * Dispatches a generation to the selected provider.
- * @remarks CAD v1 starts a fresh asset — prevAssetManifestCid/transformMatrix
- *   (typed follow-up chaining) are mesh-generation concepts and stay on the
- *   generateAsset path.
+ * @remarks A fresh CAD part starts a new asset; a CAD edit (priorDesign)
+ *   chains onto the open asset with prevAssetManifestCid/transformMatrix like
+ *   a Tripo follow-up.
  */
 async function dispatchGeneration(args: GenerationRequestArgs) {
   if (args.provider === "cad") {
     return api.generateCadAsset({
       prompt: args.effectivePrompt,
       nodeId: args.nodeId,
+      // An edit chains onto the open asset like a Tripo follow-up; a fresh
+      // part starts a new asset (CAD v1 behaviour).
+      ...(args.priorDesign && {
+        priorDesign: args.priorDesign,
+        prevAssetManifestCid: args.prevAssetManifestCid,
+        transformMatrix: args.transformMatrix,
+      }),
       ...(args.stoppable && {
         signal: args.stoppable.signal,
         onTaskId: args.stoppable.onTaskId,
@@ -2211,6 +2235,50 @@ async function dispatchGeneration(args: GenerationRequestArgs) {
     });
   }
   return generateAsset(buildGenerateAssetArgs(args));
+}
+
+/** True while the in-flight generation is a CAD edit (error copy differs). */
+let editingCad = false;
+
+/**
+ * Loads the active cad chip's design, announcing the edit.
+ * @returns undefined (after a toast) when the design cannot be read.
+ */
+async function priorDesignOrWarn(): Promise<CadDesign | undefined> {
+  const version = activeVersion as ActiveVersion;
+  const design = await resolveActiveDesign(version);
+  if (!design) {
+    showToast({
+      type: "warning",
+      title: "Can't edit this part",
+      message: `Couldn't load the design of '${version.name}'. Detach to generate a new part.`,
+    });
+    return undefined;
+  }
+  addChatMessage("system", `Editing "${version.name}"…`);
+  return design;
+}
+
+/**
+ * Routes a typed prompt and announces it.
+ * @remarks The chip decides the route: a mesh chip retextures
+ *   (texture/material only — geometry unchanged), a cad chip edits the design.
+ *   Detach, Clear Chat, or an attached image starts fresh.
+ * @returns null when a cad edit cannot load its design (already toasted).
+ */
+async function planGeneration(selectedProvider: string, hasImage: boolean) {
+  const route = decideGenerationRoute({
+    activeKind: activeVersion?.kind ?? null,
+    selectedProvider,
+    hasImage,
+  });
+  const retextureSource = route.mode === "retexture" ? activeVersion : null;
+  if (retextureSource) {
+    addChatMessage("system", `Refining "${retextureSource.name}" (texture/material only — geometry unchanged)…`);
+  }
+  if (route.mode !== "cad-edit") return { route, retextureSource, priorDesign: undefined };
+  const priorDesign = await priorDesignOrWarn();
+  return priorDesign ? { route, retextureSource, priorDesign } : null;
 }
 
 async function onGenerate() {
@@ -2268,15 +2336,10 @@ async function onGenerate() {
       return;
     }
 
-    // Typed follow-ups retexture the active version (texture/material only —
-    // geometry unchanged). Detach, Clear Chat, or an attached image starts fresh.
-    const retextureSource =
-      provider === "tripo3d" && activeVersion?.kind === "mesh" && !imagePayload
-        ? activeVersion
-        : null;
-    if (retextureSource) {
-      addChatMessage("system", `Refining "${retextureSource.name}" (texture/material only — geometry unchanged)…`);
-    }
+    const plan = await planGeneration(provider, !!imagePayload);
+    if (!plan) return; // finally restores the UI
+    const { route, retextureSource, priorDesign } = plan;
+    editingCad = route.mode === "cad-edit";
 
     const result = await dispatchGeneration({
       effectivePrompt,
@@ -2284,9 +2347,10 @@ async function onGenerate() {
       prevAssetManifestCid,
       transformMatrix,
       tier,
-      provider,
+      provider: route.provider,
       providerKey,
       retextureSource,
+      ...(priorDesign && { priorDesign }),
       imagePayload,
       stoppable,
     });
@@ -2295,7 +2359,7 @@ async function onGenerate() {
     // bubble with a live preview, and let the user send it explicitly.
     presentGenerationResult(result, {
       prompt: effectivePrompt,
-      provider,
+      provider: route.provider,
       task: retextureSource ? "texture" : "model",
       prevAssetManifestCid,
       transformMatrix,
@@ -2310,6 +2374,7 @@ async function onGenerate() {
   } finally {
     working?.remove();
     setGenerating(false);
+    editingCad = false;
   }
 }
 

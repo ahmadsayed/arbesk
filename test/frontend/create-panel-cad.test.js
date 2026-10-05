@@ -621,6 +621,95 @@ test("a stale 'Retry with Tripo 3D' detaches a later cad chip and generates fres
   expect(refineText().textContent).toBe("Refining: a dragon");
 });
 
+// ─── CAD edits (a typed prompt with a cad chip) ───
+
+async function generateCadPart(prompt = "a 20 mm cube") {
+  connectWallet();
+  selectProvider("cad");
+  promptInput.value = prompt;
+  await clickGenerate();
+}
+
+test("a typed prompt with a cad chip edits: priorDesign + version chain", async () => {
+  await generateCadPart();
+  assetDomainState.activeCid = "bafyOpenAsset";
+  mockGenerateCadAsset.mockClear();
+
+  promptInput.value = "make it 5 mm taller";
+  await clickGenerate();
+
+  expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateCadAsset.mock.calls[0][0];
+  expect(args.prompt).toBe("make it 5 mm taller");
+  expect(args.priorDesign).toEqual(CAD_DESIGN);
+  expect(args.prevAssetManifestCid).toBe("bafyOpenAsset");
+  expect(Array.isArray(args.transformMatrix)).toBe(true);
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", 'Editing "a 20 mm cube"…');
+  expect(mockResolveCadDesign).not.toHaveBeenCalled(); // design came with the result
+});
+
+test("after a successful edit the chip moves to the new version", async () => {
+  await generateCadPart();
+  const edited = { ...CAD_DESIGN, turn: 2, summary: "taller box" };
+  mockGenerateCadAsset.mockResolvedValueOnce({ ...CAD_RESULT, assetManifestCid: "bafyV2", design: edited });
+  promptInput.value = "taller";
+  await clickGenerate();
+
+  mockGenerateCadAsset.mockClear();
+  promptInput.value = "add a 3 mm fillet";
+  await clickGenerate();
+  expect(mockGenerateCadAsset.mock.calls[0][0].priorDesign).toEqual(edited);
+});
+
+test("a fresh cad generation (no chip) sends no priorDesign", async () => {
+  await generateCadPart();
+  expect("priorDesign" in mockGenerateCadAsset.mock.calls[0][0]).toBe(false);
+  expect(mockGenerateCadAsset.mock.calls[0][0].prevAssetManifestCid).toBeUndefined();
+});
+
+test("an unreadable design shows the toast and sends nothing", async () => {
+  await generateCadPart();
+  // Open an older CAD asset: its chip has no design in hand.
+  mockGenerateCadAsset.mockClear();
+  bus.emit(bus.EVENTS.SCENE_READY, {
+    manifest: { ...cadManifest("asset-cad-old"), name: "Old bracket" },
+    manifestCid: "bafyM",
+  });
+  expect(document.getElementById("refineIndicatorText").textContent).toBe("Refining: Old bracket");
+  mockResolveCadDesign.mockResolvedValueOnce(null);
+  promptInput.value = "edit";
+  await clickGenerate();
+
+  expect(mockGenerateCadAsset).not.toHaveBeenCalled();
+  expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({
+    message: "Couldn't load the design of 'Old bracket'. Detach to generate a new part.",
+  }));
+  expect(generateBtn.disabled).toBe(false);
+});
+
+test("CAD_REQUEST_UNSUITABLE during an edit offers no Tripo retry", async () => {
+  await generateCadPart();
+  mockGenerateCadAsset.mockRejectedValueOnce(
+    new api.ApiError("unsuitable", 400, "CAD_REQUEST_UNSUITABLE", { alternative: { provider: "tripo3d" } })
+  );
+  promptInput.value = "turn it into a dragon";
+  await clickGenerate();
+  expect(mockAddChoiceMessage).not.toHaveBeenCalled();
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", expect.stringContaining("Parametric CAD can't model this request"));
+});
+
+test("a 400 on priorDesign shows the too-large toast", async () => {
+  await generateCadPart();
+  mockGenerateCadAsset.mockRejectedValueOnce(
+    new api.ApiError("Invalid request body", 400, "VALIDATION_ERROR", { issues: [{ path: ["priorDesign", "code"], message: "too long" }] })
+  );
+  promptInput.value = "edit";
+  await clickGenerate();
+  expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({
+    message: "This design is too large to edit. Detach to start a new part.",
+  }));
+});
+
 // ─── Provider availability gating (needs a fresh module load per config) ───
 
 describe("cad option availability gating", () => {
