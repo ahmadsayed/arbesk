@@ -1,12 +1,12 @@
 doctype html
 html(lang="en")
   head
-    title Arbesk — 4D Version-Controlled 3D Assets
+    title Arbesk — Describe it. Keep every version.
     meta(charset="utf-8")
     meta(name="viewport", content="width=device-width, initial-scale=1")
-    meta(name="description", content="Arbesk is a 4D 3D-asset platform: build 3D worlds together, publish them on-chain, and travel back through every version.")
-    meta(property="og:title", content="Arbesk — 4D Version-Controlled 3D Assets")
-    meta(property="og:description", content="Build 3D worlds together with built-in version history. Invite editors, comment on assets, and share files.")
+    meta(name="description", content="Generate 3D models and CAD parts from a sentence. Every edit after that is saved as a version you can return to.")
+    meta(property="og:title", content="Arbesk — Describe it. Keep every version.")
+    meta(property="og:description", content="Generate 3D models and CAD parts from a sentence. Every edit after that is saved, forever.")
     meta(property="og:type", content="website")
     meta(property="og:site_name", content="Arbesk")
     meta(name="twitter:card", content="summary_large_image")
@@ -17,533 +17,76 @@ html(lang="en")
     link(rel="stylesheet", href="/css/styles.css")
     link(rel="preload", href="/fonts/inter-latin-wght-normal.woff2", as="font", type="font/woff2", crossorigin)
     script(src="/js/engine/theme-init.js")
-    script.
-      document.documentElement.classList.add('js-animations');
-    //- Testnet banner (landing page has no app.js bundle; mirrors
-    //- frontend/src/js/ui/testnet-banner.ts — Base Sepolia = 84532)
-    script.
-      fetch('/api/v1/config').then(function (r) { return r.json(); }).then(function (cfg) {
-        var el = document.getElementById('testnetBanner');
-        if (el && Number(cfg && cfg.defaultChainId) === 84532) el.classList.add('visible');
-      }).catch(function () {});
-
-    noscript
-      style.
-        .reveal .reveal-child-1,
-        .reveal .reveal-child-2,
-        .reveal .reveal-child-3,
-        .hero-animate {
-          opacity: 1;
-          transform: none;
-          translate: none;
-          scale: 1;
-          animation: none;
-        }
-        /* Without JS the live viewer never boots — show its render instead. */
-        .viewer-card canvas,
-        .viewer-card .viewer-hint { display: none; }
-        .viewer-card .viewer-fallback { display: grid; }
-        /* The colour-memory cube also needs JS — show a static line instead. */
-        .memory-stage canvas,
-        .memory-stage .memory-hint,
-        .memory-log { display: none; }
-        .memory-stage .memory-fallback { display: grid; }
+    script(src="/js/landing/landing.js", defer)
 
   body.landing-page
     #app
       #testnetBanner.testnet-banner(role="status") Testnet — Base Sepolia. Assets created here are not on mainnet.
-      header.headerbar
-        .headerbar-brand
-          a.brand(href="/", aria-label="Arbesk home")
-            img.brand-mark(src="/brand-logo.webp", alt="", width="78", height="52")
-            span.brand-name Arbesk
-
-        .headerbar-actions.landing-actions
-          a.btn.btn-flat(href="/library?login=1") Log in
-          a.btn.btn-primary(href="/library") Open app
+      header.landing-header
+        a.landing-brand(href="/", aria-label="Arbesk home")
+          img(src="/brand-logo.webp", alt="", width="78", height="52")
+          span Arbesk
+        a.landing-link(href="/library?login=1") Sign in
 
       main
         section.landing-hero
-          h1.hero-animate The world is 4D.
-          p.lead.hero-animate
-            | Arbesk is a shared home for 3D assets — where time is the fourth
-            | dimension. Every edit is a version, every version is kept, and your
-            | whole team sees the same history. You can only travel backward.
+          h1
+            | Describe it.
             br
-            strong Because the future is what you build together.
-          .cta-row.hero-animate
-            a.cta(href="/library")
-              | Open Library
-              svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                use(href="/icons.svg#arrow-right")
-            a.cta.cta-secondary(href="/library") Upload a model
-          .scroll-cue(aria-hidden="true")
-            span Scroll
-            svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-              use(href="/icons.svg#chevron-down")
+            span.landing-hero-dim Keep every version.
+          p.landing-hero-sub Generate 3D models and CAD parts from a sentence. Every edit after that is saved, forever.
+          .landing-composer
+            form#prompt.prompt(method="get", action="/studio")
+              fieldset.prompt-mode
+                legend.sr-only Model type
+                label
+                  input(type="radio", name="provider", value="tripo3d", checked)
+                  span 3D
+                label
+                  input(type="radio", name="provider", value="cad")
+                  span CAD
+              input#promptText.prompt-input(type="text", name="prompt", maxlength="500", required, autocomplete="off", placeholder="Describe a character or prop…", aria-label="Describe your model")
+              button.landing-cta(type="submit") Generate
+            #promptChips.prompt-chips
+          a.landing-link(href="/library?upload=1") or upload a model
 
-        section.landing-section.personas-section.reveal
-          .personas-inner
-            h2.reveal-child-1 What brings you here?
-            .persona-grid.reveal-child-2
-              a.persona-card(href="/library")
-                .persona-icon(aria-hidden="true")
-                  svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#folder")
-                h3 Manage my models
-                p Browse your library, open assets in the Studio, and travel through every version.
-                span.persona-cta
-                  | Open Library
-                  svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#arrow-right")
-              a.persona-card(href="/studio?provider=cad")
-                .persona-icon(aria-hidden="true")
-                  svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#settings")
-                h3 Create engineering models
-                p Parametric CAD parts from a text prompt — precise, printable 3MF engineering designs.
-                span.persona-cta
-                  | Open Studio · CAD
-                  svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#arrow-right")
-              a.persona-card(href="/studio?provider=tripo3d")
-                .persona-icon(aria-hidden="true")
-                  svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#sparkle")
-                h3 Create 3D models
-                p AI-generated characters, props, and game assets — text or reference images to a riggable model.
-                span.persona-cta
-                  | Open Studio · Tripo 3D
-                  svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#arrow-right")
+        section.landing-demo(aria-labelledby="demoTitle")
+          .landing-demo-head
+            h2#demoTitle The world is 4D.
+            p Time is the fourth dimension. Step back through everything this model has been.
+          figure#versionDemo.landing-demo-figure
+            .landing-demo-stage
+              img.landing-demo-fallback(src="/landing/asset-howdy.webp", alt="Howdy, a cowboy character made in Arbesk")
+              canvas(aria-label="Live 3D model — drag to rotate")
+            .landing-demo-rail
+              #versionRail.version-rail(role="group", aria-label="Versions")
+              p#versionCaption.version-caption(aria-live="polite")
 
-        section.landing-section.reverse.section-tint.reveal
-          .landing-section-inner
-            .text
-              h2.reveal-child-1 We build in 3D.
-              p.reveal-child-2 Move, rotate, scale — the three spatial dimensions every tool gives you. Grab the model.
-            .visual.reveal-child-3
-              .viewer-card
-                canvas#hero-viewer(aria-label="Live 3D model — drag to rotate")
-                .viewer-fallback
-                  img(src="/landing/asset-howdy.webp", alt="A 3D character asset rendered in Arbesk")
-                span.viewer-hint Live · drag to rotate
+        section.landing-pillars(aria-label="How it works")
+          div
+            span.landing-pillar-n 01
+            h3 Generate
+            p Precise CAD parts or characters and props — from text or a reference image.
+          div
+            span.landing-pillar-n 02
+            h3 Version
+            p Every change is a version. Nothing is overwritten, nothing is lost.
+          div
+            span.landing-pillar-n 03
+            h3 Share
+            p Invite editors, comment on any asset, and publish when it’s ready.
 
-        section.landing-section.band-dark.reveal
-          .landing-section-inner
-            .text
-              h2.reveal-child-1 Objects have memory.
-              p.reveal-child-2 Every edit is a first-class version — undo that reaches back to day one, through everything this object has ever been.
-              p.reveal-child-2.hint-line Click the cube to repaint it, then drag the timeline back.
-              .memory-ledger.reveal-child-2
-                .ledger-chain(aria-hidden="true")
-                  .manifest
-                    span.mtag M1
-                    span.cid bafy…q2
-                  span.link
-                  .manifest
-                    span.mtag M2
-                    span.cid bafy…7h
-                  span.link
-                  .manifest
-                    span.mtag M3
-                    span.cid bafy…k9
-                  span.link
-                  .manifest
-                    span.mtag M4
-                    span.cid bafy…x4
-                p.ledger-note
-                  | Each version links to the last —&nbsp;
-                  code prev_manifest_cid
-            .visual.reveal-child-3
-              .feature-card.memory-card
-                .memory-stage
-                  canvas#memory-cube(aria-label="Interactive 3D object — click it to change its color")
-                  span.memory-hint Click to repaint
-                  p.memory-fallback An object that remembers every colour it has ever been.
-                .memory-controls
-                  input#memory-scrub(type="range", min="0", max="2", value="2", step="1", aria-label="Scrub through past versions")
-                  p.memory-status(aria-live="polite")
-                ul.memory-log(aria-live="polite")
-
-        section.landing-section.team-section.reveal
-          .team-section-inner
-            .text
-              h2.reveal-child-1 Worlds are built together.
-              p.reveal-child-2 Invite editors, talk on every asset, and share files — everyone works in the same world, on the same timeline. No reminting, no copies, no lost history.
-            .feature-card.team-card.reveal-child-3
-              .team-scene
-                .pedestal
-                  .pedestal-asset
-                    img(src="/landing/asset-howdy.webp", alt="Howdy asset", aria-hidden="true")
-                  .pedestal-base
-                  span.pedestal-label
-                    strong Alice
-                    span repainted Howdy · 12 min ago
-                .pedestal
-                  .pedestal-asset
-                    img(src="/landing/asset-reema.webp", alt="Reema asset", aria-hidden="true")
-                  .pedestal-base
-                  span.pedestal-label
-                    strong Bob
-                    span resized Reema · 5 min ago
-                .pedestal
-                  .pedestal-asset
-                    img(src="/landing/asset-suka.webp", alt="Suka asset", aria-hidden="true")
-                  .pedestal-base
-                  span.pedestal-label
-                    strong You
-                    span editing Suka · now
-            .team-features.reveal-child-3
-              .team-feature
-                .tf-icon(aria-hidden="true")
-                  svg(viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#shield")
-                h3 Invite editors
-                p Cryptographic editor proofs. No reminting, no copies.
-              .team-feature
-                .tf-icon(aria-hidden="true")
-                  svg(viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#message-square")
-                h3 Comment on every asset
-                p Per-asset threads, archived with each publish.
-              .team-feature
-                .tf-icon(aria-hidden="true")
-                  svg(viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
-                    use(href="/icons.svg#folder")
-                h3 Shared files
-                p Shared collections appear for every editor, live.
-            p.agents-note.reveal-child-3
-              | Built for people — and for the AI agents working alongside them.
-              | When assets are created and re-created endlessly,&nbsp;
-              strong Arbesk keeps every iteration straight.
-
-        footer.landing-footer.band-dark.reveal
-          h2.reveal-child-1 Start building the future.
-          .cta-row.reveal-child-2
-            a.cta(href="/library") Open Library
-            a.cta(href="/library") Upload a model
-          p.signin-note.reveal-child-2
-            | In with one email code — no password, no forms. Or connect a wallet
-            | and stay completely anonymous.&nbsp;
-            strong We never ask who you are.
-          .footer-bottom.reveal-child-3
-            nav.footer-links(aria-label="Footer")
-              a(href="/studio") Studio
-              a(href="/library") Library
-            p.footer-origin
-              | Arbesk — from&#x20;
-              em arabesque
-              | , the art of building with patterns.
-
-    script.
-      (function () {
-        // Modern browsers animate reveals + parallax purely in CSS via
-        // animation-timeline; nothing to do here in that case.
-        if (window.CSS && CSS.supports && CSS.supports('animation-timeline: view()')) {
-          return;
-        }
-
-        if (!('IntersectionObserver' in window)) {
-          document.querySelectorAll('.reveal').forEach(function (el) {
-            el.classList.add('revealed');
-          });
-          return;
-        }
-
-        var observer = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('revealed');
-              observer.unobserve(entry.target);
-            }
-          });
-        }, {
-          threshold: 0.15,
-          rootMargin: '0px 0px -50px 0px'
-        });
-
-        document.querySelectorAll('.reveal').forEach(function (el) {
-          observer.observe(el);
-        });
-      })();
-
-    script.
-      // Lazy Babylon viewers — booted only when scrolled into view, sharing a
-      // single CDN load between the Howdy model and the colour-memory cube.
-      (function () {
-        if (!('IntersectionObserver' in window)) return;
-
-        // Minified core comes from jsDelivr (cdn.babylonjs.com only ships the
-        // unminified build at versioned paths); loaders stay on the BJS CDN.
-        var BJS_CORE = 'https://cdn.jsdelivr.net/npm/babylonjs@9.12.0/babylon.min.js';
-        var BJS = 'https://cdn.babylonjs.com/v9.12.0/';
-        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var coreP = null, loadersP = null;
-
-        function loadScript(src) {
-          return new Promise(function (resolve, reject) {
-            var s = document.createElement('script');
-            s.src = src;
-            s.crossOrigin = 'anonymous';
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-          });
-        }
-        function ensureCore() {
-          if (!coreP) coreP = loadScript(BJS_CORE);
-          return coreP;
-        }
-        function ensureLoaders() {
-          if (!loadersP) loadersP = ensureCore().then(function () {
-            return loadScript(BJS + 'loaders/babylonjs.loaders.min.js');
-          });
-          return loadersP;
-        }
-
-        // Boot `setup(canvas)` the first time `canvas` scrolls into view, then
-        // pause/resume its render loop as it leaves/enters the viewport.
-        function lazyViewer(canvas, setup) {
-          var state = null, booting = false;
-          var io = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-              if (entry.isIntersecting) {
-                if (state) { state.start(); }
-                else if (!booting) {
-                  booting = true;
-                  setup(canvas).then(function (s) { state = s; if (s) s.start(); });
-                }
-              } else if (state) {
-                state.stop();
-              }
-            });
-          }, { threshold: 0.2 });
-          io.observe(canvas);
-        }
-
-        function loopController(engine, render) {
-          return {
-            start: function () { engine.stopRenderLoop(); engine.runRenderLoop(render); },
-            stop: function () { engine.stopRenderLoop(); }
-          };
-        }
-
-        // ─── Live Howdy model viewer ───────────────────────────────────────
-        var heroCanvas = document.getElementById('hero-viewer');
-        if (heroCanvas) {
-          lazyViewer(heroCanvas, async function (canvas) {
-            var card = canvas.closest('.viewer-card');
-            try {
-              await ensureLoaders();
-            } catch (e) { card.classList.add('viewer-failed'); return null; }
-
-            var engine = new BABYLON.Engine(canvas, true, { alpha: true, antialias: true });
-            var scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
-
-            var result;
-            try {
-              result = await BABYLON.SceneLoader.ImportMeshAsync('', '/models/', 'howdy.glb', scene);
-            } catch (e) { card.classList.add('viewer-failed'); engine.dispose(); return null; }
-
-            var min = new BABYLON.Vector3(Infinity, Infinity, Infinity);
-            var max = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
-            result.meshes.forEach(function (m) {
-              if (!m.getTotalVertices || m.getTotalVertices() === 0) return;
-              var b = m.getBoundingInfo().boundingBox;
-              min = BABYLON.Vector3.Minimize(min, b.minimumWorld);
-              max = BABYLON.Vector3.Maximize(max, b.maximumWorld);
-            });
-            var center = min.add(max).scale(0.5);
-            var radius = max.subtract(min).length() / 2 || 1;
-
-            var camera = new BABYLON.ArcRotateCamera('cam', Math.PI / 4, Math.PI / 2.6, radius * 2.8, center, scene);
-            camera.fov = 0.5;
-            camera.lowerRadiusLimit = radius * 1.7;
-            camera.upperRadiusLimit = radius * 4;
-            camera.lowerBetaLimit = 0.6;
-            camera.upperBetaLimit = Math.PI / 1.9;
-            camera.wheelPrecision = 40;
-            camera.panningSensibility = 0;
-            camera.attachControl(canvas, true);
-
-            var key = new BABYLON.HemisphericLight('key', new BABYLON.Vector3(0.3, 1, 0.2), scene);
-            key.intensity = 0.95;
-            var rim = new BABYLON.DirectionalLight('rim', new BABYLON.Vector3(-0.6, -0.2, 1), scene);
-            rim.intensity = 1.4;
-            rim.diffuse = new BABYLON.Color3(0.63, 0.47, 0.28);
-            var fill = new BABYLON.DirectionalLight('fill', new BABYLON.Vector3(0.5, -0.5, -0.5), scene);
-            fill.intensity = 0.4;
-
-            var spinning = true;
-            canvas.addEventListener('pointerdown', function () { spinning = false; });
-            card.classList.add('viewer-ready');
-
-            return loopController(engine, function () {
-              engine.resize();
-              if (spinning && !reduce) camera.alpha += 0.0035;
-              scene.render();
-            });
-          });
-        }
-
-        // ─── Time-travelling colour-memory cube ───────────────────────────
-        // Click the cube to append a new version; drag the scrubber to travel
-        // back through every colour the object has ever been.
-        var cubeCanvas = document.getElementById('memory-cube');
-        if (cubeCanvas) {
-          var COLORS = [
-            { name: 'blue',   hex: '#3b6ea5' },
-            { name: 'green',  hex: '#4a8c5a' },
-            { name: 'amber',  hex: '#c08a3e' },
-            { name: 'crimson', hex: '#b3432f' },
-            { name: 'violet', hex: '#6a4a8c' },
-            { name: 'teal',   hex: '#2f8c8c' }
-          ];
-          var byName = {};
-          COLORS.forEach(function (c) { byName[c.name] = c; });
-
-          // versions[] runs oldest → newest. Seed a little history so the
-          // timeline is meaningful before the visitor touches anything.
-          var now = Date.now();
-          var versions = [
-            { name: 'amber', at: now - 12 * 60 * 1000 },
-            { name: 'blue',  at: now - 5 * 60 * 1000 },
-            { name: 'green', at: now }
-          ];
-          var selected = versions.length - 1; // index currently displayed
-
-          var logEl = document.querySelector('.memory-log');
-          var statusEl = document.querySelector('.memory-status');
-          var scrub = document.getElementById('memory-scrub');
-          var memCard = cubeCanvas.closest('.memory-card');
-          var view = null; // assigned once the Babylon cube boots: { setColor(hex) }
-
-          function relTime(at) {
-            var s = Math.round((Date.now() - at) / 1000);
-            if (s < 5) return 'just now';
-            if (s < 60) return s + 's ago';
-            var m = Math.round(s / 60);
-            if (m < 60) return m + ' min ago';
-            return Math.round(m / 60) + 'h ago';
-          }
-          function swatch(name) {
-            return '<span class="swatch" style="background:' + byName[name].hex + '"></span>';
-          }
-          function syncSlider() {
-            if (!scrub) return;
-            scrub.max = String(versions.length - 1);
-            scrub.value = String(selected);
-          }
-          function renderStatus() {
-            if (!statusEl) return;
-            var v = versions[selected];
-            var latest = selected === versions.length - 1;
-            if (latest) {
-              statusEl.innerHTML = '<strong>Latest version</strong> — ' +
-                v.name + ' · ' + relTime(v.at);
-            } else {
-              statusEl.innerHTML = '<span class="past-flag">Past version ' +
-                (selected + 1) + ' of ' + versions.length + '</span> — I was <strong>' +
-                v.name + '</strong> · ' + relTime(v.at);
-            }
-          }
-          function renderLog() {
-            if (!logEl) return;
-            var html = '';
-            for (var i = versions.length - 1; i >= 0; i--) {
-              var v = versions[i];
-              var cls = [];
-              if (i === versions.length - 1) cls.push('now');
-              if (i === selected) cls.push('active');
-              var label = (i === versions.length - 1) ? 'Now — ' + v.name : 'I was ' + v.name;
-              html += '<li class="' + cls.join(' ') + '">' + swatch(v.name) +
-                '<span>' + label + '</span>' +
-                '<span class="when">' + relTime(v.at) + '</span></li>';
-            }
-            logEl.innerHTML = html;
-          }
-          function applyColor() {
-            if (view) view.setColor(byName[versions[selected].name].hex);
-          }
-          function selectIndex(i) {
-            selected = Math.max(0, Math.min(versions.length - 1, parseInt(i, 10) || 0));
-            syncSlider();
-            applyColor();
-            renderStatus();
-            renderLog();
-          }
-          function paint() {
-            var last = versions[versions.length - 1].name;
-            var next;
-            do { next = COLORS[Math.floor(Math.random() * COLORS.length)]; }
-            while (next.name === last);
-            versions.push({ name: next.name, at: Date.now() });
-            if (versions.length > 8) versions.shift();
-            memCard.classList.add('touched');
-            selectIndex(versions.length - 1); // jump to the freshly-painted version
-          }
-
-          if (scrub) {
-            scrub.addEventListener('input', function () {
-              memCard.classList.add('touched');
-              selectIndex(scrub.value);
-            });
-          }
-
-          // Initial paint of slider + status + log (works before the cube boots).
-          syncSlider();
-          renderStatus();
-          renderLog();
-
-          lazyViewer(cubeCanvas, async function (canvas) {
-            try { await ensureCore(); } catch (e) { return null; }
-
-            var engine = new BABYLON.Engine(canvas, true, { alpha: true, antialias: true });
-            var scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
-
-            var camera = new BABYLON.ArcRotateCamera('cam', Math.PI / 4, Math.PI / 2.7, 4.2, BABYLON.Vector3.Zero(), scene);
-            camera.fov = 0.5;
-            camera.lowerRadiusLimit = 3;
-            camera.upperRadiusLimit = 6;
-            camera.lowerBetaLimit = 0.5;
-            camera.upperBetaLimit = Math.PI / 1.9;
-            camera.wheelPrecision = 60;
-            camera.panningSensibility = 0;
-            camera.attachControl(canvas, true);
-
-            var key = new BABYLON.HemisphericLight('key', new BABYLON.Vector3(0.3, 1, 0.4), scene);
-            key.intensity = 0.9;
-            var rim = new BABYLON.DirectionalLight('rim', new BABYLON.Vector3(-0.6, -0.3, 1), scene);
-            rim.intensity = 1.1;
-            rim.diffuse = new BABYLON.Color3(0.63, 0.47, 0.28);
-
-            var cube = BABYLON.MeshBuilder.CreateBox('cube', { size: 1.7 }, scene);
-            var mat = new BABYLON.StandardMaterial('cubeMat', scene);
-            mat.specularColor = new BABYLON.Color3(0.25, 0.25, 0.25);
-            cube.material = mat;
-            var target = BABYLON.Color3.FromHexString(byName[versions[selected].name].hex);
-            mat.diffuseColor = target.clone();
-
-            // Expose a colour setter so scrub/paint can drive the live cube.
-            view = { setColor: function (hex) { target = BABYLON.Color3.FromHexString(hex); } };
-
-            var downX = 0, downY = 0, spinning = true;
-            canvas.addEventListener('pointerdown', function (e) { downX = e.clientX; downY = e.clientY; spinning = false; });
-            canvas.addEventListener('pointerup', function (e) {
-              if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) < 8) paint();
-            });
-
-            memCard.classList.add('ready');
-
-            return loopController(engine, function () {
-              engine.resize();
-              if (spinning && !reduce) camera.alpha += 0.0028;
-              mat.diffuseColor = BABYLON.Color3.Lerp(mat.diffuseColor, target, 0.18);
-              scene.render();
-            });
-          });
-        }
-      })();
+      footer.landing-footer
+        .landing-final
+          div
+            h2 Start with a sentence.
+            p Sign in with an email code. No password.
+          a.landing-cta(href="#prompt") Generate a model
+        .landing-base
+          span
+            | Arbesk — from&#x20;
+            em arabesque
+            | .
+          nav(aria-label="Footer")
+            a.landing-link(href="/library") Library
+            a.landing-link(href="/studio") Studio

@@ -27,12 +27,9 @@ const MODELS_DIR = path.join(ROOT, 'mock-gltf-assets', 'low-poly');
 const OUT_DIR = path.join(ROOT, 'frontend', 'public', 'landing');
 
 // name -> source glb. `name` is the output WebP basename.
-// Howdy is the hero/timeline mascot; all three appear in the "Built for teams"
-// pedestal scene (Alice/Bob/You each editing a different asset).
+// Howdy is the landing page's hero/version-demo mascot.
 const TARGETS = [
   { name: 'asset-howdy', file: 'howdyhighPoly_stamp.glb' },
-  { name: 'asset-reema', file: 'reemalowPoly_stamp.glb' },
-  { name: 'asset-suka', file: 'sukaLowPoly_stamp.glb' },
 ];
 
 const SIZE = 900; // square render; CSS scales it down so it stays crisp on HiDPI

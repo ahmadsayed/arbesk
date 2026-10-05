@@ -91,6 +91,7 @@ describe("Frontend Build", () => {
         "app.js",
         "app/initial-view.js",
         "engine/theme-init.js",
+        "landing/landing.js",
         "vendor/cdp-core.js",
         "vendor/viem.js",
         "workers/cad-worker.js",

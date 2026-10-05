@@ -123,18 +123,7 @@ const DERIVED_TEXT_PAIRS = [
   // _metadata-editor print badge (window-fg text on ok/warn tint, banner idiom)
   ["window-fg on success 18% sidebar tint", (t) => [t["window-fg"], mix(t.success, t["sidebar-bg"], 0.18)]],
   ["window-fg on warning 18% sidebar tint", (t) => [t["window-fg"], mix(t.warning, t["sidebar-bg"], 0.18)]],
-  // _landing bands: --landing-on-dark text / hint line on --landing-dark
-  ["landing band text", (t) => [band(t).onDark, band(t).bg]],
-  ["landing band hint line", (t) => [mix(band(t).onDark, t["accent-text"], 0.45), band(t).bg]],
 ];
-
-/** _landing.scss band colours: inverted on light themes, one step up on dark. */
-function band(t) {
-  const dark = luminance(t["window-bg"]) < 0.5;
-  return dark
-    ? { bg: t["view-bg"], onDark: t["window-fg"] }
-    : { bg: t["window-fg"], onDark: t["window-bg"] };
-}
 
 for (const name of THEMES) {
   describe(`derived text pairs: ${name}`, () => {
@@ -145,10 +134,6 @@ for (const name of THEMES) {
         expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
       });
     }
-    // Band headings are large text (≥ 2.2rem bold): 3:1.
-    test("landing band heading (accent-text) ≥ 3:1", () => {
-      expect(contrast(t["accent-text"], band(t).bg)).toBeGreaterThanOrEqual(3);
-    });
   });
 }
 
