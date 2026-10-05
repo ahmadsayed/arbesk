@@ -32,15 +32,17 @@ export const DEPLOYMENT_BLOCKS = {
 };
 
 /**
- * Number of blocks to request per eth_getLogs call.
+ * Number of blocks to request per eth_getLogs call — the initial chunk and
+ * the growth ceiling for the indexer's adaptive chunking (token-indexer.ts
+ * self-adjusts downward when the RPC rejects a range).
  *
  * RPCs vary in how wide a range they accept. Hardhat local can handle huge
- * ranges since it's a single node. Base Sepolia handles moderately wide ranges.
+ * ranges since it's a single node. Base Sepolia's public endpoint tightens
+ * its unpublished cap under load: seen at 2000, then 1000 (2026-10-01),
+ * then 500 (2026-10-05). 1000 stays the ceiling so the indexer can grow
+ * back if the provider relaxes; the adaptive path handles the rejections.
  */
 export const LOG_CHUNK_SIZES = {
   [CHAIN_IDS.HARDHAT_LOCAL]: 10000,
-  // sepolia.base.org rejects eth_getLogs spanning more than 1000 blocks
-  // ("eth_getLogs is limited to a 1,000 range", seen 2026-10-01; the
-  // previous 2000-block limit was tightened by the RPC provider).
   [CHAIN_IDS.BASE_TESTNET]: 1000,
 };

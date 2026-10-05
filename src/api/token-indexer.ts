@@ -42,6 +42,30 @@ const INDEXER_EVENTS = [
   },
 ] as const;
 
+/**
+ * Matches RPC rejections caused by an over-wide (or over-full) getLogs query.
+ * Public RPCs enforce unpublished caps that tighten under load, so the exact
+ * phrasing varies by provider and over time.
+ */
+const RANGE_REJECTION =
+  /limited to a [\d,]+ (?:block )?range|block range (?:is )?too (?:large|wide)|exceeds (?:the )?max(?:imum)?[^\n]*range|returned more than [\d,]+ results/i;
+
+/**
+ * Extracts the provider's advertised eth_getLogs block-range cap from an RPC
+ * error message ("eth_getLogs is limited to a 500 range" → 500; also handles
+ * thousands separators like "1,000"). Returns null when no explicit cap is
+ * named, in which case the caller should halve the chunk instead.
+ */
+export function parseGetLogsRangeCap(message: string): number | null {
+  const m = message.match(/limited to a ([\d,]+) (?:block )?range/i);
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ""));
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+}
+
+/** Consecutive successes required before the chunk grows back (doubling). */
+const CHUNK_GROWTH_THRESHOLD = 5;
+
 /** ABI for the editorListURI view function. */
 const EDITOR_LIST_URI_ABI = [
   {
@@ -81,6 +105,15 @@ class TokenIndexer {
   lastCatchUpAt: number;
   _catchUpPromise: Promise<void> | null;
   storage: StorageAdapter;
+  /**
+   * Current eth_getLogs chunk size. Starts at the chain's configured ceiling
+   * and self-adjusts at runtime: public RPC caps are unpublished and tighten
+   * under load (sepolia.base.org went 2000 → 1000 → 500 in 2026), so any
+   * fixed value is a bet against a moving target.
+   */
+  logChunkSize: number;
+  /** Consecutive successful chunks since the last shrink (growth bookkeeping). */
+  _chunkSuccesses: number;
 
   constructor(chainId: number, storage: StorageAdapter) {
     this.chainId = chainId;
@@ -99,6 +132,8 @@ class TokenIndexer {
     this.initialized = false;
     this.lastCatchUpAt = 0;
     this._catchUpPromise = null;
+    this.logChunkSize = LOG_CHUNK_SIZES[chainId] || 100;
+    this._chunkSuccesses = 0;
   }
 
   _loadState(): void {
@@ -283,12 +318,12 @@ class TokenIndexer {
   async _indexRange(fromBlock: number, toBlock: number): Promise<void> {
     if (fromBlock > toBlock) return;
     const start = Date.now();
-    const chunkSize = LOG_CHUNK_SIZES[this.chainId] || 100;
+    this._chunkSuccesses = 0;
     let totalLogs = 0;
 
-    for (let from = fromBlock; from <= toBlock; from += chunkSize) {
-      const to = Math.min(from + chunkSize - 1, toBlock);
-      const logs = await this._fetchLogs(from, to);
+    let from = fromBlock;
+    while (from <= toBlock) {
+      const { logs, to } = await this._fetchAdaptiveChunk(from, toBlock);
       const { maxBlock, editorTokensToRefresh } = this._applyLogs(logs);
       this.lastScannedBlock = Math.max(maxBlock, to);
 
@@ -298,11 +333,62 @@ class TokenIndexer {
 
       this._saveState();
       totalLogs += logs.length;
+      from = to + 1;
     }
 
     console.log(
       `[${ts()}] [INDEXER] _indexRange ${fromBlock}..${toBlock} total ` +
         `${totalLogs} logs in ${Date.now() - start}ms`
+    );
+  }
+
+  /**
+   * Fetches one chunk, adapting the chunk size to the RPC's range cap.
+   * @remarks A range rejection shrinks the chunk and retries the same
+   *   window; consecutive successes double it back toward the configured
+   *   ceiling (providers relax their caps under lower load). Transient
+   *   (non-range) errors propagate unchanged so the background poll's retry
+   *   keeps its self-heal semantics.
+   */
+  async _fetchAdaptiveChunk(
+    from: number,
+    toBlock: number
+  ): Promise<{ logs: any[]; to: number }> {
+    const ceiling = LOG_CHUNK_SIZES[this.chainId] || 100;
+    for (;;) {
+      const to = Math.min(from + this.logChunkSize - 1, toBlock);
+      try {
+        const logs = await this._fetchLogs(from, to);
+        if (this.logChunkSize < ceiling && ++this._chunkSuccesses >= CHUNK_GROWTH_THRESHOLD) {
+          this.logChunkSize = Math.min(ceiling, this.logChunkSize * 2);
+          this._chunkSuccesses = 0;
+        }
+        return { logs, to };
+      } catch (err) {
+        const message = String((err as Error).message);
+        if (!RANGE_REJECTION.test(message) || this.logChunkSize <= 1) throw err;
+        this._shrinkChunk(from, to, message);
+      }
+    }
+  }
+
+  /**
+   * Shrinks the chunk after a range rejection: snaps to the provider's
+   * advertised cap when the error names one, halves otherwise.
+   */
+  _shrinkChunk(from: number, to: number, message: string): void {
+    const cap = parseGetLogsRangeCap(message);
+    let next =
+      cap !== null ? Math.min(this.logChunkSize, cap) : Math.floor(this.logChunkSize / 2);
+    // Never retry the same span: the advertised cap can be off by one
+    // (inclusive vs exclusive counting), so a non-shrinking snap halves
+    // instead — this guarantees the retry loop converges.
+    if (next >= this.logChunkSize) next = Math.floor(this.logChunkSize / 2);
+    this.logChunkSize = Math.max(1, next);
+    this._chunkSuccesses = 0;
+    console.warn(
+      `[${ts()}] [INDEXER] getLogs ${from}..${to} rejected (${message}); ` +
+        `chunk shrunk to ${this.logChunkSize}`
     );
   }
 
