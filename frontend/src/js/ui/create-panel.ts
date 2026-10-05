@@ -2401,6 +2401,19 @@ promptInput.addEventListener("input", () => {
   promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + "px";
 });
 
+// A ?prompt= deep link (landing-page hero form) prefills the composer. It never
+// submits: generating costs credits and needs a signed-in wallet. The param is
+// stripped so a reload doesn't overwrite the user's edits.
+const PROMPT_DEEP_LINK_MAX = 500;
+const deepLinkPrompt = new URLSearchParams(location.search).get("prompt")?.trim();
+if (deepLinkPrompt) {
+  promptInput.value = deepLinkPrompt.slice(0, PROMPT_DEEP_LINK_MAX);
+  promptInput.dispatchEvent(new Event("input"));
+  const url = new URL(location.href);
+  url.searchParams.delete("prompt");
+  history.replaceState(history.state, "", url);
+}
+
 // Asset identity (manifest asset_id) of the currently open scene. The AI
 // chat fully resets when the open asset changes — generations, refine
 // chains, animate choices, and attached images never leak across assets.

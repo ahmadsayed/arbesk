@@ -772,3 +772,43 @@ describe("provider deep link", () => {
     expect(document.getElementById("providerSelect").value).toBe("tripo3d");
   });
 });
+
+// ─── ?prompt= deep link (landing-page hero form) ───
+
+describe("prompt deep link", () => {
+  afterEach(() => {
+    history.replaceState(null, "", "/");
+  });
+
+  async function loadAt(url) {
+    history.replaceState(null, "", url);
+    resetModules();
+    buildDom();
+    await import("../../frontend/src/js/ui/create-panel.js");
+    await flush();
+    await flush();
+  }
+
+  test("?prompt= prefills the composer, strips only that param, and does not generate", async () => {
+    await loadAt("/studio?provider=cad&prompt=%20M3%20bracket%2C%2040%20mm%20");
+
+    expect(document.getElementById("promptInput").value).toBe("M3 bracket, 40 mm");
+    const params = new URLSearchParams(location.search);
+    expect(params.has("prompt")).toBe(false);
+    expect(params.get("provider")).toBe("cad");
+    expect(mockGenerateAsset).not.toHaveBeenCalled();
+    expect(mockGenerateCadAsset).not.toHaveBeenCalled();
+  });
+
+  test("a ?prompt= longer than 500 characters is truncated to 500", async () => {
+    await loadAt(`/studio?prompt=${"a".repeat(600)}`);
+
+    expect(document.getElementById("promptInput").value).toHaveLength(500);
+  });
+
+  test("a blank ?prompt= leaves the composer empty", async () => {
+    await loadAt("/studio?prompt=%20%20");
+
+    expect(document.getElementById("promptInput").value).toBe("");
+  });
+});
