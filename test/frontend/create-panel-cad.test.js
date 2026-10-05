@@ -189,6 +189,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 /** @type {typeof import("../../frontend/src/js/services/api.js")} */
 let api;
 let panel;
+let bus;
 let walletState;
 let pendingGens;
 let promptInput;
@@ -225,6 +226,7 @@ beforeAll(async () => {
   api = await import("../../frontend/src/js/services/api.js");
   ({ walletState } = await import("../../frontend/src/js/state/wallet-state.js"));
   pendingGens = await import("../../frontend/src/js/state/pending-generations.js");
+  bus = await import("@arbesk/asset-core/events/bus.js");
 });
 
 beforeEach(() => {
@@ -517,6 +519,108 @@ test("a fresh cad result attaches a cad chip and locks the selector to cad", asy
   expect(providerSelect.title).toBe("");
 });
 
+/** A CAD asset manifest whose root node is the stored 3MF. */
+function cadManifest(assetId) {
+  return {
+    type: "asset",
+    asset_id: assetId,
+    name: "Bracket",
+    metadata: { cad: { summary: "bracket" } },
+    scene: { nodes: [{ node_id: "root", source: { cid: `${assetId}-3mf`, format: "3mf", path: "asset.3mf" } }] },
+  };
+}
+
+const refineIndicator = () => document.getElementById("refineIndicator");
+const refineText = () => document.getElementById("refineIndicatorText");
+const detach = () => document.getElementById("refineIndicatorDetach").click();
+
+test("a mesh chip locks the selector to tripo3d without touching the stored provider", () => {
+  expect(localStorage.getItem("arbesk-provider")).toBe("mock");
+  bus.emit(bus.EVENTS.ASSET_FILE_STAGED, {
+    name: "chair.glb",
+    source: { cid: "bafyChair", path: "chair.glb", format: "glb" },
+  });
+
+  expect(refineIndicator().hidden).toBe(false);
+  expect(providerSelect.value).toBe("tripo3d");
+  expect(providerSelect.disabled).toBe(true);
+  expect(providerSelect.title).toBe("Detach to choose a provider");
+  expect(localStorage.getItem("arbesk-provider")).toBe("mock");
+
+  detach();
+  expect(providerSelect.value).toBe("mock");
+  expect(providerSelect.disabled).toBe(false);
+  expect(localStorage.getItem("arbesk-provider")).toBe("mock");
+});
+
+test("opening a CAD asset attaches a cad chip once per asset identity", () => {
+  bus.emit(bus.EVENTS.SCENE_READY, { manifest: cadManifest("asset-cad-open"), manifestCid: "bafyOpenM" });
+
+  expect(refineIndicator().hidden).toBe(false);
+  expect(refineText().textContent).toBe("Refining: Bracket");
+  expect(providerSelect.value).toBe("cad");
+  expect(providerSelect.disabled).toBe(true);
+
+  // Same asset again (e.g. an auto-save reload): the detached chip stays off.
+  detach();
+  bus.emit(bus.EVENTS.SCENE_READY, { manifest: cadManifest("asset-cad-open"), manifestCid: "bafyOpenM2" });
+  expect(refineIndicator().hidden).toBe(true);
+  expect(providerSelect.disabled).toBe(false);
+});
+
+test("no cad chip when the deployment does not list the cad provider", () => {
+  const cadOption = providerSelect.querySelector('option[value="cad"]');
+  cadOption.remove();
+  try {
+    bus.emit(bus.EVENTS.SCENE_READY, { manifest: cadManifest("asset-cad-nocad"), manifestCid: "bafyNoCadM" });
+    // The opened root model keeps its mesh chip; the selector never blanks.
+    expect(refineIndicator().hidden).toBe(false);
+    expect(providerSelect.value).toBe("tripo3d");
+  } finally {
+    providerSelect.appendChild(cadOption);
+  }
+});
+
+test("a stale 'Retry with Tripo 3D' detaches a later cad chip and generates fresh", async () => {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-test-key");
+  selectProvider("cad");
+  mockGenerateAsset.mockResolvedValue({
+    assetManifestCid: "bafyTripoManifest",
+    sourceAssetCid: "bafyTripoSource",
+    format: "glb",
+  });
+  mockGenerateCadAsset.mockRejectedValueOnce(
+    new api.ApiError("not suitable", 400, "CAD_REQUEST_UNSUITABLE", {
+      suitability: "organic",
+      alternative: { kind: "mesh", provider: "tripo3d" },
+    })
+  );
+  promptInput.value = "a dragon";
+  await clickGenerate();
+  const onPick = mockAddChoiceMessage.mock.calls[0][2];
+
+  // A later CAD part attaches a cad chip; the choice bubble is now stale.
+  promptInput.value = "a 20 mm cube";
+  await clickGenerate();
+  expect(providerSelect.value).toBe("cad");
+  expect(providerSelect.disabled).toBe(true);
+
+  onPick("tripo3d");
+  await flush();
+  await flush();
+  await flush();
+
+  expect(providerSelect.value).toBe("tripo3d");
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateAsset.mock.calls[0][0];
+  expect(args).toMatchObject({ prompt: "a dragon", provider: "tripo3d" });
+  expect(args.sourceAssetCid).toBeUndefined();
+  expect(args.retexture).toBeUndefined();
+  // The fresh Tripo result is now the chip, not the CAD part.
+  expect(refineText().textContent).toBe("Refining: a dragon");
+});
+
 // ─── Provider availability gating (needs a fresh module load per config) ───
 
 describe("cad option availability gating", () => {
@@ -546,4 +650,3 @@ describe("cad option availability gating", () => {
     expect(document.querySelector('option[value="cad"]')).not.toBeNull();
   });
 });
-

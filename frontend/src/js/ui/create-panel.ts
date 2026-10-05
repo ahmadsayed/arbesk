@@ -66,7 +66,7 @@ import {
 import { selectCollection } from "@arbesk/asset-core/domain/collection.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { chipProvider, cadChipFromManifest } from "./refine-target.ts";
-import type { ActiveVersion } from "./refine-target.ts";
+import type { ActiveVersion, RefineKind } from "./refine-target.ts";
 
 // ─── DOM References ───
 // The SPA shell (app.pug) always renders these elements, so non-null casts.
@@ -427,6 +427,8 @@ if (providerSelect) {
   void getConfig().then((config) => {
     if (config?.cadGeneration === false) {
       providerSelect.querySelector('option[value="cad"]')?.remove();
+      // A cad chip can't lock the selector to a provider it no longer lists.
+      if (activeVersion?.kind === "cad") setActiveVersion(null);
     }
   });
 }
@@ -658,6 +660,26 @@ async function attachChatPreview(
 }
 
 /**
+ * True while the deployment lists the Parametric CAD provider.
+ * @remarks A cad chip locks the selector to "cad"; without that option the
+ *   selector would go blank, so no cad chip is created.
+ */
+function cadAvailable(): boolean {
+  return !!providerSelect?.querySelector('option[value="cad"]');
+}
+
+/** Chip kind for a version produced by this provider, or null for none. */
+function chipKindFor(provider: string | undefined): RefineKind | null {
+  if (provider === "cad") return cadAvailable() ? "cad" : null;
+  return provider === "tripo3d" || provider === "upload" ? "mesh" : null;
+}
+
+/** cadChipFromManifest, skipped while the cad provider is unavailable. */
+function availableCadChip(manifest: any, manifestCid: string, name: string): ActiveVersion | null {
+  return cadAvailable() ? cadChipFromManifest(manifest, manifestCid, name) : null;
+}
+
+/**
  * Makes a version sent to the Studio the active refine target.
  * @remarks Tripo3D generations and uploads refine as meshes, cad parts as
  *   designs; other providers (mock) attach no chip.
@@ -668,9 +690,7 @@ function activateSentVersion(record: {
   assetManifestCid: string | null;
   prompt: string;
 }) {
-  const kind = record.provider === "cad"
-    ? "cad"
-    : record.provider === "tripo3d" || record.provider === "upload" ? "mesh" : null;
+  const kind = chipKindFor(record.provider);
   if (!kind) return;
   setActiveVersion({
     kind,
@@ -1192,9 +1212,10 @@ function presentGenerationResult(
  * design) for typed design edits.
  */
 function activateResultVersion(result: any, provider: string, prompt: string) {
-  if (provider !== "tripo3d" && provider !== "cad") return;
+  const kind = chipKindFor(provider);
+  if (!kind) return;
   setActiveVersion({
-    kind: provider === "cad" ? "cad" : "mesh",
+    kind,
     sourceAssetCid: result.sourceAssetCid,
     manifestCid: result.assetManifestCid,
     name: prompt,
@@ -1992,6 +2013,9 @@ function offerCadTripoRetry(err: unknown, effectivePrompt: string): boolean {
     ],
     (value) => {
       if (value !== "tripo3d") return;
+      // A stale bubble may outlive a later chip: detach first so the retry is
+      // a fresh Tripo generation with the selector unlocked.
+      setActiveVersion(null);
       if (providerSelect) {
         providerSelect.value = "tripo3d";
         localStorage.setItem(PROVIDER_STORAGE, "tripo3d");
@@ -2247,7 +2271,7 @@ async function onGenerate() {
     // Typed follow-ups retexture the active version (texture/material only —
     // geometry unchanged). Detach, Clear Chat, or an attached image starts fresh.
     const retextureSource =
-      provider === "tripo3d" && activeVersion && !imagePayload
+      provider === "tripo3d" && activeVersion?.kind === "mesh" && !imagePayload
         ? activeVersion
         : null;
     if (retextureSource) {
@@ -2349,7 +2373,7 @@ function noteOpenAssetIdentity(identity: string | null): boolean {
  */
 function presentOpenedAsset(manifest: any, manifestCid: string, name: string | null | undefined) {
   if (manifest?.type === "asset") presentOpenedAssetModel(manifest, manifestCid);
-  const cadChip = cadChipFromManifest(manifest, manifestCid, name || "Part");
+  const cadChip = availableCadChip(manifest, manifestCid, name || "Part");
   if (cadChip) setActiveVersion(cadChip);
 }
 
@@ -2398,7 +2422,7 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }: { cid: stri
     setLatestManifestCid(previousLatestCid);
     await renderChatProvenance(previousLatestCid);
     const restored = await getFromRemoteIPFS(cid).catch(() => null);
-    const cadChip = cadChipFromManifest(restored, cid, name || "");
+    const cadChip = availableCadChip(restored, cid, name || "");
     if (cadChip) setActiveVersion(cadChip);
     else if (sourceCid) setActiveVersion({ kind: "mesh", sourceAssetCid: sourceCid, manifestCid: cid, name: name || "" });
     else setActiveVersion(null); // chat-less version (e.g. parametric edit) — no retexture target
