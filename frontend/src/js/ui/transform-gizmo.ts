@@ -103,11 +103,6 @@ function initTransformGizmo(
   gizmoManager.usePointerToAttachGizmos = false;
   gizmoManager.clearGizmoOnEmptyPointerEvent = false;
 
-  // Planar drag is more useful than single-axis drag for most assets.
-  if (gizmoManager.gizmos?.positionGizmo) {
-    gizmoManager.gizmos.positionGizmo.planarGizmoEnabled = true;
-  }
-
   state.gizmoManager = gizmoManager;
   state.transformMode = null;
 
@@ -153,7 +148,14 @@ function _gridScale(): number {
 /** Sub-gizmos that leave the XZ plane: Y axis and the XY / YZ planes. */
 const _OFF_FLOOR_SUBGIZMOS = ["yGizmo", "xPlaneGizmo", "zPlaneGizmo"];
 
+/**
+ * Babylon creates the position gizmo lazily (first `positionGizmoEnabled =
+ * true`) with its plane handles off, so the XZ drag plane (`yPlaneGizmo`) is
+ * switched on here, every time constraints are applied.
+ */
 function _constrainPositionGizmo(pg: any): void {
+  if (!pg.planarGizmoEnabled) pg.planarGizmoEnabled = true;
+  if (pg.yPlaneGizmo) pg.yPlaneGizmo.isEnabled = true;
   for (const name of _OFF_FLOOR_SUBGIZMOS) {
     if (pg[name]) pg[name].isEnabled = !_floorLocked;
   }
@@ -366,7 +368,12 @@ function _keyAction(e: KeyboardEvent): (() => void) | undefined {
   return KEYS_ANY[key] ?? (isEditing() ? KEYS_EDIT[key] : undefined);
 }
 
+let _keyboardWired = false;
+
 function wireKeyboard(): void {
+  // Document-level listeners: wire once per page, even if init re-runs.
+  if (_keyboardWired) return;
+  _keyboardWired = true;
   document.addEventListener("keydown", (e) => {
     if (e.key === "Alt") _setAltHeld(true);
   });
@@ -376,7 +383,7 @@ function wireKeyboard(): void {
   // A modifier released outside the window must not leave snapping off.
   window.addEventListener("blur", () => _setAltHeld(false));
   document.addEventListener("keydown", (e) => {
-    if (_isEditableFocus()) return;
+    if (e.repeat || _isEditableFocus()) return;
     const action = _keyAction(e);
     if (!action) return;
     e.preventDefault();

@@ -43,6 +43,9 @@ describe("transform-gizmo toolbar", () => {
               onDragStartObservable: obs(),
               onDragEndObservable: obs(),
               snapDistance: 0,
+              // Babylon disables the plane handles until planarGizmoEnabled is set.
+              planarGizmoEnabled: false,
+              yPlaneGizmo: { isEnabled: false },
               yGizmo: { isEnabled: true },
               xPlaneGizmo: { isEnabled: true },
               zPlaneGizmo: { isEnabled: true },
@@ -252,6 +255,12 @@ describe("transform-gizmo toolbar", () => {
     expect(viewport.querySelector('[data-mode="time"]').hidden).toBe(true);
   });
 
+  test("auto-repeated E keydown does not toggle Edit", () => {
+    enterEditForTest();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "e", repeat: true }));
+    expect(isEditing()).toBe(true);
+  });
+
   test("keys: T/R do nothing in View; E toggles; S is gone; V works in both", () => {
     state.nodeAnchors.set("node-1", { isDisposed: () => false });
     state.highlightedNodeId = "node-1";
@@ -350,6 +359,8 @@ describe("transform-gizmo toolbar", () => {
     emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
     enterEditForTest();
     const pg = state.gizmoManager.gizmos.positionGizmo;
+    expect(pg.planarGizmoEnabled).toBe(true);
+    expect(pg.yPlaneGizmo.isEnabled).toBe(true); // the XZ drag plane
     expect(pg.yGizmo.isEnabled).toBe(false);
     expect(pg.xPlaneGizmo.isEnabled).toBe(false);
     expect(pg.zPlaneGizmo.isEnabled).toBe(false);
@@ -357,6 +368,8 @@ describe("transform-gizmo toolbar", () => {
 
     document.getElementById("lockFloorBtn").click();
     expect(document.getElementById("lockFloorBtn").getAttribute("aria-pressed")).toBe("false");
+    expect(pg.planarGizmoEnabled).toBe(true);
+    expect(pg.yPlaneGizmo.isEnabled).toBe(true);
     expect(pg.yGizmo.isEnabled).toBe(true);
     expect(pg.xPlaneGizmo.isEnabled).toBe(true);
     expect(pg.zPlaneGizmo.isEnabled).toBe(true);
