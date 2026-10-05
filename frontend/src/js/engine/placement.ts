@@ -71,7 +71,11 @@ export function resetOffset(b: Bounds | null): Vec3 {
   };
 }
 
-/** Move snap distance: one visible grid cell. */
+/** Move snap step as a fraction of one grid cell (¼ cell = 0.5 units at scale 1). */
+const SNAP_CELL_FRACTION = 0.25;
+
+/** Move snap distance: a quarter of a visible grid cell. */
 export function moveSnapStep(gridScale: number): number {
-  return Number.isFinite(gridScale) && gridScale > 0 ? GRID_CELL * gridScale : GRID_CELL;
+  const step = GRID_CELL * SNAP_CELL_FRACTION;
+  return Number.isFinite(gridScale) && gridScale > 0 ? step * gridScale : step;
 }

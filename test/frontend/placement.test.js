@@ -51,11 +51,11 @@ describe("placement math", () => {
     expect(resetOffset(null)).toEqual({ x: 0, y: 0, z: 0 });
   });
 
-  test("move snap tracks the visible grid cell; rotate snap is 15°", () => {
-    expect(moveSnapStep(1)).toBe(2);
-    expect(moveSnapStep(2.5)).toBe(5);
-    expect(moveSnapStep(0)).toBe(2);
-    expect(moveSnapStep(NaN)).toBe(2);
+  test("move snap tracks a quarter of the visible grid cell; rotate snap is 15°", () => {
+    expect(moveSnapStep(1)).toBe(0.5);
+    expect(moveSnapStep(2.5)).toBe(1.25);
+    expect(moveSnapStep(0)).toBe(0.5);
+    expect(moveSnapStep(NaN)).toBe(0.5);
     expect(ROTATE_SNAP).toBeCloseTo(Math.PI / 12);
   });
 });

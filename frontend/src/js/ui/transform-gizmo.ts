@@ -2,8 +2,8 @@
  * Viewport placement controls: the View/Edit toggle, the Move/Rotate gizmo,
  * and the side Undo/Redo/Grid strip.
  * @remarks View-only by default — the gizmo attaches only in Edit mode
- *   (state/edit-mode.ts). In Edit, Move is floor-locked and snapped (grid
- *   cell / 15°, Alt suspends snapping); Drop to floor and Reset transform
+ *   (state/edit-mode.ts). In Edit, Move is floor-locked and snapped (¼ grid
+ *   cell / 15°, toggleable from the toolbar, Alt suspends); Drop to floor and Reset transform
  *   act on the selection as one undo step each. Transform edits are staged and persisted on the
  *   next Save Draft / Publish. There is deliberately no scale gizmo: scale is
  *   a numeric Inspector edit, protecting print dimensions.
@@ -75,6 +75,8 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>',
   floorLock:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="7" y="9" width="10" height="8"/><path d="M12 3v3"/></svg>',
+  snap:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v7a6 6 0 0 0 12 0V3"/><path d="M6 3h4v4H6zM14 3h4v4h-4z"/></svg>',
   dropToFloor:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/></svg>',
   resetTransform:
@@ -136,10 +138,19 @@ let _dragMode: TransformMode = null;
 
 // ── Placement constraints (Edit mode) ──
 // Floor lock: Move drags on the XZ plane only; Rotate re-grounds on release.
-// Snapping: one grid cell / 15°, suspended while Alt is held.
+// Snapping: ¼ grid cell / 15°, persisted on/off toggle, suspended while Alt
+// is held.
+
+const SNAP_STORAGE = "arbesk-transform-snap";
+
+/** Snapping defaults on; the toolbar toggle persists "on"/"off". */
+function _readSnapPref(): boolean {
+  return localStorage.getItem(SNAP_STORAGE) !== "off";
+}
 
 let _floorLocked = true;
 let _altHeld = false;
+let _snapEnabled = _readSnapPref();
 
 function _gridScale(): number {
   return state.scene?.getMeshByName?.("groundGrid")?.scaling?.x ?? 1;
@@ -159,14 +170,15 @@ function _constrainPositionGizmo(pg: any): void {
   for (const name of _OFF_FLOOR_SUBGIZMOS) {
     if (pg[name]) pg[name].isEnabled = !_floorLocked;
   }
-  pg.snapDistance = _altHeld ? 0 : moveSnapStep(_gridScale());
+  pg.snapDistance = _altHeld || !_snapEnabled ? 0 : moveSnapStep(_gridScale());
 }
 
 /** Re-applied after setMode because Babylon creates sub-gizmos lazily. */
 function _applyGizmoConstraints(): void {
   const g = state.gizmoManager?.gizmos || {};
   if (g.positionGizmo) _constrainPositionGizmo(g.positionGizmo);
-  if (g.rotationGizmo) g.rotationGizmo.snapDistance = _altHeld ? 0 : ROTATE_SNAP;
+  if (g.rotationGizmo)
+    g.rotationGizmo.snapDistance = _altHeld || !_snapEnabled ? 0 : ROTATE_SNAP;
 }
 
 function _setAltHeld(held: boolean): void {
@@ -177,6 +189,13 @@ function _setAltHeld(held: boolean): void {
 
 function _toggleFloorLock(): void {
   _floorLocked = !_floorLocked;
+  _applyGizmoConstraints();
+  updateToolbarUI();
+}
+
+function _toggleSnap(): void {
+  _snapEnabled = !_snapEnabled;
+  localStorage.setItem(SNAP_STORAGE, _snapEnabled ? "on" : "off");
   _applyGizmoConstraints();
   updateToolbarUI();
 }
@@ -219,6 +238,7 @@ const ACTIONS: Record<string, () => void> = {
     toggleEditing();
   },
   toggleFloorLock: _toggleFloorLock,
+  toggleSnap: _toggleSnap,
   dropToFloor: dropSelectionToFloor,
   resetTransform: resetSelectionTransform,
 };
@@ -244,6 +264,9 @@ function createToolbar(): void {
     <span class="transform-toolbar-sep" data-edit-only aria-hidden="true"></span>
     <button id="lockFloorBtn" class="btn btn-flat btn-sm active" data-action="toggleFloorLock" data-edit-only aria-pressed="true" aria-label="Lock to floor" title="Lock to floor">
       ${ICONS.floorLock}
+    </button>
+    <button id="snapToggleBtn" class="btn btn-flat btn-sm active" data-action="toggleSnap" data-edit-only aria-pressed="true" aria-label="Snap to grid (¼ cell), hold Alt to suspend" title="Snap to grid (¼ cell), hold Alt to suspend">
+      ${ICONS.snap}
     </button>
     <button id="dropToFloorBtn" class="btn btn-flat btn-sm placement-action" data-action="dropToFloor" data-edit-only aria-label="Drop to floor (G)" title="Drop to floor (G)">
       ${ICONS.dropToFloor}
@@ -565,6 +588,11 @@ function _renderPlacementButtons(toolbar: HTMLElement, hasSelection: boolean): v
   if (lock) {
     lock.classList.toggle("active", _floorLocked);
     lock.setAttribute("aria-pressed", String(_floorLocked));
+  }
+  const snap = document.getElementById("snapToggleBtn");
+  if (snap) {
+    snap.classList.toggle("active", _snapEnabled);
+    snap.setAttribute("aria-pressed", String(_snapEnabled));
   }
 }
 

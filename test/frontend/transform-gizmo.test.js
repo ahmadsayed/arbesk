@@ -364,7 +364,7 @@ describe("transform-gizmo toolbar", () => {
     expect(pg.yGizmo.isEnabled).toBe(false);
     expect(pg.xPlaneGizmo.isEnabled).toBe(false);
     expect(pg.zPlaneGizmo.isEnabled).toBe(false);
-    expect(pg.snapDistance).toBe(2); // grid scale 1 (no groundGrid in the mock scene)
+    expect(pg.snapDistance).toBe(0.5); // ¼ grid cell at scale 1 (no groundGrid in the mock scene)
 
     document.getElementById("lockFloorBtn").click();
     expect(document.getElementById("lockFloorBtn").getAttribute("aria-pressed")).toBe("false");
@@ -385,7 +385,30 @@ describe("transform-gizmo toolbar", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", altKey: true }));
     expect(pg.snapDistance).toBe(0);
     document.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }));
-    expect(pg.snapDistance).toBe(2);
+    expect(pg.snapDistance).toBe(0.5);
+  });
+
+  test("snap toggle disables snapping for both gizmos and persists the choice", () => {
+    state.nodeAnchors.set("node-1", liveAnchor(0));
+    state.highlightedNodeId = "node-1";
+    emit(EVENTS.NODE_SELECTED, { nodeId: "node-1", mesh: null });
+    enterEditForTest();
+    const pg = state.gizmoManager.gizmos.positionGizmo;
+    const rg = state.gizmoManager.gizmos.rotationGizmo;
+    const btn = document.getElementById("snapToggleBtn");
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+
+    btn.click();
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(pg.snapDistance).toBe(0);
+    expect(rg.snapDistance).toBe(0);
+    expect(localStorage.getItem("arbesk-transform-snap")).toBe("off");
+
+    btn.click(); // restore the module default
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(pg.snapDistance).toBe(0.5);
+    expect(rg.snapDistance).toBe(Math.PI / 12);
+    expect(localStorage.getItem("arbesk-transform-snap")).toBe("on");
   });
 
   test("rotation snap mirrors the 15° step; Alt suspends both; window blur restores both", () => {
@@ -401,7 +424,7 @@ describe("transform-gizmo toolbar", () => {
     expect(rg.snapDistance).toBe(0);
 
     window.dispatchEvent(new Event("blur"));
-    expect(pg.snapDistance).toBe(2);
+    expect(pg.snapDistance).toBe(0.5);
     expect(rg.snapDistance).toBe(Math.PI / 12);
   });
 

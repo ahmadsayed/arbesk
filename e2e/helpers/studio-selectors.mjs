@@ -94,6 +94,7 @@ export const SELECTORS = {
   dropToFloorButton: "#dropToFloorBtn",
   resetTransformButton: "#resetTransformBtn",
   lockFloorToggle: "#lockFloorBtn",
+  snapToggle: "#snapToggleBtn",
   unsavedMarker: "#saveAssetBtn.has-unsaved",
   assetMeta: "#assetStatusMeta",
   animationsSection: "#animationsSection",
