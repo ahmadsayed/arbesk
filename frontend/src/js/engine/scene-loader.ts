@@ -27,6 +27,7 @@ import { applyColor, applyScale } from "./time-travel.ts";
 import { clearScene, disposeNodeContent, disposeNodeSubtree } from "./cleanup.ts";
 import { createAnchorNode } from "./anchor-node.ts";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
+import { notifyPendingEditsChanged } from "../state/unsaved-changes.ts";
 
 /**
  * @param src - source string or `{cid, path?, format?}` reference
@@ -669,6 +670,7 @@ async function _handleLinkedAssetDropped(event: any) {
       nextLinkedNodeId(existingIds, tokenId, detail.assetID)
     );
     state.pendingChildRefs.push(nodeEntry);
+    notifyPendingEditsChanged();
 
     const parentNode = state.rootSceneAnchor || state.scene;
     if (choice === "live-ref") {

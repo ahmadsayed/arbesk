@@ -25,7 +25,10 @@
     // via scripts/run-tests.mjs --preload for `// @test-env dom` suites.
     // Neither is imported, so the graph cannot see them.
     "test/bun.setup.js",
-    "test/helpers/dom.js"
+    "test/helpers/dom.js",
+    // test/frontend/helpers/* are imported by specific test files (edit-mode.js
+    // helper by gizmo tests and similar); the runner skips helpers/*.
+    "test/frontend/helpers/*.js"
   ],
   "ignorePatterns": [
     "frontend/src/js/vendor/**",
@@ -104,6 +107,10 @@
     {
       "file": "frontend/src/js/state/wallet-state.ts",
       "exports": ["_resetForTesting"]
+    },
+    {
+      "file": "frontend/src/js/state/edit-mode.ts",
+      "exports": ["_resetEditModeForTesting"]
     },
     {
       "file": "packages/asset-core/src/domain/asset-store.ts",

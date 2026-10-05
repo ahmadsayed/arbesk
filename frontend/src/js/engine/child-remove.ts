@@ -14,6 +14,7 @@ import { loadNode } from "./scene-loader.ts";
 import { deselectNodes } from "./scene-selection.ts";
 import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
+import { notifyPendingEditsChanged } from "../state/unsaved-changes.ts";
 
 /**
  * Keeps only the selected ids that are child assets.
@@ -70,6 +71,7 @@ function unlinkChildAssetNode(
   );
   if (pIdx >= 0) {
     const [node] = state.pendingChildRefs.splice(pIdx, 1);
+    notifyPendingEditsChanged();
     disposeNodeSubtree(nodeId);
     _disposeAfterPendingReload(nodeId);
     return { node, fromPending: true };
@@ -81,6 +83,7 @@ function unlinkChildAssetNode(
     // Mark (don't splice) saved children: the save-time no-op diff must still
     // see the baseline, so manifest-builder filters these after snapshotting.
     state.pendingChildRefRemovals.add(nodeId);
+    notifyPendingEditsChanged();
     disposeNodeSubtree(nodeId);
     _disposeAfterPendingReload(nodeId);
     return { node: saved, fromPending: false };
@@ -115,6 +118,7 @@ function reinsertChildAssetNode(captured: {
   } else {
     state.pendingChildRefRemovals.delete(node.node_id);
   }
+  notifyPendingEditsChanged();
   reloadChildAssetNode(node);
   emit(EVENTS.NODE_LIST_CHANGED, { nodeIds: [node.node_id] });
 }

@@ -10,6 +10,8 @@ import { applyColor } from "./time-travel.ts";
 import { stageNodeTransform, readNodeTransformMatrix, matricesEqual } from "./transforms.ts";
 import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
+import { notifyPendingEditsChanged, registerPendingSource } from "../state/unsaved-changes.ts";
+import { isEditing, subscribeEditMode } from "../state/edit-mode.ts";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -33,6 +35,9 @@ const nodeColorInput = document.getElementById("nodeColor");
 const scaleSection = document.getElementById("scaleSection");
 const nodeScaleFactor: HTMLInputElement|null = document.getElementById("nodeScaleFactor") as HTMLInputElement | null;
 const nodeScalePercent: HTMLInputElement|null = document.getElementById("nodeScalePercent") as HTMLInputElement | null;
+const scaleHint = document.getElementById("scaleHint");
+const SCALE_HINT_EDIT = scaleHint?.textContent ?? "";
+const SCALE_HINT_VIEW = "Switch to Edit to change scale.";
 const componentEditor = document.getElementById("componentEditor");
 const selectedComponentName = document.getElementById("selectedComponentName");
 const selectedComponentSwatch = document.getElementById(
@@ -54,6 +59,7 @@ let activeMeshName: string|null = null;
 let originalMaterialColors: Record<string, string> = {};
 // Pending direct source color edits: Map<nodeId, Map<meshName, hexColor>>
 const pendingSourceColorEdits = new Map();
+registerPendingSource(() => pendingSourceColorEdits.size > 0);
 
 // ── Undo / Redo ──────────────────────────────────────────────────────────────
 // Color and inspector-scale edits push snapshot entries into the shared scene
@@ -84,6 +90,7 @@ registerUndoApplier("color", (item, direction) => {
     pendingSourceColorEdits.set(item.nodeId, nodeEdits);
   }
   nodeEdits.set(meshName, color);
+  notifyPendingEditsChanged();
 });
 
 /**
@@ -106,6 +113,14 @@ function getMeshMaterialColor(mesh: BABYLON.AbstractMesh) {
 // ── Uniform scale fields ─────────────────────────────────────────────────────
 
 const MIN_SCALE = 0.01;
+
+/** Scale is a placement edit: editable in Edit mode only. */
+function _syncScaleEditable(): void {
+  const editable = isEditing();
+  if (nodeScaleFactor) nodeScaleFactor.disabled = !editable;
+  if (nodeScalePercent) nodeScalePercent.disabled = !editable;
+  if (scaleHint) scaleHint.textContent = editable ? SCALE_HINT_EDIT : SCALE_HINT_VIEW;
+}
 
 function _getLiveAnchor(nodeId: string | null) {
   if (!nodeId) return null;
@@ -135,12 +150,31 @@ function _refreshScaleFields() {
 }
 
 /**
+ * Pushes a "Scale" undo entry for `nodeId` when `before` and `after` differ.
+ * @remarks No-op when either matrix is missing or they're equal, so callers
+ *   can stage speculatively without checking first.
+ */
+function _pushScaleUndoIfChanged(
+  nodeId: string,
+  before: number[] | null,
+  after: number[] | null
+) {
+  if (!before || !after || matricesEqual(before, after)) return;
+  pushUndoEntry({
+    type: "transform",
+    label: "Scale",
+    items: [{ nodeId, before, after }],
+  });
+}
+
+/**
  * Applies an absolute uniform scale factor to the active node and stages the
  * transform for Save/Publish.
  * @remarks Keying the same factor into every copy of a model makes them
  *   identical in size.
  */
 function _applyUniformScale(factor: number) {
+  if (!isEditing()) return;
   const anchor = _getLiveAnchor(activeNodeId);
   if (!anchor || !Number.isFinite(factor) || factor < MIN_SCALE) {
     _refreshScaleFields();
@@ -150,14 +184,7 @@ function _applyUniformScale(factor: number) {
   anchor.scaling.setAll(factor);
   if (activeNodeId) {
     stageNodeTransform(activeNodeId);
-    const after = readNodeTransformMatrix(activeNodeId);
-    if (before && after && !matricesEqual(before, after)) {
-      pushUndoEntry({
-        type: "transform",
-        label: "Scale",
-        items: [{ nodeId: activeNodeId, before, after }],
-      });
-    }
+    _pushScaleUndoIfChanged(activeNodeId, before, readNodeTransformMatrix(activeNodeId));
   }
   _refreshScaleFields();
 }
@@ -431,6 +458,7 @@ function onComponentColorChange(e: Event) {
     pendingSourceColorEdits.set(activeNodeId, nodeEdits);
   }
   nodeEdits.set(meshName, color);
+  notifyPendingEditsChanged();
 }
 
 // Pending source color edit accessors (consumed by asset-save.js).
@@ -440,10 +468,12 @@ export function getPendingSourceColorEdits() {
 
 export function clearPendingSourceColorEdits() {
   pendingSourceColorEdits.clear();
+  notifyPendingEditsChanged();
 }
 
 export function clearPendingSourceColorEdit(nodeId: string) {
   pendingSourceColorEdits.delete(nodeId);
+  notifyPendingEditsChanged();
 }
 
 // Event bindings
@@ -581,5 +611,8 @@ on(EVENTS.TRANSFORM_STAGED, (e: {nodeIds?: string[]}) => {
   if (!activeNodeId || !Array.isArray(e?.nodeIds)) return;
   if (e.nodeIds.includes(activeNodeId)) _refreshScaleFields();
 });
+
+subscribeEditMode(_syncScaleEditable);
+_syncScaleEditable();
 
 export { openInspector };

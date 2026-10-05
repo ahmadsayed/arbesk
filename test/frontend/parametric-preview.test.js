@@ -2,6 +2,9 @@
 
 import { describe, expect, jest, mock, test } from "bun:test";
 import { resetModules } from "../helpers/module-registry.js";
+
+const editMode = { editing: false, subs: new Set() };
+
 function setupDom() {
   document.body.innerHTML = [
     '<div id="inspector"></div>',
@@ -19,12 +22,23 @@ function setupDom() {
     '<span id="tokenChildChain"></span>',
     '<span id="tokenChildResolution"></span>',
     '<span id="tokenChildCid"></span>',
+    '<p id="scaleHint">Applies the same scale on all axes.</p>',
   ].join("");
 }
 
 async function load(getNodeChildRef) {
   resetModules();
   setupDom();
+  editMode.editing = false;
+  editMode.subs.clear();
+
+  await mock.module("../../frontend/src/js/state/edit-mode.js", () => ({
+    isEditing: () => editMode.editing,
+    subscribeEditMode: (fn) => {
+      editMode.subs.add(fn);
+      return () => editMode.subs.delete(fn);
+    },
+  }));
 
   await mock.module("@arbesk/asset-core/events/bus.js", () => ({
     on: jest.fn(),
@@ -129,5 +143,22 @@ describe("showTokenChildInfo (via openInspector)", () => {
     expect(document.getElementById("tokenChildChain").textContent).toBe("—");
     expect(document.getElementById("tokenChildResolution").textContent).toBe("latest");
     expect(document.getElementById("tokenChildCid").textContent).toBe("—");
+  });
+});
+
+describe("scale fields follow Edit mode", () => {
+  test("disabled with a hint in View mode, enabled in Edit", async () => {
+    await load(jest.fn());
+    const factor = document.getElementById("nodeScaleFactor");
+    const percent = document.getElementById("nodeScalePercent");
+    const hint = document.getElementById("scaleHint");
+    expect(factor.disabled).toBe(true);
+    expect(percent.disabled).toBe(true);
+    expect(hint.textContent).toBe("Switch to Edit to change scale.");
+
+    editMode.editing = true;
+    editMode.subs.forEach((fn) => fn());
+    expect(factor.disabled).toBe(false);
+    expect(hint.textContent).toBe("Applies the same scale on all axes.");
   });
 });

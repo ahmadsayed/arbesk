@@ -488,11 +488,6 @@ export function initEngine() {
           frameSelected();
         }
         break;
-      case "g":
-        e.preventDefault();
-        // Module is already cached once the toolbar exists — no load cost.
-        import("../ui/transform-gizmo.ts").then((m) => m.toggleGrid());
-        break;
     }
   });
 }

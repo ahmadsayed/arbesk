@@ -40,6 +40,7 @@ import {
   listPendingGenerations,
   updatePendingGeneration,
 } from "../../state/pending-generations.ts";
+import { notifyPendingEditsChanged } from "../../state/unsaved-changes.ts";
 import { log, warn } from "../../utils/log.ts";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
@@ -384,8 +385,15 @@ function clearBakedChildRefs(baked: any[]) {
   if (!baked?.length) return;
   const ids = new Set(baked.map((n) => n?.node_id));
   const pending = getPendingChildRefs();
+  let removed = false;
   for (let i = pending.length - 1; i >= 0; i--) {
-    if (ids.has(pending[i]?.node_id)) pending.splice(i, 1);
+    if (ids.has(pending[i]?.node_id)) {
+      pending.splice(i, 1);
+      removed = true;
+    }
+  }
+  if (removed) {
+    notifyPendingEditsChanged();
   }
 }
 

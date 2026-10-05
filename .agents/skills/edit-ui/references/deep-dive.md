@@ -134,8 +134,11 @@ The 3D viewport shows: a 40×40 wireframe ground grid (opaque, `--viewport-grid`
 | `F` | Frame selected | `engine/scene-graph.ts` |
 | `Home` | Frame all | `engine/scene-graph.ts` |
 | `0` | Reset view (forget saved camera pose) | `engine/scene-graph.ts` |
-| `G` | Toggle grid & axes | `ui/transform-gizmo.ts` |
-| `T` / `R` / `S` | Gizmo translate / rotate / scale | `ui/transform-gizmo.ts` |
+| `E` | Enter / leave Edit mode | `ui/transform-gizmo.ts` + `state/edit-mode.ts` |
+| `T` / `R` | Move / rotate (Edit only) | `ui/transform-gizmo.ts` |
+| `G` | Drop to floor (Edit only) | `ui/transform-gizmo.ts` |
+| `Shift+R` | Reset transform, keeps scale (Edit only) | `ui/transform-gizmo.ts` |
+| `V` | Time travel (both modes) | `ui/transform-gizmo.ts` |
 | `Esc` | Deselect | `engine/scene-graph.ts` |
 | `Ctrl+B` | Toggle sidebar | `ui/sidebar.ts` |
 | `Ctrl+1–5` | Switch sidebar panel | `ui/sidebar.ts` |

@@ -1,19 +1,43 @@
 /**
- * Viewport controls to translate, rotate, and scale the selected node.
- * @remarks Transform edits are staged and only persisted on the next Save
- *   Draft / Publish.
+ * Viewport placement controls: the View/Edit toggle, the Move/Rotate gizmo,
+ * and the side Undo/Redo/Grid strip.
+ * @remarks View-only by default — the gizmo attaches only in Edit mode
+ *   (state/edit-mode.ts). In Edit, Move is floor-locked and snapped (grid
+ *   cell / 15°, Alt suspends snapping); Drop to floor and Reset transform
+ *   act on the selection as one undo step each. Transform edits are staged and persisted on the
+ *   next Save Draft / Publish. There is deliberately no scale gizmo: scale is
+ *   a numeric Inspector edit, protecting print dimensions.
  */
 
 import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { state } from "../engine/state.ts";
 import type { TransformMode } from "../engine/state.ts";
-import {
-  stageNodeTransform,
-  readNodeTransformMatrix,
-  matricesEqual,
-} from "../engine/transforms.ts";
 import { undo, redo } from "../engine/undo-controller.ts";
-import { pushUndoEntry } from "../engine/undo-stack.ts";
+import {
+  attachToGroupPivot,
+  startGroupDrag,
+  applyGroupDrag,
+  endGroupDrag,
+  disposeGroupPivot,
+  isGroupDragActive,
+  topLevelAnchorsFor,
+  shiftGroupPivotY,
+} from "../engine/group-pivot.ts";
+import { groundAnchors, resetAnchor } from "../engine/placement-actions.ts";
+import { moveSnapStep, ROTATE_SNAP } from "../engine/placement.ts";
+import {
+  selectedIds,
+  snapshotMatrices,
+  commitTransformChange,
+  type MatrixSnapshot,
+} from "../engine/transform-commit.ts";
+import {
+  canEdit,
+  isEditing,
+  setEditing,
+  toggleEditing,
+  subscribeEditMode,
+} from "../state/edit-mode.ts";
 
 const TOOLBAR_ID = "transformToolbar";
 
@@ -41,8 +65,6 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l4-4 4 4"/><path d="M9 5v14"/><path d="M19 15l-4 4-4-4"/><path d="M15 19V5"/></svg>',
   rotate:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2.5 11a9 9 0 0 1 15.2-5.8L21.5 8"/><path d="M21.5 13a9 9 0 0 1-15.2 5.8L2.5 16"/></svg>',
-  scale:
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 9 15"/><path d="M12 3H3v18h18v-9"/><path d="M16 3h5v5"/><path d="M14 15l7 7"/></svg>',
   time:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   undo:
@@ -51,6 +73,12 @@ const ICONS = {
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg>',
   grid:
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>',
+  floorLock:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="7" y="9" width="10" height="8"/><path d="M12 3v3"/></svg>',
+  dropToFloor:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/></svg>',
+  resetTransform:
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
 };
 
 /**
@@ -72,14 +100,8 @@ function initTransformGizmo(
   const gizmoManager = new BABYLON.GizmoManager(scene);
   gizmoManager.positionGizmoEnabled = false;
   gizmoManager.rotationGizmoEnabled = false;
-  gizmoManager.scaleGizmoEnabled = false;
   gizmoManager.usePointerToAttachGizmos = false;
   gizmoManager.clearGizmoOnEmptyPointerEvent = false;
-
-  // Planar drag is more useful than single-axis drag for most assets.
-  if (gizmoManager.gizmos?.positionGizmo) {
-    gizmoManager.gizmos.positionGizmo.planarGizmoEnabled = true;
-  }
 
   state.gizmoManager = gizmoManager;
   state.transformMode = null;
@@ -87,46 +109,15 @@ function initTransformGizmo(
   // Per-frame fan-out for group drags: the gizmo mutates the pivot; each
   // selected anchor follows via its drag-start relative matrix.
   scene.onBeforeRenderObservable?.add(() => {
-    if (state.isGizmoDragging && _groupSnapshot) _applyGroupDrag();
+    if (state.isGizmoDragging && isGroupDragActive()) applyGroupDrag();
   });
 
   createToolbar();
   wireEvents(gizmoManager);
-  wireKeyboard(gizmoManager);
+  wireKeyboard();
   updateToolbarUI();
 
   console.log("[GIZMO] transform gizmo initialized");
-}
-
-/**
- * Read the current local transform of one anchor and stage it for
- * persistence in the manifest.
- */
-function captureNodeTransform(nodeId: string): void {
-  if (stageNodeTransform(nodeId)) {
-    console.log(`[GIZMO] transform staged | nodeId=${nodeId}`);
-  }
-}
-
-/**
- * Returns the node ids the gizmo acts on: the multi-selection when present,
- * otherwise the single highlighted node.
- */
-function _selectedIds(): string[] {
-  return state.selectedNodeIds.size > 0
-    ? [...state.selectedNodeIds]
-    : state.highlightedNodeId
-      ? [state.highlightedNodeId]
-      : [];
-}
-
-/**
- * Stages the transforms of every selected node.
- */
-function captureSelectedTransform(): void {
-  const ids = _selectedIds();
-  for (const nodeId of ids) captureNodeTransform(nodeId);
-  if (ids.length > 0) emit(EVENTS.TRANSFORM_STAGED, { nodeIds: ids });
 }
 
 // ── Undo capture ──
@@ -136,186 +127,101 @@ function captureSelectedTransform(): void {
 const _MODE_LABELS: Record<string, string> = {
   translate: "Move",
   rotate: "Rotate",
-  scale: "Scale",
 };
 
-let _dragBefore: Array<{ nodeId: string; matrix: number[] }> | null = null;
-// Transform mode captured at drag start so a mid-drag T/R/S keypress can't
+let _dragBefore: MatrixSnapshot | null = null;
+// Transform mode captured at drag start so a mid-drag T/R keypress can't
 // mislabel the undo entry.
 let _dragMode: TransformMode = null;
 
-function _snapshotSelectedMatrices(): Array<{
-  nodeId: string;
-  matrix: number[];
-}> {
-  const out = [];
-  for (const nodeId of _selectedIds()) {
-    const matrix = readNodeTransformMatrix(nodeId);
-    if (matrix) out.push({ nodeId, matrix });
-  }
-  return out;
+// ── Placement constraints (Edit mode) ──
+// Floor lock: Move drags on the XZ plane only; Rotate re-grounds on release.
+// Snapping: one grid cell / 15°, suspended while Alt is held.
+
+let _floorLocked = true;
+let _altHeld = false;
+
+function _gridScale(): number {
+  return state.scene?.getMeshByName?.("groundGrid")?.scaling?.x ?? 1;
 }
 
-function _pushDragUndoEntry(): void {
-  const before = _dragBefore;
-  _dragBefore = null;
-  const mode = _dragMode;
-  _dragMode = null;
-  if (!before || before.length === 0) return;
-  const items = [];
-  for (const { nodeId, matrix } of before) {
-    const after = readNodeTransformMatrix(nodeId);
-    if (after && !matricesEqual(matrix, after)) {
-      items.push({ nodeId, before: matrix, after });
-    }
+/** Sub-gizmos that leave the XZ plane: Y axis and the XY / YZ planes. */
+const _OFF_FLOOR_SUBGIZMOS = ["yGizmo", "xPlaneGizmo", "zPlaneGizmo"];
+
+/**
+ * Babylon creates the position gizmo lazily (first `positionGizmoEnabled =
+ * true`) with its plane handles off, so the XZ drag plane (`yPlaneGizmo`) is
+ * switched on here, every time constraints are applied.
+ */
+function _constrainPositionGizmo(pg: any): void {
+  if (!pg.planarGizmoEnabled) pg.planarGizmoEnabled = true;
+  if (pg.yPlaneGizmo) pg.yPlaneGizmo.isEnabled = true;
+  for (const name of _OFF_FLOOR_SUBGIZMOS) {
+    if (pg[name]) pg[name].isEnabled = !_floorLocked;
   }
-  if (items.length === 0) return; // click without drag
-  pushUndoEntry({
-    type: "transform",
-    label: _MODE_LABELS[mode || ""] || "Transform",
-    items,
+  pg.snapDistance = _altHeld ? 0 : moveSnapStep(_gridScale());
+}
+
+/** Re-applied after setMode because Babylon creates sub-gizmos lazily. */
+function _applyGizmoConstraints(): void {
+  const g = state.gizmoManager?.gizmos || {};
+  if (g.positionGizmo) _constrainPositionGizmo(g.positionGizmo);
+  if (g.rotationGizmo) g.rotationGizmo.snapDistance = _altHeld ? 0 : ROTATE_SNAP;
+}
+
+function _setAltHeld(held: boolean): void {
+  if (_altHeld === held) return;
+  _altHeld = held;
+  _applyGizmoConstraints();
+}
+
+function _toggleFloorLock(): void {
+  _floorLocked = !_floorLocked;
+  _applyGizmoConstraints();
+  updateToolbarUI();
+}
+
+function _selectionAnchors(): any[] {
+  return topLevelAnchorsFor(selectedIds());
+}
+
+/** Runs one placement action on the selection as a single undo step. */
+function _runPlacementAction(label: string, act: (anchors: any[]) => void): void {
+  if (!isEditing()) return;
+  const anchors = _selectionAnchors();
+  if (anchors.length === 0) return;
+  const before = snapshotMatrices(selectedIds());
+  act(anchors);
+  commitTransformChange(label, before);
+  // Re-centre the multi-selection pivot on the moved group.
+  if (state.selectedNodeIds.size > 1 && state.gizmoManager) attachToGroupPivot(state.gizmoManager);
+}
+
+export function dropSelectionToFloor(): void {
+  _runPlacementAction("Drop to floor", (anchors) => {
+    groundAnchors(anchors);
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Group pivot — multi-selection transforms
-//
-// With 2+ nodes selected the gizmo attaches to a synthetic pivot TransformNode
-// at the selection centroid instead of a node anchor. On drag start we
-// snapshot each anchor's world matrix relative to the pivot; every frame the
-// gizmo moves the pivot we re-derive each anchor's local TRS from the new
-// pivot world matrix, so the whole group moves/rotates/scales around the
-// shared centroid (Blender "median point" style).
-// ═══════════════════════════════════════════════════════════════════════════
-
-let _groupPivot: BABYLON.TransformNode | null = null;
-/**
- * Per-drag snapshot: relative world matrices + parent-space inverses for each
- * selected anchor. Null outside an active group drag.
- */
-let _groupSnapshot: Array<{
-  anchor: BABYLON.TransformNode;
-  rel: BABYLON.Matrix;
-  parentInv: BABYLON.Matrix;
-}> | null = null;
-
-function _disposeGroupPivot(): void {
-  _groupSnapshot = null;
-  if (_groupPivot && !_groupPivot.isDisposed()) {
-    _groupPivot.dispose();
-  }
-  _groupPivot = null;
-}
-
-function _ensureGroupPivot(): BABYLON.TransformNode {
-  if (_groupPivot && !_groupPivot.isDisposed()) return _groupPivot;
-  _groupPivot = new BABYLON.TransformNode("groupTransformPivot", state.scene);
-  _groupPivot.rotationQuaternion = BABYLON.Quaternion.Identity();
-  return _groupPivot;
-}
-
-/**
- * Returns selected anchors with no other selected anchor in their parent
- * chain.
- * @remarks Transforming both a parent and its nested child in one group drag
- *   would move the child twice, so only the top-most anchors are driven and
- *   nested ones ride along.
- */
-function _topLevelSelectedAnchors(): BABYLON.TransformNode[] {
-  const anchors = [...state.selectedNodeIds]
-    .map((id) => state.nodeAnchors.get(id))
-    .filter((a) => a && !a.isDisposed());
-  const set = new Set(anchors);
-  return anchors.filter((a) => {
-    for (let p = a.parent; p; p = p.parent) {
-      if (set.has(p)) return false;
-    }
-    return true;
+export function resetSelectionTransform(): void {
+  _runPlacementAction("Reset transform", (anchors) => {
+    for (const a of anchors) resetAnchor(a);
   });
 }
 
-/**
- * Place the pivot at the centroid of the selected anchors' world positions
- * with identity rotation/scale, and attach the gizmo to it.
- */
-function _attachToGroupPivot(gizmoManager: BABYLON.GizmoManager): void {
-  const anchors = _topLevelSelectedAnchors();
-  if (anchors.length === 0) {
-    gizmoManager.attachToNode(null);
-    return;
-  }
-  // Selection collapses to a single subtree (e.g. a model plus its own
-  // child-asset node): drive that anchor directly, no pivot needed.
-  if (anchors.length === 1) {
-    gizmoManager.attachToNode(anchors[0]);
-    return;
-  }
-
-  const pivot = _ensureGroupPivot();
-  const centroid = anchors
-    .reduce((sum, a) => sum.addInPlace(a.getAbsolutePosition()), BABYLON.Vector3.Zero())
-    .scaleInPlace(1 / anchors.length);
-  pivot.position.copyFrom(centroid);
-  pivot.rotationQuaternion.copyFrom(BABYLON.Quaternion.Identity());
-  pivot.scaling.copyFromFloats(1, 1, 1);
-  pivot.computeWorldMatrix(true);
-
-  gizmoManager.attachToNode(pivot);
-}
-
-function _startGroupDrag(): void {
-  if (!_groupPivot || state.selectedNodeIds.size < 2) return;
-  const topAnchors = _topLevelSelectedAnchors();
-  if (topAnchors.length < 2) return; // gizmo is on the single anchor directly
-  _groupPivot.computeWorldMatrix(true);
-  const pivotInv = BABYLON.Matrix.Invert(_groupPivot.getWorldMatrix());
-  _groupSnapshot = [];
-  for (const anchor of topAnchors) {
-    anchor.computeWorldMatrix(true);
-    // Babylon row-vector convention: A.multiply(B) applies A first, so the
-    // anchor-in-pivot-space matrix is anchorWorld × pivotInv — not the reverse.
-    // The reversed order makes the pivot's offset pre-multiply the anchor's
-    // own scale/rotation (scaled anchors move faster/slower than the gizmo).
-    const rel = anchor.getWorldMatrix().multiply(pivotInv);
-    const parentWorld = anchor.parent
-      ? anchor.parent.getWorldMatrix()
-      : BABYLON.Matrix.Identity();
-    _groupSnapshot.push({
-      anchor,
-      rel,
-      parentInv: BABYLON.Matrix.Invert(parentWorld),
-    });
-  }
-}
-
-/**
- * Re-derives every grouped anchor's local TRS from the pivot's current world
- * matrix.
- */
-function _applyGroupDrag(): void {
-  if (!_groupSnapshot || !_groupPivot) return;
-  _groupPivot.computeWorldMatrix(true);
-  const pivotWorld = _groupPivot.getWorldMatrix();
-  const scale = new BABYLON.Vector3();
-  const rotation = new BABYLON.Quaternion();
-  const position = new BABYLON.Vector3();
-  for (const entry of _groupSnapshot) {
-    if (entry.anchor.isDisposed()) continue;
-    // rel × pivotWorld (apply rel first, then the pivot's new world matrix)
-    // — the matching order to the drag-start snapshot above.
-    const world = entry.rel.multiply(pivotWorld);
-    const local = world.multiply(entry.parentInv);
-    if (!local.decompose(scale, rotation, position)) continue;
-    entry.anchor.scaling.copyFrom(scale);
-    entry.anchor.rotationQuaternion = entry.anchor.rotationQuaternion || new BABYLON.Quaternion();
-    entry.anchor.rotationQuaternion.copyFrom(rotation);
-    entry.anchor.position.copyFrom(position);
-  }
-}
-
-function _endGroupDrag(): void {
-  _groupSnapshot = null;
-}
+const ACTIONS: Record<string, () => void> = {
+  undo,
+  redo,
+  toggleGrid: () => {
+    toggleGrid();
+  },
+  toggleEdit: () => {
+    toggleEditing();
+  },
+  toggleFloorLock: _toggleFloorLock,
+  dropToFloor: dropSelectionToFloor,
+  resetTransform: resetSelectionTransform,
+};
 
 function createToolbar(): void {
   const viewport = document.getElementById("viewport");
@@ -329,16 +235,25 @@ function createToolbar(): void {
   toolbar.setAttribute("aria-label", "Transform tools");
 
   toolbar.innerHTML = `
-    <button class="btn btn-flat btn-sm transform-tool" data-mode="translate" aria-label="Move (T)" title="Move (T)">
+    <button class="btn btn-flat btn-sm transform-tool" data-mode="translate" data-edit-only aria-label="Move (T)" title="Move (T)">
       ${ICONS.translate}
     </button>
-    <button class="btn btn-flat btn-sm transform-tool" data-mode="rotate" aria-label="Rotate (R)" title="Rotate (R)">
+    <button class="btn btn-flat btn-sm transform-tool" data-mode="rotate" data-edit-only aria-label="Rotate (R)" title="Rotate (R)">
       ${ICONS.rotate}
     </button>
-    <button class="btn btn-flat btn-sm transform-tool" data-mode="scale" aria-label="Scale (S)" title="Scale (S)">
-      ${ICONS.scale}
+    <span class="transform-toolbar-sep" data-edit-only aria-hidden="true"></span>
+    <button id="lockFloorBtn" class="btn btn-flat btn-sm active" data-action="toggleFloorLock" data-edit-only aria-pressed="true" aria-label="Lock to floor" title="Lock to floor">
+      ${ICONS.floorLock}
     </button>
-    <button class="btn btn-flat btn-sm transform-tool" data-mode="time" aria-label="Time (V)" title="Time (V)">
+    <button id="dropToFloorBtn" class="btn btn-flat btn-sm placement-action" data-action="dropToFloor" data-edit-only aria-label="Drop to floor (G)" title="Drop to floor (G)">
+      ${ICONS.dropToFloor}
+    </button>
+    <button id="resetTransformBtn" class="btn btn-flat btn-sm placement-action" data-action="resetTransform" data-edit-only aria-label="Reset transform (Shift+R)" title="Reset transform (Shift+R)">
+      ${ICONS.resetTransform}
+    </button>
+    <span class="transform-toolbar-sep" data-edit-only aria-hidden="true"></span>
+    <button id="editModeBtn" class="btn btn-flat btn-sm edit-mode-toggle" data-action="toggleEdit" aria-label="Edit placement (E)" title="Edit placement (E)" hidden>Edit</button>
+    <button class="btn btn-flat btn-sm transform-tool" data-mode="time" data-view-only aria-label="Time (V)" title="Time (V)">
       ${ICONS.time}
     </button>
   `;
@@ -356,7 +271,7 @@ function createToolbar(): void {
     <button id="redoBtn" class="btn btn-flat btn-sm" data-action="redo" aria-label="Redo" title="Nothing to redo" disabled>
       ${ICONS.redo}
     </button>
-    <button id="gridToggleBtn" class="btn btn-flat btn-sm active" data-action="toggleGrid" aria-label="Toggle grid and axes (G)" title="Toggle grid and axes (G)" aria-pressed="true">
+    <button id="gridToggleBtn" class="btn btn-flat btn-sm active" data-action="toggleGrid" aria-label="Toggle grid and axes" title="Toggle grid and axes" aria-pressed="true">
       ${ICONS.grid}
     </button>
   `;
@@ -365,22 +280,14 @@ function createToolbar(): void {
   viewport.appendChild(side);
 
   const onToolbarClick = (e: MouseEvent) => {
-    const actionBtn = (e.target as HTMLElement).closest(
-      "[data-action]"
-    ) as HTMLElement | null;
-    if (actionBtn) {
-      if (actionBtn.dataset.action === "undo") undo();
-      else if (actionBtn.dataset.action === "toggleGrid") toggleGrid();
-      else redo();
+    const actionBtn = (e.target as HTMLElement).closest("[data-action]") as HTMLElement | null;
+    const action = actionBtn ? ACTIONS[actionBtn.dataset.action || ""] : undefined;
+    if (action) {
+      action();
       return;
     }
-    const btn = (e.target as HTMLElement).closest(
-      ".transform-tool"
-    ) as HTMLElement | null;
-    if (!btn) return;
-    const mode = btn.dataset.mode;
-    if (!mode) return;
-    setMode(mode as TransformMode);
+    const btn = (e.target as HTMLElement).closest(".transform-tool") as HTMLElement | null;
+    if (btn?.dataset.mode) setMode(btn.dataset.mode as TransformMode);
   };
   toolbar.addEventListener("click", onToolbarClick);
   side.addEventListener("click", onToolbarClick);
@@ -388,73 +295,145 @@ function createToolbar(): void {
 
 function wireEvents(gizmoManager: BABYLON.GizmoManager): void {
   on(EVENTS.NODE_SELECTED, () => {
-    if (!state.transformMode) {
-      setMode("translate");
-    } else {
-      attachToSelected(gizmoManager);
-      updateToolbarUI();
-    }
+    if (isEditing() && !_isPlacementMode(state.transformMode)) setMode("translate");
+    else _refreshAttachment(gizmoManager);
   });
 
   on(EVENTS.SELECTION_CHANGED, () => {
-    // Time mode is single-selection only: fall back to translate when the
-    // selection grows past one node.
-    if (state.transformMode === "time" && state.selectedNodeIds.size > 1) {
-      setMode("translate");
-    } else {
-      attachToSelected(gizmoManager);
-      updateToolbarUI();
-    }
+    // Time mode is single-selection only.
+    if (state.transformMode === "time" && state.selectedNodeIds.size > 1) _clearMode();
+    else _refreshAttachment(gizmoManager);
   });
 
   on(EVENTS.NODE_DESELECTED, () => {
     gizmoManager.attachToNode(null);
-    _disposeGroupPivot();
+    disposeGroupPivot();
     updateToolbarUI();
   });
 
   on(EVENTS.SCENE_CLEARED, () => {
     gizmoManager.attachToNode(null);
-    _disposeGroupPivot();
+    disposeGroupPivot();
     // Do not reset transformMode here: clearing the scene is part of version
     // navigation (loadVersion -> clearScene -> loadAssetManifest), and the user
     // should remain in Time mode so the model clock can rebuild on SCENE_READY.
+    // (edit-mode.ts drops Edit on SCENE_CLEARED; _onEditModeChanged clears a
+    // placement mode.)
     updateToolbarUI();
+  });
+
+  subscribeEditMode(_onEditModeChanged);
+}
+
+function _isEditableFocus(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  const tag = el?.tagName?.toLowerCase();
+  return (
+    !!el?.isContentEditable ||
+    tag === "input" ||
+    tag === "textarea" ||
+    tag === "select" ||
+    tag === "button"
+  );
+}
+
+/** V: time travel works in View and Edit; from Edit it leaves Edit first. */
+function _enterTime(): void {
+  if (state.selectedNodeIds.size > 1) return; // refused before leaving Edit
+  if (isEditing()) setEditing(false);
+  setMode("time");
+}
+
+const KEYS_ANY: Record<string, () => void> = {
+  e: () => {
+    toggleEditing();
+  },
+  v: _enterTime,
+};
+
+const KEYS_EDIT: Record<string, () => void> = {
+  t: () => setMode("translate"),
+  r: () => setMode("rotate"),
+  g: dropSelectionToFloor,
+};
+
+const KEYS_EDIT_SHIFT: Record<string, () => void> = {
+  r: resetSelectionTransform,
+};
+
+function _keyAction(e: KeyboardEvent): (() => void) | undefined {
+  if (e.ctrlKey || e.metaKey || e.altKey) return undefined;
+  const key = e.key.toLowerCase();
+  if (e.shiftKey) return isEditing() ? KEYS_EDIT_SHIFT[key] : undefined;
+  return KEYS_ANY[key] ?? (isEditing() ? KEYS_EDIT[key] : undefined);
+}
+
+let _keyboardWired = false;
+
+function wireKeyboard(): void {
+  // Document-level listeners: wire once per page, even if init re-runs.
+  if (_keyboardWired) return;
+  _keyboardWired = true;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Alt") _setAltHeld(true);
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Alt") _setAltHeld(false);
+  });
+  // A modifier released outside the window must not leave snapping off.
+  window.addEventListener("blur", () => _setAltHeld(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.repeat || _isEditableFocus()) return;
+    const action = _keyAction(e);
+    if (!action) return;
+    e.preventDefault();
+    action();
   });
 }
 
-/** Unused, kept for call symmetry. */
-function wireKeyboard(_gizmoManager: BABYLON.GizmoManager): void {
-  document.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-    const tag = document.activeElement?.tagName?.toLowerCase();
-    const editable =
-      (document.activeElement as any)?.isContentEditable ||
-      tag === "input" ||
-      tag === "textarea" ||
-      tag === "select" ||
-      tag === "button";
-    if (editable) return;
+function _isPlacementMode(mode: TransformMode): boolean {
+  return mode === "translate" || mode === "rotate";
+}
 
-    switch (e.key.toLowerCase()) {
-      case "t":
-        e.preventDefault();
-        setMode("translate");
-        break;
-      case "r":
-        e.preventDefault();
-        setMode("rotate");
-        break;
-      case "s":
-        e.preventDefault();
-        setMode("scale");
-        break;
-      case "v":
-        e.preventDefault();
-        setMode("time");
-        break;
-    }
-  });
+/** Gizmo off, nothing attached, no mode — the View-mode resting state. */
+function _clearMode(): void {
+  const gm = state.gizmoManager;
+  if (!gm) return;
+  state.transformMode = null;
+  gm.positionGizmoEnabled = false;
+  gm.rotationGizmoEnabled = false;
+  gm.attachToNode(null);
+  disposeGroupPivot();
+  updateToolbarUI();
+  emit(EVENTS.TRANSFORM_MODE_CHANGED, { mode: null });
+}
+
+/** Set while Edit was left mid-drag; the drag-end handler finishes the exit. */
+let _detachAfterDrag = false;
+
+function _onEditModeChanged(): void {
+  if (isEditing()) {
+    if (_isPlacementMode(state.transformMode)) updateToolbarUI();
+    else setMode("translate");
+    return;
+  }
+  if (!_isPlacementMode(state.transformMode)) {
+    updateToolbarUI();
+    return;
+  }
+  if (state.isGizmoDragging) {
+    _detachAfterDrag = true;
+    updateToolbarUI();
+    return;
+  }
+  _clearMode();
+}
+
+/** Re-attach after a selection change — only placement and time modes attach. */
+function _refreshAttachment(gm: BABYLON.GizmoManager): void {
+  if (isEditing() || state.transformMode === "time") attachToSelected(gm);
+  else gm.attachToNode(null);
+  updateToolbarUI();
 }
 
 /**
@@ -462,25 +441,25 @@ function wireKeyboard(_gizmoManager: BABYLON.GizmoManager): void {
  */
 function setMode(mode: TransformMode): void {
   if (!state.gizmoManager) return;
-
+  // An explicit mode choice supersedes a deferred mid-drag Edit exit.
+  _detachAfterDrag = false;
+  // Placement tools exist only in Edit mode.
+  if (_isPlacementMode(mode) && !isEditing()) return;
   // Per-node time-travel is a single-selection feature.
   if (mode === "time" && state.selectedNodeIds.size > 1) {
     console.log("[GIZMO] time mode ignored: multi-selection active");
     return;
   }
 
-  // Toggling the same mode off is not implemented; users can press Esc to
-  // deselect or click empty space to hide the gizmo.
   state.transformMode = mode;
   state.gizmoManager.positionGizmoEnabled = mode === "translate";
   state.gizmoManager.rotationGizmoEnabled = mode === "rotate";
-  state.gizmoManager.scaleGizmoEnabled = mode === "scale";
 
   // Gizmos are created lazily; subscribe to drag-end on whichever exists.
   const gizmos = state.gizmoManager.gizmos || {};
   ensureDragEndSubscription(gizmos.positionGizmo);
   ensureDragEndSubscription(gizmos.rotationGizmo);
-  ensureDragEndSubscription(gizmos.scaleGizmo);
+  _applyGizmoConstraints();
 
   attachToSelected(state.gizmoManager);
   updateToolbarUI();
@@ -490,7 +469,7 @@ function setMode(mode: TransformMode): void {
 const _subscribedGizmos = new WeakSet<object>();
 
 /**
- * @param gizmo a Babylon position/rotation/scale gizmo.
+ * @param gizmo a Babylon position/rotation gizmo.
  */
 function ensureDragEndSubscription(gizmo: any): void {
   if (!gizmo || _subscribedGizmos.has(gizmo)) return;
@@ -498,18 +477,34 @@ function ensureDragEndSubscription(gizmo: any): void {
   if (gizmo.onDragStartObservable) {
     gizmo.onDragStartObservable.add(() => {
       state.isGizmoDragging = true;
-      _dragBefore = _snapshotSelectedMatrices();
+      _dragBefore = snapshotMatrices(selectedIds());
       _dragMode = state.transformMode;
-      if (state.selectedNodeIds.size > 1) _startGroupDrag();
+      _applyGizmoConstraints(); // grid may have rescaled since the last drag
+      // Floor-locked Move starts grounded (fixes floating legacy assets);
+      // the correction rides in this drag's undo entry.
+      if (_floorLocked && _dragMode === "translate") {
+        shiftGroupPivotY(groundAnchors(_selectionAnchors()));
+      }
+      if (state.selectedNodeIds.size > 1) startGroupDrag();
     });
     subscribed = true;
   }
   if (gizmo.onDragEndObservable) {
     gizmo.onDragEndObservable.add(() => {
       state.isGizmoDragging = false;
-      _endGroupDrag();
-      captureSelectedTransform();
-      _pushDragUndoEntry();
+      endGroupDrag();
+      // Rotating a long part tips it through the floor — re-ground it.
+      if (_floorLocked && _dragMode === "rotate") {
+        shiftGroupPivotY(groundAnchors(_selectionAnchors()));
+      }
+      _setAltHeld(false);
+      commitTransformChange(_MODE_LABELS[_dragMode || ""] || "Transform", _dragBefore);
+      _dragBefore = null;
+      _dragMode = null;
+      if (_detachAfterDrag) {
+        _detachAfterDrag = false;
+        if (!isEditing() && _isPlacementMode(state.transformMode)) _clearMode();
+      }
     });
     subscribed = true;
   }
@@ -518,7 +513,7 @@ function ensureDragEndSubscription(gizmo: any): void {
 
 function attachToSelected(gizmoManager: BABYLON.GizmoManager): void {
   if (state.selectedNodeIds.size > 1) {
-    _attachToGroupPivot(gizmoManager);
+    attachToGroupPivot(gizmoManager);
     return;
   }
 
@@ -536,28 +531,58 @@ function attachToSelected(gizmoManager: BABYLON.GizmoManager): void {
   }
 }
 
+function _renderEditButton(editing: boolean): void {
+  const btn = document.getElementById("editModeBtn");
+  if (!btn) return;
+  btn.hidden = !canEdit();
+  btn.textContent = editing ? "Done" : "Edit";
+  const label = editing ? "Done editing (E)" : "Edit placement (E)";
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+}
+
+function _renderToolButton(
+  btn: HTMLButtonElement,
+  activeMode: TransformMode,
+  hasSelection: boolean,
+  isMulti: boolean
+): void {
+  const isActive = btn.dataset.mode === activeMode;
+  btn.classList.toggle("active", isActive);
+  btn.setAttribute("aria-pressed", String(isActive));
+  const isTime = btn.dataset.mode === "time";
+  btn.disabled = !hasSelection || (isTime && isMulti);
+  if (isTime) {
+    btn.title = isMulti ? "Time travel is available for a single selected node" : "Time (V)";
+  }
+}
+
+function _renderPlacementButtons(toolbar: HTMLElement, hasSelection: boolean): void {
+  for (const btn of toolbar.querySelectorAll<HTMLButtonElement>(".placement-action")) {
+    btn.disabled = !hasSelection;
+  }
+  const lock = document.getElementById("lockFloorBtn");
+  if (lock) {
+    lock.classList.toggle("active", _floorLocked);
+    lock.setAttribute("aria-pressed", String(_floorLocked));
+  }
+}
+
 function updateToolbarUI(): void {
   const toolbar = document.getElementById(TOOLBAR_ID);
   if (!toolbar) return;
-
-  const hasSelection =
-    state.selectedNodeIds.size > 0 || !!state.highlightedNodeId;
+  const editing = isEditing();
+  const hasSelection = state.selectedNodeIds.size > 0 || !!state.highlightedNodeId;
   const isMulti = state.selectedNodeIds.size > 1;
   const activeMode = hasSelection ? state.transformMode : null;
 
-  for (const btn of toolbar.querySelectorAll(".transform-tool")) {
-    const toolBtn = btn as HTMLButtonElement;
-    const isActive = toolBtn.dataset.mode === activeMode;
-    toolBtn.classList.toggle("active", isActive);
-    toolBtn.setAttribute("aria-pressed", String(isActive));
-    const isTime = toolBtn.dataset.mode === "time";
-    toolBtn.disabled = !hasSelection || (isTime && isMulti);
-    if (isTime) {
-      toolBtn.title = isMulti
-        ? "Time travel is available for a single selected node"
-        : "Time (V)";
-    }
+  for (const el of toolbar.querySelectorAll<HTMLElement>("[data-edit-only]")) el.hidden = !editing;
+  for (const el of toolbar.querySelectorAll<HTMLElement>("[data-view-only]")) el.hidden = editing;
+  _renderEditButton(editing);
+  for (const btn of toolbar.querySelectorAll<HTMLButtonElement>(".transform-tool")) {
+    _renderToolButton(btn, activeMode, hasSelection, isMulti);
   }
+  _renderPlacementButtons(toolbar, hasSelection);
 }
 
 export { initTransformGizmo };

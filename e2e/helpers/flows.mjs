@@ -278,6 +278,65 @@ export async function saveDraft(page, prevCid) {
 }
 
 /**
+ * Enter Edit mode via the viewport toolbar button.
+ * @param {Page} page
+ */
+export async function enterEditMode(page) {
+  await page.click(SELECTORS.editModeButton);
+  await expect(page.locator(SELECTORS.editModeButton)).toHaveText("Done");
+}
+
+/**
+ * World-space facts about the first model anchor (`anchor_<node_id>`) in the
+ * main Babylon scene: lowest point, bounds centre, rotation w, scale.
+ * @param {Page} page
+ */
+export async function firstAnchorState(page) {
+  return page.evaluate(() => {
+    // Babylon is a CDN global on the page (no types in the E2E harness).
+    const B = /** @type {any} */ (globalThis).BABYLON;
+    /** @type {any[]} */
+    const scenes = B.EngineStore.Instances[0].scenes;
+    const isAnchor = (/** @type {any} */ n) => n.name.startsWith("anchor_");
+    const scene = scenes.find((s) => s.transformNodes.some(isAnchor));
+    const a = scene.transformNodes.find(isAnchor);
+    a.computeWorldMatrix(true);
+    const { min, max } = a.getHierarchyBoundingVectors(true);
+    return {
+      minY: min.y,
+      cx: (min.x + max.x) / 2,
+      cz: (min.z + max.z) / 2,
+      qw: a.rotationQuaternion ? Math.abs(a.rotationQuaternion.w) : 1,
+      sx: a.scaling.x,
+    };
+  });
+}
+
+/**
+ * Directly perturb the first model anchor (test setup only — simulates a
+ * floating/rotated legacy placement without a pointer drag).
+ * @param {Page} page
+ * @param {{ dx?: number, dy?: number, rotateZ?: number }} change
+ */
+export async function perturbFirstAnchor(page, change) {
+  await page.evaluate(({ dx = 0, dy = 0, rotateZ = 0 }) => {
+    // Babylon is a CDN global on the page (no types in the E2E harness).
+    const B = /** @type {any} */ (globalThis).BABYLON;
+    /** @type {any[]} */
+    const scenes = B.EngineStore.Instances[0].scenes;
+    const isAnchor = (/** @type {any} */ n) => n.name.startsWith("anchor_");
+    const scene = scenes.find((s) => s.transformNodes.some(isAnchor));
+    const a = scene.transformNodes.find(isAnchor);
+    a.position.x += dx;
+    a.position.y += dy;
+    if (rotateZ) {
+      a.rotationQuaternion = B.Quaternion.RotationAxis(new B.Vector3(0, 0, 1), rotateZ);
+    }
+    a.computeWorldMatrix(true);
+  }, change);
+}
+
+/**
  * First-time publish: confirm the name dialog and wait for the on-chain token
  * anchor. Returns the token id in HEX (publish derives it as a hash of the CID;
  * the gallery lists the same token in DECIMAL - compare numerically, never as
