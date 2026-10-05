@@ -177,11 +177,15 @@ export function initVersionDemo(figure: HTMLElement): void {
   if (!("IntersectionObserver" in window)) return;
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let booting = false;
+  // Tracked separately so a boot that finishes after the demo scrolled away
+  // stays paused until it comes back into view.
+  let visible = false;
 
   new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
-        if (!entry.isIntersecting) {
+        visible = entry.isIntersecting;
+        if (!visible) {
           viewer?.stop();
         } else if (viewer) {
           viewer.start();
@@ -191,7 +195,7 @@ export function initVersionDemo(figure: HTMLElement): void {
             .then((v) => {
               viewer = v;
               v.setVersion(current);
-              v.start();
+              if (visible) v.start();
               figure.classList.add("viewer-ready");
             })
             .catch(() => figure.classList.add("viewer-failed"));
