@@ -142,6 +142,10 @@ export const generateAssetSchema = z
       .min(2, "images requires 2-4 views")
       .max(4, "images requires 2-4 views")
       .optional(),
+    // Incremental CAD edit (cad only): the current design document, echoed
+    // back so the model edits it instead of starting over. Lazy because
+    // cadDesignSchema is declared further down this module.
+    priorDesign: z.lazy(() => cadDesignSchema).optional(),
   })
   .refine((v) => v.prompt || v.imageData || v.images?.length || v.sourceAssetCid, {
     message: "prompt, imageData, or sourceAssetCid is required",
@@ -205,6 +209,10 @@ export const generateAssetSchema = z
   .refine((v) => !v.animateInPlace || (v.animate && !v.rigOnly), {
     message: "animateInPlace is only valid with animate (not rigOnly)",
     path: ["animateInPlace"],
+  })
+  .refine((v) => !v.priorDesign || v.provider === "cad", {
+    message: "priorDesign is only valid with provider cad",
+    path: ["priorDesign"],
   });
 
 export const providerBalanceSchema = z.object({

@@ -163,4 +163,29 @@ describe("createCadProvider", () => {
     expect(() => provider.uploadSource({ kind: "buffer", buffer: new Uint8Array(), mime: "model/gltf-binary" }))
       .toThrow("cad provider has no source upload");
   });
+
+  it("passes priorDesign through to the generator", async () => {
+    const generate = jest.fn(async () => RESULT);
+    const provider = createCadProvider({ config: CONFIG, generator: { generate } });
+    const prior = { ...DESIGN, turn: 3 };
+
+    const taskId = await provider.textToModel({ prompt: "make it taller", priorDesign: prior });
+    for (let i = 0; i < 50 && generate.mock.calls.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 1));
+    }
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate.mock.calls[0][0]).toMatchObject({ prompt: "make it taller", priorDesign: prior });
+    expect(typeof taskId).toBe("string");
+  });
+
+  it("omits priorDesign for a fresh generation", async () => {
+    const generate = jest.fn(async () => RESULT);
+    const provider = createCadProvider({ config: CONFIG, generator: { generate } });
+    await provider.textToModel({ prompt: "a cube" });
+    for (let i = 0; i < 50 && generate.mock.calls.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 1));
+    }
+    expect("priorDesign" in generate.mock.calls[0][0]).toBe(false);
+  });
 });

@@ -12,6 +12,7 @@
  */
 import type { CadGenerator, CadGenerateResult } from "@arbesk/cad-gen/backend/index.js";
 import { CadRequestUnsuitable } from "@arbesk/cad-gen";
+import type { CadDesign } from "@arbesk/cad-gen";
 import type { GenerationConfig, GenerationProvider } from "../facade.ts";
 import type { GenerationCapability } from "../types.ts";
 import { requireCapability } from "../errors.ts";
@@ -50,6 +51,7 @@ export function cadWireResult(result: CadGenerateResult) {
 interface CadTaskState {
   createdAt: number;
   prompt: string;
+  priorDesign?: CadDesign;
   controller: AbortController;
   result?: CadGenerateResult;
   error?: CadSettleError;
@@ -96,6 +98,7 @@ export function createCadProvider({
     try {
       const result = await generator.generate({
         prompt: state.prompt,
+        ...(state.priorDesign && { priorDesign: state.priorDesign }),
         signal: state.controller.signal,
       });
       state.result = result;
@@ -119,12 +122,13 @@ export function createCadProvider({
     capabilities,
     can: (cap) => capabilities.has(cap),
 
-    textToModel: async ({ prompt }) => {
+    textToModel: async ({ prompt, priorDesign }) => {
       requireCapability(id, capabilities, "text-to-3d");
       const taskId = `cad-${crypto.randomUUID()}`;
       const state: CadTaskState = {
         createdAt: Date.now(),
         prompt,
+        ...(priorDesign && { priorDesign }),
         controller: new AbortController(),
       };
       tasks.set(taskId, state);

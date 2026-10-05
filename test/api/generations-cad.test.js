@@ -240,6 +240,36 @@ describe("POST /api/v1/generations with provider cad", () => {
     expect(del.body.upstreamCancelled).toBe(true);
     release();
   });
+
+  test("forwards priorDesign to the generator", async () => {
+    const res = await post({
+      prompt: "make it 2 mm taller", nodeId: "n_cad_edit", provider: "cad", priorDesign: DESIGN,
+    });
+    expect(res.status).toBe(202);
+    await until(async () => generate.mock.calls.length > 0, "generate call");
+    expect(generate.mock.calls[0][0]).toMatchObject({
+      prompt: "make it 2 mm taller",
+      priorDesign: { code: DESIGN.code, parameters: DESIGN.parameters, summary: "cube", turn: 1 },
+    });
+  });
+
+  test("rejects a malformed priorDesign with 400 naming the field", async () => {
+    const res = await post({
+      prompt: "edit", nodeId: "n_cad_bad", provider: "cad", priorDesign: { code: "", parameters: {} },
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.details.issues.some((i) => i.path[0] === "priorDesign")).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  test("rejects priorDesign on a non-cad provider", async () => {
+    const res = await post({
+      prompt: "edit", nodeId: "n_tripo_prior", provider: "tripo3d", providerKey: "k", priorDesign: DESIGN,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.issues.some((i) => i.path[0] === "priorDesign")).toBe(true);
+  });
 });
 
 describe("CAD_MOCK_GENERATION", () => {
@@ -265,6 +295,29 @@ describe("CAD_MOCK_GENERATION", () => {
       expect(poll.body.design.code).toBe("return box(P.width, P.depth, P.height);");
       expect(poll.body.provider.id).toBe("mock");
       expect(poll.body.attribution).toEqual([]);
+    } finally {
+      if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = prevKey;
+      if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
+    }
+  });
+
+  test("mock mode edits: priorDesign comes back with turn + 1", async () => {
+    const prevKey = process.env.DEEPSEEK_API_KEY;
+    const prevMock = process.env.CAD_MOCK_GENERATION;
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.CAD_MOCK_GENERATION = "true";
+    try {
+      app = buildBareApp();
+      const prior = { ...DESIGN, turn: 2 };
+      const res = await post({ prompt: "taller", nodeId: "n_cad_mock_edit", provider: "cad", priorDesign: prior });
+      expect(res.status).toBe(202);
+      let body;
+      await until(async () => {
+        body = (await request(app).get("/generations/" + res.body.taskId).set("Authorization", sessionHeader())).body;
+        return body.status === "success";
+      }, "mock edit success");
+      expect(body.design.code).toBe(DESIGN.code);
+      expect(body.design.turn).toBe(3);
     } finally {
       if (prevKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = prevKey;
       if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;

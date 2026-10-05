@@ -11,6 +11,7 @@ import type {
   MultiviewImage,
   SourceRef,
 } from "./types.ts";
+import type { CadDesign } from "@arbesk/cad-gen";
 import { createMockProvider } from "./providers/mock-provider.ts";
 import { createTripoProvider } from "./providers/tripo-provider.ts";
 import { createProviderRegistry } from "./registry.ts";
@@ -23,7 +24,7 @@ export interface GenerationProvider {
   can(capability: GenerationCapability): boolean;
 
   // ── fresh generation → provider taskId ──────────────────────────────────
-  textToModel(input: { prompt: string; textureQuality?: string }): Promise<string>;
+  textToModel(input: { prompt: string; textureQuality?: string; priorDesign?: CadDesign }): Promise<string>;
   imageToModel(input: { image: Uint8Array; mime: string; textureQuality?: string }): Promise<string>;
   multiviewToModel(input: { views: MultiviewImage[]; textureQuality?: string }): Promise<string>;
 

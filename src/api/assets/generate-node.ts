@@ -18,6 +18,7 @@ import type {
   SourceRef,
   MultiviewImage,
 } from "@arbesk/ai-asset-gen/types.js";
+import type { CadDesign } from "@arbesk/cad-gen";
 import {
   registerTask,
   getTask,
@@ -390,6 +391,8 @@ interface TripoGenerationInput {
   imageData?: string;
   imageMime?: string;
   images?: { imageData: string; imageMime: string; view: string }[];
+  /** Current design for an incremental CAD edit (cad only). */
+  priorDesign?: CadDesign;
 }
 
 /**
@@ -792,7 +795,7 @@ function resolveCadRuntimeForRequest(cadDeps: GenerationProvidersDeps): CadConfi
 async function handleCadRequest(
   c: Context,
   userAddress: string,
-  body: { prompt?: string; nodeId: string },
+  body: { prompt?: string; nodeId: string; priorDesign?: CadDesign },
   cadDeps: GenerationProvidersDeps,
 ): Promise<Response> {
   const prompt = body.prompt?.trim();
@@ -824,8 +827,14 @@ async function handleCadRequest(
     }
   }, CAD_CAPABILITIES);
 
-  console.log(`[GEN] cad generation started nodeId=${body.nodeId}`);
-  const cadTaskId = await provider.textToModel({ prompt });
+  console.log(
+    `[GEN] cad generation started nodeId=${body.nodeId}` +
+      (body.priorDesign ? ` edit turn=${body.priorDesign.turn ?? "?"}` : ""),
+  );
+  const cadTaskId = await provider.textToModel({
+    prompt,
+    ...(body.priorDesign && { priorDesign: body.priorDesign }),
+  });
   const taskId = registerTask({
     tripoTaskId: cadTaskId,
     providerKey: "",

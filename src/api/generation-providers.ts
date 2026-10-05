@@ -12,6 +12,7 @@ import type { CadSettleOutcome } from "@arbesk/ai-asset-gen/index.js";
 import type { GenerationCapability } from "@arbesk/ai-asset-gen/types.js";
 import type { CadGenerator, CadGenerateResult } from "@arbesk/cad-gen/backend/index.js";
 import { CadRequestUnsuitable, PRELUDE_VERSION } from "@arbesk/cad-gen/index.js";
+import type { CadDesign } from "@arbesk/cad-gen/index.js";
 import { cadConfigFromEnv } from "./routes/cad.ts";
 import type { CadConfigOutcome } from "./routes/cad.ts";
 
@@ -39,33 +40,38 @@ export function resolveCadRuntime(deps: GenerationProvidersDeps = {}): CadConfig
  */
 export function createMockCadGenerator(): CadGenerator {
   return {
-    generate: async ({ prompt }): Promise<CadGenerateResult> => {
+    generate: async ({ prompt, priorDesign }): Promise<CadGenerateResult> => {
       if (process.env.CAD_MOCK_UNSUITABLE === "true" && /dragon/i.test(prompt)) {
         throw new CadRequestUnsuitable(
           "Request unsuitable for CAD generation",
           0.1,
         );
       }
+      // An edit echoes the prior design one turn later (the real facade's
+      // turn arithmetic), so E2E can observe that priorDesign arrived.
+      const design: CadDesign = priorDesign
+        ? { ...priorDesign, summary: "Mock edit: " + prompt.slice(0, 200), turn: (priorDesign.turn ?? 1) + 1 }
+        : {
+            code: "return box(P.width, P.depth, P.height);",
+            parameters: {
+              width: { value: 40, unit: "mm", min: 10, max: 200, label: "Width" },
+              depth: { value: 30, unit: "mm", min: 10, max: 200, label: "Depth" },
+              height: { value: 20, unit: "mm", min: 5, max: 100, label: "Height" },
+            },
+            summary: "Mock parametric box",
+            turn: 1,
+          };
       return {
-      design: {
-        code: "return box(P.width, P.depth, P.height);",
-        parameters: {
-          width: { value: 40, unit: "mm", min: 10, max: 200, label: "Width" },
-          depth: { value: 30, unit: "mm", min: 10, max: 200, label: "Depth" },
-          height: { value: 20, unit: "mm", min: 5, max: 100, label: "Height" },
+        design,
+        runtime: { contractVersion: 1, preludeVersion: PRELUDE_VERSION },
+        provider: { id: "mock", model: "canned" },
+        attribution: [],
+        diagnostics: {
+          selection: { libraries: [], fit: {}, source: "fallback", jevTokens: { prompt: 0, completion: 0 } },
+          attempts: [{ index: 1, ok: true, gates: [] }],
+          durationMs: 1,
+          tokens: { prompt: 0, completion: 0 },
         },
-        summary: "Mock parametric box",
-        turn: 1,
-      },
-      runtime: { contractVersion: 1, preludeVersion: PRELUDE_VERSION },
-      provider: { id: "mock", model: "canned" },
-      attribution: [],
-      diagnostics: {
-        selection: { libraries: [], fit: {}, source: "fallback", jevTokens: { prompt: 0, completion: 0 } },
-        attempts: [{ index: 1, ok: true, gates: [] }],
-        durationMs: 1,
-        tokens: { prompt: 0, completion: 0 },
-      },
       };
     },
   };
