@@ -18,6 +18,11 @@ export function initUploadDeepLink(): void {
   const highlight = () => {
     btn.scrollIntoView?.({ block: "nearest" });
     btn.focus();
+    // Under prefers-reduced-motion the SCSS sets `animation: none`, so
+    // `animationend` never fires and `.attention` would stay forever — skip
+    // the pulse entirely rather than leave the class stuck.
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
     btn.classList.add("attention");
     btn.addEventListener("animationend", () => btn.classList.remove("attention"), { once: true });
   };

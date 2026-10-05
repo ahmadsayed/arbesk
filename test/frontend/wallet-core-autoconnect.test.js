@@ -246,3 +246,32 @@ describe("autoConnectWallet branch selection", () => {
     expect(error).not.toHaveBeenCalled();
   });
 });
+
+describe("initWallet", () => {
+  test("returns a promise that resolves only after the silent restore completes", async () => {
+    localStorage.setItem(LAST_WALLET_KEY, "cdp");
+    const { initWallet } = await loadWalletCore();
+
+    const restored = initWallet();
+    expect(restored).toBeInstanceOf(Promise);
+    // Restore is async (first await is a dynamic import inside _restoreCdp),
+    // so nothing has been written to wallet state synchronously yet.
+    expect(connectedAddress()).toBeNull();
+
+    await restored;
+
+    // Once the returned promise settles, the restore has fully run and
+    // _finishWalletSetup has written the connected address.
+    expect(connectedAddress()).toBe(SMART_ADDR);
+  });
+
+  test("never rejects, even when the restore throws", async () => {
+    localStorage.setItem(LAST_WALLET_KEY, "cdp");
+    cdp.warmupError = new Error("boom");
+    const { initWallet } = await loadWalletCore();
+
+    await expect(initWallet()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+    expect(connectedAddress()).toBeNull();
+  });
+});

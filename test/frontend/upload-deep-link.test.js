@@ -60,4 +60,19 @@ describe("initUploadDeepLink", () => {
     btn.dispatchEvent(new Event("animationend"));
     expect(btn.classList.contains("attention")).toBe(false);
   });
+
+  test("under prefers-reduced-motion, focuses the button but skips the stuck .attention pulse", async () => {
+    history.replaceState(null, "", "/library?upload=1");
+    btn.hidden = false;
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = () => ({ matches: true });
+    try {
+      const { initUploadDeepLink } = await load();
+      initUploadDeepLink();
+      expect(document.activeElement).toBe(btn);
+      expect(btn.classList.contains("attention")).toBe(false);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
 });

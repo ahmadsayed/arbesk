@@ -95,5 +95,5 @@ Port the mockup's viewer into the page's inline script, replacing the two curren
 ## 9. Risks
 
 - **Prefill vs. stored provider:** `?provider=` already overrides and persists the stored choice; `?prompt=` is independent and never persisted.
-- **Visitors without CAD:** a no-JS submit with `provider=cad` on a deployment without CAD falls through to the stored/default provider (existing `knownOption` guard) — the prompt is still prefilled.
+- **Visitors without CAD:** a no-JS submit with `provider=cad` on a CAD-less deployment does *not* fall through cleanly — `knownOption("cad")` is still true at sync time because `create-panel.ts` only removes the `cad` option once `getConfig()` resolves (async, after the select has already been set to `"cad"` and that value stored), so the select ends on whatever the browser picks once the option is later removed. The landing page's JS CAD gate (hiding the CAD persona card when the deployment lacks it) prevents this for JS users; a no-JS visitor on a CAD-less deployment hitting this URL directly is a known, accepted edge case.
 - **Copy length:** keep the hero to one sub-line; resist re-adding feature lists.

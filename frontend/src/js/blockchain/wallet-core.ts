@@ -68,8 +68,13 @@ async function _getWalletChainId(): Promise<number> {
 /**
  * Initializes the wallet system: starts EIP-6963 discovery and silently
  * auto-restores the previous connection (no popup).
+ * @returns A promise that resolves once the silent restore attempt settles
+ *   (success, no stored session, or failure) — it never rejects. By the time
+ *   it resolves, `walletState.get().walletAddress` reflects the outcome, so
+ *   callers can await it to tell a still-restoring session apart from a
+ *   genuinely signed-out one.
  */
-function initWallet() {
+function initWallet(): Promise<void> {
   startDiscovery();
   log("[WALLET] EIP-6963 discovery started");
   // Silently restore the previous connection (CDP or EOA) via
@@ -77,7 +82,7 @@ function initWallet() {
   // have no authorized account, so nothing happens and they still see
   // Login / Signup. This is what keeps an EOA login alive across page
   // navigations (index → studio → library are separate HTML documents).
-  autoConnectWallet().catch((err) => {
+  return autoConnectWallet().catch((err) => {
     warn("[WALLET] auto-connect failed:", err);
   });
 }

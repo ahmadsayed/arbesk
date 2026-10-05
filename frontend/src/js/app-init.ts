@@ -99,21 +99,31 @@ initNewMenu();
 // ─── Wallet ───
 // Start EIP-6963 discovery and silently restore the previous connection (owned
 // by initWallet). Login / Signup buttons across both views trigger a connect.
-initWallet();
+const walletRestored = initWallet();
 for (const id of ["connectWalletBtn", "libraryConnectBtn", "galleryConnectBtn"]) {
   document.getElementById(id)?.addEventListener("click", connectWallet);
 }
 initWalletPopover();
 
-// Deep links from the landing page. "Sign in" (/library?login=1; any view works)
-// opens the connect modal immediately; "or upload a model" (/library?upload=1)
-// opens it only when signed out, and initUploadDeepLink then points at the
-// Upload button once it unhides. If a previous session gets silently restored
-// while the modal is open, close it — the user is already in.
+// Deep links from the landing page. "Sign in" (/library?login=1; any view
+// works) opens the connect modal immediately, same as before — it's an
+// explicit ask to sign in, so there is nothing to wait for. "or upload a
+// model" (/library?upload=1) would otherwise flash the connect modal for a
+// returning signed-in user, because the silent session restore (initWallet)
+// is still in flight when this script runs; wait for it to settle, then only
+// open the modal if the visitor is genuinely signed out. Either way,
+// initUploadDeepLink points at the Upload button once it unhides. If a
+// previous session gets silently restored while the modal is open, close it
+// — the user is already in.
 const deepLink = new URLSearchParams(location.search);
-if (deepLink.has("login") || (deepLink.has("upload") && !walletState.get().walletAddress)) {
+if (deepLink.has("login")) {
   on(EVENTS.WALLET_CONNECTED, () => hideWalletModal());
   connectWallet();
+} else if (deepLink.has("upload")) {
+  on(EVENTS.WALLET_CONNECTED, () => hideWalletModal());
+  walletRestored.then(() => {
+    if (!walletState.get().walletAddress) connectWallet();
+  });
 }
 initUploadDeepLink();
 

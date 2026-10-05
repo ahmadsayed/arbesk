@@ -8,6 +8,9 @@
 // Babylon is loaded from the CDN as a global on this page (no app bundle).
 declare const BABYLON: any;
 
+// Must stay in sync with the CDN URLs in engine/babylon-loader.ts (same
+// Babylon version, same two hosts) and with the CSP hosts allow-listed in
+// src/api/secure-headers.ts (cdn.jsdelivr.net, cdn.babylonjs.com).
 const BJS_CORE = "https://cdn.jsdelivr.net/npm/babylonjs@9.12.0/babylon.min.js";
 const BJS_LOADERS = "https://cdn.babylonjs.com/v9.12.0/loaders/babylonjs.loaders.min.js";
 
