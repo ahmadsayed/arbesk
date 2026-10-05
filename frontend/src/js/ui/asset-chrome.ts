@@ -15,7 +15,7 @@ import {
 } from "@arbesk/asset-core/domain/version-history-store.js";
 import { walletState } from "../state/wallet-state.ts";
 import { isLibraryVisitor } from "../state/library-state.ts";
-import { hasOpenAsset } from "../state/edit-mode.ts";
+import { canEdit, hasOpenAsset } from "../state/edit-mode.ts";
 import { hasUnsavedChanges, onBeforeUnload } from "../state/unsaved-changes.ts";
 
 const titleEl = document.getElementById("assetStatusName");
@@ -51,7 +51,8 @@ function renderChrome(): void {
   const s = getAssetState();
   const hasAsset = hasOpenAsset();
   const hasWallet = !!walletState.get().walletAddress;
-  const dirty = hasAsset && hasUnsavedChanges();
+  // Marker only when the edits can actually be saved (spec §14.5).
+  const dirty = canEdit() && hasUnsavedChanges();
 
   if (titleEl) {
     if (s.activeAssetName) titleEl.textContent = s.activeAssetName;
@@ -85,5 +86,7 @@ on(EVENTS.SCENE_EMPTY, renderChrome);
 // Visitor mode flips with the profile subject, not the wallet.
 on(EVENTS.LIBRARY_STATE_CHANGED, renderChrome);
 on(EVENTS.PENDING_EDITS_CHANGED, renderChrome);
-// Native "Leave site?" prompt while edits are unsaved.
-window.addEventListener("beforeunload", onBeforeUnload);
+// Native "Leave site?" prompt while savable edits are unsaved.
+window.addEventListener("beforeunload", (e) => {
+  if (canEdit()) onBeforeUnload(e);
+});

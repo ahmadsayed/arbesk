@@ -279,3 +279,4 @@ in the same listener as the other transform keys.
 2. `beforeunload` prompts whenever `hasUnsavedChanges()` is true, including during an in-flight save (pending state clears only after a successful save).
 3. Gizmo drag end stages only nodes whose matrix changed, so a click without a drag never marks the asset dirty.
 4. The Edit/Done button has no `aria-pressed`; its accessible name is "Edit placement (E)" / "Done editing (E)" (WCAG 2.5.3 label-in-name).
+5. The unsaved marker and the leave-site prompt appear only when the user can save (`canEdit()`); signed-out users and library visitors never see them (decided at final review).

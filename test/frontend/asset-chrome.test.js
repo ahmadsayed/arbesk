@@ -210,7 +210,10 @@ test("meta gains 'Unsaved changes' and Save gets the dot while edits are pending
   expect(save.getAttribute("aria-label")).toBe("Save Draft");
 });
 
+const OWNER = "0x00000000000000000000000000000000000000a1";
+
 test("with no versions yet the marker reads 'Draft · Unsaved changes'", () => {
+  walletState.set({ walletAddress: OWNER });
   assetStore.set({ activeAssetManifestCid: "bafyA", activeAssetName: "Stand" });
   state.pendingTransformEdits.set("n1", [1]);
   emit(EVENTS.PENDING_EDITS_CHANGED);
@@ -218,6 +221,8 @@ test("with no versions yet the marker reads 'Draft · Unsaved changes'", () => {
 });
 
 test("beforeunload is prevented only while dirty", () => {
+  walletState.set({ walletAddress: OWNER });
+  assetStore.set({ activeAssetManifestCid: "bafyA", activeAssetName: "Stand" });
   const clean = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(clean);
   expect(clean.defaultPrevented).toBe(false);
@@ -226,4 +231,27 @@ test("beforeunload is prevented only while dirty", () => {
   const dirty = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(dirty);
   expect(dirty.defaultPrevented).toBe(true);
+});
+
+/** Pending edit staged where the user cannot save: no marker, no prompt. */
+function expectNoUnsavedUi() {
+  assetStore.set({ activeAssetManifestCid: "bafyA", activeAssetName: "Stand" });
+  state.pendingTransformEdits.set("n1", [1]);
+  emit(EVENTS.PENDING_EDITS_CHANGED);
+  expect(meta()).not.toContain("Unsaved changes");
+  expect(document.getElementById("saveAssetBtn").classList.contains("has-unsaved")).toBe(false);
+  const leave = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(leave);
+  expect(leave.defaultPrevented).toBe(false);
+}
+
+test("signed out with a pending edit: no unsaved marker and no leave-site prompt", () => {
+  expectNoUnsavedUi();
+});
+
+test("library visitor with a pending edit: no unsaved marker and no leave-site prompt", () => {
+  walletState.set({ walletAddress: OWNER });
+  libraryState.set({ subjectAddress: "0x00000000000000000000000000000000000000b2" });
+  emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
+  expectNoUnsavedUi();
 });
