@@ -342,8 +342,9 @@ html:has(.landing-page),
       &:last-child { flex: 0 0 auto; }
       &:last-child::before { display: none; }
 
-      &.is-past::before,
-      &.is-current::before { background: var(--accent-bg); }
+      // The line runs from a version to the next one, so it is orange only
+      // behind the current version.
+      &.is-past::before { background: var(--accent-bg); }
 
       &.is-past::after,
       &.is-current::after {
@@ -407,6 +408,9 @@ html:has(.landing-page),
   .landing-footer {
     display: grid;
     gap: 64px;
+    // #app is a flex column: auto margins would otherwise shrink the footer
+    // to its content width instead of stretching it.
+    width: 100%;
     max-width: 1080px;
     margin: 0 auto;
     padding: 96px 16px 48px;
