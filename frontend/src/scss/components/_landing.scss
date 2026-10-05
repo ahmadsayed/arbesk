@@ -869,6 +869,95 @@ html:has(.landing-page),
   margin: 0;
 }
 
+/* Persona cards — three entry paths straight off the hero. */
+.personas-inner {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.personas-inner h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 2rem;
+  color: var(--landing-fg);
+}
+
+.persona-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.persona-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  text-decoration: none;
+  background: var(--landing-card);
+  border: 1px solid color-mix(in srgb, var(--landing-border) 40%, transparent);
+  border-radius: 18px;
+  padding: 1.75rem 1.5rem;
+  box-shadow: 0 10px 30px rgba(42, 26, 14, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.persona-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(42, 26, 14, 0.12);
+}
+
+.persona-card .persona-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--landing-gold) 16%, transparent);
+  color: var(--landing-gold-strong);
+}
+
+.persona-card .persona-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.persona-card h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1rem 0 0.4rem;
+  color: var(--landing-fg);
+}
+
+.persona-card p {
+  flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--landing-muted);
+  margin: 0 0 1.1rem;
+}
+
+.persona-card .persona-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--landing-gold-strong);
+}
+
+.persona-card .persona-cta svg {
+  transition: transform 0.25s ease;
+}
+
+.persona-card:hover .persona-cta svg {
+  transform: translateX(4px);
+}
+
 /* Dark bands — clean straight edges with a gold rule at each boundary.
    Soft gold glows keep wide screens from reading as a flat brown void. */
 .band-dark {
@@ -1129,6 +1218,12 @@ html:has(.landing-page),
   .team-features {
     grid-template-columns: 1fr;
     max-width: 420px;
+  }
+
+  .persona-grid {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+    margin: 0 auto;
   }
 
   .memory-ledger {

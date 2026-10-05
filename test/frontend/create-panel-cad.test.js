@@ -739,3 +739,36 @@ describe("cad option availability gating", () => {
     expect(document.querySelector('option[value="cad"]')).not.toBeNull();
   });
 });
+
+// ─── ?provider= deep link (landing-page personas) ───
+
+describe("provider deep link", () => {
+  afterEach(() => {
+    history.replaceState(null, "", "/");
+  });
+
+  test("?provider= beats the stored provider and becomes the new default", async () => {
+    localStorage.setItem("arbesk-provider", "mock");
+    history.replaceState(null, "", "/studio?provider=cad");
+    resetModules();
+    buildDom();
+    await import("../../frontend/src/js/ui/create-panel.js");
+    await flush();
+    await flush();
+
+    expect(document.getElementById("providerSelect").value).toBe("cad");
+    expect(localStorage.getItem("arbesk-provider")).toBe("cad");
+  });
+
+  test("an unknown ?provider= falls back to the stored provider", async () => {
+    localStorage.setItem("arbesk-provider", "tripo3d");
+    history.replaceState(null, "", "/studio?provider=bogus");
+    resetModules();
+    buildDom();
+    await import("../../frontend/src/js/ui/create-panel.js");
+    await flush();
+    await flush();
+
+    expect(document.getElementById("providerSelect").value).toBe("tripo3d");
+  });
+});

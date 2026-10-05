@@ -415,11 +415,16 @@ function syncProviderUI() {
 }
 
 if (providerSelect) {
+  const knownOption = (value: string | null) =>
+    Array.from(providerSelect.options).some((o) => o.value === value);
+  // A ?provider= deep link (landing-page personas) beats the stored choice
+  // and becomes the new stored default; unknown values fall through to it.
+  const urlProvider = new URLSearchParams(location.search).get("provider");
   const storedProvider = localStorage.getItem(PROVIDER_STORAGE);
-  const knownProvider = Array.from(providerSelect.options).some(
-    (o) => o.value === storedProvider
-  );
-  if (storedProvider && knownProvider) {
+  if (urlProvider && knownOption(urlProvider)) {
+    providerSelect.value = urlProvider;
+    localStorage.setItem(PROVIDER_STORAGE, urlProvider);
+  } else if (storedProvider && knownOption(storedProvider)) {
     providerSelect.value = storedProvider;
   }
   providerSelect.addEventListener("change", () => {

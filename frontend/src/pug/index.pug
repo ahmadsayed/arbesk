@@ -82,6 +82,41 @@ html(lang="en")
             svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
               use(href="/icons.svg#chevron-down")
 
+        section.landing-section.personas-section.reveal
+          .personas-inner
+            h2.reveal-child-1 What brings you here?
+            .persona-grid.reveal-child-2
+              a.persona-card(href="/library")
+                .persona-icon(aria-hidden="true")
+                  svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    use(href="/icons.svg#folder")
+                h3 Manage my models
+                p Browse your library, open assets in the Studio, and travel through every version.
+                span.persona-cta
+                  | Open Library
+                  svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    use(href="/icons.svg#arrow-right")
+              a.persona-card(href="/studio?provider=cad")
+                .persona-icon(aria-hidden="true")
+                  svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    use(href="/icons.svg#settings")
+                h3 Create engineering models
+                p Parametric CAD parts from a text prompt — precise, printable 3MF engineering designs.
+                span.persona-cta
+                  | Open Studio · CAD
+                  svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    use(href="/icons.svg#arrow-right")
+              a.persona-card(href="/studio?provider=tripo3d")
+                .persona-icon(aria-hidden="true")
+                  svg(viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    use(href="/icons.svg#sparkle")
+                h3 Create 3D models
+                p AI-generated characters, props, and game assets — text or reference images to a riggable model.
+                span.persona-cta
+                  | Open Studio · Tripo 3D
+                  svg(width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                    use(href="/icons.svg#arrow-right")
+
         section.landing-section.reverse.section-tint.reveal
           .landing-section-inner
             .text
