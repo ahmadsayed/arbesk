@@ -112,6 +112,10 @@ mock.module("../../frontend/src/js/services/api.js", () => ({
   getOrCreateSession: mockGetOrCreateSession,
   getProviderBalance: mockGetProviderBalance,
 }));
+const mockResolveCadDesign = jest.fn();
+mock.module("../../frontend/src/js/services/cad-design-source.js", () => ({
+  resolveCadDesign: mockResolveCadDesign,
+}));
 mock.module("../../frontend/src/js/services/app-config.js", () => ({
   getConfig: mockGetConfig,
 }));
@@ -203,6 +207,8 @@ const CAD_RESULT = {
   providerTaskId: "cad-provider-task-1",
 };
 
+const CAD_DESIGN = { code: "return box(P.w,P.w,P.w);", parameters: { w: { value: 10, unit: "mm" } }, summary: "box", turn: 1 };
+
 function buildDom() {
   document.body.innerHTML = FRAGMENT;
   promptInput = document.getElementById("promptInput");
@@ -240,7 +246,7 @@ beforeEach(() => {
   document.getElementById("refineIndicatorDetach").click();
 
   mockGetOrCreateSession.mockResolvedValue("session-token");
-  mockGenerateCadAsset.mockResolvedValue({ ...CAD_RESULT });
+  mockGenerateCadAsset.mockResolvedValue({ ...CAD_RESULT, design: CAD_DESIGN });
   mockGetProviderBalance.mockResolvedValue({ balance: 5 });
   mockShowCustomDialog.mockResolvedValue(null);
   mockAddAssetMessage.mockReturnValue(null);
@@ -492,6 +498,25 @@ test("CAD_NOT_CONFIGURED surfaces the deployment-gate copy", async () => {
   );
 });
 
+// ─── Refine chip + provider lock ───
+
+test("a fresh cad result attaches a cad chip and locks the selector to cad", async () => {
+  connectWallet();
+  selectProvider("cad");
+  promptInput.value = "a 20 mm cube";
+  await clickGenerate();
+
+  expect(document.getElementById("refineIndicator").hidden).toBe(false);
+  expect(document.getElementById("refineIndicatorText").textContent).toBe("Refining: a 20 mm cube");
+  expect(providerSelect.value).toBe("cad");
+  expect(providerSelect.disabled).toBe(true);
+  expect(providerSelect.title).toBe("Detach to choose a provider");
+
+  document.getElementById("refineIndicatorDetach").click();
+  expect(providerSelect.disabled).toBe(false);
+  expect(providerSelect.title).toBe("");
+});
+
 // ─── Provider availability gating (needs a fresh module load per config) ───
 
 describe("cad option availability gating", () => {
@@ -521,3 +546,4 @@ describe("cad option availability gating", () => {
     expect(document.querySelector('option[value="cad"]')).not.toBeNull();
   });
 });
+

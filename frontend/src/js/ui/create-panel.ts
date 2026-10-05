@@ -64,6 +64,9 @@ import {
   getActiveAssetName,
 } from "@arbesk/asset-core/domain/asset.js";
 import { selectCollection } from "@arbesk/asset-core/domain/collection.js";
+import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
+import { chipProvider, cadChipFromManifest } from "./refine-target.ts";
+import type { ActiveVersion } from "./refine-target.ts";
 
 // ─── DOM References ───
 // The SPA shell (app.pug) always renders these elements, so non-null casts.
@@ -561,24 +564,42 @@ function syncCollectionSelect() {
 const assetMessages = new Map<string, AssetMessageHandle>();
 
 /**
- * Active version for typed-prompt retexture.
- * @remarks Set on generation result, Show-in-Studio, and bubble/history
- *   restore; cleared by detach, Clear Chat, and asset switch. The GLB CID is
- *   the durable reference — no expiry.
+ * Active version for typed-prompt refinement (mesh retexture or cad edit).
+ * @remarks Set on generation result, Show-in-Studio, asset open, and
+ *   bubble/history restore; cleared by detach, Clear Chat, and asset switch.
+ *   The source CID is the durable reference — no expiry.
  */
-interface ActiveVersion {
-  sourceAssetCid: string;
-  manifestCid: string | null;
-  name: string;
-}
 let activeVersion: ActiveVersion | null = null;
 
 const refineIndicator = document.getElementById("refineIndicator");
 const refineIndicatorText = document.getElementById("refineIndicatorText");
 const refineIndicatorDetach = document.getElementById("refineIndicatorDetach");
 
+/**
+ * Locks the provider selector to the chip's provider while one is attached.
+ * @remarks Never persisted: detaching restores the stored provider. Only runs
+ *   from event handlers, after the module-level consts it reads exist.
+ */
+function syncProviderLock() {
+  if (!providerSelect) return;
+  if (activeVersion) {
+    providerSelect.value = chipProvider(activeVersion.kind);
+    providerSelect.disabled = true;
+    providerSelect.title = "Detach to choose a provider";
+  } else {
+    const stored = localStorage.getItem(PROVIDER_STORAGE);
+    const known = Array.from(providerSelect.options).some((o) => o.value === stored);
+    if (stored && known) providerSelect.value = stored;
+    providerSelect.disabled = false;
+    providerSelect.title = "";
+  }
+  syncProviderUI();
+  syncImageAttachUI();
+}
+
 function setActiveVersion(version: ActiveVersion | null) {
   activeVersion = version;
+  syncProviderLock();
   if (!refineIndicator || !refineIndicatorText) return;
   refineIndicator.hidden = !version;
   if (version) refineIndicatorText.textContent = `Refining: ${version.name}`;
@@ -637,6 +658,72 @@ async function attachChatPreview(
 }
 
 /**
+ * Makes a version sent to the Studio the active refine target.
+ * @remarks Tripo3D generations and uploads refine as meshes, cad parts as
+ *   designs; other providers (mock) attach no chip.
+ */
+function activateSentVersion(record: {
+  provider?: string;
+  sourceAssetCid: string;
+  assetManifestCid: string | null;
+  prompt: string;
+}) {
+  const kind = record.provider === "cad"
+    ? "cad"
+    : record.provider === "tripo3d" || record.provider === "upload" ? "mesh" : null;
+  if (!kind) return;
+  setActiveVersion({
+    kind,
+    sourceAssetCid: record.sourceAssetCid,
+    manifestCid: record.assetManifestCid,
+    name: record.prompt,
+  });
+}
+
+/** Points the address bar at the sent version (token id when minted). */
+function pushStudioUrl(recordCid: string) {
+  const url = new URL(window.location.href);
+  const activeTokenId = getActiveAssetTokenId();
+  if (activeTokenId) {
+    url.searchParams.set("asset", activeTokenId);
+    url.searchParams.delete("manifest");
+  } else {
+    url.searchParams.set("manifest", recordCid);
+  }
+  window.history.pushState({}, "", url);
+}
+
+/** Puts the chain tip back after loading an older version. */
+async function restoreChainTip(previousLatestCid: string | null, recordCid: string) {
+  if (!previousLatestCid || previousLatestCid === recordCid) return;
+  setLatestManifestCid(previousLatestCid);
+  await renderChatProvenance(previousLatestCid);
+}
+
+/**
+ * Show in Studio is an explicit "keep this version" — saves a draft so the
+ * bubble stays restorable. Publish remains a separate, manual action.
+ */
+async function autoSaveSentVersion(assetMessage: AssetMessageHandle) {
+  try {
+    const saveResult = await onSaveAssetDraft();
+    // "no-changes" means this version is already durably saved — the pill
+    // is honest in both cases. Any other outcome already surfaced a toast.
+    if (saveResult && (saveResult.ok || saveResult.reason === "no-changes")) {
+      assetMessage.markSaved();
+    } else {
+      addChatMessage(
+        "system",
+        "Auto-save failed — use the Save button to retry."
+      );
+    }
+  } catch (err) {
+    console.error("Auto-save after Show in Studio failed:", err);
+    addChatMessage("system", "Auto-save failed — use the Save button to retry.");
+  }
+}
+
+/**
  * Sends a pending generation to the Studio viewport.
  * @remarks `restore=true` preserves the manifest-chain tip across the load so
  *   auto-save chains onto the prior tip instead of forking at the older
@@ -667,63 +754,25 @@ async function sendGenerationToStudio(
     const recordCid = record.assetManifestCid as string;
     adoptOpenedAsset(recordCid);
 
-    const url = new URL(window.location.href);
-    const activeTokenId = getActiveAssetTokenId();
-    if (activeTokenId) {
-      url.searchParams.set("asset", activeTokenId);
-      url.searchParams.delete("manifest");
-    } else {
-      url.searchParams.set("manifest", recordCid);
-    }
-    window.history.pushState({}, "", url);
+    pushStudioUrl(recordCid);
 
     await loadAssetManifest(recordCid);
 
     // Restore of an OLDER version: put the chain tip back (SCENE_READY
     // listeners re-asserted it from the loaded manifest during the await)
     // so the auto-save below chains onto the prior tip, not the old version.
-    if (
-      restore &&
-      previousLatestCid &&
-      previousLatestCid !== record.assetManifestCid
-    ) {
-      setLatestManifestCid(previousLatestCid);
-      await renderChatProvenance(previousLatestCid);
-    }
+    if (restore) await restoreChainTip(previousLatestCid, recordCid);
 
     // The restored/sent version becomes the active version for typed
-    // retexture follow-ups (Tripo3D generations and uploaded models).
-    if (record.provider === "tripo3d" || record.provider === "upload") {
-      setActiveVersion({
-        sourceAssetCid: record.sourceAssetCid,
-        manifestCid: record.assetManifestCid,
-        name: record.prompt,
-      });
-    }
+    // follow-ups (retexture for Tripo3D / uploads, design edits for cad).
+    activateSentVersion(record);
 
     const snapshot = await disposeChatPreview(generationId, {
       captureSnapshot: true,
     });
     assetMessage.markSent(snapshot);
 
-    // Show in Studio is an explicit "keep this version" — save a draft so the
-    // bubble stays restorable. Publish remains a separate, manual action.
-    try {
-      const saveResult = await onSaveAssetDraft();
-      // "no-changes" means this version is already durably saved — the pill
-      // is honest in both cases. Any other outcome already surfaced a toast.
-      if (saveResult && (saveResult.ok || saveResult.reason === "no-changes")) {
-        assetMessage.markSaved();
-      } else {
-        addChatMessage(
-          "system",
-          "Auto-save failed — use the Save button to retry."
-        );
-      }
-    } catch (err) {
-      console.error("Auto-save after Show in Studio failed:", err);
-      addChatMessage("system", "Auto-save failed — use the Save button to retry.");
-    }
+    await autoSaveSentVersion(assetMessage);
 
     addChatMessage("system", `Model carved via ${getProvider()}.`);
   } catch (err) {
@@ -1123,15 +1172,7 @@ function presentGenerationResult(
     ...(rigModel && { rigModel }),
   });
 
-  // A fresh Tripo3D result is the active version for typed retexture
-  // follow-ups until detached, cleared, or replaced.
-  if (provider === "tripo3d") {
-    setActiveVersion({
-      sourceAssetCid: result.sourceAssetCid,
-      manifestCid: result.assetManifestCid,
-      name: prompt,
-    });
-  }
+  activateResultVersion(result, provider, prompt);
 
   const assetMessage = addAssetMessage({ prompt, format: result.format, generationId });
   if (assetMessage) {
@@ -1143,6 +1184,22 @@ function presentGenerationResult(
     addFollowupActions(generationId);
   }
   return generationId;
+}
+
+/**
+ * A fresh result becomes the active version until detached, cleared, or
+ * replaced: Tripo3D results for typed retexture, CAD results (carrying their
+ * design) for typed design edits.
+ */
+function activateResultVersion(result: any, provider: string, prompt: string) {
+  if (provider !== "tripo3d" && provider !== "cad") return;
+  setActiveVersion({
+    kind: provider === "cad" ? "cad" : "mesh",
+    sourceAssetCid: result.sourceAssetCid,
+    manifestCid: result.assetManifestCid,
+    name: prompt,
+    ...(result.design && { design: result.design }),
+  });
 }
 
 /**
@@ -1205,6 +1262,7 @@ function presentStagedModel({
   // The staged model becomes the active version for typed retexture
   // follow-ups until detached, cleared, or replaced.
   setActiveVersion({
+    kind: "mesh",
     sourceAssetCid: source.cid,
     manifestCid: assetManifestCid,
     name,
@@ -2263,20 +2321,37 @@ on(EVENTS.SCENE_READY, (event: any) => {
   if (name) syncAssetNameDisplay(name);
   const manifestCid =
     event?.manifestCid || getActiveAssetManifestCid();
-  const identity = event?.manifest?.asset_id || manifestCid || null;
+  const identityChanged = noteOpenAssetIdentity(event?.manifest?.asset_id || manifestCid || null);
+  if (manifestCid) void renderChatProvenance(manifestCid);
+  if (identityChanged && manifestCid) presentOpenedAsset(event?.manifest, manifestCid, name);
+});
+
+/**
+ * Records the open asset's identity; the chat fully resets when it changes.
+ * @returns true when the identity changed
+ */
+function noteOpenAssetIdentity(identity: string | null): boolean {
   const identityChanged = !!(identity && identity !== openAssetIdentity);
   if (identityChanged && openAssetIdentity) {
     clearChat();
   }
   if (identity) openAssetIdentity = identity;
-  if (manifestCid) void renderChatProvenance(manifestCid);
-  // An asset that was opened (not generated/uploaded this session) gets an
-  // actionable bubble for its root model — otherwise the panel offers no
-  // follow-up actions for pre-existing assets.
-  if (identityChanged && manifestCid && event?.manifest?.type === "asset") {
-    presentOpenedAssetModel(event.manifest, manifestCid);
-  }
-});
+  return identityChanged;
+}
+
+/**
+ * Offers follow-ups for an asset that was opened (not generated/uploaded
+ * this session).
+ * @remarks Its root model gets an actionable bubble — otherwise the panel
+ *   offers no follow-up actions for pre-existing assets — and a CAD asset is
+ *   editable straight away (its design is read from the stored 3MF on the
+ *   first send).
+ */
+function presentOpenedAsset(manifest: any, manifestCid: string, name: string | null | undefined) {
+  if (manifest?.type === "asset") presentOpenedAssetModel(manifest, manifestCid);
+  const cadChip = cadChipFromManifest(manifest, manifestCid, name || "Part");
+  if (cadChip) setActiveVersion(cadChip);
+}
 
 on(EVENTS.ASSET_DRAFT_SAVED, () => {
   const manifestCid = getActiveAssetManifestCid();
@@ -2322,7 +2397,10 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }: { cid: stri
     await loadAssetManifest(cid);
     setLatestManifestCid(previousLatestCid);
     await renderChatProvenance(previousLatestCid);
-    if (sourceCid) setActiveVersion({ sourceAssetCid: sourceCid, manifestCid: cid, name: name || "" });
+    const restored = await getFromRemoteIPFS(cid).catch(() => null);
+    const cadChip = cadChipFromManifest(restored, cid, name || "");
+    if (cadChip) setActiveVersion(cadChip);
+    else if (sourceCid) setActiveVersion({ kind: "mesh", sourceAssetCid: sourceCid, manifestCid: cid, name: name || "" });
     else setActiveVersion(null); // chat-less version (e.g. parametric edit) — no retexture target
   } catch (err) {
     console.error("Version restore failed:", err);
