@@ -196,8 +196,9 @@ async function build() {
   fs.copyFileSync(MANIFOLD_WASM_FILE, path.join(distRoot, 'workers', 'manifold.wasm'));
   console.log('[BUNDLE] manifold.wasm staged next to cad-worker.js');
 
-  // 4. Classic (non-module) synchronous head scripts.
-  for (const rel of ['engine/theme-init', 'app/initial-view']) {
+  // 4. Classic (non-module) scripts: synchronous head scripts, plus the
+  //    landing page's deferred script (index.html ships no app bundle).
+  for (const rel of ['engine/theme-init', 'app/initial-view', 'landing/landing']) {
     await run({
       entrypoints: [path.join(srcRoot, rel + '.ts')],
       outdir: path.join(distRoot, rel, '..'),

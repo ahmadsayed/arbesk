@@ -10,6 +10,9 @@
     "frontend/src/js/app-entry.ts",
     "frontend/src/js/app/initial-view.ts",
     "frontend/src/js/engine/theme-init.ts",
+    // Landing page classic script: index.pug loads the built /js/landing/landing.js
+    // by URL (bundle.js classic-scripts loop), which the import graph cannot see.
+    "frontend/src/js/landing/landing.ts",
     "frontend/src/js/workers/gltf-worker.ts",
     // CAD render worker: same fixed-asset reasoning as the gltf worker entry
     // above — frontend/scripts/bundle.js references it by path string, which
