@@ -106,3 +106,17 @@
 .library-toolbar .btn-icon {
   padding: var(--size-2);
 }
+
+// /library?upload=1 deep link (ui/upload-deep-link.ts): one-shot pulse on Upload.
+#libraryUploadBtn.attention {
+  animation: kUploadAttention 0.9s ease-out 2;
+}
+
+@keyframes kUploadAttention {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-bg) 60%, transparent); }
+  to { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent-bg) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #libraryUploadBtn.attention { animation: none; }
+}

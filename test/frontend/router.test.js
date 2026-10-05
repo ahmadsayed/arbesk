@@ -64,7 +64,9 @@ describe("?login=1 deep link", () => {
     const url = await import("url");
     const here = path.dirname(url.fileURLToPath(import.meta.url));
     const src = fs.readFileSync(path.resolve(here, "../../frontend/src/js/app-init.ts"), "utf-8");
-    expect(src).toMatch(/new URLSearchParams\(location\.search\)\.has\("login"\)/);
+    // The query string is parsed once into `deepLink`, and "login" is read from it.
+    expect(src).toMatch(/const deepLink = new URLSearchParams\(location\.search\);/);
+    expect(src).toMatch(/deepLink\.has\("login"\)/);
     expect(src).not.toMatch(/pathname[^\n]*login/);
   });
 });

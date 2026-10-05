@@ -19,6 +19,7 @@ import { initWalletPopover } from "./ui/wallet-popover.ts";
 import { initThemeMenu } from "./ui/theme-menu.ts";
 import { initNewMenu } from "./ui/new-menu.ts";
 import { hideWalletModal } from "./ui/wallet-modal.ts";
+import { initUploadDeepLink } from "./ui/upload-deep-link.ts";
 // Installs the engine/wallet-backed deps of the asset-core version-history
 // store (side effect) before any scene/history events can fire.
 import "./engine/version-history-deps.ts";
@@ -104,13 +105,17 @@ for (const id of ["connectWalletBtn", "libraryConnectBtn", "galleryConnectBtn"])
 }
 initWalletPopover();
 
-// Deep link from the landing page "Log in" (/library?login=1; any view works): open the
-// connect modal immediately. If a previous session gets silently restored
+// Deep links from the landing page. "Sign in" (/library?login=1; any view works)
+// opens the connect modal immediately; "or upload a model" (/library?upload=1)
+// opens it only when signed out, and initUploadDeepLink then points at the
+// Upload button once it unhides. If a previous session gets silently restored
 // while the modal is open, close it — the user is already in.
-if (new URLSearchParams(location.search).has("login")) {
+const deepLink = new URLSearchParams(location.search);
+if (deepLink.has("login") || (deepLink.has("upload") && !walletState.get().walletAddress)) {
   on(EVENTS.WALLET_CONNECTED, () => hideWalletModal());
   connectWallet();
 }
+initUploadDeepLink();
 
 // ─── Headerbar network selector (shared by both views) ───
 document
