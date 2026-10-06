@@ -8,6 +8,8 @@
 import type { CadDesign, CadStats } from "../types.ts";
 import { evaluateStaticGates, evaluateKernelGates } from "../core/gates.ts";
 import type { GateResult } from "../core/gates.ts";
+import { referencedIdentifiers } from "../core/document.ts";
+import { missingRequiredHelpers } from "./catalog.ts";
 import { runValidation } from "./validate-runner.ts";
 import type { RunnerOptions } from "./validate-runner.ts";
 
@@ -24,6 +26,19 @@ export interface ValidationOutcome {
 }
 
 /**
+ * Fails a design that skips a helper its request requires (CatalogEntry.requires).
+ * @remarks Backend-only because the catalog is: the rule is about what the user
+ *   ASKED for, which the client never sees, and the server is where the repair
+ *   loop can act on it before anything ships.
+ */
+function requiredHelpersGate(design: CadDesign, prompt: string): GateResult {
+  const missing = missingRequiredHelpers(prompt, referencedIdentifiers(design.code));
+  return missing.length === 0
+    ? { gate: "required-helper", ok: true }
+    : { gate: "required-helper", ok: false, error: missing.map((r) => r.error).join(" ") };
+}
+
+/**
  * Runs the static gates - the whole of server-side validation.
  * @remarks The server does not run the kernel in the request path any more. Not
  *   a reduction in coverage but a correction of WHERE the check belongs: a
@@ -37,8 +52,10 @@ export interface ValidationOutcome {
 export function validateStatic(
   design: CadDesign,
   preludeNames: Iterable<string>,
+  prompt?: string,
 ): ValidationOutcome {
   const gates = evaluateStaticGates(design, preludeNames);
+  if (prompt !== undefined) gates.push(requiredHelpersGate(design, prompt));
   const failure = gates.find((g) => !g.ok);
   return failure ? { ok: false, gates, error: failure.error } : { ok: true, gates };
 }

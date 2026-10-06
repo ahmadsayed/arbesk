@@ -50,6 +50,23 @@ export interface CatalogEntry {
   helperRows: string[];
   /** Rules, frames and reference numbers, sent when the entry is selected. */
   guidance: string[];
+  /**
+   * Helpers a request of this kind MUST call - a static gate in the repair loop.
+   * @remarks Guidance alone is not enough: the model calls a helper when it
+   *   believes it cannot do the job itself, and a hand-drawn part can still be
+   *   one watertight body that passes every geometric gate. This turns the rule
+   *   into a failed attempt whose error is the repair instruction.
+   */
+  requires?: HelperRequirement[];
+}
+
+/** One "this request must call that helper" rule. */
+export interface HelperRequirement {
+  /** True when the request (the user's prompt) is of this kind. */
+  when: (prompt: string) => boolean;
+  helper: string;
+  /** The repair instruction handed back to the model when the helper is missing. */
+  error: string;
 }
 
 export const CATALOG: CatalogEntry[] = [
@@ -199,14 +216,35 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     id: "gridfinity",
-    helpers: ["gridfinityBase", "gridfinityCup"],
+    helpers: ["gridfinityBase", "gridfinityBaseplate", "gridfinityCup"],
     summary: "Gridfinity bins, cups, boxes and baseplates - anything that must fit the Gridfinity grid",
     helperRows: [
-      "gridfinityBase({ unitsX, unitsY })    standard Gridfinity base, sitting on z = 0",
+      "gridfinityBaseplate({ unitsX, unitsY })  the BASEPLATE: open grid frame bins plug into",
+      "gridfinityBase({ unitsX, unitsY })    the FOOT under a bin, sitting on z = 0 - NOT a baseplate",
       "gridfinityCup({ width, depth, height, chambers?, withLabel?, magnetDiameter?, ... })",
       "                                      a COMPLETE Gridfinity bin",
     ],
+    requires: [{
+      // "fits on a baseplate" is a part that SITS on one - a bin or a custom
+      // holder, built on gridfinityCup or gridfinityBase - not a baseplate.
+      when: (prompt) => /gridfinity/i.test(prompt) &&
+        /base[\s-]*plat|grid[\s-]*plate/i.test(prompt) &&
+        !/\b(?:fits?|sits?|for|on|onto|into|in|compatible with)\s+(?:an?\s+|the\s+|my\s+)?(?:gridfinity\s+)?(?:base[\s-]*plat|grid[\s-]*plate)/i.test(prompt),
+      helper: "gridfinityBaseplate",
+      error: "the request is a Gridfinity BASEPLATE, and this script does not call " +
+        "gridfinityBaseplate. A hand-drawn baseplate does not fit real bins (one came " +
+        "back as raised bumps on a slab - the inverse of a baseplate), and gridfinityBase " +
+        "is the FOOT under a bin, not a baseplate. Replace the geometry with " +
+        "return gridfinityBaseplate({ unitsX: P.unitsX, unitsY: P.unitsY }); with unitsX " +
+        "and unitsY as whole-number cell-count parameters.",
+    }],
     guidance: [
+      "A Gridfinity BASEPLATE (base plate, grid, the frame bins plug into) is ALWAYS",
+      "gridfinityBaseplate({ unitsX, unitsY }). Never draw it yourself and never use",
+      "gridfinityBase for it: a baseplate is POCKETS cut down into a plate, not bumps",
+      "on top of one. It is 42mm x units on each side and 4.65mm tall, open at the",
+      "bottom, centred on the origin on z = 0; return it as it is. Its only",
+      "parameters are unitsX and unitsY, whole cell counts.",
       "A Gridfinity bin, cup or box is ALWAYS gridfinityCup({...}). This is not a",
       "suggestion: it is a port of vector76's gridfinity_openscad basic_cup(), verified",
       "against OpenSCAD's own render - feet, walls, stacking lip, finger slide, dividers",
@@ -482,4 +520,17 @@ export function catalogEntries(ids: Iterable<string>): CatalogEntry[] {
 /** The ids of the entries owning any helper a script references. */
 export function entriesUsedBy(referenced: Set<string>): string[] {
   return CATALOG.filter((e) => e.helpers.some((h) => referenced.has(h))).map((e) => e.id);
+}
+
+/**
+ * The helpers this request must call that the script does not.
+ * @remarks Checked against EVERY entry, not only the selected ones: the rule is
+ *   about what was asked for, and Jev failing open must not switch it off.
+ */
+export function missingRequiredHelpers(
+  prompt: string,
+  referenced: Set<string>,
+): HelperRequirement[] {
+  return CATALOG.flatMap((e) => e.requires ?? [])
+    .filter((r) => r.when(prompt) && !referenced.has(r.helper));
 }

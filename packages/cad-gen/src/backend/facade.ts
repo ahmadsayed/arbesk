@@ -180,7 +180,8 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         // Static only, and deliberately so: the server never runs the kernel.
         // See validateStatic for why, and for the measurement that shows the
         // server-side proxy disagreeing with the delivered part.
-        validate: async (design) => validateStatic(design, PRELUDE_NAMES),
+        // The prompt feeds the required-helper gate (CatalogEntry.requires).
+        validate: async (design) => validateStatic(design, PRELUDE_NAMES, input.prompt),
       }, openingMessages(turn), attempts, input.signal);
 
       return {

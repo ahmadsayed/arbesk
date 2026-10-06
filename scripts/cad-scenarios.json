@@ -12,6 +12,10 @@
     "prompt": "A Gridfinity bin, 2 by 3 units, 6 units tall"
   },
   {
+    "name": "gf-baseplate-2x3",
+    "prompt": "gridfinity baseplat 2x3"
+  },
+  {
     "name": "rpi4-case",
     "prompt": "A case for a Raspberry Pi 4 with openings for the USB, Ethernet and HDMI ports"
   },

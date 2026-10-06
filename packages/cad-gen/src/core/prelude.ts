@@ -17,7 +17,7 @@ import { pipeClamp } from "./library/pipe-clamp.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -110,12 +110,41 @@ const GF_RISER = 1.8;
 const GF_TAPER_TOP = 2.15;
 const GF_BASE_HEIGHT = GF_TAPER_BOTTOM + GF_RISER + GF_TAPER_TOP;
 const GF_CORNER_RADIUS = 3.75;
+/**
+ * The baseplate pocket: the bin's profile plus clearance, so the same riser and
+ * top taper over a 0.7mm (not 0.8mm) bottom taper - 4.65mm tall - and a 4mm
+ * corner radius at the 42mm cell boundary.
+ */
+const GF_PLATE_TAPER_BOTTOM = 0.7;
+const GF_PLATE_HEIGHT = GF_PLATE_TAPER_BOTTOM + GF_RISER + GF_TAPER_TOP;
+const GF_PLATE_CORNER_RADIUS = 4;
 // The 7mm height unit, the 26mm magnet/screw square and the 6.5mm magnet holes
 // are quoted in SYSTEM_PROMPT's STANDARDS section rather than kept here: no
 // helper reads them, and a constant nothing reads is a constant that drifts.
 
 /** Involute samples per flank. More is smoother and slower. */
 const GEAR_FLANK_STEPS = 8;
+
+/** A baseplate's [unitsX, unitsY]: whole cells, at least one each way. */
+function baseplateUnits(opts: any): [number, number] {
+  const ux = opts?.unitsX ?? 1;
+  const uy = opts?.unitsY ?? ux;
+  if (!Number.isInteger(ux) || !Number.isInteger(uy) || ux < 1 || uy < 1) {
+    throw new Error("gridfinityBaseplate needs whole unitsX and unitsY of at least 1");
+  }
+  return [ux, uy];
+}
+
+/** The [x, y] centre of every cell of a ux x uy grid centred on the origin. */
+function gridCentres(ux: number, uy: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let ix = 0; ix < ux; ix++) {
+    for (let iy = 0; iy < uy; iy++) {
+      out.push([(ix - (ux - 1) / 2) * GF_GRID, (iy - (uy - 1) / 2) * GF_GRID]);
+    }
+  }
+  return out;
+}
 
 /** The involute function, inv(a) = tan(a) - a. */
 const involute = (a: number): number => Math.tan(a) - a;
@@ -642,10 +671,12 @@ export function buildPrelude(
    *   by the same amount the walls move. extrude's scaleTop cannot do that - it
    *   scales the radius proportionally - so this lofts with the convex hull of
    *   two thin rounded rectangles, which is exact because a rounded rectangle is
-   *   convex. Passing i0 == i1 gives the straight riser.
+   *   convex. Passing i0 == i1 gives the straight riser. `r` is the corner
+   *   radius at inset 0: the bin's 3.75mm by default, 4mm for a baseplate pocket.
    */
   const baseSegment = (
     w: number, d: number, i0: number, z0: number, i1: number, z1: number,
+    r: number = GF_CORNER_RADIUS,
   ): any => {
     // The wafers sit INSIDE the segment: the lower one grows upward from z0 and
     // the upper one ends at z1, so the hull spans exactly z0..z1. Centring them
@@ -653,9 +684,28 @@ export function buildPrelude(
     // room for slop.
     const eps = 0.01;
     return Manifold.hull([
-      slab(w - 2 * i0, d - 2 * i0, GF_CORNER_RADIUS - i0, z0, z0 + eps),
-      slab(w - 2 * i1, d - 2 * i1, GF_CORNER_RADIUS - i1, z1 - eps, z1),
+      slab(w - 2 * i0, d - 2 * i0, r - i0, z0, z0 + eps),
+      slab(w - 2 * i1, d - 2 * i1, r - i1, z1 - eps, z1),
     ]);
+  };
+
+  /**
+   * The cutter for one baseplate cell, centred on the origin.
+   * @remarks It overshoots both faces so no cut face is coplanar with the
+   *   plate's: straight down through the floor, and the top taper carried on at
+   *   45 degrees past the rim, so the rim is cut to the exact knife edge.
+   */
+  const baseplatePocket = (): any => {
+    const r = GF_PLATE_CORNER_RADIUS;
+    const iB = GF_PLATE_TAPER_BOTTOM + GF_TAPER_TOP;
+    const iM = GF_TAPER_TOP;
+    const zRiser = GF_PLATE_TAPER_BOTTOM;
+    const zTaper = GF_PLATE_TAPER_BOTTOM + GF_RISER;
+    const over = 1;
+    return baseSegment(GF_GRID, GF_GRID, iB, -over, iB, 0, r)
+      .add(baseSegment(GF_GRID, GF_GRID, iB, 0, iM, zRiser, r))
+      .add(baseSegment(GF_GRID, GF_GRID, iM, zRiser, iM, zTaper, r))
+      .add(baseSegment(GF_GRID, GF_GRID, iM, zTaper, -over, GF_PLATE_HEIGHT + over, r));
   };
 
   const roundRect = (w: number, d: number, r: number): any => {
@@ -822,6 +872,25 @@ export function buildPrelude(
       return baseSegment(w, d, iB, 0, iM, zRiser)
         .add(baseSegment(w, d, iM, zRiser, iM, zTaper))
         .add(baseSegment(w, d, iM, zTaper, 0, GF_BASE_HEIGHT));
+    },
+
+    /**
+     * A Gridfinity BASEPLATE: the open grid frame bins drop into, unitsX x
+     * unitsY cells, centred on the origin, sitting on z = 0.
+     * @remarks NOT gridfinityBase - that is the FOOT under a bin, a solid that
+     *   sits IN one of these pockets. The pocket is the bin profile inverted
+     *   (0.7mm taper, 1.8mm riser, 2.15mm taper, 4.65mm tall, R4 at the 42mm
+     *   cell edge) and open at the bottom, so the walls between cells rise to a
+     *   knife edge exactly as the published "lite" baseplate does. The failure
+     *   this replaces: asked for a baseplate, the model drew raised bumps on a
+     *   slab - the inverse of a baseplate, which no bin can sit in.
+     */
+    gridfinityBaseplate: (opts: any = {}) => {
+      const [ux, uy] = baseplateUnits(opts);
+      const pocket = baseplatePocket();
+      const pockets = gridCentres(ux, uy).map(([x, y]) => pocket.translate([x, y, 0]));
+      return slab(ux * GF_GRID, uy * GF_GRID, GF_PLATE_CORNER_RADIUS, 0, GF_PLATE_HEIGHT)
+        .subtract(Manifold.union(pockets));
     },
 
     /**

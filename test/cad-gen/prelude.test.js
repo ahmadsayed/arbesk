@@ -159,6 +159,44 @@ describe("prelude geometry", () => {
 // Gridfinity is a COMPATIBILITY standard - a base a hundredth of a millimetre
 // out does not seat in anyone else's baseplate - so the envelope is pinned here
 // rather than left to the model.
+// A baseplate is POCKETS cut down into a plate. The failure this pins: asked
+// for one, the model drew raised bumps on a slab, which no bin can sit in.
+describe("gridfinityBaseplate", () => {
+  it("is 42mm per cell and 4.65mm tall, centred on z = 0", async () => {
+    const r = await run("return gridfinityBaseplate({ unitsX: 2, unitsY: 3 });");
+    expect(r.ok).toBe(true);
+    expectSameBbox(r.stats.bboxMm, { min: [-42, -63, 0], max: [42, 63, 4.65] }, 3);
+    expect(r.stats.bodies.count).toBe(1);
+  }, 40000);
+
+  it("is open pockets, not a slab", async () => {
+    const r = await run("return gridfinityBaseplate({ unitsX: 2, unitsY: 3 });");
+    // Walls only: a fraction of the solid prism. The hand-drawn slab was all of it.
+    expect(r.stats.volumeMm3).toBeGreaterThan(0);
+    expect(r.stats.volumeMm3).toBeLessThan(0.3 * 84 * 126 * 4.65);
+  }, 40000);
+
+  it("takes a bin foot in every cell without touching it", async () => {
+    const r = await run([
+      "const plate = gridfinityBaseplate({ unitsX: 2, unitsY: 2 });",
+      "const feet = [[-21, -21], [21, -21], [-21, 21], [21, 21]]",
+      "  .map(([x, y]) => gridfinityBase({ unitsX: 1, unitsY: 1 }).translate([x, y, 0]));",
+      "for (const foot of feet) {",
+      "  if (foot.intersect(plate).volume() > 1e-6) throw new Error('foot collides with the plate');",
+      "}",
+      "return plate;",
+    ].join("\n"));
+    expect(r.error).toBeUndefined();
+    expect(r.ok).toBe(true);
+  }, 40000);
+
+  it("refuses fractional or missing cells", async () => {
+    const r = await run("return gridfinityBaseplate({ unitsX: 1.5, unitsY: 2 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("whole unitsX and unitsY");
+  }, 40000);
+});
+
 describe("gridfinityBase", () => {
   it("is 41.5mm across for one cell and 4.75mm tall", async () => {
     const r = await run("return gridfinityBase({ unitsX: 1, unitsY: 1 });");

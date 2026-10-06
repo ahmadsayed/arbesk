@@ -92,6 +92,15 @@ while the model draws the part by hand. Rules must be ABSOLUTE, and a competing
 recipe must be **demoted or removed** — a merely discouraged alternative still
 wins.
 
+**When a rule must hold, make it a gate.** A catalog entry's `requires`
+(`{ when(prompt), helper, error }`) feeds the server's `required-helper` static
+gate: a request of that kind whose script does not call the helper is a failed
+attempt, and `error` is the repair instruction. Needed because a hand-drawn part
+can be one watertight body that passes every geometric gate - "gridfinity
+baseplat 2x3" came back as bumps on a slab, a single attempt, all gates green.
+Keep `when` narrow (a part that merely *fits on* a baseplate is not one), or
+the loop burns every attempt on a request it cannot satisfy.
+
 ## Fillet fidelity
 
 Manifold is a **mesh** kernel, not a B-rep: there is no fillet primitive.

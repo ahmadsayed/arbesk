@@ -15,8 +15,8 @@ export type {
 export {
   SYSTEM_PROMPT, buildSystemPrompt, buildTurnMessages, buildRepairMessages, PROMPT_HELPER_NAMES,
 } from "./prompt.ts";
-export { CATALOG, CATALOG_IDS, catalogEntries, entriesUsedBy } from "./catalog.ts";
-export type { CatalogEntry } from "./catalog.ts";
+export { CATALOG, CATALOG_IDS, catalogEntries, entriesUsedBy, missingRequiredHelpers } from "./catalog.ts";
+export type { CatalogEntry, HelperRequirement } from "./catalog.ts";
 export {
   FIT_THRESHOLD, SUITABILITY_THRESHOLD, selectLibraries,
 } from "./select.ts";
