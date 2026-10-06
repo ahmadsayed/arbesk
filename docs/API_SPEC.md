@@ -786,7 +786,7 @@ Prometheus scrape endpoint (text exposition format 0.0.4), mounted at the server
 | `arbesk_host_cpu_seconds_total` | `mode` | Host CPU time over all cores (counter) |
 | `arbesk_host_cpus`, `arbesk_host_memory_bytes`, `arbesk_host_load` | `type` / `window` | Host cores, memory, load average |
 
-Terminal dashboard: `bun run metrics:dash` (btop-style; polls `https://promptscad.com/metrics` by default — `--url` or `ARBESK_METRICS_URL` for a local backend; `--interval`, `--once`).
+Terminal dashboard: `bun run metrics:dash` (btop-style, built on blessed + blessed-contrib; polls `https://promptscad.com/metrics` by default — `--url` or `ARBESK_METRICS_URL` for a local backend; `--interval`, `--once`).
 
 ---
 

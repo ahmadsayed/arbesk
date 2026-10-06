@@ -124,50 +124,68 @@ test("metricsEnabled: on everywhere by default, METRICS_ENABLED=false turns it o
   expect(metricsEnabled({ NODE_ENV: "production", METRICS_ENABLED: "false" })).toBe(false);
 });
 
-test("dashboard parses the endpoint's output and renders chain + system panels", async () => {
+test("dashboard summarizes the endpoint's output into chain, wallet and system views", async () => {
   const { indexer, renderMetrics } = await seeded();
   const dash = await import("../scripts/metrics-dashboard.mjs");
-  const samples = dash.parsePrometheus(renderMetrics([indexer.getStats()]));
+  const view = dash.summarize(dash.parsePrometheus(renderMetrics([indexer.getStats()])));
 
-  const live = samples.find((s) => s.name === "arbesk_assets" && s.labels.state === "live");
-  expect(live).toEqual({
-    name: "arbesk_assets",
-    labels: { chain_id: String(CHAIN), network: "Hardhat Local", state: "live" },
-    value: 4,
-  });
-
-  const history = dash.createHistory();
-  dash.observe(history, samples, 1_000);
-  const cpu = dash.observe(history, samples, 2_000);
-  const frame = dash.stripAnsi(
-    dash.renderFrame({ samples, history, cpu, url: "http://x/metrics", width: 100, now: 2_000 }),
-  );
-  expect(frame).toContain("Hardhat Local");
-  expect(frame).toMatch(/Assets\s+4 live\s+1 burned · 5 minted/);
-  expect(frame).toMatch(/Wallets\s+2 holding/);
-  expect(frame).toContain("0x0000…00a1");
-  expect(frame).toContain("System");
+  expect(view.chains).toEqual([
+    expect.objectContaining({
+      chainId: String(CHAIN),
+      network: "Hardhat Local",
+      live: 4,
+      burned: 1,
+      minted: 5,
+      wallets: 2,
+      editors: 1,
+      shared: 1,
+    }),
+  ]);
+  expect(view.topWallets.map((w) => [w.address, w.assets])).toEqual([[ALICE, 3], [BOB, 1]]);
+  expect(view.system.cores).toBeGreaterThan(0);
+  expect(view.system.memTotal).toBeGreaterThan(0);
 });
 
-test("dashboard renders an unreachable panel instead of throwing", async () => {
+test("parsePrometheus unescapes label values", async () => {
   const dash = await import("../scripts/metrics-dashboard.mjs");
-  const frame = dash.renderFrame({
-    samples: null,
-    error: "fetch failed",
-    history: dash.createHistory(),
-    cpu: { hostPct: NaN, procPct: NaN },
-    url: "http://x/metrics",
-    width: 80,
-    now: 0,
-  });
-  expect(frame).toContain("unreachable");
-  expect(frame).toContain("fetch failed");
+  expect(dash.parsePrometheus('m{a="x\\"y\\\\z"} 2\n# HELP m h\n')).toEqual([
+    { name: "m", labels: { a: 'x"y\\z' }, value: 2 },
+  ]);
 });
 
-test("sparkline scales to the window and meter clamps its ratio", async () => {
+test("syncStatus reports waiting, backfill, stale, behind and synced", async () => {
   const dash = await import("../scripts/metrics-dashboard.mjs");
-  expect(dash.sparkline([0, 1, 2, 3, 4, 5, 6, 7], 8)).toBe("▁▂▃▄▅▆▇█");
-  expect(dash.sparkline([5, 5, 5], 8)).toBe("▁▁▁");
-  expect(dash.stripAnsi(dash.meter(2, 4))).toBe("■■■■");
-  expect(dash.stripAnsi(dash.meter(NaN, 4))).toBe("····");
+  const chain = { head: 100, scanned: 100, lastOk: 1000 };
+  expect(dash.syncStatus({ ...chain, head: 0 }, 1000)).toBe("waiting");
+  expect(dash.syncStatus({ ...chain, scanned: 40, lastOk: 0 }, 1000)).toBe("backfill -60");
+  expect(dash.syncStatus(chain, 1000 + 300)).toBe("stale 5m 0s");
+  expect(dash.syncStatus({ ...chain, scanned: 90 }, 1010)).toBe("behind 10");
+  expect(dash.syncStatus(chain, 1010)).toBe("synced");
+});
+
+test("observe derives CPU rates from counter deltas and keeps per-chain history", async () => {
+  const dash = await import("../scripts/metrics-dashboard.mjs");
+  const view = (/** @type {number} */ total, /** @type {number} */ idle, /** @type {number} */ proc, /** @type {number} */ live) => ({
+    chains: [{ chainId: "1", live, wallets: 1 }],
+    topWallets: [],
+    system: { hostCpuTotal: total, hostCpuIdle: idle, procCpu: proc },
+  });
+  const h = dash.createHistory();
+  const first = dash.observe(h, view(100, 80, 1, 3), 0);
+  expect(Number.isNaN(first.hostPct)).toBe(true);
+  // 10s host CPU, 6s idle → 40% busy; 0.5s process CPU over 2s wall → 25% of a core.
+  expect(dash.observe(h, view(110, 86, 1.5, 4), 2000)).toEqual({ hostPct: 0.4, procPct: 0.25 });
+  expect(h.live.get("1")).toEqual([3, 4]);
+  expect(h.x).toHaveLength(2);
+});
+
+test("formatSnapshot prints chain counts, top wallets and system load", async () => {
+  const { indexer, renderMetrics } = await seeded();
+  const dash = await import("../scripts/metrics-dashboard.mjs");
+  const view = dash.summarize(dash.parsePrometheus(renderMetrics([indexer.getStats()])));
+  const text = dash.formatSnapshot(view, { hostPct: 0.25, procPct: NaN }, Date.now());
+  expect(text).toContain("Hardhat Local (#31337): 4 live / 1 burned / 5 minted · 2 wallets");
+  expect(text).toContain(`${ALICE}  3 assets`);
+  expect(text).toContain("host cpu 25.0%");
+  expect(text).toContain("backend cpu …");
 });
