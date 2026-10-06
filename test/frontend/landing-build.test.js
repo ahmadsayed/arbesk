@@ -33,6 +33,16 @@ describe("landing page build (index.html)", () => {
     expect(h).toContain('href="/library?upload=1"');
   });
 
+  test("upload is a visible secondary action that promises version history", () => {
+    const h = html();
+    const upload = h.match(/<a[^>]*class="landing-upload"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(upload).toContain('href="/library?upload=1"');
+    expect(upload).toContain('href="/icons.svg#upload"');
+    expect(upload).toContain("Upload your model");
+    expect(upload).toMatch(/GLB, glTF or 3MF/);
+    expect(upload).toMatch(/every edit .*version/i);
+  });
+
   test("only the two Generate actions are orange CTAs", () => {
     expect(html().match(/class="landing-cta"/g)).toHaveLength(2);
   });

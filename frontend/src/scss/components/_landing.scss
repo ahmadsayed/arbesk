@@ -205,6 +205,93 @@ html:has(.landing-page),
     gap: 8px;
   }
 
+  // Upload: the second way in. A neutral card (orange stays on Generate),
+  // with a small version trail that says history is kept.
+  .landing-upload {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: min(640px, 100%);
+    margin-top: 8px;
+    padding: 14px 18px 14px 14px;
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    color: var(--window-fg);
+    text-align: left;
+    text-decoration: none;
+    transition: border-color 0.15s, background-color 0.15s;
+
+    &:hover {
+      border-color: var(--border-color);
+      background: var(--view-bg);
+    }
+  }
+
+  .landing-upload-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--raised-bg);
+  }
+
+  .landing-upload-text {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+
+    strong {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    span {
+      color: var(--dim-fg);
+      font-size: 13px;
+    }
+  }
+
+  .landing-upload-history {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--dim-fg);
+    font-size: 11px;
+
+    span {
+      display: flex;
+      align-items: center;
+
+      &::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        margin-right: 4px;
+        border: 1.5px solid var(--border-color);
+        border-radius: 50%;
+      }
+    }
+
+    i {
+      width: 12px;
+      height: 1px;
+      margin: 0 6px;
+      background: var(--border-color);
+    }
+
+    span:last-child {
+      color: var(--window-fg);
+
+      &::before {
+        border-color: var(--window-fg);
+        background: var(--window-fg);
+      }
+    }
+  }
+
   .prompt-note {
     margin: 0;
     color: var(--dim-fg);
@@ -673,6 +760,10 @@ html:has(.landing-page),
     }
 
     .prompt .landing-cta { flex: 1; }
+
+    // The trail drops under the text, aligned with it (icon 44 + gap 16).
+    .landing-upload { flex-wrap: wrap; }
+    .landing-upload-history { flex-basis: 100%; padding-left: 60px; }
   }
 
   @media (prefers-reduced-motion: reduce) {

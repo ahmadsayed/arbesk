@@ -49,7 +49,19 @@ html(lang="en")
               button.landing-cta(type="submit") Generate
             #promptChips.prompt-chips
             p#promptNote.prompt-note CAD parts work out of the box — no API key needed.
-          a.landing-link(href="/library?upload=1") or upload a model
+          a.landing-upload(href="/library?upload=1")
+            span.landing-upload-icon
+              svg(width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+                use(href="/icons.svg#upload")
+            span.landing-upload-text
+              strong Upload your model
+              span GLB, glTF or 3MF — every edit after that is kept as a version.
+            span.landing-upload-history.tabular(aria-hidden="true")
+              span v1
+              i
+              span v2
+              i
+              span v3
 
         section#cad.landing-track.landing-track-cad(aria-labelledby="cadTitle", data-cad-only)
           .landing-track-copy

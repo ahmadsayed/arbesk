@@ -20,7 +20,7 @@ The chosen direction is mockup **A · Prompt** (reference build kept out of repo
 | # | Block | Content |
 |---|---|---|
 | — | Header (sticky, blurred) | Brand mark + "Arbesk" left; **Sign in** text link right → `/library?login=1`. No orange button. |
-| 1 | Hero (≈ full viewport) | H1 "Describe it." / dimmed second line "Keep every version." · one sub-line · **prompt form** · three example chips · quiet link "or upload a model" → `/library?upload=1`. |
+| 1 | Hero (≈ full viewport) | H1 "Describe it." / dimmed second line "Keep every version." · one sub-line · **prompt form** · three example chips · **upload card** → `/library?upload=1` (neutral bordered card under the prompt: upload icon, "Upload your model", "GLB, glTF or 3MF — every edit after that is kept as a version.", and a small v1 → v2 → v3 trail; never orange). |
 | 1a | CAD track (`#cad`, `data-cad-only`) | Kicker "For makers" · H2 "Parts that fit." · three facts · quiet "Try" deep links (`/studio?provider=cad&prompt=…`) · isometric bracket drawing (`landing/cad-bracket*.svg` used as CSS masks so lines take theme colours; dimension labels are HTML). Hidden when `cadGeneration === false`. |
 | 1b | Art track (`#art`) | Staggered Reema + Suka renders · "For artists" / "Characters with character." · three facts · "Try" deep links (`provider=tripo3d`). |
 | 2 | 4D demo | H2 "The world is 4D." + one-line explanation · live Howdy viewer · version rail v1–v4 · live caption (`aria-live="polite"`). |
