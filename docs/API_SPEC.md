@@ -765,6 +765,31 @@ Like `/indexer/owned`, a background poll runs every ~15s and the route performs 
 
 ---
 
+### `GET /metrics`
+
+Prometheus scrape endpoint (text exposition format 0.0.4), mounted at the server root — outside `/api/v1`. Served by default (production included); `METRICS_ENABLED=false` turns it off. Values are read from the token indexer's in-memory state — a scrape never triggers an RPC catch-up.
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `arbesk_assets` | `chain_id`, `network`, `state` (`live`/`burned`) | Indexed asset tokens |
+| `arbesk_assets_minted` | `chain_id`, `network` | Tokens ever minted (live + burned) |
+| `arbesk_wallets` | `chain_id`, `network` | Distinct wallets holding ≥ 1 live asset |
+| `arbesk_editors` | `chain_id`, `network` | Distinct editor wallets |
+| `arbesk_shared_assets` | `chain_id`, `network` | Assets with ≥ 1 editor |
+| `arbesk_wallet_assets` | `chain_id`, `network`, `address` | Live assets of the top 10 wallets |
+| `arbesk_indexer_last_scanned_block` / `_chain_head_block` | `chain_id`, `network` | Indexer progress vs chain tip |
+| `arbesk_indexer_last_success_timestamp_seconds` | `chain_id`, `network` | Last successful catch-up (0 = never) |
+| `arbesk_indexer_log_chunk_size` | `chain_id`, `network` | Current adaptive `eth_getLogs` range |
+| `arbesk_process_cpu_seconds_total` | `mode` | Backend CPU time (counter) |
+| `arbesk_process_memory_bytes` | `type` (`rss`/`heap_used`/`heap_total`) | Backend memory |
+| `arbesk_process_uptime_seconds` | — | Backend uptime |
+| `arbesk_host_cpu_seconds_total` | `mode` | Host CPU time over all cores (counter) |
+| `arbesk_host_cpus`, `arbesk_host_memory_bytes`, `arbesk_host_load` | `type` / `window` | Host cores, memory, load average |
+
+Terminal dashboard: `bun run metrics:dash` (btop-style; polls `https://promptscad.com/metrics` by default — `--url` or `ARBESK_METRICS_URL` for a local backend; `--interval`, `--once`).
+
+---
+
 ## Frontend/Contract Flow Summary
 
 1. User connects wallet.

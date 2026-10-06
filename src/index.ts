@@ -30,6 +30,7 @@ try {
 const { default: api } = await import("./api/index.ts");
 const { createChatProxy } = await import("./api/chat-proxy.ts");
 const { initIndexers } = await import("./api/token-indexer.ts");
+const { default: metricsRoutes, metricsEnabled } = await import("./api/routes/metrics.ts");
 const { createStorageAdapter } = await import("./api/storage/index.ts");
 const { createBackendCore } = await import("./api/asset-core-adapters.ts");
 
@@ -75,6 +76,11 @@ app.use(
   }),
 );
 app.route("/api", api({ storage, core }));
+
+/* ─── Prometheus scrape endpoint (indexer counts + process/host stats) ─── */
+if (metricsEnabled()) {
+  app.route("/metrics", metricsRoutes());
+}
 
 // Workers, their pool, and the vendored libraries they import must never be
 // cached. A stale module that predates a method registration (e.g. "ping")
