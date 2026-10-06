@@ -21,6 +21,12 @@ void config.then((cfg) => {
   }
 });
 
+// The CAD track describes a provider this deployment may not serve.
+void config.then((cfg) => {
+  if (cfg?.cadGeneration !== false) return;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-cad-only]")) el.hidden = true;
+});
+
 const form = document.getElementById("prompt");
 if (form instanceof HTMLFormElement) {
   initPromptForm(form, { cadAvailable: config.then((cfg) => cfg?.cadGeneration !== false) });

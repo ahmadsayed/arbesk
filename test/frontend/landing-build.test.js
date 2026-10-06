@@ -20,8 +20,9 @@ describe("landing page build (index.html)", () => {
     expect(forms[0]).toContain('id="prompt"');
     expect(forms[0]).toContain('method="get"');
     expect(forms[0]).toContain('action="/studio"');
-    expect(h).toMatch(/<input[^>]*name="provider"[^>]*value="tripo3d"[^>]*checked/);
-    expect(h).toMatch(/<input[^>]*name="provider"[^>]*value="cad"/);
+    // CAD is the default: it needs no API key.
+    expect(h).toMatch(/<input[^>]*name="provider"[^>]*value="cad"[^>]*checked/);
+    expect(h).toMatch(/<input[^>]*name="provider"[^>]*value="tripo3d"(?![^>]*checked)[^>]*>/);
     expect(h).toMatch(/<input[^>]*name="prompt"[^>]*maxlength="500"[^>]*required/);
   });
 
@@ -42,6 +43,18 @@ describe("landing page build (index.html)", () => {
       expect(h).not.toContain(gone);
     }
     expect(h).not.toMatch(/AI agents|\bMCP\b|\bbesk\b/); // "Arbesk" has no word boundary before "besk"
+  });
+
+  test("has a CAD track (hidden without CAD) and an art track, each with quiet Studio deep links", () => {
+    const h = html();
+    expect(h).toMatch(/<section[^>]*id="cad"[^>]*data-cad-only/);
+    expect(h).toContain('id="art"');
+    expect(h).toMatch(/id="art"[\s\S]*Tripo 3D API key/);
+    expect(h).toContain('href="/studio?provider=cad&amp;prompt=M3%20mounting%20bracket%2C%2040%20mm"');
+    expect(h).toContain('href="/studio?provider=tripo3d&amp;prompt=Low-poly%20fox"');
+    for (const file of ["cad-bracket.svg", "cad-bracket-dims.svg", "asset-reema.webp", "asset-suka.webp"]) {
+      expect(fs.existsSync(path.join(DIST, "landing", file))).toBe(true);
+    }
   });
 
   test("loads the landing script and ships the version demo with its fallback", () => {

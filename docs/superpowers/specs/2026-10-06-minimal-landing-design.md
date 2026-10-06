@@ -21,13 +21,15 @@ The chosen direction is mockup **A · Prompt** (reference build kept out of repo
 |---|---|---|
 | — | Header (sticky, blurred) | Brand mark + "Arbesk" left; **Sign in** text link right → `/library?login=1`. No orange button. |
 | 1 | Hero (≈ full viewport) | H1 "Describe it." / dimmed second line "Keep every version." · one sub-line · **prompt form** · three example chips · quiet link "or upload a model" → `/library?upload=1`. |
+| 1a | CAD track (`#cad`, `data-cad-only`) | Kicker "For makers" · H2 "Parts that fit." · three facts · quiet "Try" deep links (`/studio?provider=cad&prompt=…`) · isometric bracket drawing (`landing/cad-bracket*.svg` used as CSS masks so lines take theme colours; dimension labels are HTML). Hidden when `cadGeneration === false`. |
+| 1b | Art track (`#art`) | Staggered Reema + Suka renders · "For artists" / "Characters with character." · three facts · "Try" deep links (`provider=tripo3d`). |
 | 2 | 4D demo | H2 "The world is 4D." + one-line explanation · live Howdy viewer · version rail v1–v4 · live caption (`aria-live="polite"`). |
 | 3 | Three lines | `01 Generate` · `02 Version` · `03 Share` — mono number in accent, title, one sentence each. No cards. |
 | — | Footer | "Start with a sentence." + **Generate a model** (only other primary button, links to `#prompt` and focuses the hero input) · "Sign in with an email code. No password." · bottom row: origin line + quiet Library · Studio links. |
 
 Testnet banner (`#testnetBanner`) and its config fetch are kept as-is.
 
-**Removed:** persona cards, colour-memory cube + scrubber + log, CID ledger chain (`prev_manifest_cid`), team pedestals and feature grid, agents note, scroll cue, `band-dark` / `section-tint` bands and radial glows. `frontend/public/landing/asset-reema.webp` and `asset-suka.webp` become unused and are deleted; `asset-howdy.webp` stays as the no-JS viewer fallback.
+**Removed:** persona cards, colour-memory cube + scrubber + log, CID ledger chain (`prev_manifest_cid`), team pedestals and feature grid, agents note, scroll cue, `band-dark` / `section-tint` bands and radial glows. `asset-reema.webp` / `asset-suka.webp` were deleted here and later restored for the art track (§3 row 1b); `asset-howdy.webp` stays as the no-JS viewer fallback.
 
 ### Copy
 
@@ -51,6 +53,7 @@ form#prompt.prompt(method="get" action="/studio")
 ```
 
 - Submitting produces `/studio?provider=tripo3d&prompt=low-poly+fox`. **Works without JS** (native GET form).
+- **CAD is the default (first, checked) mode** — it works without an API key; 3D bills the visitor's own Tripo 3D key (BYOK). A one-line note under the chips (`#promptNote`) says which, per mode; the art track repeats the key requirement with a link to platform.tripo3d.ai.
 - Placeholder and example chips switch with the mode (JS enhancement): 3D → "Describe a character or prop…" / *Low-poly fox · Cowboy mascot · Sci-fi crate*; CAD → "Describe a part…" / *M3 mounting bracket, 40 mm · Phone stand, 70° · Gridfinity bin 2×3*. A chip fills the input and focuses it; it does not submit.
 - When `/api/v1/config` returns `cadGeneration === false`, the CAD radio is removed (mirrors Studio behaviour in `create-panel.ts`).
 - **Studio side (new):** `create-panel.ts` reads `?prompt=` next to the existing `?provider=` handling and **prefills** `#promptInput` (trimmed, capped at 500 chars), resizing the textarea. It **never auto-submits** — generation costs credits and needs sign-in. After prefill the param is removed with `history.replaceState` so a reload doesn't re-prefill over user edits.

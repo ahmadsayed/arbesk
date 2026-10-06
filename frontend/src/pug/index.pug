@@ -40,15 +40,56 @@ html(lang="en")
               fieldset.prompt-mode
                 legend.sr-only Model type
                 label
-                  input(type="radio", name="provider", value="tripo3d", checked)
-                  span 3D
-                label
-                  input(type="radio", name="provider", value="cad")
+                  input(type="radio", name="provider", value="cad", checked)
                   span CAD
-              input#promptText.prompt-input(type="text", name="prompt", maxlength="500", required, autocomplete="off", placeholder="Describe a character or prop…", aria-label="Describe your model")
+                label
+                  input(type="radio", name="provider", value="tripo3d")
+                  span 3D
+              input#promptText.prompt-input(type="text", name="prompt", maxlength="500", required, autocomplete="off", placeholder="Describe a part…", aria-label="Describe your model")
               button.landing-cta(type="submit") Generate
             #promptChips.prompt-chips
+            p#promptNote.prompt-note CAD parts work out of the box — no API key needed.
           a.landing-link(href="/library?upload=1") or upload a model
+
+        section#cad.landing-track.landing-track-cad(aria-labelledby="cadTitle", data-cad-only)
+          .landing-track-copy
+            span.landing-track-kicker For makers
+            h2#cadTitle Parts that fit.
+            p Describe a bracket, a stand or a storage bin with real dimensions. You get a precise part, ready to print.
+            ul.landing-track-facts
+              li Dimensions in millimetres
+              li Exports 3MF for your slicer
+              li Rendered right in your browser
+              li No API key needed
+            .landing-track-try
+              span Try
+              a.landing-link(href="/studio?provider=cad&prompt=M3%20mounting%20bracket%2C%2040%20mm") M3 mounting bracket, 40 mm
+              a.landing-link(href="/studio?provider=cad&prompt=Gridfinity%20bin%202%C3%973") Gridfinity bin 2×3
+          figure.landing-blueprint(aria-hidden="true")
+            .landing-blueprint-part
+            .landing-blueprint-dims
+            span.landing-dim.landing-dim-length.tabular 40
+            span.landing-dim.landing-dim-width.tabular 24
+            span.landing-dim.landing-dim-height.tabular 30
+            figcaption.tabular L-bracket · 40 × 24 × 30 mm · 3 mm wall
+
+        section#art.landing-track.landing-track-art(aria-labelledby="artTitle")
+          .landing-gallery
+            img(src="/landing/asset-reema.webp", alt="Reema, a character in an embroidered dress and keffiyeh", width="900", height="900", loading="lazy")
+            img(src="/landing/asset-suka.webp", alt="Suka, a round creature with a woven straw hat", width="900", height="900", loading="lazy")
+          .landing-track-copy
+            span.landing-track-kicker For artists
+            h2#artTitle Characters with character.
+            p Characters, creatures and props from a sentence or a sketch. Then keep shaping them, one version at a time.
+            ul.landing-track-facts
+              li Text or up to four reference views
+              li Retexture and retopologize
+              li Rig and animate
+            p.landing-track-note Uses your own #[a.landing-link(href="https://platform.tripo3d.ai/", rel="noopener") Tripo 3D API key] — add it once in the Studio.
+            .landing-track-try
+              span Try
+              a.landing-link(href="/studio?provider=tripo3d&prompt=Low-poly%20fox") Low-poly fox
+              a.landing-link(href="/studio?provider=tripo3d&prompt=Cowboy%20mascot") Cowboy mascot
 
         section.landing-demo(aria-labelledby="demoTitle")
           .landing-demo-head

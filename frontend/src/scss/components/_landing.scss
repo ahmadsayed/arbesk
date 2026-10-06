@@ -97,8 +97,9 @@ html:has(.landing-page),
     align-content: center;
     justify-items: center;
     gap: 28px;
-    min-height: calc(100svh - 64px);
-    padding: 40px 16px 96px;
+    // Short of a full screen, so the CAD track below peeks in.
+    min-height: calc(78svh - 64px);
+    padding: 40px 16px 48px;
     text-align: center;
 
     h1 {
@@ -204,6 +205,13 @@ html:has(.landing-page),
     gap: 8px;
   }
 
+  .prompt-note {
+    margin: 0;
+    color: var(--dim-fg);
+    font-size: 13px;
+    text-align: center;
+  }
+
   .prompt-chip {
     padding: 6px 12px;
     border: 1px solid var(--hairline);
@@ -217,6 +225,184 @@ html:has(.landing-page),
       border-color: var(--border-color);
       color: var(--window-fg);
     }
+  }
+
+  // ─── Two tracks: CAD and art ───
+  // Asymmetric two-column blocks with a lot of air: the copy stays narrow
+  // and the visual gets the wide column.
+  .landing-track {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+    gap: clamp(48px, 9vw, 128px);
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 160px 16px;
+
+    &[hidden] { display: none; }
+
+    .landing-hero + & { padding-top: 48px; }
+    & + & { padding-top: 40px; }
+  }
+
+  .landing-track-art { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+
+  .landing-track-copy {
+    display: grid;
+    justify-items: start;
+    gap: 20px;
+
+    h2 {
+      margin: 0;
+      font-size: clamp(32px, 4.4vw, 52px);
+      font-weight: 650;
+      line-height: 1.02;
+      letter-spacing: -0.035em;
+      text-wrap: balance;
+    }
+
+    > p {
+      max-width: 34ch;
+      margin: 0;
+      color: var(--dim-fg);
+      font-size: 17px;
+    }
+  }
+
+  .landing-track-kicker {
+    color: var(--dim-fg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .landing-track-facts {
+    display: grid;
+    gap: 10px;
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 15px;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      &::before {
+        content: "";
+        flex: none;
+        width: 16px;
+        height: 1px;
+        background: var(--border-color);
+      }
+    }
+  }
+
+  .landing-track-note {
+    margin: 0;
+    color: var(--dim-fg);
+    font-size: 14px;
+
+    .landing-link {
+      font-size: inherit;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  }
+
+  .landing-track-try {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 18px;
+    margin-top: 16px;
+    padding-top: 20px;
+    border-top: 1px solid var(--hairline);
+    width: 100%;
+
+    span {
+      color: var(--dim-fg);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .landing-link { color: var(--window-fg); }
+  }
+
+  // Isometric technical drawing. The SVGs are masks, so the lines take
+  // theme colours: the part in the text colour, dimensions dimmed.
+  .landing-blueprint {
+    position: relative;
+    margin: 0;
+    aspect-ratio: 672 / 642;
+    padding: 0;
+    border-radius: 20px;
+    background-image: radial-gradient(var(--hairline) 1px, transparent 1.5px);
+    background-size: 24px 24px;
+
+    figcaption {
+      position: absolute;
+      right: 0;
+      bottom: -40px;
+      color: var(--dim-fg);
+      font-size: 12px;
+    }
+  }
+
+  .landing-blueprint-part,
+  .landing-blueprint-dims {
+    position: absolute;
+    inset: 0;
+    mask: center / contain no-repeat;
+  }
+
+  .landing-blueprint-part {
+    background: var(--window-fg);
+    mask-image: url("/landing/cad-bracket.svg");
+  }
+
+  .landing-blueprint-dims {
+    background: var(--border-color);
+    mask-image: url("/landing/cad-bracket-dims.svg");
+  }
+
+  // Labels sit on their dimension line and break it, as on a drawing.
+  .landing-dim {
+    position: absolute;
+    padding: 0 6px;
+    background: var(--window-bg);
+    color: var(--dim-fg);
+    font-size: 12px;
+    line-height: 1.4;
+    transform: translate(-50%, -50%);
+  }
+
+  .landing-dim-length { left: 28%; top: 81.5%; }
+  .landing-dim-width { left: 81.3%; top: 87.1%; }
+  .landing-dim-height { left: 4.8%; top: 36.7%; }
+
+  // Two renders, staggered, with open space between them.
+  .landing-gallery {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(16px, 4vw, 48px);
+
+    img {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+      object-fit: contain;
+      // The renders carry wide transparent margins.
+      scale: 1.25;
+      border-radius: 20px;
+      background: radial-gradient(
+        65% 65% at 50% 55%,
+        color-mix(in srgb, var(--viewport-bg) 40%, var(--window-bg)) 0%,
+        var(--window-bg) 80%
+      );
+    }
+
+    img:nth-child(2) { margin-top: 40%; }
   }
 
   // ─── 4D demo ───
@@ -456,6 +642,16 @@ html:has(.landing-page),
     .landing-header { padding: 0 16px; }
     .landing-demo { padding-top: 96px; }
     .landing-demo-stage { aspect-ratio: 1 / 1; }
+
+    .landing-track,
+    .landing-track-art {
+      grid-template-columns: 1fr;
+      gap: 56px;
+      padding: 96px 16px;
+    }
+
+    // Copy first on both tracks once they stack.
+    .landing-track-art .landing-gallery { order: 1; }
 
     .landing-pillars {
       grid-template-columns: 1fr;
