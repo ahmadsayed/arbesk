@@ -40,6 +40,9 @@ in-cluster.
    The builder stage runs on the host's own architecture and Bun
    cross-compiles the server for arm64 — only the tiny runtime stage is
    emulated, so an x86 host builds this in a fraction of the old time.
+   `deploy:k3s` also passes `--build-arg SOURCE_DATE_EPOCH=0` and
+   `rewrite-timestamp=true`, so unchanged layers keep their digest and the
+   Pi only pulls what changed (e.g. ~8 MB for a frontend-only deploy).
    Set the tag in `deployment.yaml` (replace `REPLACE_TAG`).
 
 2. Prepare `.env.k3s` (never commit it) with the testnet values — see

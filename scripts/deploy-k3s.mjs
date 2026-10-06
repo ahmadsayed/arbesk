@@ -42,12 +42,18 @@ execSync(
   { cwd: root, stdio: "inherit", shell: "/bin/bash" }
 );
 
-// 3. Build + push the arm64 image
+// 3. Build + push the arm64 image. File timestamps are clamped to a fixed
+// epoch so a layer whose content did not change (mock fixtures, ABIs, the
+// server binary when only the frontend changed) keeps its digest and the Pi
+// skips re-pulling it. Fresh checkout/build mtimes otherwise change every
+// layer's digest on every deploy.
 run("docker", [
   "buildx", "build", "--builder", "multiplatform-builder",
   "--platform", "linux/arm64",
   "-f", "docker/app.Dockerfile",
-  "-t", `${IMAGE}:${TAG}`, "--push", ".",
+  "--build-arg", "SOURCE_DATE_EPOCH=0",
+  "--output", `type=registry,name=${IMAGE}:${TAG},rewrite-timestamp=true`,
+  ".",
 ]);
 
 // 4. Stamp the tag into the deployment manifest
