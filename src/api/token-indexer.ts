@@ -87,6 +87,29 @@ interface IndexerState {
   editorTokens: Record<string, string[]>;
 }
 
+/** Point-in-time aggregate counts derived from the in-memory index. */
+export interface IndexerStats {
+  chainId: number;
+  /** Every token ID ever seen (live + burned). */
+  minted: number;
+  live: number;
+  burned: number;
+  /** Distinct addresses currently owning at least one live token. */
+  holders: number;
+  /** Distinct editor addresses across all tokens. */
+  editors: number;
+  /** Tokens with at least one editor. */
+  sharedAssets: number;
+  lastScannedBlock: number;
+  /** Chain tip at the last catch-up; 0 before the first one. */
+  latestBlock: number;
+  /** Epoch ms of the last catch-up that completed; 0 if none has. */
+  lastCatchUpOkAt: number;
+  logChunkSize: number;
+  /** Largest holders, most assets first. */
+  topHolders: Array<{ address: string; assets: number }>;
+}
+
 class TokenIndexer {
   chainId: number;
   contractAddress: string | null;
@@ -103,6 +126,10 @@ class TokenIndexer {
   pollTimer: NodeJS.Timeout | null;
   initialized: boolean;
   lastCatchUpAt: number;
+  /** Chain tip observed by the last catch-up. */
+  latestBlock: number;
+  /** Epoch ms of the last catch-up that completed without throwing. */
+  lastCatchUpOkAt: number;
   _catchUpPromise: Promise<void> | null;
   storage: StorageAdapter;
   /**
@@ -131,6 +158,8 @@ class TokenIndexer {
     this.pollTimer = null;
     this.initialized = false;
     this.lastCatchUpAt = 0;
+    this.latestBlock = 0;
+    this.lastCatchUpOkAt = 0;
     this._catchUpPromise = null;
     this.logChunkSize = LOG_CHUNK_SIZES[chainId] || 100;
     this._chunkSuccesses = 0;
@@ -406,7 +435,9 @@ class TokenIndexer {
       const start = Date.now();
       this.lastCatchUpAt = start;
       const latest = Number(await this.client.getBlockNumber());
+      this.latestBlock = latest;
       if (this.lastScannedBlock >= latest) {
+        this.lastCatchUpOkAt = Date.now();
         console.log(
           `[${ts()}] [INDEXER] catchUp chain ${this.chainId} already at tip ` +
             `${this.lastScannedBlock} in ${Date.now() - start}ms`
@@ -418,6 +449,7 @@ class TokenIndexer {
           `from block ${this.lastScannedBlock} to ${latest}`
       );
       await this._indexRange(this.lastScannedBlock, latest);
+      this.lastCatchUpOkAt = Date.now();
       console.log(
         `[${ts()}] [INDEXER] chain ${this.chainId} caught up ` +
           `to ${this.lastScannedBlock} (${this.ownership.size} tokens, ${this.editorTokens.size} editors) ` +
@@ -502,6 +534,40 @@ class TokenIndexer {
     }
     return shared;
   }
+
+  /**
+   * Aggregate counts for metrics.
+   * @remarks Pure read of in-memory state — no RPC — so scrapes stay cheap.
+   */
+  getStats(topN = 10): IndexerStats {
+    let burned = 0;
+    const holdings = new Map<string, number>();
+    for (const owner of this.ownership.values()) {
+      if (owner === ZERO_ADDRESS) {
+        burned++;
+      } else {
+        holdings.set(owner, (holdings.get(owner) ?? 0) + 1);
+      }
+    }
+    const topHolders = [...holdings]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, topN)
+      .map(([address, assets]) => ({ address, assets }));
+    return {
+      chainId: this.chainId,
+      minted: this.ownership.size,
+      live: this.ownership.size - burned,
+      burned,
+      holders: holdings.size,
+      editors: this.editorTokens.size,
+      sharedAssets: this.tokenEditors.size,
+      lastScannedBlock: this.lastScannedBlock,
+      latestBlock: this.latestBlock,
+      lastCatchUpOkAt: this.lastCatchUpOkAt,
+      logChunkSize: this.logChunkSize,
+      topHolders,
+    };
+  }
 }
 
 const indexers = new Map<number, TokenIndexer>();
@@ -515,6 +581,14 @@ export function getIndexer(chainId: number, storage: StorageAdapter): TokenIndex
     indexers.set(id, new TokenIndexer(id, storage));
   }
   return indexers.get(id) as TokenIndexer;
+}
+
+/**
+ * All indexers created so far (one per chain that has been initialized or
+ * queried).
+ */
+export function listIndexers(): TokenIndexer[] {
+  return [...indexers.values()];
 }
 
 /**

@@ -437,6 +437,8 @@ frontend/src/js/
 
 Optional root `.env` kill-switch: `INDEXER_DISABLE_TESTNET=1` skips starting the Base Sepolia token indexer (see `.env.example`).
 
+Metrics: `GET /metrics` (Prometheus text — indexer asset/wallet counts, sync progress, process + host load; see `docs/API_SPEC.md`) is on by default everywhere; `METRICS_ENABLED=false` turns it off. `bun run metrics:dash` draws it as a btop-style terminal dashboard (defaults to `https://promptscad.com/metrics`; `--url http://localhost:9090/metrics` for local).
+
 #### Engineering CAD generation (`POST /api/v1/cad/*`)
 
 Server-side generation of **engineering** parts (as opposed to Tripo3D's organic

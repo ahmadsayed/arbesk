@@ -52,6 +52,7 @@
     "test:coverage:all": "bun run test:coverage:js && bun run test:e2e:coverage && bun scripts/merge-all-coverage.mjs",
     "test:coverage:contracts": "docker compose -p ${COMPOSE_PROJECT_NAME:-arbesk} run --rm hardhat ./node_modules/.bin/hardhat coverage && docker run --rm -v $(pwd)/blockchain/coverage:/cov alpine sh -c 'chown -R $(stat -c \"%u:%g\" /cov) /cov'",
     "worktree:create": "./scripts/create-worktree.sh",
+    "metrics:dash": "bun scripts/metrics-dashboard.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "audit": "bunx fallow@3.20.0 audit --changed-since HEAD"
   },
