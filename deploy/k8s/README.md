@@ -37,6 +37,9 @@ in-cluster.
    docker buildx build --platform linux/arm64 \
      -f docker/app.Dockerfile -t ahmadsayed/arbesk:$(date +%m%d%H%M) --push .
    ```
+   The builder stage runs on the host's own architecture and Bun
+   cross-compiles the server for arm64 — only the tiny runtime stage is
+   emulated, so an x86 host builds this in a fraction of the old time.
    Set the tag in `deployment.yaml` (replace `REPLACE_TAG`).
 
 2. Prepare `.env.k3s` (never commit it) with the testnet values — see

@@ -5,6 +5,10 @@
 // scripts/x402-stub.mjs.
 //
 // Usage: bun scripts/build-server.mjs   (or: bun run build:server)
+//        bun scripts/build-server.mjs --target=bun-linux-arm64
+// --target cross-compiles the binary for another platform (Bun downloads that
+// platform's runtime once); the Docker image uses it to build arm64 natively
+// on an x86 host instead of under QEMU. Omitted = the host platform.
 
 /** The Bun runtime global — this script only ever runs under `bun`, and
  *  pulling in @types/bun would pollute the whole program's fetch types. */
@@ -70,9 +74,11 @@ const brotliWasmShim = {
   },
 };
 
+const target = process.argv.find((arg) => arg.startsWith("--target="))?.slice("--target=".length);
+
 const result = await Bun.build({
   entrypoints: ["src/index.ts"],
-  compile: { outfile: "dist/arbesk-server" },
+  compile: { outfile: "dist/arbesk-server", ...(target && { target }) },
   bytecode: true,
   format: "esm",
   target: "bun",
@@ -85,4 +91,4 @@ if (!result.success) {
   for (const log of result.logs) console.error(log);
   process.exit(1);
 }
-console.log(`[BUILD] dist/arbesk-server compiled (${result.outputs.length} output(s))`);
+console.log(`[BUILD] dist/arbesk-server compiled for ${target ?? "host"} (${result.outputs.length} output(s))`);

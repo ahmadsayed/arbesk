@@ -11,15 +11,27 @@
 #
 # Build for the Pi cluster:  docker buildx build --platform linux/arm64 \
 #   -f docker/app.Dockerfile -t ahmadsayed/arbesk:<tag> --push .
+#
+# The builder runs on the BUILD host's own architecture (no QEMU): everything
+# it produces is architecture-independent (frontend/dist, ABIs, package dist)
+# except the server binary, which Bun cross-compiles for TARGETARCH. Only the
+# small runtime stage is the target architecture.
 
-FROM oven/bun:1-debian AS builder
+FROM --platform=$BUILDPLATFORM oven/bun:1-debian AS builder
+ARG TARGETARCH
 WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile \
   && cd frontend && bun install --frozen-lockfile
 RUN bun run build:packages \
   && cd frontend && bun run build
-RUN bun run build:server
+# Docker's arch names → Bun's compile targets.
+RUN case "$TARGETARCH" in \
+      amd64) target=bun-linux-x64 ;; \
+      arm64) target=bun-linux-arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+  && bun scripts/build-server.mjs --target="$target"
 
 # The compiled server binary embeds the Bun runtime — no toolchain needed.
 FROM debian:bookworm-slim

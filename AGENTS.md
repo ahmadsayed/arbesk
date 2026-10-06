@@ -58,7 +58,7 @@ bun run build:frontend                 # Pug→HTML, SCSS→CSS (minified), Bun.
 bun start                              # backend :9090 (runs under Bun);  bun run nodemon = auto-rebuild
 
 # Production (Bun runtime)
-bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode)
+bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode); `-- --target=bun-linux-arm64` cross-compiles
 bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
 bun run deploy:k3s                     # one-command deploy to promptscad.com: regen .env.k3s → recreate secret → arm64 build+push → apply manifests (deploy/k8s/README.md)
 # start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config, sources .env.pinata,
