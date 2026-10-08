@@ -33,8 +33,6 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 - **Asset-level Nostr comments** — per-asset comment threads scoped by `<chainId>:<contractAddress>:<tokenId>:<assetId>`, archived to IPFS on republish.
 - **Token indexer** — chunked `eth_getLogs` backfill discovers owned and shared collection tokens for the gallery and library.
 
-See [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) for the latest implementation snapshot and known gaps.
-
 ---
 
 ## Studio vs `besk` CLI vs MCP
@@ -183,7 +181,6 @@ arbesk/
 
 | Document | Purpose |
 |---|---|
-| [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) | Implementation status, validation snapshot, known gaps |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture and data flows |
 | [`docs/API_SPEC.md`](docs/API_SPEC.md) | Implemented Express API routes and response shapes |
 | [`docs/MERKLE_IMPLEMENTATION.md`](docs/MERKLE_IMPLEMENTATION.md) | Merkle editor architecture |

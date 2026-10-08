@@ -38,7 +38,6 @@ Follow the steps in order. Do not skip the decision gate (step 4).
    - Flip the README table row from **TODO** to **✅** in BOTH the CLI and MCP columns (command name + tool name, plus any caveat like owner-only or best-effort unpin).
    - Add the command to `cli.ts` `help()` and the README intro command list.
    - The MCP tool count appears in the README ("AI agents" row + `besk mcp` section) — bump it when a tool is added or removed.
-   - Touch `docs/CURRENT_STATUS.md` only if it documents the affected area.
 
 ## Red Flags — STOP
 
