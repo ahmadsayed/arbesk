@@ -7,6 +7,13 @@ import { mountRoutes } from "../helpers/hono.js";
 const VALID_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
 const EOA_ADDRESS = "0xEOA000000000000000000000000000000000000A";
 
+// Keep the sign-in tracker off the real .data/ file; the real classifier runs.
+const recordSignin = jest.fn();
+async function mockSigninStats() {
+  const { classifySignin } = await import("../../src/api/signin-stats.ts");
+  mock.module("../../src/api/signin-stats.ts", () => ({ classifySignin, recordSignin }));
+}
+
 async function loadModule(verifySiweResult) {
   resetModules();
   mock.module("../../src/api/identity.ts", () => ({
@@ -15,6 +22,7 @@ async function loadModule(verifySiweResult) {
   mock.module("../../src/api/validation.ts", () => ({
     validateBody: jest.fn(() => validator("json", (value) => value)),
   }));
+  await mockSigninStats();
   return await import("../../src/api/sessions.ts");
 }
 
@@ -100,6 +108,7 @@ describe("session routes", () => {
     expect(res.body.token).toBeDefined();
     expect(res.body.expiresAt).toBeGreaterThan(Date.now());
     expect(mod.sessions.has(res.body.token)).toBe(true);
+    expect(recordSignin).toHaveBeenLastCalledWith(VALID_ADDRESS, "wallet");
   });
 
   it("POST /sessions returns 400 for an invalid SIWE", async () => {
@@ -128,6 +137,7 @@ describe("session routes", () => {
     mock.module("../../src/api/validation.ts", () => ({
       validateBody: jest.fn(() => validator("json", (value) => value)),
     }));
+    await mockSigninStats();
     mod = await import("../../src/api/sessions.ts");
     const app = createApp(mod.default);
     const res = await request(app)
@@ -151,6 +161,7 @@ describe("session routes", () => {
     mock.module("../../src/api/validation.ts", () => ({
       validateBody: jest.fn(() => validator("json", (value) => value)),
     }));
+    await mockSigninStats();
     mod = await import("../../src/api/sessions.ts");
     const app = createApp(mod.default);
     const res = await request(app)
@@ -165,6 +176,7 @@ describe("session routes", () => {
       });
 
     expect(res.status).toBe(201);
+    expect(recordSignin).toHaveBeenLastCalledWith(VALID_ADDRESS, "email");
     expect(res.body.token).toBeDefined();
     expect(res.body.expiresAt).toBeGreaterThan(Date.now());
     expect(mod.sessions.has(res.body.token)).toBe(true);

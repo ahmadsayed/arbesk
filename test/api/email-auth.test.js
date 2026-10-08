@@ -1,7 +1,7 @@
 /**
  * Email OTP auth route tests (P1).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { mountRoutes } from "../helpers/hono.js";
 import request from "supertest";
 import emailAuthRoutes, { _resetOtpStoreForTesting } from "../../src/api/routes/email-auth.ts";
@@ -10,6 +10,10 @@ import { validateSession, getSessionRecord } from "../../src/api/sessions.ts";
 import { _resetCdpClientForTesting } from "../../src/api/cdp.ts";
 
 const DEV_ADDR = "0x0000000000000000000000000000000000000abc";
+
+// Keep the sign-in tracker off the real .data/ file (one process per test file).
+const recordSignin = jest.fn();
+mock.module("../../src/api/signin-stats.ts", () => ({ recordSignin }));
 
 function makeApp(fakeCdp, sendEmail) {
   return mountRoutes("/auth/email", emailAuthRoutes({ getCdpClientFn: async () => fakeCdp, sendEmail }));
@@ -75,6 +79,7 @@ describe("email OTP auth (dev mode)", () => {
     expect(a.body.address).toMatch(/^0x[0-9a-f]{40}$/);
     expect(a.body.token).toBeTruthy();
     expect(validateSession(a.body.token)).toBe(a.body.address.toLowerCase());
+    expect(recordSignin).toHaveBeenLastCalledWith(a.body.address, "email");
 
     const b = await request(app).post("/auth/email/verify").send({ email: "maya@studio.com", code: "000000" });
     expect(b.body.address).toBe(a.body.address);

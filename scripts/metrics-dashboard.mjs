@@ -28,8 +28,13 @@ const LINE_COLOURS = ["cyan", "magenta", "yellow", "green"];
  *   lastOk: number }} ChainView
  */
 /**
+ * @typedef {{ method: string, signins: number, wallets: number, active24h: number,
+ *   active7d: number, active30d: number }} SigninView
+ */
+/**
  * @typedef {{ chains: ChainView[],
  *   topWallets: Array<{ chainId: string, network: string, address: string, assets: number }>,
+ *   signins: SigninView[],
  *   system: { cores: number, memTotal: number, memFree: number, rss: number, heapUsed: number,
  *     load: number[], uptime: number, hostCpuTotal: number, hostCpuIdle: number, procCpu: number } }} View
  */
@@ -105,9 +110,18 @@ export function summarize(samples) {
     .filter((s) => s.name === "arbesk_wallet_assets")
     .map((s) => ({ chainId: s.labels.chain_id, network: s.labels.network, address: s.labels.address, assets: s.value }))
     .sort((a, b) => b.assets - a.assets);
+  const signins = ["email", "wallet"].map((method) => ({
+    method,
+    signins: sum(samples, "arbesk_signins_total", { method }),
+    wallets: sum(samples, "arbesk_signin_wallets", { method }),
+    active24h: sum(samples, "arbesk_active_wallets", { method, window: "24h" }),
+    active7d: sum(samples, "arbesk_active_wallets", { method, window: "7d" }),
+    active30d: sum(samples, "arbesk_active_wallets", { method, window: "30d" }),
+  }));
   return {
     chains,
     topWallets,
+    signins,
     system: {
       cores: sum(samples, "arbesk_host_cpus"),
       memTotal: sum(samples, "arbesk_host_memory_bytes", { type: "total" }),
@@ -232,6 +246,12 @@ export function formatSnapshot(view, cpu, now) {
   for (const w of view.topWallets.slice(0, 5)) {
     lines.push(`  ${w.address}  ${num(w.assets)} assets  (#${w.chainId})`);
   }
+  for (const g of view.signins) {
+    lines.push(
+      `sign-ins ${g.method}: ${num(g.wallets)} wallets · active ${num(g.active24h)} 24h / ` +
+        `${num(g.active7d)} 7d / ${num(g.active30d)} 30d · ${num(g.signins)} sign-ins`,
+    );
+  }
   lines.push(
     `host cpu ${pct(cpu.hostPct)} · mem ${human(s.memTotal - s.memFree)}/${human(s.memTotal)} · ` +
       `load ${s.load.map((l) => l.toFixed(2)).join(" ")} · ${s.cores} cores`,
@@ -276,8 +296,14 @@ async function runDashboard(url, intervalMs) {
     columnWidth: [13, 6],
   });
   const lineOpts = { showLegend: true, legend: { width: 22 }, wholeNumbersOnly: true, style: { baseline: "white" } };
-  const assetsChart = grid.set(4, 0, 5, 6, contrib.line, { ...lineOpts, label: " Live assets " });
-  const walletsChart = grid.set(4, 6, 5, 6, contrib.line, { ...lineOpts, label: " Holding wallets " });
+  const assetsChart = grid.set(4, 0, 5, 4, contrib.line, { ...lineOpts, label: " Live assets " });
+  const walletsChart = grid.set(4, 4, 5, 4, contrib.line, { ...lineOpts, label: " Holding wallets " });
+  const signinsTable = grid.set(4, 8, 5, 4, contrib.table, {
+    ...tableStyle,
+    label: " Sign-ins (wallets) ",
+    columnSpacing: 2,
+    columnWidth: [7, 6, 4, 4, 4, 7],
+  });
   const gaugeOpts = { stroke: "green", fill: "white" };
   const hostCpuGauge = grid.set(9, 0, 3, 3, contrib.gauge, { ...gaugeOpts, label: " Host CPU " });
   const hostMemGauge = grid.set(9, 3, 3, 3, contrib.gauge, { ...gaugeOpts, label: " Host memory " });
@@ -326,6 +352,12 @@ async function runDashboard(url, intervalMs) {
         headers: ["Wallet", "Assets"],
         data: view.topWallets.slice(0, 10).map((w) => [shortAddr(w.address), num(w.assets)]),
       });
+      signinsTable.setData({
+        headers: ["Method", "Total", "24h", "7d", "30d", "Logins"],
+        data: view.signins.map((g) => [
+          g.method, num(g.wallets), num(g.active24h), num(g.active7d), num(g.active30d), num(g.signins),
+        ]),
+      });
       drawLines(assetsChart, history.live, view);
       drawLines(walletsChart, history.wallets, view);
 
@@ -354,7 +386,7 @@ async function runDashboard(url, intervalMs) {
   };
 
   screen.on("resize", () => {
-    for (const w of [chainsTable, walletsTable, assetsChart, walletsChart, hostCpuGauge, hostMemGauge, procCpuGauge]) {
+    for (const w of [chainsTable, walletsTable, signinsTable, assetsChart, walletsChart, hostCpuGauge, hostMemGauge, procCpuGauge]) {
       w.emit("attach");
     }
     screen.render();

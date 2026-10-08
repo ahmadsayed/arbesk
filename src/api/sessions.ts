@@ -11,6 +11,7 @@ import crypto from "crypto";
 import { verifyProof } from "./identity.ts";
 import { validateBody } from "./validation.ts";
 import { createSessionSchema } from "./schemas.ts";
+import { classifySignin, recordSignin } from "./signin-stats.ts";
 
 // ─── Session Store ──────────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ export default function sessionRouter() {
 
       // Create session
       const token = createSession(result.address);
+      recordSignin(result.address, proof.kind === "siwe" ? classifySignin(result.address, proof) : "wallet");
       const expiresAt = sessions.get(token)!.expiresAt;
 
       return c.json({ token, expiresAt }, 201);

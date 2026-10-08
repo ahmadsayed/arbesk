@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { NETWORK_CONFIGS } from "../../config.ts";
 import { listIndexers } from "../token-indexer.ts";
 import type { IndexerStats } from "../token-indexer.ts";
+import { getSigninStats, SIGNIN_METHODS } from "../signin-stats.ts";
+import type { MethodStats, SigninMethod } from "../signin-stats.ts";
 
 /**
  * Whether GET /metrics is served.
@@ -81,6 +83,21 @@ function writeIndexerMetrics(w: MetricsWriter, all: IndexerStats[]): void {
     per((s) => s.logChunkSize));
 }
 
+function writeSigninMetrics(w: MetricsWriter, signins: Record<SigninMethod, MethodStats>): void {
+  w.metric("arbesk_signins_total", "counter",
+    "Successful sign-ins by method (email = CDP smart account, wallet = browser wallet).",
+    SIGNIN_METHODS.map((method) => ({ labels: { method }, value: signins[method].signins })));
+  w.metric("arbesk_signin_wallets", "gauge", "Distinct wallets that have ever signed in, by method.",
+    SIGNIN_METHODS.map((method) => ({ labels: { method }, value: signins[method].wallets })));
+  w.metric("arbesk_active_wallets", "gauge", "Distinct wallets whose last sign-in is within the window.",
+    SIGNIN_METHODS.flatMap((method) =>
+      (["24h", "7d", "30d"] as const).map((window) => ({
+        labels: { method, window },
+        value: signins[method].active[window],
+      })),
+    ));
+}
+
 function writeProcessMetrics(w: MetricsWriter): void {
   const mem = process.memoryUsage();
   const cpu = process.cpuUsage();
@@ -120,9 +137,13 @@ function writeHostMetrics(w: MetricsWriter): void {
 }
 
 /** Renders every Arbesk metric in Prometheus text format. */
-export function renderMetrics(stats: IndexerStats[]): string {
+export function renderMetrics(
+  stats: IndexerStats[],
+  signins: Record<SigninMethod, MethodStats> = getSigninStats(),
+): string {
   const w = new MetricsWriter();
   writeIndexerMetrics(w, stats);
+  writeSigninMetrics(w, signins);
   writeProcessMetrics(w);
   writeHostMetrics(w);
   return w.toString();
@@ -130,7 +151,7 @@ export function renderMetrics(stats: IndexerStats[]): string {
 
 /**
  * GET /metrics — Prometheus scrape endpoint.
- * @remarks Reads indexer state only; never triggers an RPC catch-up.
+ * @remarks Reads indexer and sign-in state only; never triggers an RPC catch-up.
  */
 export default function metricsRoutes() {
   const app = new Hono();

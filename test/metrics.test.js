@@ -189,3 +189,30 @@ test("formatSnapshot prints chain counts, top wallets and system load", async ()
   expect(text).toContain("host cpu 25.0%");
   expect(text).toContain("backend cpu …");
 });
+
+const SIGNINS = {
+  email: { signins: 9, wallets: 4, active: { "24h": 1, "7d": 2, "30d": 3 } },
+  wallet: { signins: 2, wallets: 1, active: { "24h": 0, "7d": 1, "30d": 1 } },
+};
+
+test("renderMetrics emits per-method sign-in counters and active-wallet gauges", async () => {
+  const { indexer, renderMetrics } = await seeded();
+  const text = renderMetrics([indexer.getStats()], SIGNINS);
+  expect(text).toContain("# TYPE arbesk_signins_total counter");
+  expect(text).toContain('arbesk_signins_total{method="email"} 9');
+  expect(text).toContain('arbesk_signin_wallets{method="wallet"} 1');
+  expect(text).toContain('arbesk_active_wallets{method="email",window="7d"} 2');
+  expect(text).toContain('arbesk_active_wallets{method="wallet",window="30d"} 1');
+});
+
+test("dashboard summarizes sign-ins per method and prints them in the snapshot", async () => {
+  const { indexer, renderMetrics } = await seeded();
+  const dash = await import("../scripts/metrics-dashboard.mjs");
+  const view = dash.summarize(dash.parsePrometheus(renderMetrics([indexer.getStats()], SIGNINS)));
+  expect(view.signins).toEqual([
+    { method: "email", signins: 9, wallets: 4, active24h: 1, active7d: 2, active30d: 3 },
+    { method: "wallet", signins: 2, wallets: 1, active24h: 0, active7d: 1, active30d: 1 },
+  ]);
+  const text = dash.formatSnapshot(view, { hostPct: 0, procPct: 0 }, Date.now());
+  expect(text).toContain("sign-ins wallet: 1 wallets · active 0 24h / 1 7d / 1 30d · 2 sign-ins");
+});

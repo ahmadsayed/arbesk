@@ -152,6 +152,8 @@ export default function emailAuthRoutes(deps: EmailAuthDeps = {}) {
 
         const { createSession, sessions } = await import("../sessions.ts");
         const token = createSession(address, { userId, email, authMethod: "email" });
+        const { recordSignin } = await import("../signin-stats.ts");
+        recordSignin(address, "email");
         const expiresAt = sessions.get(token)!.expiresAt;
         console.log("[EMAIL-AUTH] verified - address=" + address);
         return c.json({ token, expiresAt, address, email }, 201);
