@@ -8,7 +8,7 @@
 //   2. recreate the arbesk-env secret on the cluster from .env.k3s
 //   3. buildx arm64 build + push ahmadsayed/arbesk:<MMDDHHMM>
 //   4. stamp the new tag into deploy/k8s/deployment.yaml
-//   5. apply all deploy/k8s manifests (order: storage, nostr, service,
+//   5. apply all deploy/k8s manifests (order: storage, backup, nostr, service,
 //      ingress, deployment) and wait for the rollout
 //
 // Override the SSH target with K3S_SSH=user@host (default adam@192.168.68.60).
@@ -21,7 +21,7 @@ const root = path.resolve(import.meta.dirname, "..");
 const SSH = process.env.K3S_SSH || "adam@192.168.68.60";
 const IMAGE = "ahmadsayed/arbesk";
 const TAG = new Date().toISOString().replace(/[-:T]/g, "").slice(4, 12); // MMDDHHMM
-const MANIFEST_ORDER = ["storage", "nostr", "service", "ingress", "deployment"];
+const MANIFEST_ORDER = ["storage", "backup", "nostr", "service", "ingress", "deployment"];
 
 const log = (msg) => console.log(`[DEPLOY] ${msg}`);
 const run = (cmd, args, opts = {}) => {

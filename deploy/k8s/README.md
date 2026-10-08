@@ -25,6 +25,7 @@ The manual steps below document what the command does under the hood.
 |---|---|---|
 | `arbesk` app (backend + frontend + in-process token indexer) | Deployment, 1 replica (Recreate) | PVC `arbesk-data` → `/app/.data` |
 | `nostr` relay (nostr-rs-relay) | Deployment, 1 replica | PVC `nostr-data` → `/usr/src/app/db` |
+| `arbesk-data-backup` | CronJob, daily 03:17 UTC | copies `arbesk-data` → host `/var/backups/arbesk-data/<date>/`, keeps 14 |
 
 Both PVCs use the default `local-path` StorageClass (host disk). IPFS is
 Pinata (external), chain is Base Sepolia (external) — nothing else runs
@@ -79,7 +80,7 @@ in-cluster.
 
 4. Apply in order:
    ```bash
-   for f in storage nostr deployment service ingress; do
+   for f in storage backup nostr deployment service ingress; do
      ssh adam@192.168.68.60 'sudo k3s kubectl apply -f -' < deploy/k8s/$f.yaml
    done
    ```

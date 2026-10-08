@@ -1,0 +1,54 @@
+# Daily backup of the arbesk-data volume (/app/.data: sign-in stats, CAD quota,
+# token-indexer state) to a host directory outside the PVC.
+# arbesk-data's reclaimPolicy is Delete, so deleting the PVC deletes its data;
+# the copy in /var/backups/arbesk-data on the node survives that. It does not
+# survive losing the node's disk — copy it off the Pi for that.
+# Single-node cluster: the job lands on the same node as the app pod, so the
+# ReadWriteOnce volume can be mounted (read-only) alongside it.
+#
+# Restore: scale the app to 0, copy a dated snapshot back into the PVC (e.g.
+# from a busybox pod mounting arbesk-data and the backup hostPath), scale to 1.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arbesk-data-backup
+  labels: { app: arbesk }
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: busybox:1.37
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  dest=/backup/$(date -u +%Y-%m-%d)
+                  mkdir -p "$dest"
+                  cp -a /data/. "$dest"/
+                  # Keep 14 daily snapshots.
+                  ls -1d /backup/????-??-?? | sort | head -n -14 | xargs -r rm -rf
+                  echo "backed up to $dest:"; ls -l "$dest"
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: arbesk-data
+            - name: backup
+              hostPath:
+                path: /var/backups/arbesk-data
+                type: DirectoryOrCreate

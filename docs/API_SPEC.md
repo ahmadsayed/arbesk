@@ -780,11 +780,16 @@ Prometheus scrape endpoint (text exposition format 0.0.4), mounted at the server
 | `arbesk_indexer_last_scanned_block` / `_chain_head_block` | `chain_id`, `network` | Indexer progress vs chain tip |
 | `arbesk_indexer_last_success_timestamp_seconds` | `chain_id`, `network` | Last successful catch-up (0 = never) |
 | `arbesk_indexer_log_chunk_size` | `chain_id`, `network` | Current adaptive `eth_getLogs` range |
+| `arbesk_signins_total` | `method` (`email`/`wallet`) | Successful sign-ins (counter; `email` = CDP smart account, `wallet` = browser wallet) |
+| `arbesk_signin_wallets` | `method` | Distinct wallets that have ever signed in |
+| `arbesk_active_wallets` | `method`, `window` (`24h`/`7d`/`30d`) | Distinct wallets whose last sign-in is within the window |
 | `arbesk_process_cpu_seconds_total` | `mode` | Backend CPU time (counter) |
 | `arbesk_process_memory_bytes` | `type` (`rss`/`heap_used`/`heap_total`) | Backend memory |
 | `arbesk_process_uptime_seconds` | — | Backend uptime |
 | `arbesk_host_cpu_seconds_total` | `mode` | Host CPU time over all cores (counter) |
 | `arbesk_host_cpus`, `arbesk_host_memory_bytes`, `arbesk_host_load` | `type` / `window` | Host cores, memory, load average |
+
+Sign-in metrics are persisted to `.data/signin-stats.json` (wallets as truncated SHA-256 hashes, never raw addresses), so they survive restarts; tracking began with that release, so earlier sign-ins are not counted.
 
 Terminal dashboard: `bun run metrics:dash` (btop-style, built on blessed + blessed-contrib; polls `https://promptscad.com/metrics` by default — `--url` or `ARBESK_METRICS_URL` for a local backend; `--interval`, `--once`).
 
