@@ -48,6 +48,8 @@ blockchain/artifacts/
 blockchain/typechain/
 blockchain/typechain-types/
 blockchain/coverage/
+# Local chain deployment records (regenerated on every local deploy; baseSepolia stays tracked)
+blockchain/deployments/localhost/
 
 # Mutation testing (slither-mutate) — isolated venv + campaign output, never committed
 blockchain/.venv-mutate/
