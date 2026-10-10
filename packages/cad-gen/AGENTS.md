@@ -282,7 +282,7 @@ the UI should offer the Tripo3D generator instead. Measured: engineering parts
 - `scripts/cad-bench.mjs` — the **external score**: runs the public CADPrompt
   benchmark (200 prompts with ground-truth meshes, ICLR 2025) through the
   **hardened loop** it composes — the server's static repair, then its own
-  kernel gates and 2 client repair rounds, which the browser worker does not yet
+  kernel gates and 3 client repair rounds, which the browser worker does not yet
   apply (it renders once, with no geometric gates) — and writes `summary.md`
   beside the paper's GPT-4/Gemini rows,
   plus exact IoU and a Jev-triaged "where to improve" table, under
