@@ -426,6 +426,96 @@ describe("ringGear", () => {
   }, 40000);
 });
 
+// gearDistance is pure maths - there is no geometry to compare against an
+// OpenSCAD reference - so these pin the formula exactly and then prove the
+// computed distance is the meshing one with the same graze/clash intersection
+// tests the ringGear entry uses. The BOSL2 convention matched is gear_dist()
+// at profile_shift 0 / backlash 0, the only tooth form these gears cut.
+describe("gearDistance", () => {
+  it("external pair: module 2, 16 + 24 teeth is exactly 40 mm", async () => {
+    const r = await run("return box(gearDistance({ module: 2, teeth1: 16, teeth2: 24 }), 10, 10);");
+    expect(r.ok).toBe(true);
+    expect(r.stats.volumeMm3).toBeCloseTo(4000, 3);
+    expect(r.stats.bboxMm.max[0] - r.stats.bboxMm.min[0]).toBeCloseTo(40, 6);
+  }, 40000);
+
+  it("helical pair grows the distance by 1/cos(helix)", async () => {
+    const r = await run("return box(gearDistance({ module: 2, teeth1: 16, teeth2: 24, helical: 20 }), 10, 10);");
+    expect(r.ok).toBe(true);
+    expect(r.stats.volumeMm3).toBeCloseTo((100 * 40) / Math.cos((20 * Math.PI) / 180), 1);
+  }, 40000);
+
+  it("internal mesh: a 12-tooth planet sits at 28 mm inside a 40-tooth ring, and it meshes", async () => {
+    const d = "gearDistance({ module: 2, teeth1: 40, teeth2: 12, internal: true })";
+    const exact = await run("return box(" + d + ", 10, 10);");
+    expect(exact.ok).toBe(true);
+    expect(exact.stats.volumeMm3).toBeCloseTo(2800, 3);
+    // The same placement the ringGear graze test proves by hand: at the
+    // helper's distance the teeth only graze.
+    const graze = await run([
+      "const ring = ringGear({ module: 2, teeth: 40, thickness: 8 });",
+      "const planet = spurGear({ module: 2, teeth: 12, thickness: 8 }).translate([" + d + ", 0, 0]);",
+      "return ring.intersect(planet);",
+    ].join("\n"));
+    expect(graze.ok ? graze.stats.volumeMm3 : 0).toBeLessThan(2);
+  }, 40000);
+
+  it("places an external spur pair at grazing contact, in phase and out", async () => {
+    // spurGear's tooth i sits at angle 2 pi i / z from +X, so the 16-tooth
+    // wheel already points a tooth at the 24-tooth wheel; spinning the mate
+    // half a tooth (180/24 degrees) puts a gap where that tooth arrives.
+    const code = (spin) => [
+      "const a = spurGear({ module: 2, teeth: 16, thickness: 8 });",
+      "const b = spurGear({ module: 2, teeth: 24, thickness: 8 })",
+      "  .rotate([0, 0, " + spin + "])",
+      "  .translate([gearDistance({ module: 2, teeth1: 16, teeth2: 24 }), 0, 0]);",
+      "return a.intersect(b);",
+    ].join("\n");
+    const graze = await run(code("180 / 24"));
+    const clash = await run(code("0"));
+    expect(graze.ok ? graze.stats.volumeMm3 : 0).toBeLessThan(2);
+    expect(clash.stats.volumeMm3).toBeGreaterThan(100);
+  }, 40000);
+
+  it("places a helical pair of opposite hand at the grown distance", async () => {
+    const code = (distance) => [
+      "const a = spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20 });",
+      "const b = spurGear({ module: 2, teeth: 24, thickness: 8, helical: -20 })",
+      "  .rotate([0, 0, 180 / 24])",
+      "  .translate([" + distance + ", 0, 0]);",
+      "return a.intersect(b);",
+    ].join("\n");
+    const graze = await run(code("gearDistance({ module: 2, teeth1: 16, teeth2: 24, helical: 20 })"));
+    // At the SPUR distance the same pair buries its teeth: 40 x (1/cos(20) - 1)
+    // is 2.57 mm of radial overlap, hundreds of mm^3 of intersection.
+    const buried = await run(code("gearDistance({ module: 2, teeth1: 16, teeth2: 24 })"));
+    expect(graze.ok ? graze.stats.volumeMm3 : 0).toBeLessThan(2);
+    expect(buried.stats.volumeMm3).toBeGreaterThan(100);
+  }, 40000);
+
+  it("refuses specs the formula cannot answer, naming each one", async () => {
+    const noModule = await run("return box(gearDistance({ module: 0, teeth1: 16, teeth2: 24 }), 10, 10);");
+    expect(noModule.ok).toBe(false);
+    expect(noModule.error).toMatch(/gearDistance needs a positive module/);
+
+    const fewTeeth = await run("return box(gearDistance({ module: 2, teeth1: 3, teeth2: 24 }), 10, 10);");
+    expect(fewTeeth.ok).toBe(false);
+    expect(fewTeeth.error).toMatch(/gearDistance needs a whole number of teeth1, at least 4/);
+
+    const fractional = await run("return box(gearDistance({ module: 2, teeth1: 16.5, teeth2: 24 }), 10, 10);");
+    expect(fractional.ok).toBe(false);
+    expect(fractional.error).toMatch(/whole number of teeth1/);
+
+    const badHelix = await run("return box(gearDistance({ module: 2, teeth1: 16, teeth2: 24, helical: 90 }), 10, 10);");
+    expect(badHelix.ok).toBe(false);
+    expect(badHelix.error).toMatch(/helical angle between -90 and 90/);
+
+    const inverted = await run("return box(gearDistance({ module: 2, teeth1: 12, teeth2: 40, internal: true }), 10, 10);");
+    expect(inverted.ok).toBe(false);
+    expect(inverted.error).toMatch(/gearDistance needs teeth1 > teeth2/);
+  }, 40000);
+});
+
 describe("spurGear", () => {
   it("puts the tip circle at pitch radius plus the module", async () => {
     const r = await run("return spurGear({ module: P.m, teeth: P.z, thickness: 10 });");
