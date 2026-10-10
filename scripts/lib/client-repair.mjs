@@ -51,7 +51,10 @@ export async function buildWithClientRepair(ctx, first) {
       // in-process kernel's plain return value awaits to itself.
       const run = await ctx.kernel.run(design);
       const maxBodies = bodyAllowance(design.code, pieces);
-      const failed = evaluateKernelGates(run.stats, { maxTriangles: MAX_TRIANGLES, maxBodies, minBodies })
+      // A part of an array return may have more than one body only when a
+      // multi-body helper built it: the helper floor, without Jev's count.
+      const maxBodiesPerPart = bodyAllowance(design.code);
+      const failed = evaluateKernelGates(run.stats, { maxTriangles: MAX_TRIANGLES, maxBodies, maxBodiesPerPart, minBodies })
         .find((g) => !g.ok);
       if (!failed) return { run, design, failures, results };
       failure = { gate: failed.gate, error: failed.gate + ": " + failed.error };
