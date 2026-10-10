@@ -253,6 +253,34 @@ function partBodiesOf(solids: any[]): { bodies?: CadStats["bodies"]; bodyCounts:
   };
 }
 
+/** Overlapping part pairs listed in stats; past this the count says enough. */
+const MAX_OVERLAPS = 8;
+
+/** Whether two boxes share interior volume; boxes that only touch do not. */
+function boxesMeet(a: Box, b: Box): boolean {
+  return [0, 1, 2].every((k) => a.min[k] < b.max[k] && b.min[k] < a.max[k]);
+}
+
+/**
+ * Part pairs whose solids share more than DEGENERATE_BODY_MM3.
+ * @remarks Recorded, never failed: a pin in its hole overlaps by design, and
+ *   printing at assembled positions is out of scope (spec decision 4). Only
+ *   pairs whose boxes meet are intersected, so disjoint parts cost box checks.
+ */
+function overlapsOf(solids: any[], boxes: Box[]): Pick<NonNullable<CadStats["parts"]>, "overlaps" | "overlapCount"> {
+  const found: { a: number; b: number; volumeMm3: number }[] = [];
+  for (let i = 0; i < solids.length; i++) {
+    for (let j = i + 1; j < solids.length; j++) {
+      if (!boxesMeet(boxes[i], boxes[j])) continue;
+      const volumeMm3 = solids[i].intersect(solids[j]).volume();
+      if (volumeMm3 > DEGENERATE_BODY_MM3) found.push({ a: i + 1, b: j + 1, volumeMm3 });
+    }
+  }
+  if (found.length === 0) return {};
+  found.sort((x, y) => y.volumeMm3 - x.volumeMm3);
+  return { overlaps: found.slice(0, MAX_OVERLAPS), overlapCount: found.length };
+}
+
 /** Stats for an array return: totals over the parts, plus per-part facts. */
 function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
   const boxes: Box[] = solids.map((s) => {
@@ -268,7 +296,7 @@ function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
     ...(helpers.lastFilletMode ? { filletMode: helpers.lastFilletMode } : {}),
     ...(helpers.lastFilletQuality ? { filletQuality: helpers.lastFilletQuality } : {}),
     ...(bodies ? { bodies } : {}),
-    parts: { count: solids.length, array: true, boxes, bodyCounts },
+    parts: { count: solids.length, array: true, boxes, bodyCounts, ...overlapsOf(solids, boxes) },
   };
 }
 

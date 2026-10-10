@@ -21,6 +21,7 @@ class FakeManifold {
       triVerts: [0, 1, 2, 0, 1, 3],
     };
   }
+  intersect() { return new EmptyManifold(); }
 }
 
 /**
@@ -99,5 +100,23 @@ describe("createCadKernel", () => {
     expect(parts.length).toBe(2);
     expect(stats.triangles).toBe(4);
     expect(Array.from(mesh.indices)).toEqual([0, 1, 2, 0, 1, 3, 4, 5, 6, 4, 5, 7]);
+  });
+
+  it("never intersects parts whose boxes are apart", () => {
+    let calls = 0;
+    class Far extends FakeManifold {
+      boundingBox() { return { min: [50, 0, 0], max: [51, 1, 1] }; }
+      intersect() { calls++; return new FakeManifold(); }
+    }
+    class Spy extends FakeManifold {
+      intersect() { calls++; return new FakeManifold(); }
+    }
+    const kernel = createCadKernel({ Manifold: FakeManifold, CrossSection: class {} });
+    globalThis.__far = () => new Far();
+    globalThis.__spy = () => new Spy();
+    kernel.run(design("return [globalThis.__spy(), globalThis.__far()];"));
+    expect(calls).toBe(0);
+    delete globalThis.__far;
+    delete globalThis.__spy;
   });
 });

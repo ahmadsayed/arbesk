@@ -78,3 +78,19 @@ describe("single-solid returns", () => {
     });
   });
 });
+
+describe("overlaps", () => {
+  it("records parts that overlap, with the shared volume", () => {
+    const run = kernel.run(design("return [box(P.s, P.s, P.s), box(P.s, P.s, P.s).translate([5, 0, 0])];"));
+    expect(run.stats.parts.overlapCount).toBe(1);
+    expect(run.stats.parts.overlaps[0].a).toBe(1);
+    expect(run.stats.parts.overlaps[0].b).toBe(2);
+    expect(run.stats.parts.overlaps[0].volumeMm3).toBeCloseTo(500, 3);
+  });
+
+  it("does not count parts that only touch", () => {
+    const run = kernel.run(design("return [box(P.s, P.s, P.s), box(P.s, P.s, P.s).translate([P.s, 0, 0])];"));
+    expect(run.stats.parts.overlaps).toBeUndefined();
+    expect(run.stats.parts.overlapCount).toBeUndefined();
+  });
+});
