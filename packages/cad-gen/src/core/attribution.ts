@@ -117,6 +117,24 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "BSD-2-Clause",
     url: "https://github.com/BelfrySCAD/BOSL2",
   },
+  // BSD-2-Clause, same provenance as rack. Match OpenSCAD:
+  // scripts/cad-reference.mjs worm-* and wormgear-*.
+  worm: {
+    helper: "worm",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), gears.scad worm(); inspired by Leemon Baird's public-domain involute gear (2011)",
+    author: "Adrian Mariano and Revar Desmera",
+    authorGithub: ["https://github.com/adrianVmariano", "https://github.com/revarbat"],
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
+  wormGear: {
+    helper: "wormGear",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), gears.scad worm_gear(); inspired by Leemon Baird's public-domain involute gear (2011)",
+    author: "Adrian Mariano and Revar Desmera",
+    authorGithub: ["https://github.com/adrianVmariano", "https://github.com/revarbat"],
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
   printInPlaceHinge: {
     helper: "printInPlaceHinge",
     work: "BOSL2 (Belfry OpenSCAD Library v2), hinges.scad print-in-place hinge example",

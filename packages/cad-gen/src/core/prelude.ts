@@ -14,12 +14,13 @@ import { knob } from "./library/knob.ts";
 import { pipeClamp } from "./library/pipe-clamp.ts";
 import { rack } from "./library/gear-rack.ts";
 import { bevelApexHeight, bevelGear } from "./library/bevel-gear.ts";
+import { worm, wormDistance, wormGear } from "./library/worm-gear.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gearDistance", "bevelGear", "bevelApex", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gearDistance", "bevelGear", "bevelApex", "worm", "wormGear", "wormDistance", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -374,8 +375,28 @@ function spurOutlinePoints(
  *   repair a self-overlap.
  */
 function bevelToothPoints(m: number, z: number, pressureAngle: number): number[][] {
-  const phi = (pressureAngle * Math.PI) / 180;
-  const radii = gearRadii(m, z, phi);
+  return centredToothPoints(m, z, pressureAngle, 0, true);
+}
+
+/**
+ * One tooth for a worm gear: bevelToothPoints' layout on the transverse
+ * section of a helix (the worm's lead angle), without the single tip point.
+ * @remarks worm_gear() splits the tooth into two equal flanks, so the count
+ *   must be even; the two flank tips stay, a tip chord in place of the arc.
+ */
+function wormToothPoints(m: number, z: number, pressureAngle: number, helical: number): number[][] {
+  return centredToothPoints(m, z, pressureAngle, helical, false);
+}
+
+/**
+ * A tooth centred on +Y with its pitch point at the origin, +X root first.
+ * @param helical Helix angle in degrees: module and pressure angle are
+ *   transverse, the tooth height stays on the normal module (as spurGear).
+ * @param tipPoint Whether to include the single point at the tip's centre.
+ */
+function centredToothPoints(m: number, z: number, pressureAngle: number, helical: number, tipPoint: boolean): number[][] {
+  const { mt, phi } = transverseGear(m, pressureAngle, helical, "gear tooth");
+  const radii = gearRadii(mt, z, phi, m);
   const start = Math.max(radii.base, radii.root);
   const steps = GEAR_FLANK_STEPS;
   const half = (r: number): number => Math.max(0, halfToothAngle(r, radii, z, phi));
@@ -385,7 +406,7 @@ function bevelToothPoints(m: number, z: number, pressureAngle: number): number[]
   const pts: number[][] = [at(radii.root, up - Math.PI / z)];
   if (radii.root < radii.base) pts.push(at(radii.root, up - half(radii.base)));
   for (const r of flank) pts.push(at(r, up - half(r)));
-  pts.push(at(radii.tip, up));
+  if (tipPoint) pts.push(at(radii.tip, up));
   for (const r of [...flank].reverse()) pts.push(at(r, up + half(r)));
   if (radii.root < radii.base) pts.push(at(radii.root, up + half(radii.base)));
   pts.push(at(radii.root, up + Math.PI / z));
@@ -1436,6 +1457,36 @@ export function buildPrelude(
      *   axis - see the catalog guidance.
      */
     bevelApex: (opts: any = {}) => bevelApexHeight(opts ?? {}),
+
+    /**
+     * A worm: the screw that drives a worm gear, for a high reduction between crossed shafts.
+     * @remarks PORT of worm() from BelfrySCAD/BOSL2 gears.scad, BSD-2-Clause,
+     *   by Adrian Mariano and Revar Desmera (library/worm-gear.ts); credited in
+     *   ATTRIBUTED_HELPERS. Axis on Z, centred on the origin; diameter is the
+     *   PITCH diameter. Right-handed unless leftHanded. It meshes with a
+     *   wormGear of the same module, wormDiameter and wormStarts, at
+     *   wormDistance(...) from the gear's axis with its own axis crossing the
+     *   gear's at 90 degrees - see the catalog guidance for the placement.
+     */
+    worm: (opts: any = {}) => worm(module, { segments: segmentsFor(opts), ...(opts ?? {}) }),
+
+    /**
+     * A worm gear: the wheel a worm drives, its teeth hobbed to wrap the worm.
+     * @remarks PORT of worm_gear() from BelfrySCAD/BOSL2 gears.scad,
+     *   BSD-2-Clause, by Adrian Mariano and Revar Desmera (library/worm-gear.ts);
+     *   credited in ATTRIBUTED_HELPERS. Uses spurGear's involute tooth on the
+     *   worm's lead angle. Axis on Z, centred on the origin, tooth 0 toward +Y.
+     *   Built for one worm: pass that worm's diameter and starts as
+     *   wormDiameter and wormStarts, and the same leftHanded.
+     */
+    wormGear: (opts: any = {}) => wormGear(module, opts ?? {}, wormToothPoints),
+
+    /**
+     * Centre distance between a worm's axis and its worm gear's axis, in mm.
+     * @remarks BOSL2's worm_dist(): takes the worm gear's module, teeth,
+     *   wormDiameter and wormStarts.
+     */
+    wormDistance: (opts: any = {}) => wormDistance(opts ?? {}),
 
     /**
      * The centre distance between two meshing gears, in millimetres.
