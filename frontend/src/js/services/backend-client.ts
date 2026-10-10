@@ -193,6 +193,8 @@ interface FetchWithSessionOptions {
   body?: Record<string, any> | string;
   /** extra request headers */
   headers?: Record<string, string>;
+  /** aborts the request (e.g. a timeout) */
+  signal?: AbortSignal;
 }
 
 /**
@@ -201,7 +203,7 @@ interface FetchWithSessionOptions {
  *   and the request retried once with a fresh session.
  * @param path - path relative to API_BASE (e.g. "/generations")
  */
-export async function fetchWithSession(path: string, { method = "POST", body, headers = {} }: FetchWithSessionOptions = {}): Promise<Response> {
+export async function fetchWithSession(path: string, { method = "POST", body, headers = {}, signal }: FetchWithSessionOptions = {}): Promise<Response> {
   const doFetch = (token: string) =>
     fetch(`${API_BASE}${path}`, {
       method,
@@ -211,6 +213,7 @@ export async function fetchWithSession(path: string, { method = "POST", body, he
         ...headers,
       },
       body: typeof body === "string" ? body : JSON.stringify(body),
+      ...(signal && { signal }),
     });
 
   let token = await getOrCreateSession();

@@ -12,6 +12,7 @@ const {
 
 import generateAssetNode from "./assets/generate-node.ts";
 import cadRoutes from "./routes/cad.ts";
+import followupIntentRoutes from "./routes/followup-intent.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import sessionRouter from "./sessions.ts";
@@ -71,6 +72,10 @@ export default (deps: ApiDeps) => {
   // ─── CAD generation (code only; the client runs the kernel) ────────────────
 
   v1.route("/cad", cadRoutes());
+
+  // ─── Follow-up intent (Jev reads what a typed follow-up asks for) ─────────
+
+  v1.route("/followup-intent", followupIntentRoutes());
 
   // ─── Comments Archive ─────────────────────────────────────────────────────
 

@@ -86,6 +86,16 @@ export const LIMITER_SPECS: Record<string, LimiterSpec> = {
     windowMs: HOUR_MS,
     message: "CAD request rate limit exceeded.",
   },
+  /**
+   * One Jev call per typed follow-up (~1.1k input tokens). Generous: it only
+   * bounds a client calling the judge in a loop, and a hit just falls back to
+   * the client's default route.
+   */
+  followupIntent: {
+    max: () => Number(process.env.FOLLOWUP_INTENT_RATE_LIMIT_MAX || 120),
+    windowMs: HOUR_MS,
+    message: "Follow-up intent rate limit exceeded.",
+  },
 };
 
 /**
@@ -241,6 +251,7 @@ export const emailOtpRequestRateLimit = limiters.emailOtpRequest.middleware;
 export const emailOtpVerifyRateLimit = limiters.emailOtpVerify.middleware;
 export const walletRelayRateLimit = limiters.walletRelay.middleware;
 export const cadRateLimit = limiters.cad.middleware;
+export const followupIntentRateLimit = limiters.followupIntent.middleware;
 
 /**
  * Generation rate-limit middleware.
