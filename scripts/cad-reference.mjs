@@ -97,6 +97,12 @@ const CASES = {
   "gear-herringbone": {
     scad: "gear-herringbone.scad", code: "return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20, herringbone: true });",
   },
+  "bevel-straight": { scad: "bevel-straight.scad", code: "return bevelGear({ module: 2, teeth: 20, mateTeeth: 20 });" },
+  "bevel-pinion": { scad: "bevel-pinion.scad", code: "return bevelGear({ module: 2, teeth: 16, mateTeeth: 28, bore: 5 });" },
+  "bevel-backing": { scad: "bevel-backing.scad", code: "return bevelGear({ module: 2, teeth: 28, mateTeeth: 16, backing: 3 });" },
+  "bevel-spiral": {
+    scad: "bevel-spiral.scad", code: "return bevelGear({ module: 2, teeth: 16, mateTeeth: 28, spiral: 35, rightHanded: true });",
+  },
   "ring-default": { scad: "ring-default.scad", code: "return ringGear({ module: 2, teeth: 40, thickness: 8 });" },
   "ring-backing": { scad: "ring-backing.scad", code: "return ringGear({ module: 1.5, teeth: 36, thickness: 6, backing: 3 });" },
   "ring-helical": { scad: "ring-helical.scad", code: "return ringGear({ module: 2, teeth: 40, thickness: 8, helical: 20 });" },
