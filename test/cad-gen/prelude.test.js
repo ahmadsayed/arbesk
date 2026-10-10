@@ -426,6 +426,67 @@ describe("ringGear", () => {
   }, 40000);
 });
 
+// OpenSCAD's render of BOSL2's bevel_gear() matches these to 0.08 mm and
+// 0.5 % volume - scripts/cad-reference.mjs bevel-*.
+describe("bevelGear", () => {
+  it("builds one solid with its pitch base on z = 0", async () => {
+    const r = await run("return bevelGear({ module: 2, teeth: 20, mateTeeth: 20 });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+    // OpenSCAD: 42.81 across, z -1.768 to 7.685.
+    expect(r.stats.bboxMm.max[0] - r.stats.bboxMm.min[0]).toBeCloseTo(42.81, 0);
+    expect(r.stats.bboxMm.min[2]).toBeCloseTo(-1.768, 2);
+    expect(r.stats.volumeMm3).toBeGreaterThan(7100);
+    expect(r.stats.volumeMm3).toBeLessThan(7250);
+  });
+
+  it("cuts a bore through the whole gear", async () => {
+    const plain = await run("return bevelGear({ module: 2, teeth: 16, mateTeeth: 28 });");
+    const bored = await run("return bevelGear({ module: 2, teeth: 16, mateTeeth: 28, bore: 5 });");
+    expect(bored.stats.bodies.count).toBe(1);
+    expect(plain.stats.volumeMm3 - bored.stats.volumeMm3).toBeGreaterThan(100);
+  });
+
+  it("puts the apex at the mate's pitch radius for shafts at 90 degrees", async () => {
+    const r = await run("return box(bevelApex({ module: 2, teeth: 16, mateTeeth: 28 }), 10, 10);");
+    expect(r.stats.bboxMm.max[0] - r.stats.bboxMm.min[0]).toBeCloseTo(28, 3);
+  });
+
+  it("meshes a pair at their shared apex, in phase and out", async () => {
+    // Each gear's tooth 0 points along its own +Y. With both apexes on the
+    // origin and the 28-tooth gear turned onto +Y, the 16-tooth gear's tooth
+    // 0 and the 28's tooth 14 meet on the contact line; spinning the 28 half
+    // a tooth puts a gap there instead.
+    const code = (spin) => [
+      "const a = bevelGear({ module: 2, teeth: 16, mateTeeth: 28 })",
+      "  .translate([0, 0, -bevelApex({ module: 2, teeth: 16, mateTeeth: 28 })]);",
+      "const b = bevelGear({ module: 2, teeth: 28, mateTeeth: 16 }).rotate([0, 0, " + spin + "])",
+      "  .translate([0, 0, -bevelApex({ module: 2, teeth: 28, mateTeeth: 16 })]).rotate([90, 0, 0]);",
+      "return a.intersect(b);",
+    ].join("\n");
+    const graze = await run(code("180 / 28"));
+    const clash = await run(code("0"));
+    expect(graze.ok ? graze.stats.volumeMm3 : 0).toBeLessThan(2);
+    expect(clash.stats.volumeMm3).toBeGreaterThan(50);
+  }, 40000);
+
+  it("refuses specs it cannot build, naming each one", async () => {
+    const cases = [
+      ["bevelGear({ module: 0, teeth: 16, mateTeeth: 28 })", /positive module/],
+      ["bevelGear({ module: 2, teeth: 2, mateTeeth: 28 })", /whole number of teeth/],
+      ["bevelGear({ module: 2, teeth: 16 })", /whole number of mateTeeth/],
+      ["bevelGear({ module: 2, teeth: 16, mateTeeth: 28, shaftAngle: 180 })", /shaftAngle strictly between/],
+      ["bevelGear({ module: 2, teeth: 16, mateTeeth: 28, spiral: 90 })", /spiral angle/],
+      ["bevelGear({ module: 2, teeth: 30, mateTeeth: 10, shaftAngle: 150 })", /crown or internal bevel gear/],
+    ];
+    for (const [call, message] of cases) {
+      const r = await run("return " + call + ";");
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(message);
+    }
+  }, 40000);
+});
+
 // gearDistance is pure maths - there is no geometry to compare against an
 // OpenSCAD reference - so these pin the formula exactly and then prove the
 // computed distance is the meshing one with the same graze/clash intersection

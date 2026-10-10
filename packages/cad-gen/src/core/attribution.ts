@@ -107,6 +107,16 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "BSD-2-Clause",
     url: "https://github.com/BelfrySCAD/BOSL2",
   },
+  // BSD-2-Clause, same provenance as rack. Matches OpenSCAD:
+  // scripts/cad-reference.mjs bevel-*.
+  bevelGear: {
+    helper: "bevelGear",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), gears.scad bevel_gear(); inspired by Leemon Baird's public-domain involute gear (2011)",
+    author: "Adrian Mariano and Revar Desmera",
+    authorGithub: ["https://github.com/adrianVmariano", "https://github.com/revarbat"],
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
   printInPlaceHinge: {
     helper: "printInPlaceHinge",
     work: "BOSL2 (Belfry OpenSCAD Library v2), hinges.scad print-in-place hinge example",

@@ -13,12 +13,13 @@ import { extrusionSpoolArm } from "./library/extrusion-spool-arm.ts";
 import { knob } from "./library/knob.ts";
 import { pipeClamp } from "./library/pipe-clamp.ts";
 import { rack } from "./library/gear-rack.ts";
+import { bevelApexHeight, bevelGear } from "./library/bevel-gear.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gearDistance", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gearDistance", "bevelGear", "bevelApex", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -361,6 +362,34 @@ function spurOutlinePoints(
     for (const p of toothPoints(i, z, phi, radii, steps)) points.push(p);
   }
   return points;
+}
+
+/**
+ * One tooth for a bevel gear: centred on +Y, pitch point at the origin,
+ * mirror-symmetric, root to root across one pitch.
+ * @remarks spurGear's involute (toothPoints), laid out the way BOSL2's
+ *   bevel_gear() sweeps a tooth. The flank starts at the root circle when that
+ *   lies outside the base circle (more than ~42 teeth), so the outline never
+ *   doubles back on itself - a swept mesh, unlike a CrossSection, cannot
+ *   repair a self-overlap.
+ */
+function bevelToothPoints(m: number, z: number, pressureAngle: number): number[][] {
+  const phi = (pressureAngle * Math.PI) / 180;
+  const radii = gearRadii(m, z, phi);
+  const start = Math.max(radii.base, radii.root);
+  const steps = GEAR_FLANK_STEPS;
+  const half = (r: number): number => Math.max(0, halfToothAngle(r, radii, z, phi));
+  const at = (r: number, a: number): number[] => [r * Math.cos(a), r * Math.sin(a) - radii.pitch];
+  const flank = Array.from({ length: steps + 1 }, (_v, s) => start + ((radii.tip - start) * s) / steps);
+  const up = Math.PI / 2;
+  const pts: number[][] = [at(radii.root, up - Math.PI / z)];
+  if (radii.root < radii.base) pts.push(at(radii.root, up - half(radii.base)));
+  for (const r of flank) pts.push(at(r, up - half(r)));
+  pts.push(at(radii.tip, up));
+  for (const r of [...flank].reverse()) pts.push(at(r, up + half(r)));
+  if (radii.root < radii.base) pts.push(at(radii.root, up + half(radii.base)));
+  pts.push(at(radii.root, up + Math.PI / z));
+  return pts;
 }
 
 // Gates PowerGrip GT (GT2) 2mm-pitch dimensions. These are published
@@ -1384,6 +1413,29 @@ export function buildPrelude(
      *   rack(): scripts/cad-reference.mjs, cases rack-*.
      */
     rack: (opts: any = {}) => rack(module, opts ?? {}),
+
+    /**
+     * A bevel gear: teeth on a cone, for two shafts that meet at an angle.
+     * @remarks PORT of BOSL2's bevel_gear() (library/bevel-gear.ts, credited
+     *   in ATTRIBUTED_HELPERS) with spurGear's involute tooth. Sits like
+     *   BOSL2's "pitchbase" anchor: the base of the pitch cone on z = 0, axis
+     *   on Z, teeth toward +Z. Two bevel gears mesh when they share module and
+     *   pressure angle, each is built with the OTHER's tooth count as
+     *   mateTeeth and the same shaftAngle, and their pitch-cone apexes
+     *   coincide: the apex is bevelApex(...) above the pitch base. spiral: 0
+     *   (the default) is a straight bevel gear; a spiral pair needs opposite
+     *   hands (rightHanded: true on one).
+     */
+    bevelGear: (opts: any = {}) => bevelGear(module, opts ?? {}, bevelToothPoints),
+
+    /**
+     * Height of a bevel gear's pitch-cone apex above its pitch base, in mm.
+     * @remarks Takes the same module / teeth / mateTeeth / shaftAngle as
+     *   bevelGear. To mesh a pair, move each gear down by its own bevelApex so
+     *   both apexes sit on the origin, then turn one onto the other's shaft
+     *   axis - see the catalog guidance.
+     */
+    bevelApex: (opts: any = {}) => bevelApexHeight(opts ?? {}),
 
     /**
      * The centre distance between two meshing gears, in millimetres.
