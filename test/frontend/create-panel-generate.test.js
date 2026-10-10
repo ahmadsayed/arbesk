@@ -502,6 +502,32 @@ test("an uncertain reading asks, and Retexture runs the old route", async () => 
   expect(followup.prompt).toBe("make it look scary");
 });
 
+test("an uncertain animate reading asks, and Animate opens with Jev's motions checked", async () => {
+  await generateRobot();
+  mockJudgeFollowupIntent.mockResolvedValue({
+    action: "animate", confidence: 0.52, animations: ["preset:run"], inPlace: false,
+    probabilities: { animate: 0.52, retexture: 0.3, new_model: 0.1, unclear: 0.08 },
+  });
+  mockShowCustomDialog.mockResolvedValue(undefined); // the user cancels
+
+  promptInput.value = "make it go";
+  await clickGenerate();
+
+  const [, choices, onPick] = mockAddChoiceMessage.mock.calls[0];
+  expect(choices.map((c) => c.value)).toEqual(["animate", "retexture"]);
+
+  onPick("animate");
+  await flush(); await flush(); await flush();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1); // nothing retextured
+  const [title, wrap] = mockShowCustomDialog.mock.calls[0];
+  expect(title).toBe("Rig & Animate");
+  const box = (v) => wrap.querySelector(`input[value="${v}"]`).checked;
+  expect(box("preset:run")).toBe(true);
+  expect(box("preset:walk")).toBe(false);
+  expect(box("option:in-place")).toBe(false);
+});
+
 test("single attached image goes out as legacy imageData/imageMime with a synthesized prompt", async () => {
   connectWallet();
   localStorage.setItem("arbesk-byok-key", "sk-test-key");
