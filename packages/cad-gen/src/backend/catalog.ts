@@ -199,10 +199,11 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     id: "gear",
-    helpers: ["spurGear"],
-    summary: "spur gears, gear pairs, anything with involute teeth",
+    helpers: ["spurGear", "rack"],
+    summary: "spur gears, gear pairs, racks and rack-and-pinion drives, anything with involute teeth",
     helperRows: [
       "spurGear({ module, teeth, thickness, bore?, pressureAngle? })   involute gear",
+      "rack({ module, teeth, thickness, pressureAngle?, backing? })     straight gear rack",
     ],
     guidance: [
       "Use spurGear for every gear. NEVER write the tooth trigonometry yourself and",
@@ -212,6 +213,12 @@ export const CATALOG: CatalogEntry[] = [
       "(module x (teeth1 + teeth2)) / 2. Report the module, tooth count and pressure",
       "angle you chose, since the user has to match them against whatever the gear",
       "drives.",
+      "A rack - any linear gear, toothed bar or rack-and-pinion - is ALWAYS",
+      "rack(...). This is not a suggestion: never draw rack teeth with boxes or a",
+      "polygon. rack() lays its teeth along X with the tips toward +Z, face width",
+      "along Y and the base at z = -bottom; a pinion meshes with it when it has the",
+      "same module and pressure angle and its pitch circle touches the rack's pitch",
+      "line at z = 0.",
     ],
   },
   {
