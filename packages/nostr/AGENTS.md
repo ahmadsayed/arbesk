@@ -1,7 +1,7 @@
 # @arbesk/nostr — Nostr identity + asset-update events
 
 Environment-agnostic Nostr SDK. Consumed by the browser, `besk` CLI, and tests.
-Compiled by tsc to dist/ (ESM + .d.ts). No browser/backend imports; host
+Compiled by tsgo (TypeScript 7 native compiler) to dist/ (ESM + .d.ts). No browser/backend imports; host
 capabilities arrive via injected ports.
 
 ## Public API (src/index.ts)

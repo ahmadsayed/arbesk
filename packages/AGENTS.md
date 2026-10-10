@@ -3,7 +3,7 @@
 This directory holds Arbesk's shared, environment-agnostic SDKs, published as
 **Bun workspaces** (root `package.json` `workspaces.packages` + shared `catalog`)
 under the `@arbesk/*` scope.
-Each is one TypeScript codebase compiled by `tsc` to `dist/` (ESM + `.d.ts`),
+Each is one TypeScript codebase compiled by `tsgo` (TypeScript 7 native compiler) to `dist/` (ESM + `.d.ts`),
 consumed by bare specifier in the browser, the Node backend, and tests.
 
 The root `AGENTS.md` treats these as **black boxes**. Work inside a package
@@ -71,7 +71,7 @@ other and of the frontend/backend trees.
 ## Build & test
 
 ```bash
-bun run build:packages   # tsc → dist/ (ESM + .d.ts); bun runs the three
+bun run build:packages   # tsgo → dist/ (ESM + .d.ts); bun runs the three
                          # bottom packages in parallel, then @arbesk/authz and
                          # @arbesk/cad-gen (they type-check against
                          # @arbesk/wallet's and @arbesk/asset-core's dist),

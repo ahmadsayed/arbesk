@@ -3,7 +3,7 @@
 Environment-agnostic wallet, identity, and chain SDK for Arbesk: the `Signer`
 port, SIWE build/verify, Merkle editor proofs, typed contract writes, and the
 session store. One TypeScript codebase (`packages/wallet/`) consumed by the
-browser, the Node backend, and tests — compiled by `tsc` to `dist/` (ESM +
+browser, the Node backend, and tests — compiled by `tsgo` (TypeScript 7 native compiler) to `dist/` (ESM +
 `.d.ts`). This is the **bottom** of the SDK stack: `@arbesk/authz` and the
 backend/frontend both build on it.
 
@@ -82,7 +82,7 @@ src/
 ## Build & test
 
 ```bash
-bun run build:packages      # tsc → dist/ (ESM + .d.ts), all three packages
+bun run build:packages      # tsgo → dist/ (ESM + .d.ts), all three packages
 bun run typecheck           # after build (resolves @arbesk/* via workspace)
 bun run test                # bun test preload (test/bun.setup.js) maps @arbesk/wallet/*.js → source
 ```

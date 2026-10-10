@@ -27,7 +27,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 ## 3. Repo Layout
 
 - **Backend** `src/api/` (all `.ts`): routes `index.ts` + `routes/` · generation (`assets/generate-node.ts`, `generation-tasks.ts`) · storage `storage/` (kubo/pinata) · auth `authentication.ts`, `sessions.ts`, `identity.ts` · `token-indexer.ts` · `comments-archive.ts` · `chat-proxy.ts` (WS) · `nostr-relay.ts` · `manifest-utils.ts` · `asset-tag.ts` (canonical tag `<chainId>:<contract>:<tokenId>:<assetId>`) · `openapi.json`
-- **SDK packages** `packages/*` (bun workspaces; compiled by tsc to `dist/` ESM + `.d.ts`; consumed by bare specifier) — treated as **black boxes**: import their public API, don't reach into internals. Internals + boundary rules live in each package's own guide:
+- **SDK packages** `packages/*` (bun workspaces; compiled by tsgo — the TypeScript 7 native compiler, `@typescript/native-preview` — to `dist/` ESM + `.d.ts`; consumed by bare specifier) — treated as **black boxes**: import their public API, don't reach into internals. Internals + boundary rules live in each package's own guide:
   - `@arbesk/asset-core` (`packages/asset-core/`) — asset engine: manifests, glTF/3MF compose/decompose, domain state, editor lists. See `packages/asset-core/AGENTS.md` + `docs/ASSET_CORE_SDK.md`.
   - `@arbesk/wallet` (`packages/wallet/`) — wallet/identity/chain: `Signer` port, SIWE, Merkle proofs, contract writes, session store. See `packages/wallet/AGENTS.md`.
   - `@arbesk/authz` (`packages/authz/`) — asset access policy (ownership + Merkle editor proof). See `packages/authz/AGENTS.md`.
@@ -44,9 +44,12 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 ./scripts/start-dev.sh --testnet       # Base Sepolia + Pinata + local Nostr
 docker compose up -d                   # IPFS + Hardhat + Nostr; logs: docker compose logs -f ipfs
 
-# Dependencies (Bun ≥1.4 is the package manager, backend runtime and unit-test
-# runner for root + frontend; Node is still required for the E2E harness and
-# the Hardhat Docker flow — see §1)
+# Dependencies (Bun ≥1.4.3 is the package manager, backend runtime and unit-test
+# runner for root + frontend; the `typecheck*` scripts use Bun's native `bun check`
+# and package `build` uses `tsgo` (TypeScript 7 native, `@typescript/native-preview`)
+# for dist + .d.ts emit — the classic `typescript` package remains only for
+# typescript-eslint and editor tooling; Node is still required for the E2E
+# harness and the Hardhat Docker flow — see §1)
 bun install && (cd frontend && bun install)   # + (cd blockchain && npm install) — IDE intellisense only
 # Shared deps (viem, zod, fflate, …) are pinned once in the root `catalog`
 # (package.json `workspaces.catalog`) and referenced as "catalog:" — add with

@@ -8,7 +8,7 @@
     "besk": "./src/cli.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

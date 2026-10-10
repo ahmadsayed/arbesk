@@ -13,9 +13,9 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "bun run clean && bun --bun tsc -p tsconfig.build.json",
+    "build": "bun run clean && tsgo -p tsconfig.build.json",
     "clean": "bun -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@arbesk/asset-core": "*",

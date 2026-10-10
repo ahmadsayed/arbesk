@@ -3,7 +3,7 @@
 Environment-agnostic Arbesk asset engine: manifests, glTF/3MF compose/decompose,
 asset domain state, and Merkle editor lists — one TypeScript codebase
 (`packages/asset-core/`) consumed by the browser, the Node backend, and tests.
-Compiled by `tsc` to `dist/` (ESM + `.d.ts`) with no runtime dependency on
+Compiled by `tsgo` (TypeScript 7 native compiler) to `dist/` (ESM + `.d.ts`) with no runtime dependency on
 Babylon.js or any 3D engine.
 
 > **Consumer guide:** `docs/ASSET_CORE_SDK.md` — per-environment quickstarts,
@@ -152,7 +152,7 @@ bundles — never duplicate the magic.
 ## Build, test, benchmark
 
 ```bash
-bun run build:packages    # tsc → dist/ (ESM + .d.ts)
+bun run build:packages    # tsgo → dist/ (ESM + .d.ts)
 bun run typecheck         # after build (resolves @arbesk/* via workspace)
 bun run test              # bun test preload maps @arbesk/asset-core/*.js → .ts source (no build step)
 bun run bench:asset-core  # pipeline benchmark → test-results/asset-core-bench.json

@@ -3,7 +3,7 @@
 Environment-agnostic authorization SDK: decides whether an address may access
 an Arbesk asset — either as the **owner** or via a valid **Merkle editor
 proof**. One TypeScript codebase (`packages/authz/`) consumed by the Node
-backend (and reusable by any host); compiled by `tsc` to `dist/` (ESM +
+backend (and reusable by any host); compiled by `tsgo` (TypeScript 7 native compiler) to `dist/` (ESM +
 `.d.ts`). Built on `@arbesk/wallet`'s Merkle primitives.
 
 ## Public API (`src/index.ts`)
@@ -62,7 +62,7 @@ that in `src/api/asset-core-adapters.ts` / the authorization route (moved from
 ## Build & test
 
 ```bash
-bun run build:packages   # tsc → dist/ (ESM + .d.ts)
+bun run build:packages   # tsgo → dist/ (ESM + .d.ts)
 bun run typecheck        # after build
 bun run test             # bun test preload maps @arbesk/authz/*.js → source
 ```
