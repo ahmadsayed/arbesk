@@ -18,6 +18,7 @@
  * Requires `openscad` on PATH and the reference library checked out:
  *   git clone --depth 1 https://github.com/BelfrySCAD/BOSL2 test-results/reference/BOSL2
  */
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -90,6 +91,11 @@ const CASES = {
     repo: "mmalecki/openscad-knobs", file: "knob.scad",
     defines: { head_d: "45", head_h: "14", star_points: "6", stem_d: "20", stem_h: "8" },
     code: "return knob({ d: 45, h: 14, starPoints: 6, stemD: 20, stemH: 8 });",
+  },
+  "spur-m2-z16": { scad: "spur-m2-z16.scad", code: "return spurGear({ module: 2, teeth: 16, thickness: 8, bore: 5 });" },
+  "gear-helical": { scad: "gear-helical.scad", code: "return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20 });" },
+  "gear-herringbone": {
+    scad: "gear-herringbone.scad", code: "return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20, herringbone: true });",
   },
   "rack-default": { scad: "rack-default.scad", code: "return rack({ module: 2, teeth: 10, thickness: 8 });" },
   "rack-shifted": {
@@ -198,11 +204,18 @@ async function runCase(name, module) {
   if (!c) throw new Error("unknown case " + name + "; known: " + Object.keys(CASES).join(", "));
   const refStl = path.join(OUT, name + ".ref.stl");
   const portStl = path.join(OUT, name + ".port.stl");
-  if (!fs.existsSync(refStl)) {
-    const defines = Object.entries(c.defines ?? {}).flatMap(([k, v]) => ["-D", k + "=" + v]);
+  const defines = Object.entries(c.defines ?? {}).flatMap(([k, v]) => ["-D", k + "=" + v]);
+  // The render is cached against its INPUTS, not its existence: an edited
+  // .scad or changed -D overrides once kept a stale reference, which made a
+  // port look verified against a reference it no longer matched.
+  const keyFile = path.join(OUT, name + ".ref.key");
+  const key = crypto.createHash("sha256")
+    .update(fs.readFileSync(scadPathOf(c))).update(JSON.stringify(defines)).digest("hex");
+  if (!fs.existsSync(refStl) || !fs.existsSync(keyFile) || fs.readFileSync(keyFile, "utf8") !== key) {
     execFileSync("openscad", ["-o", refStl, ...defines, scadPathOf(c)], {
       env: { ...process.env, OPENSCADPATH: OUT }, stdio: "ignore",
     });
+    fs.writeFileSync(keyFile, key);
   }
   const helpers = buildPrelude(module, { segments: 64 });
   const fn = new Function("PARAMETERS", "P", "M", ...PRELUDE_NAMES, c.code);

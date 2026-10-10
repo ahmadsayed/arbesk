@@ -202,7 +202,8 @@ export const CATALOG: CatalogEntry[] = [
     helpers: ["spurGear", "rack"],
     summary: "spur gears, gear pairs, racks and rack-and-pinion drives, anything with involute teeth",
     helperRows: [
-      "spurGear({ module, teeth, thickness, bore?, pressureAngle? })   involute gear",
+      "spurGear({ module, teeth, thickness, bore?, pressureAngle?, helical?, herringbone? })",
+      "                                      involute gear; helical = helix angle in degrees",
       "rack({ module, teeth, thickness, pressureAngle?, backing? })     straight gear rack",
     ],
     guidance: [
@@ -213,6 +214,13 @@ export const CATALOG: CatalogEntry[] = [
       "(module x (teeth1 + teeth2)) / 2. Report the module, tooth count and pressure",
       "angle you chose, since the user has to match them against whatever the gear",
       "drives.",
+      "A helical or herringbone gear is ALWAYS spurGear({ ..., helical: angle }) (add",
+      "herringbone: true for a herringbone / double-helical gear); never twist one",
+      "yourself. module is the NORMAL module. Two helical gears mesh only with the SAME",
+      "helix angle and OPPOSITE hand (helical: 20 with helical: -20) at centre distance",
+      "module x (teeth1 + teeth2) / (2 x cos(helical)); two herringbones mesh the same",
+      "way. A herringbone needs no thrust bearing and prints without a seam fight, so",
+      "prefer it when the user asks for quiet or strong printed gears.",
       "A rack - any linear gear, toothed bar or rack-and-pinion - is ALWAYS",
       "rack(...). This is not a suggestion: never draw rack teeth with boxes or a",
       "polygon. rack() lays its teeth along X with the tips toward +Z, face width",
