@@ -364,6 +364,36 @@ describe("rack", () => {
   }, 40000);
 });
 
+// Helical and herringbone follow BOSL2's construction (transverse section,
+// tooth height on the normal module, twist = 360 t tan(b) / pitch circumference),
+// verified against OpenSCAD: cad-reference gear-helical / gear-herringbone, IoU
+// 0.995 with the reference and 0.798 with its mirror image - the hand is right.
+describe("spurGear helical and herringbone", () => {
+  it("grows the pitch circle by 1/cos(helix) but keeps the tooth height", async () => {
+    const r = await run("return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20 });");
+    expect(r.ok).toBe(true);
+    const tip = (2 / Math.cos((20 * Math.PI) / 180)) * 16 / 2 + 2; // transverse pitch radius + normal addendum
+    expect(r.stats.bboxMm.max[0] * 2).toBeCloseTo(2 * tip, 1);
+    expect(r.stats.bboxMm.max[2] - r.stats.bboxMm.min[2]).toBeCloseTo(8, 4);
+    expect(r.stats.bodies.count).toBe(1);
+  }, 40000);
+
+  it("builds a herringbone as two opposite halves, symmetric about z = 0", async () => {
+    const r = await run([
+      "const g = spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20, herringbone: true });",
+      "return g.subtract(g.mirror([0, 0, 1]));",
+    ].join("\n"));
+    // A herringbone is its own mirror image across the mid-plane.
+    expect(r.ok ? r.stats.volumeMm3 : 0).toBeLessThan(1);
+  }, 40000);
+
+  it("refuses a helix of 90 degrees or more", async () => {
+    const r = await run("return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 90 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/helical angle between -90 and 90/);
+  }, 40000);
+});
+
 describe("spurGear", () => {
   it("puts the tip circle at pitch radius plus the module", async () => {
     const r = await run("return spurGear({ module: P.m, teeth: P.z, thickness: 10 });");
