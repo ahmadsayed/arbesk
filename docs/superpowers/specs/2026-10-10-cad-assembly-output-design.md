@@ -35,8 +35,8 @@ This is the shared weak spot behind both benchmarks: MUSE CNC furniture
   (`packages/asset-core/src/formats/3mf/parser.ts`, `to-gltf.ts`), so a
   multi-object file previews and saves without changes there.
 - **Browser path**: `services/cad-render.ts` → `workers/cad-worker.ts` →
-  kernel → 3MF bytes → `stageCadAsset` (`services/api.ts`), all carrying one
-  `bytes`. The production worker does not run kernel gates; the harnesses do.
+  `workers/cad-render-core.ts` (`renderCadDesign`: guard → kernel → 3MF) →
+  `stageCadAsset` (`services/api.ts`), all carrying one `bytes`. The production worker does not run kernel gates; the harnesses do.
 - **Hard constraints**: the server never executes generated code (S11/D3/D5);
   parts must stay un-unioned end to end; old single-solid designs keep working
   byte for byte.
@@ -103,7 +103,7 @@ This is the shared weak spot behind both benchmarks: MUSE CNC furniture
 - `meshTo3mf` / `meshToGlb` accept `CadMesh | CadMesh[]`; a single mesh writes
   exactly today's bytes (golden test).
 - `readDesignFrom3mf` is unaffected.
-- **Browser**: `cad-render.ts` and `cad-worker.ts` pass `result.parts` to the
+- **Browser**: `workers/cad-render-core.ts` passes `result.parts` to the
   exporter; the worker still returns one 3MF `bytes`, so `stageCadAsset`,
   composite-3MF saving and IPFS part dedup are unchanged.
 
