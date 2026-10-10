@@ -31,6 +31,9 @@ import { PROJECT_ROOT, generatorConfigFrom, loadCadKernel, requireEnv } from "./
 import { CADPROMPT_PIN, fetchCadPrompt, loadSamples } from "./lib/cadprompt.mjs";
 import { runSample } from "./lib/bench-sample.mjs";
 import { createScorer } from "./lib/bench-iou.mjs";
+import { nextRunDir, pool, readJson, writeJsonAtomic } from "./lib/bench-io.mjs";
+
+export { pool };
 import { needsTriage, triage } from "./lib/bench-triage.mjs";
 import { askComplexity } from "./lib/bench-complexity.mjs";
 import {
@@ -132,52 +135,6 @@ export function parseArgs(argv) {
   }
   return opts;
 }
-
-/**
- * Runs fn over items with at most `concurrency` in flight.
- * @remarks The kernel runs synchronously in process, so concurrency overlaps
- *   provider latency rather than geometry - which is where the time is: measured,
- *   raising concurrency from 1 to 12 took 20 identical prompts from 63 s to 13 s.
- * @template T
- * @param {T[]} items @param {number} concurrency
- * @param {(item: T) => Promise<void>} fn @param {() => boolean} shouldStop
- */
-export async function pool(items, concurrency, fn, shouldStop) {
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length && !shouldStop()) await fn(items[next++]);
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
-}
-
-/**
- * Creates the next free run#N directory, like cad-eval's attempt#N.
- * @param {string} root
- * @returns {string}
- */
-function nextRunDir(root) {
-  fs.mkdirSync(root, { recursive: true });
-  const taken = new Set(fs.readdirSync(root));
-  let n = 1;
-  while (taken.has("run#" + n)) n++;
-  const dir = path.join(root, "run#" + n);
-  fs.mkdirSync(dir);
-  return dir;
-}
-
-/**
- * Writes JSON via a temp file and rename, so an interrupted run never leaves a
- * half-written result that --resume would then skip.
- * @param {string} file @param {unknown} value
- */
-function writeJsonAtomic(file, value) {
-  const tmp = file + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
-  fs.renameSync(tmp, file);
-}
-
-/** @param {string} file @returns {any} */
-const readJson = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null);
 
 /**
  * Every sample result written in a variant directory, in id order.

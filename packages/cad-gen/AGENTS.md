@@ -292,6 +292,15 @@ the UI should offer the Tripo3D generator instead. Measured: engineering parts
   is fetched into `test-results/` for local evaluation and must never be
   committed.
   Spec: `docs/superpowers/specs/2026-10-04-cad-bench-cadprompt-design.md`.
+- `scripts/muse-bench.mjs` — the **functional score**: runs the MUSE benchmark
+  (106 manufacturable / functional / assemblable design specs, arXiv
+  2605.28579, CC BY 4.0) through the same hardened loop, draws each delivered
+  part as a MUSE-style 4-view engineering sheet (`scripts/lib/drawing.mjs`),
+  has MUSE's own judge (Gemini-3.1-Pro, MUSE's prompt and rubric) score it,
+  and writes the code → geometry → final funnel beside the paper's leaderboard
+  under `test-results/muse-bench/run#N/`. Needs `GEMINI_API_KEY` in
+  `.env.gemini`; `--no-judge` runs without it, `--judge-only <runDir>`
+  re-judges. Spec: `docs/superpowers/specs/2026-10-10-muse-bench-design.md`.
 - `scripts/cad-scad-port.mjs` — ports a `polygon(points, paths)` OpenSCAD
   profile into Manifold JS. See the `openscad-reference-port` skill.
 

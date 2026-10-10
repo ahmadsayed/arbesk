@@ -12,12 +12,13 @@ import { wallHook } from "./library/wall-hook.ts";
 import { extrusionSpoolArm } from "./library/extrusion-spool-arm.ts";
 import { knob } from "./library/knob.ts";
 import { pipeClamp } from "./library/pipe-clamp.ts";
+import { rack } from "./library/gear-rack.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -125,6 +126,9 @@ const GF_PLATE_CORNER_RADIUS = 4;
 /** Involute samples per flank. More is smoother and slower. */
 const GEAR_FLANK_STEPS = 8;
 
+/** Slices per full turn of a helical gear's twist - BOSL2 uses the pitch circle's segment count. */
+const GEAR_HELIX_SEGMENTS = 64;
+
 /** A baseplate's [unitsX, unitsY]: whole cells, at least one each way. */
 function baseplateUnits(opts: any): [number, number] {
   const ux = opts?.unitsX ?? 1;
@@ -160,14 +164,42 @@ interface GearRadii {
   root: number;
 }
 
-/** The four radii every spur gear is defined by. */
-function gearRadii(m: number, z: number, phi: number): GearRadii {
+/**
+ * The four radii every spur gear is defined by.
+ * @param normalModule The module the tooth HEIGHT follows. For a helical gear
+ *   the pitch circle uses the transverse module (module / cos(helix)) while the
+ *   addendum and dedendum stay on the normal module, as in BOSL2; for a spur
+ *   gear the two are the same.
+ */
+function gearRadii(m: number, z: number, phi: number, normalModule: number = m, internal = false): GearRadii {
   const pitch = (m * z) / 2;
+  // An internal gear's tooth SPACES are an external gear's teeth: the cutter
+  // reaches a dedendum past the pitch circle and stops an addendum short.
+  const out = internal ? GEAR_DEDENDUM : GEAR_ADDENDUM;
+  const inward = internal ? GEAR_ADDENDUM : GEAR_DEDENDUM;
   return {
     pitch,
     base: pitch * Math.cos(phi),
-    tip: pitch + GEAR_ADDENDUM * m,
-    root: pitch - GEAR_DEDENDUM * m,
+    tip: pitch + out * normalModule,
+    root: pitch - inward * normalModule,
+  };
+}
+
+/**
+ * The transverse-section module (mt) and pressure angle (phi) a gear is cut on.
+ * @remarks A helical gear is cut on its transverse section: module and pressure
+ *   angle grow by 1/cos(helix) there, the tooth height does not (BOSL2). For a
+ *   spur gear (helix 0) mt and phi equal the normal values. `caller` names the
+ *   helper in the refusal.
+ */
+function transverseGear(
+  m: number, pressureAngle: number | undefined, helical: number, caller: string,
+): { mt: number; phi: number } {
+  if (!(Math.abs(helical) < 90)) throw new Error(caller + " needs a helical angle between -90 and 90 degrees");
+  const beta = (helical * Math.PI) / 180;
+  return {
+    mt: m / Math.cos(beta),
+    phi: Math.atan(Math.tan(((pressureAngle ?? 20) * Math.PI) / 180) / Math.cos(beta)),
   };
 }
 
@@ -219,6 +251,28 @@ function toothPoints(
 }
 
 /**
+ * Extrudes a gear section along Z, centred, twisting it along a helix.
+ * @remarks BOSL2's construction: the twist over the face width is
+ *   360 x thickness x tan(helix) / pitch circumference; OpenSCAD twists
+ *   clockwise for a positive angle, so Manifold (counter-clockwise) gets the
+ *   negative, and the result is turned back half the twist so the mid-plane
+ *   section is the untwisted profile. A herringbone is two opposite halves
+ *   meeting at z = 0. A zero helix is a plain spur extrusion.
+ */
+function helicalExtrude(
+  Manifold: any, section: any, thickness: number, pitchRadius: number, helical: number, herringbone: boolean,
+): any {
+  const twist = (360 * thickness * Math.tan((helical * Math.PI) / 180)) / (2 * Math.PI * pitchRadius);
+  if (twist === 0) return Manifold.extrude(section, thickness, 0, 0, [1, 1], true);
+  const slices = Math.ceil((Math.abs(twist) / 360) * GEAR_HELIX_SEGMENTS) + 1;
+  if (herringbone) {
+    const half = Manifold.extrude(section, thickness / 2, Math.ceil(slices / 2), -twist / 2, [1, 1], false);
+    return half.add(half.mirror([0, 0, 1]));
+  }
+  return Manifold.extrude(section, thickness, slices, -twist, [1, 1], true).rotate([0, 0, twist / 2]);
+}
+
+/**
  * Rejects a gear spec the kernel cannot build.
  * @remarks A bore at or beyond the root circle would leave nothing to hold the
  *   teeth, and the result would be a ring rather than the gear that was asked
@@ -234,9 +288,36 @@ function assertGearSpec(m: number, z: number, thickness: number, bore: number, r
   }
 }
 
+/** Throws when a ringGear option is outside what BOSL2's ring_gear() accepts. */
+function assertRingGearBasics(o: any): void {
+  if (!(o.module > 0)) throw new Error("ringGear needs a positive module");
+  if (!Number.isInteger(o.teeth) || o.teeth < 4) throw new Error("ringGear needs a whole number of teeth, at least 4");
+  if (!(o.thickness > 0)) throw new Error("ringGear needs a positive thickness");
+  if (o.backing !== undefined && o.outerDiameter !== undefined) {
+    throw new Error("ringGear takes backing or outerDiameter, not both");
+  }
+}
+
+/**
+ * The ring's outer radius, as BOSL2 resolves it: outerDiameter as given,
+ * backing beyond the tooth roots, or by default
+ * 2 x (pitch + dedendum) - (pitch - addendum).
+ */
+function ringOuterRadius(o: any, radii: GearRadii): number {
+  const outer = o.outerDiameter !== undefined ? o.outerDiameter / 2
+    : o.backing !== undefined ? radii.tip + o.backing
+      : 2 * radii.tip - radii.root;
+  if (!(outer > radii.tip)) {
+    throw new Error("ringGear: the outer diameter must clear the tooth roots (" + (2 * radii.tip).toFixed(2) + " mm)");
+  }
+  return outer;
+}
+
 /** The closed 2D outline of a spur gear, as [x, y] millimetre points. */
-function spurOutlinePoints(m: number, z: number, phi: number, steps: number): number[][] {
-  const radii = gearRadii(m, z, phi);
+function spurOutlinePoints(
+  m: number, z: number, phi: number, steps: number, normalModule: number = m, internal = false,
+): number[][] {
+  const radii = gearRadii(m, z, phi, normalModule, internal);
   const points: number[][] = [];
   for (let i = 0; i < z; i++) {
     for (const p of toothPoints(i, z, phi, radii, steps)) points.push(p);
@@ -802,7 +883,9 @@ export function buildPrelude(
      *   trigonometry itself. The failure this replaces was a gear whose teeth
      *   were trapezoids: it looked plausible and meshed with nothing.
      *   To mesh, two gears need the SAME module and pressure angle, axes
-     *   parallel, at centre distance (module x (z1 + z2)) / 2.
+     *   parallel, at centre distance (module x (z1 + z2)) / 2. helical (degrees)
+     *   and herringbone follow BOSL2's helical construction - see helicalExtrude;
+     *   cad-reference gear-helical / gear-herringbone verify it.
      *   LICENCE: the profile's proportions and construction were checked against
      *   BOSL2 gears.scad, which is BSD-2-Clause, by Revar Desmera and other
      *   contributors. The credit is declared in ATTRIBUTED_HELPERS
@@ -812,18 +895,42 @@ export function buildPrelude(
      */
     spurGear: (opts: any = {}) => {
       const o = opts ?? {};
-      const phi = ((o.pressureAngle ?? 20) * Math.PI) / 180;
+      const helical = o.helical ?? 0;
+      const { mt, phi } = transverseGear(o.module, o.pressureAngle, helical, "spurGear");
       const bore = o.bore ?? 0;
-      const radii = gearRadii(o.module, o.teeth, phi);
+      const radii = gearRadii(mt, o.teeth, phi, o.module);
       assertGearSpec(o.module, o.teeth, o.thickness, bore, radii.root);
-      const solid = Manifold.extrude(
-        CrossSection.ofPolygons([spurOutlinePoints(o.module, o.teeth, phi, o.steps ?? GEAR_FLANK_STEPS)]),
-        o.thickness, 0, 0, [1, 1], true,
-      );
+      const section = CrossSection.ofPolygons([spurOutlinePoints(mt, o.teeth, phi, o.steps ?? GEAR_FLANK_STEPS, o.module)]);
+      const solid = helicalExtrude(Manifold, section, o.thickness, radii.pitch, helical, Boolean(o.herringbone));
       if (!(bore > 0)) return solid;
       return solid.subtract(
         Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
       );
+    },
+
+    /**
+     * An internal (ring) gear: teeth on the inside of a ring, as the outer
+     * gear of a planetary gearbox.
+     * @remarks Built as BOSL2's ring_gear() is: a disc of radius outerDiameter/2
+     *   minus an external gear whose tooth height is swapped (it reaches a
+     *   dedendum past the pitch circle and stops an addendum short), extruded
+     *   with the opposite helix so a same-sign helical planet meshes with it.
+     *   Default outer radius 2 x (pitch + dedendum) - (pitch - addendum), as in
+     *   BOSL2; backing gives the wall beyond the tooth roots instead. Verified
+     *   against OpenSCAD's render of BOSL2's ring_gear(): cad-reference ring-*.
+     *   A planet of z_p teeth meshes inside a ring of z_r at centre distance
+     *   module x (z_r - z_p) / 2; a planetary set needs z_r = z_s + 2 x z_p.
+     */
+    ringGear: (opts: any = {}) => {
+      const o = opts ?? {};
+      const helical = o.helical ?? 0;
+      const { mt, phi } = transverseGear(o.module, o.pressureAngle, helical, "ringGear");
+      assertRingGearBasics(o);
+      const radii = gearRadii(mt, o.teeth, phi, o.module, true);
+      const outer = ringOuterRadius(o, radii);
+      const cutter = CrossSection.ofPolygons([spurOutlinePoints(mt, o.teeth, phi, o.steps ?? GEAR_FLANK_STEPS, o.module, true)]);
+      const section = CrossSection.circle(outer, segmentsFor(undefined)).subtract(cutter);
+      return helicalExtrude(Manifold, section, o.thickness, radii.pitch, -helical, Boolean(o.herringbone));
     },
 
     /**
@@ -1229,6 +1336,16 @@ export function buildPrelude(
      *   Matches OpenSCAD's render: scripts/cad-reference.mjs, cases knob-*.
      */
     knob: (opts: any = {}) => knob(module, opts ?? {}),
+
+    /**
+     * A straight gear rack that meshes with spurGear of the same module.
+     * @remarks PORT of rack() from BelfrySCAD/BOSL2 gears.scad, BSD-2-Clause,
+     *   by Adrian Mariano and Revar Desmera; credited in
+     *   ATTRIBUTED_HELPERS. Teeth along X, tips toward +Z, face width along
+     *   Y, base at z = -bottom. Matches OpenSCAD's render of BOSL2's own
+     *   rack(): scripts/cad-reference.mjs, cases rack-*.
+     */
+    rack: (opts: any = {}) => rack(module, opts ?? {}),
 
     /**
      * A filament spool arm that bolts onto 2020 aluminium extrusion.
