@@ -455,6 +455,8 @@ function assertContours(contours: any[]): void {
  *   reaching it: a detached disc, and it took three attempts to notice. This
  *   removes the arithmetic instead of correcting it. Solids are stacked in the
  *   order given, so [flange, body, flange] is a body with a flange at each end.
+ *   Each solid after the first sinks STACK_OVERLAP_MM into the one below it:
+ *   faces butted exactly only fuse when the heights are exact binary fractions.
  * @throws Error when the list is empty or holds something that is not a solid.
  */
 function stackAlong(solids: any[], axis: 0 | 1 | 2): any {
@@ -468,6 +470,7 @@ function stackAlong(solids: any[], axis: 0 | 1 | 2): any {
       throw new Error("stack needs solids, not " + typeof solid);
     }
     const box = solid.boundingBox();
+    if (out) cursor -= STACK_OVERLAP_MM;
     const shift = [0, 0, 0];
     shift[axis] = cursor - box.min[axis];
     const placed = solid.translate(shift);
@@ -476,6 +479,15 @@ function stackAlong(solids: any[], axis: 0 | 1 | 2): any {
   }
   return out;
 }
+
+/**
+ * How far each stacked solid sinks into the one below it.
+ * @remarks CADPrompt 00039012 stacked a 0.78575 mm flange under a pipe; butted
+ *   exactly, rounding left the shared faces a hair apart and the part came back
+ *   as two bodies on every repair round. A micron is far below print tolerance
+ *   and well above float32 rounding at the 150 mm parts the gates allow.
+ */
+const STACK_OVERLAP_MM = 1e-3;
 
 /**
  * One post per [x, y] position, rising from a base at z = 0.

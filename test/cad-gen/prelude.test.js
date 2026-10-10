@@ -240,7 +240,7 @@ describe("gridfinityBase", () => {
     ].join("\n"));
     expect(stacked.ok).toBe(true);
     expect(stacked.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
-    expect(stacked.stats.bboxMm.max[2]).toBeCloseTo(14.75, 3); // 4.75 base + 10 wall
+    expect(stacked.stats.bboxMm.max[2]).toBeCloseTo(14.749, 3); // 4.75 base + 10 wall, less the 1 um joint overlap
   }, 40000);
 
   it("refuses a fractional cell count", async () => {
@@ -265,8 +265,9 @@ describe("stack", () => {
     expect(r.ok).toBe(true);
     // 10 then 4 tall, starting at 0.
     expect(r.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
-    expect(r.stats.bboxMm.max[2]).toBeCloseTo(14, 4);
-    expect(r.stats.volumeMm3).toBeCloseTo(20 * 20 * 10 + 10 * 10 * 4, 4);
+    // 10 then 4, less the 1 um each joint sinks so the faces fuse.
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(13.999, 4);
+    expect(r.stats.volumeMm3).toBeCloseTo(20 * 20 * 10 + 10 * 10 * (4 - 0.001), 4);
   }, 40000);
 
   it("closes the gap a hand-stacked assembly leaves", async () => {
@@ -284,7 +285,7 @@ describe("stack", () => {
     // Both are valid solids; only one is attached.
     expect(wrong.ok).toBe(true);
     expect(right.ok).toBe(true);
-    expect(right.stats.bboxMm.max[2]).toBeCloseTo(17, 4); // 15 then 2
+    expect(right.stats.bboxMm.max[2]).toBeCloseTo(16.999, 4); // 15 then 2, less the joint overlap
     expect(wrong.stats.bboxMm.max[2]).toBeCloseTo(16, 4); // 15, from -7.5..7.5
     expect(wrong.stats.bboxMm.min[2]).toBeCloseTo(-7.5, 4);
   }, 40000);
@@ -298,7 +299,21 @@ describe("stack", () => {
     const r = await run(code);
     expect(r.ok).toBe(true);
     expect(r.stats.bboxMm.min[0]).toBeCloseTo(0, 4);
-    expect(r.stats.bboxMm.max[0]).toBeCloseTo(14, 4);
+    expect(r.stats.bboxMm.max[0]).toBeCloseTo(13.999, 4);
+  }, 40000);
+
+  it("fuses solids whose heights are not exact binary fractions", async () => {
+    // CADPrompt 00039012: a 0.28575 + 0.5 mm flange under a pipe. Butted exactly
+    // end to end, rounding left the faces a hair apart and the part came back as
+    // two bodies - the connected gate failed all four rounds on stack() itself.
+    const r = await run([
+      "const flange = cylinder(10.4775, 0.28575 + 0.5);",
+      "const pipe = cylinder(8.9215, 19.05);",
+      "return stack([flange, pipe]);",
+    ].join("\n"));
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(0.78575 + 19.05, 2);
   }, 40000);
 
   it("refuses an empty list", async () => {
