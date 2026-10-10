@@ -36,6 +36,17 @@ export function isThinkingEnabled(env: CadEnv): boolean {
 }
 
 /**
+ * Whether CAD_REPAIR_THINKING switches repair-round thinking OFF.
+ * @remarks The opposite default to CAD_THINKING: repair rounds think unless an
+ *   operator says otherwise, because the plain model measurably returns the
+ *   failing script unchanged (see CadGenConfig.repairThinking).
+ */
+function repairThinkingDisabled(env: CadEnv): boolean {
+  const flag = (env.CAD_REPAIR_THINKING ?? "").trim().toLowerCase();
+  return flag === "false" || flag === "0" || flag === "no" || flag === "off";
+}
+
+/**
  * Jev library selection, when JEV_API_KEY is set.
  * @remarks Optional by design: without it every request sees the whole
  *   library catalog, which is how the service worked before selection existed.
@@ -70,6 +81,7 @@ export function cadGenConfigFromEnv(
     ...(baseUrl ? { baseUrl } : {}),
     ...(model ? { model } : {}),
     thinking: isThinkingEnabled(env),
+    ...(repairThinkingDisabled(env) ? { repairThinking: false } : {}),
     limits,
     ...(fetchImpl ? { fetchImpl } : {}),
     ...jevConfig(env, fetchImpl),

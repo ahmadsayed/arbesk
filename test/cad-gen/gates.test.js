@@ -76,6 +76,19 @@ describe("evaluateKernelGates", () => {
     expect(connected.error).not.toContain("OUTSIDE the main body");
   });
 
+  it("asks a severed part to check each cut's axis and size", () => {
+    // CADPrompt 00984033: 30 mm holes bored along the 54 mm height of a 1.8 mm
+    // plate instead of through its thickness - the plate came back in four
+    // pieces, and "leave a bridge" alone never got the axis questioned.
+    const bodies = { count: 2, boxes: [
+      { min: [44.5, -0.9, -27.3], max: [75, 0.9, 27.3] }, { min: [-75, -0.9, -27.3], max: [-54.1, 0.9, 27.3] },
+    ] };
+    const connected = evaluateKernelGates({ ...stats, bodies }, LIMITS)
+      .find((g) => g.gate === "connected");
+    expect(connected.error).toContain("THINNEST dimension");
+    expect(connected.error).toContain("wider than the material");
+  });
+
   it("tells a piece resting inside a cavity apart from one floating away", () => {
     // attempt#10 gf-bin: the base's top sat in the cavity, touching the floor.
     const bodies = { count: 2, boxes: [

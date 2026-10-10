@@ -90,6 +90,8 @@ function whereLoose(b: Box, main: Box): string {
   if (severedAxis !== undefined) {
     return "SEVERED: it spans the main body's full extent along " + severedAxis + ", side by side " +
       "with it - a cut (a slot, channel or groove) went ALL the way through and split the part. " +
+      "Check every cut and hole: does it run along the right axis (a hole in a plate goes through " +
+      "its THINNEST dimension), and is the cutter wider than the material it crosses? " +
       "Leave a floor or bridge of material across every cut instead of cutting it clean through; " +
       "do not move the pieces";
   }
