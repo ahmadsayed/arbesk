@@ -97,6 +97,9 @@ const CASES = {
   "gear-herringbone": {
     scad: "gear-herringbone.scad", code: "return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 20, herringbone: true });",
   },
+  "ring-default": { scad: "ring-default.scad", code: "return ringGear({ module: 2, teeth: 40, thickness: 8 });" },
+  "ring-backing": { scad: "ring-backing.scad", code: "return ringGear({ module: 1.5, teeth: 36, thickness: 6, backing: 3 });" },
+  "ring-helical": { scad: "ring-helical.scad", code: "return ringGear({ module: 2, teeth: 40, thickness: 8, helical: 20 });" },
   "rack-default": { scad: "rack-default.scad", code: "return rack({ module: 2, teeth: 10, thickness: 8 });" },
   "rack-shifted": {
     scad: "rack-shifted.scad",

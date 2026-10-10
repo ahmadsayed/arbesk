@@ -394,6 +394,38 @@ describe("spurGear helical and herringbone", () => {
   }, 40000);
 });
 
+// Verified against OpenSCAD's render of BOSL2's ring_gear() (cad-reference
+// ring-*: size within 0.05 mm, volume within 0.1%; the helical ring's IoU is
+// 0.994 with the reference and 0.777 with its mirror).
+describe("ringGear", () => {
+  it("defaults its outer radius to 2 x (pitch + dedendum) - (pitch - addendum), as BOSL2 does", async () => {
+    const r = await run("return ringGear({ module: 2, teeth: 40, thickness: 8 });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bboxMm.max[0] * 2).toBeCloseTo(94, 1); // 2 x (2 x 42.5 - 38)
+    expect(r.stats.bodies.count).toBe(1);
+  }, 40000);
+
+  it("meshes a same-module planet at centre distance m (z_ring - z_planet) / 2", async () => {
+    const graze = await run([
+      "const ring = ringGear({ module: 2, teeth: 40, thickness: 8 });",
+      "return ring.intersect(spurGear({ module: 2, teeth: 12, thickness: 8 }).translate([28, 0, 0]));",
+    ].join("\n"));
+    const clash = await run([
+      "const ring = ringGear({ module: 2, teeth: 40, thickness: 8 });",
+      "return ring.intersect(spurGear({ module: 2, teeth: 12, thickness: 8 }).rotate([0, 0, 15]).translate([28, 0, 0]));",
+    ].join("\n"));
+    // In phase the teeth only graze; half a tooth out of phase they collide.
+    expect(graze.ok ? graze.stats.volumeMm3 : 0).toBeLessThan(2);
+    expect(clash.stats.volumeMm3).toBeGreaterThan(100);
+  }, 40000);
+
+  it("refuses an outer diameter that does not clear the tooth roots", async () => {
+    const r = await run("return ringGear({ module: 2, teeth: 40, thickness: 8, outerDiameter: 80 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/clear the tooth roots/);
+  }, 40000);
+});
+
 describe("spurGear", () => {
   it("puts the tip circle at pitch radius plus the module", async () => {
     const r = await run("return spurGear({ module: P.m, teeth: P.z, thickness: 10 });");

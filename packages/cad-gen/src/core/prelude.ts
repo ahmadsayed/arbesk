@@ -18,7 +18,7 @@ import { rack } from "./library/gear-rack.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "rack", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -171,13 +171,35 @@ interface GearRadii {
  *   addendum and dedendum stay on the normal module, as in BOSL2; for a spur
  *   gear the two are the same.
  */
-function gearRadii(m: number, z: number, phi: number, normalModule: number = m): GearRadii {
+function gearRadii(m: number, z: number, phi: number, normalModule: number = m, internal = false): GearRadii {
   const pitch = (m * z) / 2;
+  // An internal gear's tooth SPACES are an external gear's teeth: the cutter
+  // reaches a dedendum past the pitch circle and stops an addendum short.
+  const out = internal ? GEAR_DEDENDUM : GEAR_ADDENDUM;
+  const inward = internal ? GEAR_ADDENDUM : GEAR_DEDENDUM;
   return {
     pitch,
     base: pitch * Math.cos(phi),
-    tip: pitch + GEAR_ADDENDUM * normalModule,
-    root: pitch - GEAR_DEDENDUM * normalModule,
+    tip: pitch + out * normalModule,
+    root: pitch - inward * normalModule,
+  };
+}
+
+/**
+ * The transverse-section module (mt) and pressure angle (phi) a gear is cut on.
+ * @remarks A helical gear is cut on its transverse section: module and pressure
+ *   angle grow by 1/cos(helix) there, the tooth height does not (BOSL2). For a
+ *   spur gear (helix 0) mt and phi equal the normal values. `caller` names the
+ *   helper in the refusal.
+ */
+function transverseGear(
+  m: number, pressureAngle: number | undefined, helical: number, caller: string,
+): { mt: number; phi: number } {
+  if (!(Math.abs(helical) < 90)) throw new Error(caller + " needs a helical angle between -90 and 90 degrees");
+  const beta = (helical * Math.PI) / 180;
+  return {
+    mt: m / Math.cos(beta),
+    phi: Math.atan(Math.tan(((pressureAngle ?? 20) * Math.PI) / 180) / Math.cos(beta)),
   };
 }
 
@@ -266,9 +288,36 @@ function assertGearSpec(m: number, z: number, thickness: number, bore: number, r
   }
 }
 
+/** Throws when a ringGear option is outside what BOSL2's ring_gear() accepts. */
+function assertRingGearBasics(o: any): void {
+  if (!(o.module > 0)) throw new Error("ringGear needs a positive module");
+  if (!Number.isInteger(o.teeth) || o.teeth < 4) throw new Error("ringGear needs a whole number of teeth, at least 4");
+  if (!(o.thickness > 0)) throw new Error("ringGear needs a positive thickness");
+  if (o.backing !== undefined && o.outerDiameter !== undefined) {
+    throw new Error("ringGear takes backing or outerDiameter, not both");
+  }
+}
+
+/**
+ * The ring's outer radius, as BOSL2 resolves it: outerDiameter as given,
+ * backing beyond the tooth roots, or by default
+ * 2 x (pitch + dedendum) - (pitch - addendum).
+ */
+function ringOuterRadius(o: any, radii: GearRadii): number {
+  const outer = o.outerDiameter !== undefined ? o.outerDiameter / 2
+    : o.backing !== undefined ? radii.tip + o.backing
+      : 2 * radii.tip - radii.root;
+  if (!(outer > radii.tip)) {
+    throw new Error("ringGear: the outer diameter must clear the tooth roots (" + (2 * radii.tip).toFixed(2) + " mm)");
+  }
+  return outer;
+}
+
 /** The closed 2D outline of a spur gear, as [x, y] millimetre points. */
-function spurOutlinePoints(m: number, z: number, phi: number, steps: number, normalModule: number = m): number[][] {
-  const radii = gearRadii(m, z, phi, normalModule);
+function spurOutlinePoints(
+  m: number, z: number, phi: number, steps: number, normalModule: number = m, internal = false,
+): number[][] {
+  const radii = gearRadii(m, z, phi, normalModule, internal);
   const points: number[][] = [];
   for (let i = 0; i < z; i++) {
     for (const p of toothPoints(i, z, phi, radii, steps)) points.push(p);
@@ -847,12 +896,7 @@ export function buildPrelude(
     spurGear: (opts: any = {}) => {
       const o = opts ?? {};
       const helical = o.helical ?? 0;
-      if (!(Math.abs(helical) < 90)) throw new Error("spurGear needs a helical angle between -90 and 90 degrees");
-      const beta = (helical * Math.PI) / 180;
-      // A helical gear is cut on its transverse section: module and pressure
-      // angle grow by 1/cos(helix) there, the tooth height does not (BOSL2).
-      const mt = o.module / Math.cos(beta);
-      const phi = Math.atan(Math.tan(((o.pressureAngle ?? 20) * Math.PI) / 180) / Math.cos(beta));
+      const { mt, phi } = transverseGear(o.module, o.pressureAngle, helical, "spurGear");
       const bore = o.bore ?? 0;
       const radii = gearRadii(mt, o.teeth, phi, o.module);
       assertGearSpec(o.module, o.teeth, o.thickness, bore, radii.root);
@@ -862,6 +906,31 @@ export function buildPrelude(
       return solid.subtract(
         Manifold.cylinder(o.thickness + 2, bore / 2, bore / 2, segmentsFor(undefined), true),
       );
+    },
+
+    /**
+     * An internal (ring) gear: teeth on the inside of a ring, as the outer
+     * gear of a planetary gearbox.
+     * @remarks Built as BOSL2's ring_gear() is: a disc of radius outerDiameter/2
+     *   minus an external gear whose tooth height is swapped (it reaches a
+     *   dedendum past the pitch circle and stops an addendum short), extruded
+     *   with the opposite helix so a same-sign helical planet meshes with it.
+     *   Default outer radius 2 x (pitch + dedendum) - (pitch - addendum), as in
+     *   BOSL2; backing gives the wall beyond the tooth roots instead. Verified
+     *   against OpenSCAD's render of BOSL2's ring_gear(): cad-reference ring-*.
+     *   A planet of z_p teeth meshes inside a ring of z_r at centre distance
+     *   module x (z_r - z_p) / 2; a planetary set needs z_r = z_s + 2 x z_p.
+     */
+    ringGear: (opts: any = {}) => {
+      const o = opts ?? {};
+      const helical = o.helical ?? 0;
+      const { mt, phi } = transverseGear(o.module, o.pressureAngle, helical, "ringGear");
+      assertRingGearBasics(o);
+      const radii = gearRadii(mt, o.teeth, phi, o.module, true);
+      const outer = ringOuterRadius(o, radii);
+      const cutter = CrossSection.ofPolygons([spurOutlinePoints(mt, o.teeth, phi, o.steps ?? GEAR_FLANK_STEPS, o.module, true)]);
+      const section = CrossSection.circle(outer, segmentsFor(undefined)).subtract(cutter);
+      return helicalExtrude(Manifold, section, o.thickness, radii.pitch, -helical, Boolean(o.herringbone));
     },
 
     /**

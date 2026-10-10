@@ -199,11 +199,13 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     id: "gear",
-    helpers: ["spurGear", "rack"],
-    summary: "spur gears, gear pairs, racks and rack-and-pinion drives, anything with involute teeth",
+    helpers: ["spurGear", "ringGear", "rack"],
+    summary: "spur, helical and herringbone gears, gear pairs, ring (internal) gears, planetary gearboxes, racks and rack-and-pinion drives - anything with involute teeth",
     helperRows: [
       "spurGear({ module, teeth, thickness, bore?, pressureAngle?, helical?, herringbone? })",
       "                                      involute gear; helical = helix angle in degrees",
+      "ringGear({ module, teeth, thickness, backing?, outerDiameter?, pressureAngle?, helical?, herringbone? })",
+      "                                      internal (ring) gear: teeth on the inside",
       "rack({ module, teeth, thickness, pressureAngle?, backing? })     straight gear rack",
     ],
     guidance: [
@@ -221,6 +223,11 @@ export const CATALOG: CatalogEntry[] = [
       "module x (teeth1 + teeth2) / (2 x cos(helical)); two herringbones mesh the same",
       "way. A herringbone needs no thrust bearing and prints without a seam fight, so",
       "prefer it when the user asks for quiet or strong printed gears.",
+      "An internal gear, ring gear or the outer gear of a planetary set is ALWAYS",
+      "ringGear(...). A planet of z_p teeth meshes inside a ring of z_r at centre",
+      "distance module x (z_r - z_p) / 2. A planetary gearbox needs z_r = z_s + 2 x z_p",
+      "(sun z_s), every gear the same module and pressure angle, and - for equally",
+      "spaced planets - (z_r + z_s) divisible by the number of planets.",
       "A rack - any linear gear, toothed bar or rack-and-pinion - is ALWAYS",
       "rack(...). This is not a suggestion: never draw rack teeth with boxes or a",
       "polygon. rack() lays its teeth along X with the tips toward +Z, face width",
