@@ -35,12 +35,12 @@ describe("decideFollowup", () => {
 
   test("an unavailable action asks among the available ones", () => {
     const plan = decideFollowup(reading("retopo", 1), ["animate"]);
-    expect(plan).toEqual({ kind: "ask", options: ["animate", "new-model"] });
+    expect(plan).toEqual({ kind: "ask", options: ["animate", "new-model"], animations: [], inPlace: true });
   });
 
   test("a confident 'unclear' offers every option", () => {
     expect(decideFollowup(reading("unclear", 0.99), ALL))
-      .toEqual({ kind: "ask", options: [...ALL, "new-model"] });
+      .toEqual({ kind: "ask", options: [...ALL, "new-model"], animations: [], inPlace: true });
   });
 
   test("ask offers the two likeliest options, best first", () => {
@@ -48,6 +48,17 @@ describe("decideFollowup", () => {
       action: "retexture", confidence: 0.4, animations: [], inPlace: true,
       probabilities: { retexture: 0.3, animate: 0.25, new_model: 0.35, unclear: 0.1 },
     };
-    expect(decideFollowup(intent, ALL)).toEqual({ kind: "ask", options: ["new-model", "retexture"] });
+    expect(decideFollowup(intent, ALL))
+      .toEqual({ kind: "ask", options: ["new-model", "retexture"], animations: [], inPlace: true });
+  });
+
+  test("ask carries Jev's motions, for when the user picks Animate", () => {
+    const intent = {
+      action: "animate", confidence: 0.5, animations: ["preset:biped:dance_01"], inPlace: false,
+      probabilities: { animate: 0.5, retexture: 0.3 },
+    };
+    expect(decideFollowup(intent, ALL)).toEqual({
+      kind: "ask", options: ["animate", "retexture"], animations: ["preset:biped:dance_01"], inPlace: false,
+    });
   });
 });

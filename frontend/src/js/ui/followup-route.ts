@@ -27,7 +27,11 @@ export type FollowupPlan =
   | { kind: "auto-rig" }
   | { kind: "animate"; animations: string[]; inPlace: boolean }
   | { kind: "new-model" }
-  | { kind: "ask"; options: FollowupOption[] };
+  /**
+   * Too uncertain to act: offer options. The motions ride along so picking
+   * Animate opens the dialog with Jev's reading, as the confident route does.
+   */
+  | { kind: "ask"; options: FollowupOption[]; animations: string[]; inPlace: boolean };
 
 /** Confidence to open a confirming dialog (retopo, rig, animate) or offer a new model. */
 export const DIALOG_CONFIDENCE = 0.6;
@@ -52,7 +56,7 @@ export function decideFollowup(intent: FollowupIntent | null, available: Followu
       ? { kind: "animate", animations: intent.animations, inPlace: intent.inPlace }
       : { kind: action as "retopo" | "auto-rig" };
   }
-  return { kind: "ask", options: likeliestOptions(intent, available) };
+  return { kind: "ask", options: likeliestOptions(intent, available), animations: intent.animations, inPlace: intent.inPlace };
 }
 
 /**

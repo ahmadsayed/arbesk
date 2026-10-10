@@ -2381,7 +2381,7 @@ function runFollowupPlan(plan: FollowupPlan, prompt: string, generationId: strin
       addChoiceMessage(
         "What should this do to the model?",
         plan.options.map((o) => ({ label: FOLLOWUP_OPTION_LABELS[o], value: o })),
-        (picked) => pickFollowupOption(picked, prompt, generationId),
+        (picked) => pickFollowupOption(picked, prompt, generationId, plan),
       );
       return true;
   }
@@ -2391,15 +2391,27 @@ function runFollowupPlan(plan: FollowupPlan, prompt: string, generationId: strin
  * Runs the option the user picked from a follow-up choice.
  * @remarks Retexture and New model go through the normal generate path with
  *   the original prompt; New model detaches the chip first so it starts fresh.
+ *   Animate keeps the ask's motions, so the dialog opens prefilled.
  */
-function pickFollowupOption(option: FollowupOption, prompt: string, generationId: string) {
+function pickFollowupOption(
+  option: FollowupOption,
+  prompt: string,
+  generationId: string,
+  motions: { animations: string[]; inPlace: boolean } = { animations: [], inPlace: true },
+) {
   if (option === "retexture" || option === "new-model") {
     if (option === "new-model") setActiveVersion(null);
     promptInput.value = prompt;
     void onGenerate({ resubmit: true });
     return;
   }
-  runFollowupPlan(option === "animate" ? { kind: "animate", animations: [], inPlace: true } : { kind: option }, prompt, generationId);
+  runFollowupPlan(
+    option === "animate"
+      ? { kind: "animate", animations: motions.animations, inPlace: motions.inPlace }
+      : { kind: option },
+    prompt,
+    generationId,
+  );
 }
 
 /**
