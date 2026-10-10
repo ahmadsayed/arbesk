@@ -12,12 +12,13 @@ import { wallHook } from "./library/wall-hook.ts";
 import { extrusionSpoolArm } from "./library/extrusion-spool-arm.ts";
 import { knob } from "./library/knob.ts";
 import { pipeClamp } from "./library/pipe-clamp.ts";
+import { rack } from "./library/gear-rack.ts";
 
 /** Helper names injected into every script, in injection order. */
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "rack", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -1229,6 +1230,16 @@ export function buildPrelude(
      *   Matches OpenSCAD's render: scripts/cad-reference.mjs, cases knob-*.
      */
     knob: (opts: any = {}) => knob(module, opts ?? {}),
+
+    /**
+     * A straight gear rack that meshes with spurGear of the same module.
+     * @remarks PORT of rack() from BelfrySCAD/BOSL2 gears.scad, BSD-2-Clause,
+     *   by Adrian Mariano and Revar Desmera; credited in
+     *   ATTRIBUTED_HELPERS. Teeth along X, tips toward +Z, face width along
+     *   Y, base at z = -bottom. Matches OpenSCAD's render of BOSL2's own
+     *   rack(): scripts/cad-reference.mjs, cases rack-*.
+     */
+    rack: (opts: any = {}) => rack(module, opts ?? {}),
 
     /**
      * A filament spool arm that bolts onto 2020 aluminium extrusion.
