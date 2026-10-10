@@ -95,6 +95,18 @@ export const ATTRIBUTED_HELPERS: Record<string, Attribution> = {
     licence: "BSD-2-Clause",
     url: "https://github.com/BelfrySCAD/BOSL2",
   },
+  // BSD-2-Clause. cad-candidates.mjs flagged the file's provenance ("Inspired
+  // by code by Leemon Baird, 2011"); a human read settled it - BOSL2's own work,
+  // and Baird's 2011 gear (thingiverse.com/thing:5505) is public domain.
+  // Matches OpenSCAD: scripts/cad-reference.mjs rack-*.
+  rack: {
+    helper: "rack",
+    work: "BOSL2 (Belfry OpenSCAD Library v2), gears.scad rack(); inspired by Leemon Baird's public-domain involute gear (2011)",
+    author: "Adrian Mariano and Revar Desmera",
+    authorGithub: ["https://github.com/adrianVmariano", "https://github.com/revarbat"],
+    licence: "BSD-2-Clause",
+    url: "https://github.com/BelfrySCAD/BOSL2",
+  },
   printInPlaceHinge: {
     helper: "printInPlaceHinge",
     work: "BOSL2 (Belfry OpenSCAD Library v2), hinges.scad print-in-place hinge example",

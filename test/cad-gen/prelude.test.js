@@ -327,6 +327,43 @@ describe("stack", () => {
 // and the material between the teeth is gone. Both are checked here, because a
 // gear whose teeth are trapezoids passes every "is it a valid solid" test and
 // meshes with nothing.
+// Ported from BOSL2's rack(): the size matches OpenSCAD's render of the
+// original (scripts/cad-reference.mjs rack-default), and the rack must MESH -
+// a same-module pinion on the pitch line may only graze it, never cut into it.
+describe("rack", () => {
+  it("matches BOSL2's rack: 10 teeth of module 2 are 20 pi long, 9 mm deep", async () => {
+    const r = await run("return rack({ module: 2, teeth: 10, thickness: 8 });");
+    expect(r.ok).toBe(true);
+    const size = [0, 1, 2].map((a) => r.stats.bboxMm.max[a] - r.stats.bboxMm.min[a]);
+    expect(size[0]).toBeCloseTo(20 * Math.PI, 2);
+    expect(size[1]).toBeCloseTo(8, 4);
+    expect(size[2]).toBeCloseTo(9, 2); // base 2 x 2.5 dedendum + 2 addendum = 7 below the pitch line, tips 2 above
+    expect(r.stats.bboxMm.max[2]).toBeCloseTo(2, 3); // addendum above the pitch line
+    expect(r.stats.bodies.count).toBe(1);
+  }, 40000);
+
+  it("meshes with a same-module spurGear on its pitch line", async () => {
+    // Pinion of 12 teeth, pitch radius 12 mm, axis along Y. With an even tooth
+    // count the rack has a GAP at x = 0, and spurGear's teeth sit every 30
+    // degrees from +X, so one already points straight down (270 = 9 x 30) into it.
+    const code = [
+      "const r = rack({ module: 2, teeth: 10, thickness: 8 });",
+      "const g = spurGear({ module: 2, teeth: 12, thickness: 8 }).rotate([90, 0, 0]).translate([0, 0, 12]);",
+      "return r.intersect(g);",
+    ].join("\n");
+    const touch = await run(code);
+    // An overlap of a few mm^3 is the involute grazing the trapezoid at the
+    // pitch line; a mismatched pitch would bury whole teeth (hundreds of mm^3).
+    expect(touch.ok ? touch.stats.volumeMm3 : 0).toBeLessThan(5);
+  }, 40000);
+
+  it("refuses an impossible rack instead of drawing one", async () => {
+    const r = await run("return rack({ module: 2, teeth: 0, thickness: 8 });");
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/whole number of teeth/);
+  }, 40000);
+});
+
 describe("spurGear", () => {
   it("puts the tip circle at pitch radius plus the module", async () => {
     const r = await run("return spurGear({ module: P.m, teeth: P.z, thickness: 10 });");
