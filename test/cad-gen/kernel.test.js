@@ -69,6 +69,7 @@ describe("createCadKernel", () => {
       vertices: 4,
       volumeMm3: 1,
       bboxMm: { min: [0, 0, 0], max: [1, 1, 1] },
+      parts: { count: 1, array: false, boxes: [{ min: [0, 0, 0], max: [1, 1, 1] }], bodyCounts: [1] },
     });
     expect(Array.from(mesh.positions)).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]);
     expect(Array.from(mesh.indices)).toEqual([0, 1, 2, 0, 1, 3]);
@@ -90,5 +91,13 @@ describe("createCadKernel", () => {
       min: [0, 0, 0],
       max: [0, 0, 0],
     });
+  });
+
+  it("concatenates an array's parts with offset indices", () => {
+    const kernel = createCadKernel(MODULE);
+    const { mesh, parts, stats } = kernel.run(design("return [new M(), new M()];"));
+    expect(parts.length).toBe(2);
+    expect(stats.triangles).toBe(4);
+    expect(Array.from(mesh.indices)).toEqual([0, 1, 2, 0, 1, 3, 4, 5, 6, 4, 5, 7]);
   });
 });
