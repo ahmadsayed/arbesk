@@ -54,8 +54,9 @@ export function renderCadDesign(
   }
   try {
     const kernel = createCadKernel(manifoldModule as any, { segments: 64 });
-    const { mesh, stats } = kernel.run(design);
-    const bytes = meshTo3mf(mesh, design);
+    // One 3MF object per part: an array return's parts stay separate objects.
+    const { parts, stats } = kernel.run(design);
+    const bytes = meshTo3mf(parts, design);
     return { bytes, summary: design.summary, stats };
   } catch (err) {
     if (err instanceof CadRenderError) throw err;

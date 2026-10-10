@@ -108,15 +108,15 @@ async function main() {
   const { kernel } = await loadCadKernel();
 
   const built = Date.now();
-  const { mesh, stats } = kernel.run(result.design);
+  const { parts, stats } = kernel.run(result.design);
   console.log("kernel   " + (Date.now() - built) + "ms  " + JSON.stringify(stats));
 
   fs.mkdirSync(outDir, { recursive: true });
   // The design is written BEFORE the exports, so a design whose export throws
   // is still on disk to read - which is exactly when its code is most wanted.
   fs.writeFileSync(path.join(outDir, "design.json"), JSON.stringify(result.design, null, 2));
-  const glb = meshToGlb(mesh, result.design);
-  const threeMf = meshTo3mf(mesh, result.design);
+  const glb = meshToGlb(parts, result.design);
+  const threeMf = meshTo3mf(parts, result.design);
   fs.writeFileSync(path.join(outDir, "part.glb"), glb);
   fs.writeFileSync(path.join(outDir, "part.3mf"), threeMf);
 

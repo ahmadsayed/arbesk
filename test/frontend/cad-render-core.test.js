@@ -26,6 +26,19 @@ beforeAll(async () => {
 });
 
 describe("renderCadDesign", () => {
+  test("renders an array return as one 3MF object per part", () => {
+    const twoPart = {
+      ...DESIGN,
+      code: "return [box(P.width, P.depth, P.height), box(P.width, P.depth, P.height).translate([P.width, 0, 0])];",
+    };
+    const { bytes, stats } = renderCadDesign(twoPart, module_);
+    expect(stats.parts.count).toBe(2);
+    const entries = unzipSync(bytes);
+    const modelPath = Object.keys(entries).find((p) => p.endsWith(".model"));
+    const parsed = parse3mfModel(strFromU8(entries[modelPath]));
+    expect(parsed.objects.length).toBe(2);
+  });
+
   test("renders a valid design to parseable 3MF with geometry", () => {
     const { bytes, summary, stats } = renderCadDesign(DESIGN, module_);
     expect(bytes.length).toBeGreaterThan(500);

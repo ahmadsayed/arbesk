@@ -4,7 +4,7 @@ import { CadDesignError } from "@arbesk/cad-gen/errors.js";
 
 describe("@arbesk/cad-gen package wiring", () => {
   it("exposes the contract version", () => {
-    expect(CONTRACT_VERSION).toBe(1);
+    expect(CONTRACT_VERSION).toBe(2);
   });
 
   it("exposes a non-empty prelude version", () => {

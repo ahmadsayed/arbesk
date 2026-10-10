@@ -62,7 +62,7 @@ describe("createCadGenerator", () => {
     expect(r.design.parameters.s.value).toBe(10);
     expect(r.design.turn).toBe(1);
     expect(r.diagnostics.attempts).toHaveLength(1);
-    expect(r.runtime.contractVersion).toBe(1);
+    expect(r.runtime.contractVersion).toBe(2);
     expect(typeof r.runtime.preludeVersion).toBe("string");
   }, 40000);
 
