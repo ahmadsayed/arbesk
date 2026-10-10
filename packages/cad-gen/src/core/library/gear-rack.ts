@@ -21,7 +21,10 @@
  *   clearance, clearance defaulting to module/4), and its base depth (2 x
  *   dedendum + addendum unless backing, width or bottom is given). Verified
  *   against OpenSCAD's render of BOSL2's own rack(): scripts/cad-reference.mjs,
- *   cases rack-*. Not ported: helical and herringbone racks.
+ *   cases rack-*. rackOutline also carries rack2d()'s helical branch (the
+ *   tooth on its transverse pitch and pressure angle), which worm() sweeps;
+ *   the rack() helper itself stays straight. Not ported: helical and
+ *   herringbone rack solids.
  *
  *   ---------------------------------------------------------------------------
  *   BSD 2-Clause License
@@ -98,6 +101,8 @@ export interface RackSpec {
   addendum: number;
   dedendum: number;
   bottom: number;
+  /** Helix angle in degrees: rack2d() lays the tooth out on its transverse section. 0 is straight. */
+  helical: number;
 }
 
 /** Throws when a rack option is outside what BOSL2's rack() accepts. */
@@ -148,16 +153,19 @@ export function resolveRackSpec(o: any): RackSpec {
     module: m, teeth: o.teeth, thickness: o.thickness, pressureAngle: o.pressureAngle ?? 20,
     backlash: o.backlash ?? 0, clearance, profileShift, addendum, dedendum,
     bottom: rackBottom(o, addendum, dedendum),
+    helical: 0,
   };
 }
 
 /** rack2d()'s closed outline: teeth along +X centred on x = 0, tips toward +Y, base at y = -bottom. */
 export function rackOutline(s: RackSpec): Pt[] {
-  const pitch = s.module * Math.PI;
+  const beta = (s.helical * Math.PI) / 180;
+  const pitch = (s.module * Math.PI) / Math.cos(beta);
   const pa = (s.pressureAngle * Math.PI) / 180;
+  const transPa = Math.atan(Math.tan(pa) / Math.cos(beta));
   const tthick = (pitch / Math.PI) * (Math.PI / 2 + 2 * s.profileShift * Math.tan(pa)) - s.backlash;
-  const ax = s.addendum * Math.tan(pa);
-  const dx = s.dedendum * Math.tan(pa);
+  const ax = s.addendum * Math.tan(transPa);
+  const dx = s.dedendum * Math.tan(transPa);
   const poff = tthick / 2;
   const a = s.addendum;
   const d = s.dedendum;

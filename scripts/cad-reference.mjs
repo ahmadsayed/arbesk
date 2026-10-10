@@ -103,6 +103,19 @@ const CASES = {
   "bevel-spiral": {
     scad: "bevel-spiral.scad", code: "return bevelGear({ module: 2, teeth: 16, mateTeeth: 28, spiral: 35, rightHanded: true });",
   },
+  "worm-default": { scad: "worm-default.scad", code: "return worm({ module: 2, diameter: 30, length: 50, segments: 72 });" },
+  "worm-left3": {
+    scad: "worm-left3.scad", code: "return worm({ module: 2, diameter: 30, length: 40, starts: 3, leftHanded: true, segments: 72 });",
+  },
+  "wormgear-default": { scad: "wormgear-default.scad", code: "return wormGear({ module: 2, teeth: 30, wormDiameter: 30 });" },
+  "wormgear-4start": {
+    scad: "wormgear-4start.scad", code: "return wormGear({ module: 2, teeth: 36, wormDiameter: 30, wormStarts: 4 });",
+  },
+  // BOSL2's worm_gear() ignores left_handed, so its reference is the RIGHT-handed
+  // gear; this case checks the size and volume only (see worm-gear.ts).
+  "wormgear-left": {
+    scad: "wormgear-left.scad", code: "return wormGear({ module: 1.5, teeth: 24, wormDiameter: 20, wormStarts: 2, leftHanded: true });",
+  },
   "ring-default": { scad: "ring-default.scad", code: "return ringGear({ module: 2, teeth: 40, thickness: 8 });" },
   "ring-backing": { scad: "ring-backing.scad", code: "return ringGear({ module: 1.5, teeth: 36, thickness: 6, backing: 3 });" },
   "ring-helical": { scad: "ring-helical.scad", code: "return ringGear({ module: 2, teeth: 40, thickness: 8, helical: 20 });" },

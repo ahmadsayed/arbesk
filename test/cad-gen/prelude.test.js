@@ -492,6 +492,105 @@ describe("bevelGear", () => {
 // computed distance is the meshing one with the same graze/clash intersection
 // tests the ringGear entry uses. The BOSL2 convention matched is gear_dist()
 // at profile_shift 0 / backlash 0, the only tooth form these gears cut.
+// OpenSCAD's render of BOSL2's worm() and worm_gear() matches these to
+// 0.05 mm and 0.3 % volume, and IoU 0.995+ against 0.76-0.95 for the mirror
+// image - scripts/cad-reference.mjs worm-* and wormgear-*.
+describe("worm and wormGear", () => {
+  /** The catalog's placement: gear tooth 0 to +X, worm on +X along Y, spun 90 + 180 / starts + extra. */
+  const pair = (o, wormHand, extra) => [
+    "const o = " + JSON.stringify(o) + ";",
+    "const gear = wormGear(o).rotate([0, 0, -90]);",
+    "const screw = worm({ module: o.module, diameter: o.wormDiameter, length: 40, starts: o.wormStarts,",
+    "  leftHanded: " + wormHand + " })",
+    "  .rotate([0, 0, 90 + 180 / o.wormStarts + " + extra + "]).rotate([-90, 0, 0]).translate([wormDistance(o), 0, 0]);",
+    "return gear.intersect(screw);",
+  ].join("\n");
+  const volumeOf = (r) => (r.ok ? r.stats.volumeMm3 : 0);
+
+  it("builds a worm as one solid matching BOSL2's", async () => {
+    const r = await run("return worm({ module: 2, diameter: 30, length: 50 });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+    // OpenSCAD: 34.00 x 34.00 x 50.00, 35256 mm^3, centred.
+    expect(r.stats.bboxMm.max[0] - r.stats.bboxMm.min[0]).toBeCloseTo(34, 1);
+    expect(r.stats.bboxMm.min[2]).toBeCloseTo(-25, 3);
+    expect(r.stats.volumeMm3).toBeGreaterThan(35100);
+    expect(r.stats.volumeMm3).toBeLessThan(35400);
+  }, 40000);
+
+  it("builds a worm gear as one solid matching BOSL2's", async () => {
+    const r = await run("return wormGear({ module: 2, teeth: 30, wormDiameter: 30 });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.bodies.count).toBe(1);
+    // OpenSCAD: 65.99 x 66.10 x 13.57, 39225 mm^3, centred.
+    expect(r.stats.bboxMm.max[0] - r.stats.bboxMm.min[0]).toBeCloseTo(65.99, 1);
+    expect(r.stats.bboxMm.max[2] - r.stats.bboxMm.min[2]).toBeCloseTo(13.6, 1);
+    expect(r.stats.volumeMm3).toBeGreaterThan(39100);
+    expect(r.stats.volumeMm3).toBeLessThan(39450);
+  }, 40000);
+
+  it("cuts a bore through each", async () => {
+    const worms = await Promise.all([0, 6].map((bore) => run("return worm({ module: 2, diameter: 20, length: 30, bore: " + bore + " });")));
+    const gears = await Promise.all([0, 8].map((bore) => run("return wormGear({ module: 2, teeth: 30, wormDiameter: 20, bore: " + bore + " });")));
+    // The removed volume is the bore's area through the part's full height.
+    for (const [plain, bored, radius] of [[...worms, 3], [...gears, 4]]) {
+      const height = plain.stats.bboxMm.max[2] - plain.stats.bboxMm.min[2];
+      expect(bored.stats.bodies.count).toBe(1);
+      expect(plain.stats.volumeMm3 - bored.stats.volumeMm3).toBeGreaterThan(Math.PI * radius ** 2 * height * 0.97);
+    }
+  }, 40000);
+
+  it("pins wormDistance to BOSL2's worm_dist()", async () => {
+    // (d + module x teeth / cos(asin(starts x module / d))) / 2
+    const expected = (30 + (2 * 30) / Math.cos(Math.asin(2 / 30))) / 2;
+    const r = await run("return box(wormDistance({ module: 2, teeth: 30, wormDiameter: 30 }), 10, 10);");
+    expect(r.stats.bboxMm.max[0] - r.stats.bboxMm.min[0]).toBeCloseTo(expected, 3);
+  });
+
+  it("meshes in phase and clashes half a thread out, both hands", async () => {
+    for (const [o, hand] of [
+      [{ module: 2, teeth: 30, wormDiameter: 20, wormStarts: 1 }, false],
+      [{ module: 1.5, teeth: 40, wormDiameter: 20, wormStarts: 3, leftHanded: true }, true],
+    ]) {
+      const graze = await run(pair(o, hand, 0));
+      const clash = await run(pair(o, hand, "180 / o.wormStarts"));
+      expect(volumeOf(graze)).toBeLessThan(2);
+      expect(clash.stats.volumeMm3).toBeGreaterThan(50);
+    }
+  }, 60000);
+
+  it("a worm of the other hand clashes at the meshing phase", async () => {
+    const r = await run(pair({ module: 2, teeth: 30, wormDiameter: 20, wormStarts: 2 }, true, 0));
+    expect(r.stats.volumeMm3).toBeGreaterThan(50);
+  }, 40000);
+
+  it("keeps a fine, long worm inside the triangle budget", async () => {
+    const r = await run("return worm({ module: 0.5, diameter: 8, length: 80 });");
+    expect(r.ok).toBe(true);
+    expect(r.stats.triangles).toBeLessThan(150000);
+  }, 40000);
+
+  it("refuses specs it cannot build, naming each one", async () => {
+    const cases = [
+      ["worm({ module: 0, diameter: 20, length: 30 })", /worm needs a positive module/],
+      ["worm({ module: 2, length: 30 })", /positive diameter/],
+      ["worm({ module: 2, diameter: 20 })", /positive length/],
+      ["worm({ module: 2, diameter: 20, length: 30, starts: 1.5 })", /whole number of starts/],
+      ["worm({ module: 2, diameter: 6, length: 30, starts: 4 })", /do not fit a 6 mm worm/],
+      ["worm({ module: 2, diameter: 20, length: 30, bore: 16 })", /does not fit inside the root diameter/],
+      ["wormGear({ module: 2, teeth: 12, wormDiameter: 20 })", /at least 18/],
+      ["wormGear({ module: 2, teeth: 30 })", /wormDiameter/],
+      ["wormGear({ module: 2, teeth: 30, wormDiameter: 20, wormArc: 120 })", /wormArc/],
+      ["wormDistance({ module: 2, wormDiameter: 20 })", /whole number of teeth/],
+    ];
+    for (const [call, message] of cases) {
+      const r = await run("return " + call + ";");
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(message);
+    }
+  }, 60000);
+});
+
 describe("gearDistance", () => {
   it("external pair: module 2, 16 + 24 teeth is exactly 40 mm", async () => {
     const r = await run("return box(gearDistance({ module: 2, teeth1: 16, teeth2: 24 }), 10, 10);");

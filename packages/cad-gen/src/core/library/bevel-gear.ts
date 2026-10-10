@@ -54,8 +54,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 import type { ManifoldModule } from "../../types.ts";
-
-type Vec3 = [number, number, number];
+import { sideFaces, signedVolume } from "./triangle-soup.ts";
+import type { Vec3 } from "./triangle-soup.ts";
 
 /** One tooth's outline: centred on +Y with its pitch point at the origin, mirror-symmetric. */
 export type BevelTooth = (module: number, teeth: number, pressureAngle: number) => number[][];
@@ -214,19 +214,6 @@ function endFaces(base: number, perTooth: number, teeth: number, centre: number)
   return faces;
 }
 
-/** Quads between consecutive slices, wrapping round the ring. */
-function sideFaces(rings: number, ringSize: number): number[][] {
-  const faces: number[][] = [];
-  for (let k = 0; k + 1 < rings; k++) {
-    for (let i = 0; i < ringSize; i++) {
-      const a = k * ringSize + i;
-      const b = k * ringSize + ((i + 1) % ringSize);
-      faces.push([a, b + ringSize, b], [a, a + ringSize, b + ringSize]);
-    }
-  }
-  return faces;
-}
-
 /** The backing a gear gets by default: none when its centre is at least half a face width thick. */
 function backingOf(s: BevelSpec, centreThickness: number): number {
   if (s.backing !== undefined) {
@@ -265,16 +252,6 @@ function backingFaces(s: BevelSpec, verts: Vec3[], perTooth: number, backing: nu
     );
   }
   return faces;
-}
-
-/** Signed volume of a closed triangle soup; negative means it is wound inside out. */
-function signedVolume(verts: Vec3[], faces: number[][]): number {
-  let v = 0;
-  for (const [a, b, c] of faces) {
-    const [p, q, r] = [verts[a], verts[b], verts[c]];
-    v += p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0]);
-  }
-  return v / 6;
 }
 
 /**
