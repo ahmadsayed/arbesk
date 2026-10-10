@@ -17,7 +17,7 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-export function meshToGltf(mesh: CadMesh, design: CadDesign): string {
+export function meshToGltf(mesh: CadMesh | CadMesh[], design: CadDesign): string {
   const { gltf, bin } = buildPartDocument(mesh, design);
   const buffer = gltf.buffers[0] as { byteLength: number; uri?: string };
   buffer.uri = "data:application/octet-stream;base64," + toBase64(bin);

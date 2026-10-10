@@ -82,18 +82,68 @@ function packChunk(indexBytes: Uint8Array, posBytes: Uint8Array, normalBytes: Ui
 }
 
 /**
- * Builds the shared glTF document plus its binary chunk.
- * @remarks meshToGlb wraps this in a GLB container; meshToGltf (gltf.ts)
- *   embeds the chunk as a base64 data URI. One builder means the two formats
- *   cannot drift apart.
+ * One part's binary run, buffer views, accessors and primitive.
+ * @param byteBase Where the run starts in the shared buffer (4-byte aligned).
+ * @param viewBase Index of the part's first buffer view (= its first accessor).
  */
-export function buildPartDocument(mesh: CadMesh, design: CadDesign) {
+function partBuffers(mesh: CadMesh, byteBase: number, viewBase: number) {
   const normals = computeNormals(mesh);
   const indexBytes = bytesOf(mesh.indices);
   const posBytes = bytesOf(mesh.positions);
   const normalBytes = bytesOf(normals);
   const { bin, posOffset, normalOffset } = packChunk(indexBytes, posBytes, normalBytes);
   const bounds = positionBounds(mesh.positions);
+  return {
+    bin,
+    bufferViews: [
+      { buffer: 0, byteOffset: byteBase, byteLength: indexBytes.length, target: 34963 },
+      { buffer: 0, byteOffset: byteBase + posOffset, byteLength: posBytes.length, target: 34962 },
+      { buffer: 0, byteOffset: byteBase + normalOffset, byteLength: normalBytes.length, target: 34962 },
+    ],
+    accessors: [
+      { bufferView: viewBase, componentType: 5125, count: mesh.indices.length, type: "SCALAR" },
+      {
+        bufferView: viewBase + 1, componentType: 5126, count: mesh.positions.length / 3, type: "VEC3",
+        min: bounds.min, max: bounds.max,
+      },
+      { bufferView: viewBase + 2, componentType: 5126, count: normals.length / 3, type: "VEC3" },
+    ],
+    primitive: {
+      attributes: { POSITION: viewBase + 1, NORMAL: viewBase + 2 }, indices: viewBase, material: 0,
+    },
+  };
+}
+
+/** The scene's nodes: today's single node, or a root holding one node per part. */
+function partNodes(count: number) {
+  if (count === 1) return [{ mesh: 0, matrix: MM_TO_M_Z_UP_TO_Y_UP, name: "cad_part" }];
+  return [
+    { matrix: MM_TO_M_Z_UP_TO_Y_UP, name: "cad_part", children: Array.from({ length: count }, (_v, i) => i + 1) },
+    ...Array.from({ length: count }, (_v, i) => ({ mesh: i, name: "part-" + (i + 1) })),
+  ];
+}
+
+/**
+ * Builds the shared glTF document plus its binary chunk.
+ * @remarks meshToGlb wraps this in a GLB container; meshToGltf (gltf.ts)
+ *   embeds the chunk as a base64 data URI. One builder means the two formats
+ *   cannot drift apart. A single mesh writes exactly the pre-assembly layout.
+ */
+export function buildPartDocument(mesh: CadMesh | CadMesh[], design: CadDesign) {
+  const meshes = Array.isArray(mesh) ? mesh : [mesh];
+  const runs: ReturnType<typeof partBuffers>[] = [];
+  let byteBase = 0;
+  for (const [i, m] of meshes.entries()) {
+    const run = partBuffers(m, byteBase, i * 3);
+    runs.push(run);
+    byteBase += run.bin.length; // every run ends on a 4-byte boundary (float32 normals)
+  }
+  const bin = new Uint8Array(byteBase);
+  let at = 0;
+  for (const run of runs) {
+    bin.set(run.bin, at);
+    at += run.bin.length;
+  }
 
   const gltf = {
     asset: {
@@ -103,10 +153,8 @@ export function buildPartDocument(mesh: CadMesh, design: CadDesign) {
     },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, matrix: MM_TO_M_Z_UP_TO_Y_UP, name: "cad_part" }],
-    meshes: [{
-      primitives: [{ attributes: { POSITION: 1, NORMAL: 2 }, indices: 0, material: 0 }],
-    }],
+    nodes: partNodes(meshes.length),
+    meshes: runs.map((r) => ({ primitives: [r.primitive] })),
     materials: [{
       name: "cad_default",
       pbrMetallicRoughness: {
@@ -116,30 +164,19 @@ export function buildPartDocument(mesh: CadMesh, design: CadDesign) {
       },
     }],
     buffers: [{ byteLength: bin.length }],
-    bufferViews: [
-      { buffer: 0, byteOffset: 0, byteLength: indexBytes.length, target: 34963 },
-      { buffer: 0, byteOffset: posOffset, byteLength: posBytes.length, target: 34962 },
-      { buffer: 0, byteOffset: normalOffset, byteLength: normalBytes.length, target: 34962 },
-    ],
-    accessors: [
-      { bufferView: 0, componentType: 5125, count: mesh.indices.length, type: "SCALAR" },
-      {
-        bufferView: 1, componentType: 5126, count: mesh.positions.length / 3, type: "VEC3",
-        min: bounds.min, max: bounds.max,
-      },
-      { bufferView: 2, componentType: 5126, count: normals.length / 3, type: "VEC3" },
-    ],
+    bufferViews: runs.flatMap((r) => r.bufferViews),
+    accessors: runs.flatMap((r) => r.accessors),
   };
 
   return { gltf, bin };
 }
 
 /**
- * Serialises a mesh plus its design document to GLB bytes.
+ * Serialises a mesh (or one mesh per part) plus its design document to GLB bytes.
  * @remarks Single self-contained buffer; the design rides in asset.extras, so
  *   the exported file alone reconstructs the design and its credits.
  */
-export function meshToGlb(mesh: CadMesh, design: CadDesign): Uint8Array {
+export function meshToGlb(mesh: CadMesh | CadMesh[], design: CadDesign): Uint8Array {
   const { gltf, bin } = buildPartDocument(mesh, design);
   return new Uint8Array(serializeGLB(gltf as never, bin));
 }
