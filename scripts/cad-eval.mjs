@@ -29,7 +29,9 @@ import zlib from "node:zlib";
 import { buildPrelude, PRELUDE_NAMES } from "../packages/cad-gen/src/core/prelude.ts";
 import { meshToGlb, meshTo3mf } from "../packages/cad-gen/src/core/export/index.ts";
 import { DEGENERATE_BODY_MM3, meshFrom } from "../packages/cad-gen/src/core/kernel.ts";
-import { bodyAllowance, bodyFloor, evaluateKernelGates } from "../packages/cad-gen/src/core/gates.ts";
+import { bodyFloor } from "../packages/cad-gen/src/core/gates.ts";
+import { buildWithClientRepair } from "./lib/client-repair.mjs";
+import { readStl } from "./lib/stl.mjs";
 import { PROJECT_ROOT, cadGeneratorFrom, loadCadKernel, loadEnv } from "./lib/cad-harness.mjs";
 
 /** @typedef {{ positions: Float32Array, indices: Uint32Array }} Mesh */
@@ -291,66 +293,6 @@ function resolve(s) {
   return rgb;
 }
 
-// ------------------------------------------------------------- reference STL
-
-/**
- * Reads an ASCII STL into a mesh.
- * @remarks Ground truth for comparison has to go through the SAME renderer as
- *   our own output, or the comparison is of two different pictures rather than
- *   of two different parts. OpenSCAD writes ASCII STL by default, and this is
- *   the whole of that format: a facet normal line, an outer loop, three vertex
- *   lines, an endloop.
- * @param {string} file Path to an ASCII .stl.
- * @returns {Mesh} Positions and triangle indices.
- */
-function readAsciiStl(file) {
-  const buf = fs.readFileSync(file);
-  // OpenSCAD writes ASCII, but almost every STL published elsewhere is binary.
-  // Detected the standard way: a binary file's first five bytes are not "solid".
-  if (!/^\s*solid/.test(buf.subarray(0, 5).toString("utf8"))) {
-    return readBinaryStl(buf);
-  }
-  const text = buf.toString("utf8");
-  /** @type {number[]} */
-  const positions = [];
-  /** @type {number[]} */
-  const indices = [];
-  for (const line of text.split("\n")) {
-    const m = /^\s*vertex\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)/.exec(line);
-    if (!m) continue;
-    positions.push(Number(m[1]), Number(m[2]), Number(m[3]));
-    if (positions.length % 9 === 0) {
-      const v = positions.length / 3 - 3;
-      indices.push(v, v + 1, v + 2);
-    }
-  }
-  return { positions: new Float32Array(positions), indices: new Uint32Array(indices) };
-}
-
-/**
- * Reads a binary STL into a mesh.
- * @remarks 80-byte header, a triangle count, then 50 bytes each: a normal the
- *   renderer recomputes anyway, three vertices, and a trailing attribute.
- * @param {Buffer} buf The whole file.
- * @returns {Mesh} Positions and triangle indices.
- */
-function readBinaryStl(buf) {
-  const count = buf.readUInt32LE(80);
-  const positions = new Float32Array(count * 9);
-  const indices = new Uint32Array(count * 3);
-  for (let t = 0; t < count; t++) {
-    const at = 84 + t * 50 + 12;
-    for (let v = 0; v < 3; v++) {
-      const o = t * 9 + v * 3;
-      positions[o] = buf.readFloatLE(at + v * 12);
-      positions[o + 1] = buf.readFloatLE(at + v * 12 + 4);
-      positions[o + 2] = buf.readFloatLE(at + v * 12 + 8);
-      indices[t * 3 + v] = t * 3 + v;
-    }
-  }
-  return { positions, indices };
-}
-
 // ----------------------------------------------------------------- components
 
 /** Distinct tints, so a body that is not joined to the rest is obvious. */
@@ -521,7 +463,7 @@ async function main() {
   // Reference mode: render a known-good STL through our own renderer so a
   // comparison is of two PARTS, not of two different pictures.
   if (rest[0] === "--stl") {
-    const mesh = readAsciiStl(rest[1]);
+    const mesh = readStl(rest[1]);
     const stats = boundsOf(mesh);
     const target = rest[2] ?? path.join(outDir, path.basename(rest[1]).replace(/\.stl$/i, ".png"));
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -556,59 +498,6 @@ async function main() {
   console.log("\nrenders written to " + runDir);
 }
 
-/** The delivery triangle budget the browser worker enforces. */
-const MAX_TRIANGLES = 200000;
-
-/** Client repair rounds after the first build, as the browser worker will spend. */
-const CLIENT_REPAIR_ROUNDS = 2;
-
-/**
- * Builds a design the way the browser worker will: run the kernel, and on a
- * failure send it back as a repair turn carrying the kernel's own error.
- * @remarks The server never runs the kernel, so a design that throws in it -
- *   a helper refusing its arguments, say - can only be repaired by this round
- *   trip. Without it the harness reports failures a real client would fix.
- * @param {{ generator: any, kernel: any, outDir: string,
- *   scenario: { name: string, prompt: string } }} ctx Run context.
- * @param {any} result The first generation.
- * @returns {Promise<{ run: any, design: any } | null>} The build, or null.
- */
-async function buildWithClientRepair(ctx, result) {
-  let design = result.design;
-  // Jev's judgement from the FIRST call: a repair round skips Jev, and whether
-  // the request wants separate pieces does not change between rounds.
-  const { expectedPieces: pieces, piecesSeparate } = result.diagnostics.selection;
-  const minBodies = bodyFloor(pieces, piecesSeparate);
-  if (pieces !== undefined) {
-    console.log("expected pieces " + (pieces >= 5 ? "5+" : pieces) +
-      (piecesSeparate === undefined ? "" : "  separate " + piecesSeparate.toFixed(2)) +
-      "  min bodies " + minBodies);
-  }
-  for (let round = 0; ; round++) {
-    try {
-      const run = ctx.kernel.run(design);
-      const maxBodies = bodyAllowance(design.code, pieces);
-      const failed = evaluateKernelGates(run.stats, { maxTriangles: MAX_TRIANGLES, maxBodies, minBodies })
-        .find((/** @type {any} */ g) => !g.ok);
-      if (failed) throw new Error(failed.gate + ": " + failed.error);
-      return { run, design };
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      if (round >= CLIENT_REPAIR_ROUNDS) {
-        console.log("FAILED after " + round + " client repair(s): " + error);
-        return null;
-      }
-      console.log("client repair " + (round + 1) + ": " + error.slice(0, 160));
-      const repaired = await ctx.generator.generate({
-        prompt: ctx.scenario.prompt, priorDesign: design,
-        failures: [{ gate: "kernel", error }],
-      });
-      design = repaired.design;
-      fs.writeFileSync(path.join(ctx.outDir, slug(ctx.scenario.name) + ".json"), JSON.stringify(design, null, 2));
-    }
-  }
-}
-
 /**
  * Generates, builds, renders and reports one scenario.
  * @param {{ generator: any, kernel: any, module: any, outDir: string,
@@ -634,8 +523,22 @@ async function runScenario(ctx) {
     // disk to read: that is exactly when its code is most wanted.
     fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(result.design, null, 2));
     const buildStart = Date.now();
-    const built = await buildWithClientRepair(ctx, result);
-    if (!built) return;
+    const { expectedPieces: pieces, piecesSeparate } = result.diagnostics.selection;
+    if (pieces !== undefined) {
+      console.log("expected pieces " + (pieces >= 5 ? "5+" : pieces) +
+        (piecesSeparate === undefined ? "" : "  separate " + piecesSeparate.toFixed(2)) +
+        "  min bodies " + bodyFloor(pieces, piecesSeparate));
+    }
+    const built = await buildWithClientRepair({
+      generator, kernel: ctx.kernel, prompt: scenario.prompt,
+      onRepair: (round, failure) => console.log("client repair " + round + ": " + failure.error.slice(0, 160)),
+      onDesign: (design) => fs.writeFileSync(path.join(outDir, stem + ".json"), JSON.stringify(design, null, 2)),
+    }, result);
+    if (!built.run) {
+      const last = built.failures[built.failures.length - 1];
+      console.log("FAILED after " + (built.failures.length - 1) + " client repair(s): " + last.error);
+      return;
+    }
     const { mesh, stats } = built.run;
     result.design = built.design;
     console.log("kernel   " + (Date.now() - buildStart) + "ms  " + JSON.stringify(stats));

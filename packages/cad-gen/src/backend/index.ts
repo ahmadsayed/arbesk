@@ -30,7 +30,12 @@ export type { TurnInput } from "./prompt.ts";
 export { generateWithRepair } from "./repair.ts";
 export type { AttemptRecord, RepairDeps, RepairOutcome } from "./repair.ts";
 export { createCadGenerator } from "./facade.ts";
+export { DEFAULT_CAD_MODEL } from "./facade.ts";
 export type {
   CadDiagnostics, CadFailure, CadGenerateInput, CadGenerateResult, CadGenConfig,
   CadGenerator, CadLimits,
 } from "./facade.ts";
+export {
+  cadGenConfigFromEnv, DEFAULT_REPAIR_ATTEMPTS, isThinkingEnabled, readBound,
+} from "./env-config.ts";
+export type { CadEnv } from "./env-config.ts";

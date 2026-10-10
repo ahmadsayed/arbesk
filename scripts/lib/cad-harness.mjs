@@ -16,6 +16,9 @@ import fs from "node:fs";
 import path from "node:path";
 import Module from "manifold-3d";
 import { createCadGenerator } from "../../packages/cad-gen/src/backend/index.ts";
+import {
+  DEFAULT_REPAIR_ATTEMPTS, cadGenConfigFromEnv, readBound,
+} from "../../packages/cad-gen/src/backend/index.ts";
 import { createCadKernel } from "../../packages/cad-gen/src/core/kernel.ts";
 
 /** Repository root, resolved from this file rather than from the caller's cwd. */
@@ -82,16 +85,27 @@ export async function loadCadKernel(wasmDir = WASM_DIR) {
 }
 
 /**
+ * The generator config, read exactly as the API route reads it.
+ * @remarks Shared with src/api/routes/cad.ts through cadGenConfigFromEnv, so a
+ *   harness measures the generator production runs. CAD_MODEL is no longer
+ *   read: the model comes from DEEPSEEK_MODEL, as in the route.
+ * @param {Record<string, string | undefined>} env Parsed environment.
+ * @returns {any} A CadGenConfig.
+ * @throws {Error} When CAD_MAX_REPAIR_ATTEMPTS is set but not a positive integer.
+ */
+export function generatorConfigFrom(env) {
+  const repairs = readBound(env, "CAD_MAX_REPAIR_ATTEMPTS", DEFAULT_REPAIR_ATTEMPTS);
+  if (typeof repairs === "string") {
+    throw new Error("CAD_MAX_REPAIR_ATTEMPTS must be a positive integer, got " + JSON.stringify(repairs));
+  }
+  return cadGenConfigFromEnv(env, { maxRepairAttempts: repairs });
+}
+
+/**
  * Builds the generator the harnesses share.
- * @param {Record<string, string>} env Parsed environment.
+ * @param {Record<string, string | undefined>} env Parsed environment.
  * @returns {any} A configured CadGenerator.
  */
 export function cadGeneratorFrom(env) {
-  return createCadGenerator({
-    apiKey: env.DEEPSEEK_API_KEY,
-    model: env.CAD_MODEL || "deepseek-flash",
-    ...(env.DEEPSEEK_BASE_URL ? { baseUrl: env.DEEPSEEK_BASE_URL } : {}),
-    ...(env.CAD_THINKING ? { thinking: true } : {}),
-    ...(env.JEV_API_KEY ? { jev: { apiKey: env.JEV_API_KEY } } : {}),
-  });
+  return createCadGenerator(generatorConfigFrom(env));
 }

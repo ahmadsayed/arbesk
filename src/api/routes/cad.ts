@@ -11,8 +11,11 @@ import type { Context, MiddlewareHandler } from "hono";
 import type { z } from "zod";
 import type { CadDesign } from "@arbesk/cad-gen";
 import { createCadGenerator } from "@arbesk/cad-gen/backend/index.js";
+import {
+  DEFAULT_REPAIR_ATTEMPTS, cadGenConfigFromEnv, readBound,
+} from "@arbesk/cad-gen/backend/index.js";
 import type {
-  CadFailure, CadGenerateInput, CadGenerateResult, CadGenerator, CadLimits,
+  CadFailure, CadGenerateInput, CadGenerateResult, CadGenerator,
 } from "@arbesk/cad-gen/backend/index.js";
 import {
   acquireCadSlot, cadLockTtlMs, cadQuotaHeaders, refundCadUnit, releaseCadSlot,
@@ -53,9 +56,6 @@ interface CadEnv {
  */
 const DEFAULT_DAILY_ROUNDS = 50;
 
-/** Shipped default for CAD_MAX_REPAIR_ATTEMPTS. */
-const DEFAULT_REPAIR_ATTEMPTS = 3;
-
 /** Shipped default for CAD_MAX_IMAGE_BYTES (8 MiB of decoded image). */
 const DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -89,22 +89,6 @@ export type CadConfigOutcome =
   | { ok: true; config: CadRuntimeConfig }
   | { ok: false; status: number; code: string; message: string };
 
-/**
- * Reads a positive whole-number bound from the environment.
- * @remarks Unset or blank means the documented default; a value that is SET but
- *   unusable is returned verbatim so the caller can refuse the request. Silently
- *   defaulting would make a typo'd cap behave exactly like a cap nobody wrote,
- *   which is the failure cad-quota's own fail-closed normalization exists to
- *   stop happening one layer down. Reporting it as an unusable CONFIGURATION
- *   rather than a mysterious quota rejection is operator experience, not safety.
- */
-function readBound(env: Env, name: string, fallback: number): number | string {
-  const raw = env[name];
-  if (raw === undefined || raw.trim() === "") return fallback;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed >= 1 ? parsed : raw;
-}
-
 /** The three numeric bounds, or the name and value of the first unusable one. */
 function readBounds(
   env: Env,
@@ -132,47 +116,6 @@ function readBounds(
 function isEnabled(env: Env): boolean {
   const flag = (env.CAD_GENERATION_ENABLED ?? "").trim().toLowerCase();
   return flag !== "false" && flag !== "0" && flag !== "no";
-}
-
-/** Provider thinking mode, off unless explicitly asked for. */
-function isThinkingEnabled(env: Env): boolean {
-  const flag = (env.CAD_THINKING ?? "").trim().toLowerCase();
-  return flag === "true" || flag === "1" || flag === "yes";
-}
-
-/** Builds the shaped options object the DeepSeek client takes. */
-function providerOptions(env: Env, deps: CadRouteDeps, limits: CadLimits) {
-  const baseUrl = (env.DEEPSEEK_BASE_URL ?? "").trim();
-  const model = (env.DEEPSEEK_MODEL ?? "").trim();
-  return {
-    apiKey: (env.DEEPSEEK_API_KEY ?? "").trim(),
-    ...(baseUrl ? { baseUrl } : {}),
-    ...(model ? { model } : {}),
-    thinking: isThinkingEnabled(env),
-    limits,
-    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
-    ...jevOptions(env, deps),
-  };
-}
-
-/**
- * Jev library selection, when JEV_API_KEY is set.
- * @remarks Optional by design: without it every request sees the whole
- *   library catalog, which is how the service worked before selection existed.
- */
-function jevOptions(env: Env, deps: CadRouteDeps) {
-  const apiKey = (env.JEV_API_KEY ?? "").trim();
-  if (!apiKey) return {};
-  const baseUrl = (env.JEV_BASE_URL ?? "").trim();
-  const model = (env.JEV_MODEL ?? "").trim();
-  return {
-    jev: {
-      apiKey,
-      ...(baseUrl ? { baseUrl } : {}),
-      ...(model ? { model } : {}),
-      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
-    },
-  };
 }
 
 /**
@@ -215,7 +158,7 @@ export function cadConfigFromEnv(env: Env = process.env, deps: CadRouteDeps = {}
     ok: true,
     config: {
       generator: deps.generator
-        ?? createCadGenerator(providerOptions(env, deps, { maxRepairAttempts: read.bounds.maxRepairAttempts })),
+        ?? createCadGenerator(cadGenConfigFromEnv(env, { maxRepairAttempts: read.bounds.maxRepairAttempts }, deps.fetchImpl)),
       quota: {
         dailyLimit: read.bounds.dailyRounds,
         lockTtlMs: cadLockTtlMs(requestLimits, env),

@@ -124,6 +124,7 @@ the browser's client loop (`CLIENT_REPAIR_ROUNDS = 2`, `MAX_TRIANGLES =
 bun scripts/cad-bench.mjs [--variant measured|abstract|both]   (default measured)
                           [--limit N] [--ids id1,id2]
                           [--concurrency 4]
+                          [--thinking on|off]  override CAD_THINKING for this run
                           [--no-jev]          generator built without JEV_API_KEY
                           [--no-triage]       skip the triage pass
                           [--resume <runDir>] skip samples that already have a result
@@ -131,6 +132,11 @@ bun scripts/cad-bench.mjs [--variant measured|abstract|both]   (default measured
                           [--agreement <runDir>] score a hand-labelled triage-agreement.md
                           [--out <root>]      default test-results/cad-bench
 ```
+
+Each sample also gets an observe-only Jev complexity score (see
+`scripts/lib/bench-complexity.mjs` in the implementation), banded in
+`summary.md` under "By complexity (Jev)"; it never changes the generator under
+test.
 
 Reads `DEEPSEEK_API_KEY` (required) and `JEV_API_KEY` (optional) from `.env`
 via `requireEnv`. Each run gets `test-results/cad-bench/run#N/`, following

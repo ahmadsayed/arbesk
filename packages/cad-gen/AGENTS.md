@@ -279,10 +279,23 @@ the UI should offer the Tripo3D generator instead. Measured: engineering parts
 - `scripts/cad-eval.mjs` — batch scenarios → PNG renders, component tinting and
   a per-`attempt#N` gallery under `test-results/cad-eval`. Use it to compare a
   change against earlier attempts.
+- `scripts/cad-bench.mjs` — the **external score**: runs the public CADPrompt
+  benchmark (200 prompts with ground-truth meshes, ICLR 2025) through the
+  **hardened loop** it composes — the server's static repair, then its own
+  kernel gates and 3 client repair rounds, which the browser worker does not yet
+  apply (it renders once, with no geometric gates) — and writes `summary.md`
+  beside the paper's GPT-4/Gemini rows,
+  plus exact IoU and a Jev-triaged "where to improve" table, under
+  `test-results/cad-bench/run#N/`. It also records an observe-only Jev
+  complexity score per sample, banded in the summary, and `--thinking on|off`
+  selects DeepSeek thinking mode for an A/B. CADPrompt has **no licence**: it
+  is fetched into `test-results/` for local evaluation and must never be
+  committed.
+  Spec: `docs/superpowers/specs/2026-10-04-cad-bench-cadprompt-design.md`.
 - `scripts/cad-scad-port.mjs` — ports a `polygon(points, paths)` OpenSCAD
   profile into Manifold JS. See the `openscad-reference-port` skill.
 
-Both harnesses import the package **source**, not the bare specifier: they run
+The harnesses import the package **source**, not the bare specifier: they run
 under Bun before any build, where `dist/` is absent or stale.
 
 ## Porting an OpenSCAD reference

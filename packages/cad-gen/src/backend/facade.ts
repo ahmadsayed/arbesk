@@ -102,6 +102,9 @@ const DEFAULTS: CadLimits = {
   maxRepairAttempts: 3,
 };
 
+/** Model the provider falls back to when the caller names none. */
+export const DEFAULT_CAD_MODEL = "deepseek-flash";
+
 /**
  * Builds the opening message list for one request.
  * @remarks A client-driven repair is the same conversation plus one turn: the
@@ -150,7 +153,7 @@ function selectionDiagnostics(selection: LibrarySelection): CadDiagnostics["sele
  */
 export function createCadGenerator(config: CadGenConfig): CadGenerator {
   const limits: CadLimits = { ...DEFAULTS, ...config.limits };
-  const model = config.model ?? "deepseek-flash";
+  const model = config.model ?? DEFAULT_CAD_MODEL;
   const client = createDeepSeekClient({
     apiKey: config.apiKey,
     baseUrl: config.baseUrl ?? "https://api.deepseek.com",
