@@ -4,7 +4,7 @@
  *   match refuses to execute the code rather than running it against an API it
  *   does not implement.
  */
-export const CONTRACT_VERSION = 1;
+export const CONTRACT_VERSION = 2;
 
 /** Date-stamped prelude revision shipped with this build. */
 export const PRELUDE_VERSION = "2026-10-10.5";

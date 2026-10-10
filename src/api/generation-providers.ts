@@ -11,7 +11,7 @@ import { createCadProvider } from "@arbesk/ai-asset-gen/index.js";
 import type { CadSettleOutcome } from "@arbesk/ai-asset-gen/index.js";
 import type { GenerationCapability } from "@arbesk/ai-asset-gen/types.js";
 import type { CadGenerator, CadGenerateResult } from "@arbesk/cad-gen/backend/index.js";
-import { CadRequestUnsuitable, PRELUDE_VERSION } from "@arbesk/cad-gen/index.js";
+import { CadRequestUnsuitable, CONTRACT_VERSION, PRELUDE_VERSION } from "@arbesk/cad-gen/index.js";
 import type { CadDesign } from "@arbesk/cad-gen/index.js";
 import { cadConfigFromEnv } from "./routes/cad.ts";
 import type { CadConfigOutcome } from "./routes/cad.ts";
@@ -63,7 +63,7 @@ export function createMockCadGenerator(): CadGenerator {
           };
       return {
         design,
-        runtime: { contractVersion: 1, preludeVersion: PRELUDE_VERSION },
+        runtime: { contractVersion: CONTRACT_VERSION, preludeVersion: PRELUDE_VERSION },
         provider: { id: "mock", model: "canned" },
         attribution: [],
         diagnostics: {

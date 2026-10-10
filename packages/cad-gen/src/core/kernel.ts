@@ -10,7 +10,10 @@ import { PRELUDE_NAMES, buildPrelude } from "./prelude.ts";
 import type { PreludeHelpers, PreludeOptions } from "./prelude.ts";
 
 export interface KernelRunResult {
+  /** Every part's mesh laid side by side (never unioned). */
   mesh: CadMesh;
+  /** One mesh per returned part, in the script's order. */
+  parts: CadMesh[];
   stats: CadStats;
 }
 
@@ -77,17 +80,54 @@ function callScript(
  *   the stat gates read — and every gate would then be reporting numbers the
  *   script itself chose. `instanceof` against the injected module is the one
  *   check the script cannot forge.
+ * @param label Prefix naming the part, for an array return ("part 2: ").
  * @throws CadKernelError when it did not.
  */
-function assertManifold(result: any, module: ManifoldModule): any {
+function assertManifold(result: any, module: ManifoldModule, label = ""): any {
   if (!(result instanceof module.Manifold)) {
-    throw new CadKernelError("script did not return a Manifold");
+    throw new CadKernelError(label ? label + "did not return a Manifold" : "script did not return a Manifold");
   }
   const status = result.status();
   if (status !== "NoError") {
-    throw new CadKernelError("kernel status: " + String(status));
+    throw new CadKernelError(label + "kernel status: " + String(status));
   }
   return result;
+}
+
+/** Most parts a script may return: a bound for the browser worker, not a design rule. */
+export const MAX_PARTS = 64;
+
+/**
+ * The script's return as checked parts, and whether it was an array.
+ * @throws CadKernelError naming the 1-based part that is not a usable Manifold,
+ *   or when there are more than MAX_PARTS.
+ */
+function partsOf(result: unknown, module: ManifoldModule): { solids: any[]; array: boolean } {
+  if (!Array.isArray(result)) return { solids: [assertManifold(result, module)], array: false };
+  if (result.length > MAX_PARTS) {
+    throw new CadKernelError("script returned " + result.length + " parts; at most " + MAX_PARTS + " are allowed");
+  }
+  return { solids: result.map((r, i) => assertManifold(r, module, "part " + (i + 1) + ": ")), array: true };
+}
+
+/**
+ * Lays meshes side by side in one mesh, offsetting each one's indices.
+ * @remarks Concatenation, never a union: touching parts stay separate and
+ *   overlapping ones cannot produce a non-manifold result.
+ */
+export function concatMeshes(meshes: CadMesh[]): CadMesh {
+  const positions = new Float32Array(meshes.reduce((n, m) => n + m.positions.length, 0));
+  const indices = new Uint32Array(meshes.reduce((n, m) => n + m.indices.length, 0));
+  let p = 0;
+  let i = 0;
+  for (const m of meshes) {
+    const base = p / 3;
+    positions.set(m.positions, p);
+    for (let k = 0; k < m.indices.length; k++) indices[i + k] = m.indices[k] + base;
+    p += m.positions.length;
+    i += m.indices.length;
+  }
+  return { positions, indices };
 }
 
 /** De-interleaves Manifold's property buffer into a renderer-neutral mesh. */
@@ -184,6 +224,82 @@ function bodiesOf(result: any): Pick<CadStats, "bodies"> {
   return { bodies: { count: parts.length, boxes } };
 }
 
+type Box = { min: [number, number, number]; max: [number, number, number] };
+
+/** The bounds of every non-empty box, or the empty-solid zeros when there are none. */
+function unionBox(boxes: Box[]): Box {
+  if (boxes.length === 0) return { min: [...EMPTY_BBOX], max: [...EMPTY_BBOX] };
+  const min = [0, 1, 2].map((a) => Math.min(...boxes.map((b) => b.min[a])));
+  const max = [0, 1, 2].map((a) => Math.max(...boxes.map((b) => b.max[a])));
+  return { min: min as Box["min"], max: max as Box["max"] };
+}
+
+/** Every part's bodies, tagged with their 1-based part, plus each part's body count. */
+function partBodiesOf(solids: any[]): { bodies?: CadStats["bodies"]; bodyCounts: number[] } {
+  if (solids.length === 0 || typeof solids[0].decompose !== "function") {
+    return { bodyCounts: solids.map(() => 1) };
+  }
+  const tagged = solids.map((s, i) => s.decompose().filter((p: any) => !isDegenerate(p))
+    .map((p: any) => ({ volume: p.volume() as number, box: p.boundingBox() as ManifoldBox, part: i + 1 })));
+  const all = tagged.flat().sort((a: { volume: number }, b: { volume: number }) => b.volume - a.volume);
+  return {
+    bodies: {
+      count: all.length,
+      boxes: all.slice(0, MAX_BODY_BOXES).map(({ box, part }: { box: ManifoldBox; part: number }) => ({
+        min: [...box.min] as Box["min"], max: [...box.max] as Box["max"], part,
+      })),
+    },
+    bodyCounts: tagged.map((t) => t.length),
+  };
+}
+
+/** Overlapping part pairs listed in stats; past this the count says enough. */
+const MAX_OVERLAPS = 8;
+
+/** Whether two boxes share interior volume; boxes that only touch do not. */
+function boxesMeet(a: Box, b: Box): boolean {
+  return [0, 1, 2].every((k) => a.min[k] < b.max[k] && b.min[k] < a.max[k]);
+}
+
+/**
+ * Part pairs whose solids share more than DEGENERATE_BODY_MM3.
+ * @remarks Recorded, never failed: a pin in its hole overlaps by design, and
+ *   printing at assembled positions is out of scope (spec decision 4). Only
+ *   pairs whose boxes meet are intersected, so disjoint parts cost box checks.
+ */
+function overlapsOf(solids: any[], boxes: Box[]): Pick<NonNullable<CadStats["parts"]>, "overlaps" | "overlapCount"> {
+  const found: { a: number; b: number; volumeMm3: number }[] = [];
+  for (let i = 0; i < solids.length; i++) {
+    for (let j = i + 1; j < solids.length; j++) {
+      if (!boxesMeet(boxes[i], boxes[j])) continue;
+      const volumeMm3 = solids[i].intersect(solids[j]).volume();
+      if (volumeMm3 > DEGENERATE_BODY_MM3) found.push({ a: i + 1, b: j + 1, volumeMm3 });
+    }
+  }
+  if (found.length === 0) return {};
+  found.sort((x, y) => y.volumeMm3 - x.volumeMm3);
+  return { overlaps: found.slice(0, MAX_OVERLAPS), overlapCount: found.length };
+}
+
+/** Stats for an array return: totals over the parts, plus per-part facts. */
+function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
+  const boxes: Box[] = solids.map((s) => {
+    const b = boundsOf(s, s.numTri());
+    return { min: [...b.min] as Box["min"], max: [...b.max] as Box["max"] };
+  });
+  const { bodies, bodyCounts } = partBodiesOf(solids);
+  return {
+    triangles: solids.reduce((n, s) => n + s.numTri(), 0),
+    vertices: solids.reduce((n, s) => n + s.numVert(), 0),
+    volumeMm3: solids.reduce((n, s) => n + s.volume(), 0),
+    bboxMm: unionBox(boxes.filter((_b, i) => solids[i].numTri() > 0)),
+    ...(helpers.lastFilletMode ? { filletMode: helpers.lastFilletMode } : {}),
+    ...(helpers.lastFilletQuality ? { filletQuality: helpers.lastFilletQuality } : {}),
+    ...(bodies ? { bodies } : {}),
+    parts: { count: solids.length, array: true, boxes, bodyCounts, ...overlapsOf(solids, boxes) },
+  };
+}
+
 /**
  * Builds a kernel bound to a loaded Manifold module.
  * @throws CadKernelError when the script is malformed, throws, or does not
@@ -199,15 +315,32 @@ export function createCadKernel(
     run(design: CadDesign): KernelRunResult {
       const helpers = buildPrelude(module, options);
       const fn = compileScript(design.code, names);
-      const raw = assertManifold(
+      const { solids: raw, array } = partsOf(
         callScript(fn, parameterValues(design), module, helpers, names),
         module,
       );
-      const { solid: result, dropped } = withoutFlakes(module, raw);
-      const stats = statsFrom(result, helpers);
-
+      if (!array) {
+        const { solid: result, dropped } = withoutFlakes(module, raw[0]);
+        const stats = statsFrom(result, helpers);
+        const mesh = meshFrom(result.getMesh());
+        const parts = {
+          count: 1, array: false, boxes: [stats.bboxMm], bodyCounts: [stats.bodies?.count ?? 1],
+        };
+        return {
+          mesh,
+          parts: [mesh],
+          stats: { ...stats, ...(dropped > 0 ? { degenerateBodiesDropped: dropped } : {}), parts },
+        };
+      }
+      const cleaned = raw.map((s) => withoutFlakes(module, s));
+      // A part that is nothing but a flake is not a part.
+      const solids = cleaned.map((c) => c.solid).filter((s) => !isDegenerate(s));
+      const dropped = cleaned.reduce((n, c) => n + c.dropped, 0) + (cleaned.length - solids.length);
+      const parts = solids.map((s) => meshFrom(s.getMesh()));
+      const stats = arrayStatsFrom(solids, helpers);
       return {
-        mesh: meshFrom(result.getMesh()),
+        mesh: concatMeshes(parts),
+        parts,
         stats: dropped > 0 ? { ...stats, degenerateBodiesDropped: dropped } : stats,
       };
     },

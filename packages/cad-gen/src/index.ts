@@ -30,7 +30,7 @@ export { meshTo3mf, readDesignFrom3mf } from "./core/export/three-mf.ts";
 export {
   SIDECAR_PART_PATH, SIDECAR_REL_TYPE, serializeDesign, parseEmbeddedDesign,
 } from "./core/export/embed.ts";
-export { createCadKernel } from "./core/kernel.ts";
+export { concatMeshes, createCadKernel, MAX_PARTS } from "./core/kernel.ts";
 export { PRELUDE_NAMES, buildPrelude } from "./core/prelude.ts";
 export type { CadKernel, KernelRunResult } from "./core/kernel.ts";
 export type { PreludeHelpers } from "./core/prelude.ts";

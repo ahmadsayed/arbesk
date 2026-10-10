@@ -18,10 +18,14 @@ import type { LibraryFit } from "./jev.ts";
 /** Rules the generated script must obey. */
 const RULES = [
   "Units are millimetres. The coordinate system is Z-up (CAD convention).",
-  "Produce ONE solid. Solids only - no surfaces, no open shells.",
+  "Solids only - no surfaces, no open shells. For a single part, return one solid.",
+  "For an object made of SEPARATE parts (clamp halves, a lid and its box, a set of",
+  "gears), return an ARRAY of solids, one per part, each placed where it sits in the",
+  "assembled object: return [base, lid]. Parts in an array are never fused, so they",
+  "may touch - do not union them and do not spread them apart.",
   "The code is the BODY of a function with PARAMETERS, P (an alias of PARAMETERS),",
   "M (the raw Manifold class) and the helper functions below in scope.",
-  "It MUST end by returning a Manifold.",
+  "It MUST end by returning a Manifold, or an array of Manifolds (one per part).",
   "Every dimension MUST come from PARAMETERS - never hard-code a size the user may",
   "want to change. Declare each parameter with value, unit \"mm\" and, where useful,",
   "min, max and label.",

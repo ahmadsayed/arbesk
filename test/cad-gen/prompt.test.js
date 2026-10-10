@@ -12,6 +12,11 @@ const design = (summary) => ({
 });
 
 describe("SYSTEM_PROMPT", () => {
+  it("documents the array return for multi-part objects", () => {
+    expect(SYSTEM_PROMPT).toContain("return an ARRAY of solids, one per part");
+    expect(SYSTEM_PROMPT).not.toContain("Produce ONE solid.");
+  });
+
   it("names the key prelude helpers", () => {
     for (const name of ["roundedBox", "hole", "boltCircle", "filletEdges", "chamferEdges"]) {
       expect(SYSTEM_PROMPT).toContain(name);

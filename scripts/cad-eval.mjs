@@ -77,9 +77,12 @@ function componentsOf(module, design) {
   for (const [k, v] of Object.entries(design.parameters)) values[k] = /** @type {any} */ (v).value;
   const fn = new Function("PARAMETERS", "P", "M", ...PRELUDE_NAMES, design.code);
   const helpers = buildPrelude(module, { segments: 64 });
-  const part = fn(values, values, module.Manifold, ...PRELUDE_NAMES.map((n) => helpers[n]));
+  const returned = fn(values, values, module.Manifold, ...PRELUDE_NAMES.map((n) => helpers[n]));
+  // An array return is one solid per part; a single solid is one part.
+  const parts = Array.isArray(returned) ? returned : [returned];
   // Same rule as the kernel: a zero-volume flake is not a body.
-  const solids = part.decompose().filter((/** @type {any} */ s) => Math.abs(s.volume()) >= DEGENERATE_BODY_MM3);
+  const solids = parts.flatMap((/** @type {any} */ p) => p.decompose())
+    .filter((/** @type {any} */ s) => Math.abs(s.volume()) >= DEGENERATE_BODY_MM3);
   return {
     solids: solids.length,
     meshes: solids.map((/** @type {any} */ s) => meshFrom(s.getMesh())),
@@ -141,7 +144,7 @@ function renderComponents(file, meshes, tints, opts) {
 /**
  * Writes a mesh as GLB and 3MF, design document embedded in both.
  * @param {string} stem Destination path without extension.
- * @param {Mesh} mesh Mesh in millimetres, Z-up.
+ * @param {Mesh[]} mesh One mesh per part, in millimetres, Z-up.
  * @param {any} design The design document that produced the mesh.
  * @returns {{ glb: number, threeMf: number }} Bytes written for each format.
  */
@@ -292,14 +295,17 @@ async function runScenario(ctx) {
       console.log("FAILED after " + (built.failures.length - 1) + " client repair(s): " + last.error);
       return;
     }
-    const { mesh, stats } = built.run;
+    const { parts, stats } = built.run;
     result.design = built.design;
     console.log("kernel   " + (Date.now() - buildStart) + "ms  " + JSON.stringify(stats));
     const { solids, meshes, tints } = componentsOf(ctx.module, result.design);
-    console.log("solids   " + solids + (solids > 1 ? "   <-- NOT ONE BODY, pieces are not joined" : ""));
+    // An array return is expected to have one solid per part.
+    const partCount = stats.parts?.count ?? 1;
+    console.log("solids   " + solids + (stats.parts?.array ? " in " + partCount + " parts" : "") +
+      (solids > partCount ? "   <-- a part is NOT ONE BODY, its pieces are not joined" : ""));
     const png = path.join(outDir, stem + ".png");
     console.log("png " + png + " (" + renderComponents(png, meshes, tints, {}) + " B)");
-    const written = writeExports(path.join(outDir, stem), mesh, result.design);
+    const written = writeExports(path.join(outDir, stem), parts, result.design);
     console.log("glb " + written.glb + " B  3mf " + written.threeMf + " B");
   } catch (e) {
     console.log("FAILED after " + (Date.now() - started) + "ms: " + (e instanceof Error ? e.message : String(e)));

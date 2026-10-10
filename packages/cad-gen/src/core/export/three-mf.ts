@@ -31,8 +31,8 @@ const ROOT_RELS = [
   "</Relationships>",
 ].join("\n");
 
-/** Renders the 3MF core-spec model part. */
-function buildModelXml(mesh: CadMesh): string {
+/** One `<object>` element for a part; a lone part keeps today's unnamed form. */
+function objectXml(mesh: CadMesh, id: number, name?: string): string[] {
   const verts: string[] = [];
   for (let i = 0; i < mesh.positions.length; i += 3) {
     verts.push(
@@ -50,12 +50,7 @@ function buildModelXml(mesh: CadMesh): string {
     );
   }
   return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<model unit="millimeter" xml:lang="en-US" ' +
-      'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
-    '  <metadata name="Application">Arbesk CAD</metadata>',
-    "  <resources>",
-    '    <object id="1" type="model">',
+    '    <object id="' + id + '"' + (name ? ' name="' + name + '"' : "") + ' type="model">',
     "      <mesh>",
     "        <vertices>",
     verts.join("\n"),
@@ -65,24 +60,41 @@ function buildModelXml(mesh: CadMesh): string {
     "        </triangles>",
     "      </mesh>",
     "    </object>",
+  ];
+}
+
+/**
+ * Renders the 3MF core-spec model part: one object and one build item per part.
+ * @remarks Items carry no transform: the vertices are already at the
+ *   assembled positions. Parts are named part-1..n only when there are several.
+ */
+function buildModelXml(meshes: CadMesh[]): string {
+  const named = meshes.length > 1;
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<model unit="millimeter" xml:lang="en-US" ' +
+      'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
+    '  <metadata name="Application">Arbesk CAD</metadata>',
+    "  <resources>",
+    ...meshes.flatMap((m, i) => objectXml(m, i + 1, named ? "part-" + (i + 1) : undefined)),
     "  </resources>",
     "  <build>",
-    '    <item objectid="1"/>',
+    ...meshes.map((_m, i) => '    <item objectid="' + (i + 1) + '"/>'),
     "  </build>",
     "</model>",
   ].join("\n");
 }
 
 /**
- * Serialises a mesh plus its design document to .3mf bytes.
+ * Serialises a mesh (or one mesh per part) plus its design document to .3mf bytes.
  * @remarks The design travels as a declared OPC part, so the package alone
  *   reconstructs the design state - and therefore its licence credits.
  */
-export function meshTo3mf(mesh: CadMesh, design: CadDesign): Uint8Array {
+export function meshTo3mf(mesh: CadMesh | CadMesh[], design: CadDesign): Uint8Array {
   return zipSync({
     "[Content_Types].xml": strToU8(CONTENT_TYPES),
     "_rels/.rels": strToU8(ROOT_RELS),
-    [MODEL_PATH]: strToU8(buildModelXml(mesh)),
+    [MODEL_PATH]: strToU8(buildModelXml(Array.isArray(mesh) ? mesh : [mesh])),
     [SIDECAR_PART_PATH]: strToU8(serializeDesign(design)),
   }, { level: 6 });
 }

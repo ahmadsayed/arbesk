@@ -220,6 +220,16 @@ $0.042/MTok. ONE call per request asks:
 | `pieces_separate` | `noul` | "would ONE fused solid be wrong?" - with `piece_count` >= 2 and this ≥ `SEPARATE_THRESHOLD` (0.75), the `pieces` gate needs at least `piece_count` bodies (`bodyFloor` → `KernelLimits.minBodies`) |
 | `cad_suitable` | `noul` | < `SUITABILITY_THRESHOLD` (0.5) refuses the request |
 
+A script may return an ARRAY of solids, one per part (`return [base, lid]`). The
+kernel never unions them: `KernelRunResult.parts` holds one mesh per part, the
+exporters write one 3MF object / GLB node per part at its assembled position,
+and `stats.parts` reports each part's box and body count. Overlapping parts are
+recorded in `stats.parts.overlaps` and never fail a gate. For an array return the
+gates count PARTS: `pieces` needs at least `minBodies` parts, and `connected`
+allows at most `maxBodies` parts with at most `maxBodiesPerPart` bodies each
+(1 unless a multi-body helper built that part). Single-solid returns are gated
+exactly as before.
+
 The body count is gated from both sides. `connected` caps it from above
 (`maxBodies`); `pieces` floors it from below (`minBodies`, 1 when absent), so a
 two-half clamp fused into one block fails with a repair message that says to

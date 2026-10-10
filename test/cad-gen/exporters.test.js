@@ -12,6 +12,7 @@ import {
   attributionsFor,
 } from "@arbesk/cad-gen";
 import { detectFormat } from "@arbesk/asset-core/formats/index.js";
+import { parse3mfModel } from "@arbesk/asset-core/formats/3mf/parser.js";
 
 /** A unit tetrahedron: 4 vertices, 4 triangles. */
 const MESH = {
@@ -213,5 +214,51 @@ describe("meshToGltf", () => {
 
     expect(fromGltf.length).toBe(fromGlb.length);
     expect(Buffer.from(fromGltf).equals(Buffer.from(fromGlb))).toBe(true);
+  });
+});
+
+/** sha256 of meshToGlb(MESH, DESIGN) from the pre-assembly exporter. */
+const GOLDEN_GLB_SHA256 = "0e8be950237282089adbccf95a051277b2ea05444b3a280d1428d6f894aa5e4a";
+
+/** MESH moved 20 mm along x: a second part. */
+const SHIFTED = {
+  positions: MESH.positions.map((v, i) => (i % 3 === 0 ? v + 20 : v)),
+  indices: MESH.indices,
+};
+
+const modelXml = (bytes) => strFromU8(unzipSync(bytes)["3D/3dmodel.model"]);
+const sha256 = (bytes) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+
+describe("multi-part export", () => {
+  it("writes a single mesh exactly as before", () => {
+    expect(sha256(meshToGlb(MESH, DESIGN))).toBe(GOLDEN_GLB_SHA256);
+    expect(sha256(meshToGlb([MESH], DESIGN))).toBe(GOLDEN_GLB_SHA256);
+    expect(modelXml(meshTo3mf([MESH], DESIGN))).toBe(modelXml(meshTo3mf(MESH, DESIGN)));
+    expect(modelXml(meshTo3mf(MESH, DESIGN))).toContain('<object id="1" type="model">');
+  });
+
+  it("writes one 3MF object and build item per part, at the authored coordinates", () => {
+    const xml = modelXml(meshTo3mf([MESH, SHIFTED], DESIGN));
+    expect(xml).toContain('<object id="1" name="part-1" type="model">');
+    expect(xml).toContain('<object id="2" name="part-2" type="model">');
+    expect(xml).toContain('<item objectid="1"/>');
+    expect(xml).toContain('<item objectid="2"/>');
+    const parsed = parse3mfModel(xml);
+    expect(parsed.objects.length).toBe(2);
+    // parse3mfModel returns flat [x, y, z, x, y, z, ...] vertices.
+    const xs = parsed.objects[1].vertices.filter((_v, i) => i % 3 === 0);
+    expect(Math.min(...xs)).toBe(20);
+  });
+
+  it("writes one GLB mesh and node per part under one root node", () => {
+    const json = readGlbJson(meshToGlb([MESH, SHIFTED], DESIGN));
+    expect(json.scenes[0].nodes).toEqual([0]);
+    expect(json.nodes[0].children).toEqual([1, 2]);
+    expect(json.nodes[0].matrix).toBeDefined();
+    expect(json.nodes.slice(1).map((n) => n.name)).toEqual(["part-1", "part-2"]);
+    expect(json.meshes.length).toBe(2);
+    expect(json.accessors.length).toBe(6);
+    expect(json.bufferViews.every((v) => v.byteOffset % 4 === 0)).toBe(true);
+    expect(json.asset.extras.arbesk_cad).toEqual(DESIGN);
   });
 });

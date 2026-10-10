@@ -24,6 +24,12 @@ export interface KernelLimits {
    * request needs separate pieces that would be wrong fused - see bodyFloor.
    */
   minBodies?: number;
+  /**
+   * Most bodies one part of an ARRAY return may have; 1 when absent. Above 1
+   * only for a part built by a multi-body helper - see bodyAllowance with no
+   * piece count.
+   */
+  maxBodiesPerPart?: number;
 }
 
 /**
@@ -139,9 +145,31 @@ function fusedError(count: number, wanted: number): string {
   return "the part is " + count + " bod" + (count === 1 ? "y" : "ies") + ", but the request needs " +
     want + " SEPARATE pieces that must not be fused (two clamp halves, a set of items, a lid that " +
     "comes off or slides). Pieces that touch or overlap merge into one body. Build each piece as " +
-    "its own solid and lay them out apart on the print bed, at least 2mm between any two, then " +
-    "return them together - separate bodies are expected here. Do not join the pieces with a " +
-    "bridge, rib or pin; bolt holes that join them in use go through each piece.";
+    "its own solid and return them as an array, one solid per piece, each where it sits in the " +
+    "assembled object: return [pieceA, pieceB]. Parts in an array are never fused, so they may " +
+    "touch. Do not join the pieces with a bridge, rib or pin; bolt holes that join them in use " +
+    "go through each piece.";
+}
+
+/** The pieces-gate failure for an array return: too few parts in the array. */
+function tooFewPartsError(count: number, wanted: number): string {
+  const want = wanted >= 5 ? "5 or more" : String(wanted);
+  return "the design returns " + count + " part" + (count === 1 ? "" : "s") + ", but the request " +
+    "needs " + want + " SEPARATE pieces. Return one solid per piece in the array, each where it " +
+    "sits in the assembled object: return [pieceA, pieceB].";
+}
+
+/** The connected-gate failure for an array return with more parts than allowed. */
+function tooManyPartsError(count: number, allowed: number): string {
+  return "the design returns " + count + " parts, but the request needs at most " + allowed +
+    ". Combine features that belong to one piece into one solid before returning the array.";
+}
+
+/** The connected-gate failure for one array part that fell apart. */
+function splitPartError(part: number, bodies: CadStats["bodies"]): string {
+  const own = (bodies?.boxes ?? []).filter((b) => b.part === part);
+  return "part " + part + " of the returned array " +
+    disconnectedError({ count: own.length, boxes: own }, 1).slice("the part ".length);
 }
 
 /**
@@ -204,15 +232,37 @@ export function evaluateStaticGates(
   return gates;
 }
 
-/** Caps bodies from above; passes when the kernel reported no body count. */
-function connectedGate(bodies: CadStats["bodies"], max: number): GateResult {
+/**
+ * Caps bodies from above - or, for an array return, parts and each part's bodies.
+ * @remarks Passes when the kernel reported no body count.
+ */
+function connectedGate(stats: CadStats, max: number, perPart: number): GateResult {
+  const parts = stats.parts;
+  if (parts?.array) {
+    if (parts.count > max) return { gate: "connected", ok: false, error: tooManyPartsError(parts.count, max) };
+    const split = parts.bodyCounts.findIndex((n) => n > perPart);
+    return split === -1
+      ? { gate: "connected", ok: true }
+      : { gate: "connected", ok: false, error: splitPartError(split + 1, stats.bodies) };
+  }
+  const bodies = stats.bodies;
   return bodies === undefined || bodies.count <= max
     ? { gate: "connected", ok: true }
     : { gate: "connected", ok: false, error: disconnectedError(bodies, max) };
 }
 
-/** Floors bodies from below; passes when the kernel reported no body count. */
-function piecesGate(bodies: CadStats["bodies"], min: number): GateResult {
+/**
+ * Floors bodies from below - or, for an array return, parts.
+ * @remarks Passes when the kernel reported no body count.
+ */
+function piecesGate(stats: CadStats, min: number): GateResult {
+  const parts = stats.parts;
+  if (parts?.array) {
+    return parts.count >= min
+      ? { gate: "pieces", ok: true }
+      : { gate: "pieces", ok: false, error: tooFewPartsError(parts.count, min) };
+  }
+  const bodies = stats.bodies;
   return bodies === undefined || bodies.count >= min
     ? { gate: "pieces", ok: true }
     : { gate: "pieces", ok: false, error: fusedError(bodies.count, min) };
@@ -229,8 +279,8 @@ export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): Gate
       ? { gate: "volume", ok: true }
       : { gate: "volume", ok: false, error: "solid has no volume - the result is degenerate" },
 
-    connectedGate(stats.bodies, limits.maxBodies ?? 1),
-    piecesGate(stats.bodies, limits.minBodies ?? 1),
+    connectedGate(stats, limits.maxBodies ?? 1, limits.maxBodiesPerPart ?? 1),
+    piecesGate(stats, limits.minBodies ?? 1),
 
     stats.triangles <= limits.maxTriangles
       ? { gate: "budget", ok: true }

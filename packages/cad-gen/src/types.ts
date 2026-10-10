@@ -43,9 +43,28 @@ export interface CadStats {
    *   that sees it. Bounds are listed (largest first, capped) so a repair turn
    *   can say WHICH piece came loose, not just that one did.
    */
-  bodies?: { count: number; boxes: { min: [number, number, number]; max: [number, number, number] }[] };
+  bodies?: {
+    count: number;
+    /** `part` is the 1-based part a body belongs to; set for array returns only. */
+    boxes: { min: [number, number, number]; max: [number, number, number]; part?: number }[];
+  };
   /** Zero-volume flakes the kernel removed from the solid (see DEGENERATE_BODY_MM3). */
   degenerateBodiesDropped?: number;
+  /**
+   * The parts the script returned.
+   * @remarks `array` is true when the script returned an array of solids;
+   *   parts in an array are never unioned, so they cannot fuse. A single
+   *   solid is one part. `bodyCounts[i]` is how many connected bodies part
+   *   i+1 has. Overlaps between parts are recorded, never failed.
+   */
+  parts?: {
+    count: number;
+    array: boolean;
+    boxes: { min: [number, number, number]; max: [number, number, number] }[];
+    bodyCounts: number[];
+    overlaps?: { a: number; b: number; volumeMm3: number }[];
+    overlapCount?: number;
+  };
 }
 
 /** Renderer-neutral mesh in Manifold coordinates (millimetres, Z-up). */

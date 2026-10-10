@@ -126,11 +126,53 @@ describe("evaluateKernelGates", () => {
     ).find((g) => g.gate === "pieces");
     expect(at(1, 2).ok).toBe(false);
     expect(at(1, 2).error).toContain("1 body, but the request needs 2 SEPARATE pieces");
-    expect(at(1, 2).error).toContain("at least 2mm");
+    expect(at(1, 2).error).toContain("return them as an array");
+    expect(at(1, 2).error).not.toContain("print bed");
     expect(at(2, 2).ok).toBe(true);
     expect(at(1, undefined).ok).toBe(true);
     expect(evaluateKernelGates(stats, { ...LIMITS, minBodies: 4 })
       .find((g) => g.gate === "pieces").ok).toBe(true);
+  });
+
+  describe("array returns", () => {
+    const box = (part) => ({ min: [0, 0, 0], max: [1, 1, 1], part });
+    const arrayStats = (bodyCounts) => ({
+      ...stats,
+      bodies: {
+        count: bodyCounts.reduce((a, b) => a + b, 0),
+        boxes: bodyCounts.flatMap((n, i) => Array(n).fill(box(i + 1))),
+      },
+      parts: { count: bodyCounts.length, array: true, boxes: bodyCounts.map(() => box()), bodyCounts },
+    });
+    const gate = (s, limits, name) => evaluateKernelGates(s, { ...LIMITS, ...limits }).find((g) => g.gate === name);
+
+    it("passes a two-part clamp returned as an array", () => {
+      expect(gate(arrayStats([1, 1]), { maxBodies: 2, minBodies: 2 }, "connected").ok).toBe(true);
+      expect(gate(arrayStats([1, 1]), { maxBodies: 2, minBodies: 2 }, "pieces").ok).toBe(true);
+    });
+
+    it("fails pieces when the array has too few parts, pointing at the array", () => {
+      const pieces = gate(arrayStats([1]), { maxBodies: 2, minBodies: 2 }, "pieces");
+      expect(pieces.ok).toBe(false);
+      expect(pieces.error).toContain("returns 1 part");
+      expect(pieces.error).toContain("one solid per piece");
+    });
+
+    it("fails connected when the array has more parts than allowed", () => {
+      const connected = gate(arrayStats([1, 1, 1]), { maxBodies: 2 }, "connected");
+      expect(connected.ok).toBe(false);
+      expect(connected.error).toContain("returns 3 parts");
+    });
+
+    it("fails connected when one part falls apart, naming the part", () => {
+      const connected = gate(arrayStats([1, 2]), { maxBodies: 2 }, "connected");
+      expect(connected.ok).toBe(false);
+      expect(connected.error).toContain("part 2 of the returned array is 2 separate bodies");
+    });
+
+    it("lets a multi-body helper's part keep its bodies", () => {
+      expect(gate(arrayStats([1, 2]), { maxBodies: 2, maxBodiesPerPart: 2 }, "connected").ok).toBe(true);
+    });
   });
 
   it("asks for a floor only when Jev judged fused pieces wrong, and fails open", () => {
