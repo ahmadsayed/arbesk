@@ -45,6 +45,14 @@ describe("bridgeSource", () => {
     expect(src).not.toMatch(/base64|struct|OCP/);
   });
 
+  it("cleans each solid so CAD-bench's boolean reference gate can cut it", () => {
+    // Live finding: unmerged triangle faces made part.cut(reference) return
+    // the whole part, so an L-bracket that passed every dimension check read
+    // as 100% different from the reference and scored 0. clean() merges the
+    // coplanar triangles back into faces; the difference fell to 0.008%.
+    expect(src).toMatch(/return Solid\(Shell\(faces\)\)\.clean\(\)/);
+  });
+
   it("leaves a top-level part and says where the geometry came from", () => {
     expect(src).toMatch(/^part = /m);
     expect(src).toContain("arbesk cad-gen");

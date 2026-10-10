@@ -13,7 +13,11 @@
  *   build123d, math and numpy, with about twenty builtins - no base64, no
  *   struct, no file access - so the mesh travels as plain number lists and
  *   the solids are built with Build123D's own Face / Shell / Solid, which
- *   was verified to rebuild a cube exactly (valid, 8000 mm^3).
+ *   was verified to rebuild a cube exactly (valid, 8000 mm^3). Each solid is
+ *   then clean()ed: with its faces left as hundreds of coplanar triangles,
+ *   OCC's booleans failed on it, and CAD-bench's reference gate - which cuts
+ *   the part with the reference - read a dimensionally perfect L-bracket as
+ *   100% different and scored it 0.
  */
 
 /** Positions closer than this (mm) are the same vertex. */
@@ -107,7 +111,7 @@ def _solid(points, triangles):
     for k in range(0, len(triangles), 3):
         corners = [Vector(points[3 * v], points[3 * v + 1], points[3 * v + 2]) for v in triangles[k:k + 3]]
         faces.append(Face(Wire.make_polygon(corners, close=True)))
-    return Solid(Shell(faces))
+    return Solid(Shell(faces)).clean()
 
 
 _solids = [_solid(points, triangles) for points, triangles in BODIES]

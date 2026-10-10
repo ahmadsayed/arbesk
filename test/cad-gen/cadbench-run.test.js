@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { VERIFIER_IMAGE, gradeSubmission } from "../../scripts/lib/cadbench-grade.mjs";
-import { runTask } from "../../scripts/lib/cadbench-task.mjs";
+import { regradeTask, runTask } from "../../scripts/lib/cadbench-task.mjs";
 import { RenderTimeout } from "../../scripts/lib/kernel-worker.mjs";
 import { box } from "./helpers/bench-meshes.js";
 
@@ -72,5 +72,21 @@ describe("runTask", () => {
   it("keeps the score null when the grader itself failed", async () => {
     const r = await runTask({ generator: generator(), kernel: kernel(GOOD), task: TASK, dir: tmp(), grade: async () => ({ gradeError: "docker died" }) });
     expect(r).toMatchObject({ built: true, score: null, gradeError: "docker died" });
+  });
+});
+
+describe("regradeTask", () => {
+  it("re-bridges the saved part and grades it again, without generating", async () => {
+    const dir = tmp();
+    const first = await runTask({ generator: generator(), kernel: kernel(GOOD), task: TASK, dir, grade: async () => ({ overall_score: 0, build_success: 1, task_score: 1 }) });
+    fs.writeFileSync(path.join(dir, TASK.id, "final.py"), "stale");
+    const r = await regradeTask({ record: first, dir, grade });
+    expect(r).toMatchObject({ id: TASK.id, built: true, score: 1, regraded: true });
+    expect(fs.readFileSync(path.join(dir, TASK.id, "final.py"), "utf8")).toContain("part = ");
+  });
+
+  it("leaves a task that was never built untouched", async () => {
+    const record = { id: "x", built: false, score: 0, reason: "gate:connected" };
+    expect(await regradeTask({ record, dir: tmp(), grade })).toBe(record);
   });
 });

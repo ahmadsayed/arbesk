@@ -13,7 +13,7 @@ import { CadGenerationFailed } from "../../packages/cad-gen/src/errors.ts";
 import { classifyError, SAMPLE_TIMEOUT_MS } from "./bench-sample.mjs";
 import { bridgeSource } from "./cadbench-bridge.mjs";
 import { buildWithClientRepair } from "./client-repair.mjs";
-import { writeBinaryStl } from "./stl.mjs";
+import { readStl, writeBinaryStl } from "./stl.mjs";
 
 /** @typedef {{ prompt: number, completion: number }} Tokens */
 
@@ -67,19 +67,41 @@ export async function runTask(ctx) {
     record.stats = built.run.stats;
     writeBinaryStl(path.join(taskDir, "part.stl"), built.run.mesh);
     fs.writeFileSync(path.join(taskDir, "final.py"), bridgeSource(built.run.mesh, { taskId: task.id }));
-    const g = await ctx.grade({ taskId: task.id, dir: taskDir });
-    if (g.gradeError) {
-      record.score = null;
-      record.gradeError = g.gradeError;
-    } else {
-      record.score = g.overall_score ?? 0;
-      record.buildSuccess = g.build_success ?? 0;
-      record.taskScore = g.task_score ?? 0;
-      record.grading = g.grading;
-    }
+    applyGrade(record, await ctx.grade({ taskId: task.id, dir: taskDir }));
     return record;
   } finally {
     clearTimeout(timer);
     record.durationMs = Date.now() - started;
   }
+}
+
+/**
+ * Copies a grade onto a task record.
+ * @param {any} record @param {any} g gradeSubmission's result.
+ */
+function applyGrade(record, g) {
+  record.gradeError = g.gradeError ?? null;
+  record.score = g.gradeError ? null : g.overall_score ?? 0;
+  record.buildSuccess = g.gradeError ? 0 : g.build_success ?? 0;
+  record.taskScore = g.gradeError ? 0 : g.task_score ?? 0;
+  record.grading = g.gradeError ? null : g.grading;
+}
+
+/**
+ * Grades a built task again from its saved part, with the current bridge.
+ * @remarks For a bridge or verifier fix: the geometry is the part.stl cad-gen
+ *   delivered, so a regrade changes how the part is handed to the grader, never
+ *   what cad-gen made. A task that was never built has nothing to regrade.
+ * @param {{ record: any, dir: string, grade: (ctx: { taskId: string, dir: string }) => Promise<any> }} ctx
+ * @returns {Promise<any>} The updated record.
+ */
+export async function regradeTask(ctx) {
+  const { record } = ctx;
+  if (!record.built) return record;
+  const taskDir = path.join(ctx.dir, record.id);
+  const mesh = readStl(path.join(taskDir, "part.stl"));
+  fs.writeFileSync(path.join(taskDir, "final.py"), bridgeSource(mesh, { taskId: record.id }));
+  const updated = { ...record, regraded: true };
+  applyGrade(updated, await ctx.grade({ taskId: record.id, dir: taskDir }));
+  return updated;
 }
