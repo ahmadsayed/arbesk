@@ -39,8 +39,9 @@ function drawSheet(mesh, files) {
  * Runs one case.
  * @param {{ generator: any, kernel: any, kase: import("./muse.mjs").Case, dir: string,
  *   timeoutMs?: number, draw?: boolean,
- *   drawImpl?: (mesh: any, files: { svg: string, png: string, title: string }) => void }} ctx
- *   drawImpl is injectable so a drawing failure can be tested without inkscape.
+ *   drawImpl?: (mesh: any, files: { svg: string, png: string, title: string }) => void | Promise<void> }} ctx
+ *   drawImpl draws the sheet - the CLI passes the worker kernel's draw, which
+ *   has the render time limit; tests inject failures through it.
  * @returns {Promise<any>} The case record.
  */
 export async function runCase(ctx) {
@@ -70,7 +71,8 @@ export async function runCase(ctx) {
       record.design = built.design;
       record.clientFailures = built.failures;
     } catch (e) {
-      record.stage1Reason = classifyError(e, controller.signal);
+      // A build past the browser's 90 s limit is what a user would see fail.
+      record.stage1Reason = e instanceof Error && e.name === "RenderTimeout" ? "render_timeout" : classifyError(e, controller.signal);
       record.error = e instanceof Error ? e.message : String(e);
       if (e instanceof CadGenerationFailed) {
         record.tokens = addTokens(record.tokens, /** @type {any} */ (e.diagnostics)?.tokens);
@@ -94,7 +96,7 @@ export async function runCase(ctx) {
     record.geometry = MANIFOLD_GEOMETRY;
     record.firstPass = built.failures.length === 0;
     record.stats = built.run.stats;
-    if (ctx.draw !== false) writeArtifacts(ctx, record, built.run.mesh);
+    if (ctx.draw !== false) await writeArtifacts(ctx, record, built.run.mesh);
     return record;
   } finally {
     clearTimeout(timer);
@@ -107,14 +109,15 @@ export async function runCase(ctx) {
  * @remarks A drawing failure is recorded, never thrown: the part was built,
  *   and the summary reports undrawable parts apart from judged ones.
  * @param {any} ctx @param {any} record @param {any} mesh
+ * @returns {Promise<void>}
  */
-function writeArtifacts(ctx, record, mesh) {
+async function writeArtifacts(ctx, record, mesh) {
   const stem = path.join(ctx.dir, record.id);
   writeBinaryStl(stem + ".stl", mesh);
   const image = renderMesh(mesh, { width: 720, height: 560 });
   writePng(stem + ".render.png", image.width, image.height, image.rgb);
   try {
-    (ctx.drawImpl ?? drawSheet)(mesh, { svg: stem + ".drawing.svg", png: stem + ".drawing.png", title: record.id });
+    await (ctx.drawImpl ?? drawSheet)(mesh, { svg: stem + ".drawing.svg", png: stem + ".drawing.png", title: record.id });
     record.drawing = "ok";
   } catch (e) {
     record.drawing = "error";

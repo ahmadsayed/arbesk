@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { CLIENT_REPAIR_ROUNDS, buildWithClientRepair } from "../../scripts/lib/client-repair.mjs";
+import { RenderTimeout } from "../../scripts/lib/kernel-worker.mjs";
 
 /** Stats that pass every kernel gate. */
 const GOOD = {
@@ -36,6 +37,23 @@ function generatorOf() {
 }
 
 describe("buildWithClientRepair", () => {
+  it("awaits an asynchronous kernel", async () => {
+    const generator = generatorOf();
+    const sync = kernelOf([GOOD]);
+    const kernel = { run: async (/** @type {any} */ d) => sync.run(d) };
+    const out = await buildWithClientRepair({ generator, kernel, prompt: "p" }, first());
+    expect(out.run?.stats).toEqual(GOOD);
+  });
+
+  it("ends the case on a render timeout instead of asking for a repair", async () => {
+    // The browser renders once and stops at 90 s; a repair round would only
+    // queue another build of the same runaway part.
+    const generator = generatorOf();
+    const kernel = { run: async () => { throw new RenderTimeout("build", 90000); } };
+    await expect(buildWithClientRepair({ generator, kernel, prompt: "p" }, first())).rejects.toBeInstanceOf(RenderTimeout);
+    expect(generator.calls).toHaveLength(0);
+  });
+
   it("returns the first build when it passes the gates", async () => {
     const generator = generatorOf();
     const out = await buildWithClientRepair({ generator, kernel: kernelOf([GOOD]), prompt: "p" }, first());

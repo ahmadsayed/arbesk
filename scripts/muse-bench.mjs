@@ -20,7 +20,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { nextRunDir, pool, readJson, writeJsonAtomic } from "./lib/bench-io.mjs";
-import { PROJECT_ROOT, cadGeneratorFrom, loadCadKernel, loadEnv, requireEnv } from "./lib/cad-harness.mjs";
+import { PROJECT_ROOT, cadGeneratorFrom, loadEnv, requireEnv } from "./lib/cad-harness.mjs";
+import { createWorkerKernel } from "./lib/kernel-worker.mjs";
 import { fetchMuse, loadCases, MUSE_REVISION } from "./lib/muse.mjs";
 import { JUDGE_MODEL, JudgeAbort, judgeCase } from "./lib/muse-judge.mjs";
 import { runCase } from "./lib/muse-sample.mjs";
@@ -188,12 +189,14 @@ async function main() {
       }
     }, () => aborted);
   } else {
-    const { kernel } = await loadCadKernel();
+    // Builds and drawings run in worker threads under the browser's 90 s render
+    // limit: one runaway part once froze every pool slot for over two hours.
+    const kernel = createWorkerKernel();
     const generator = cadGeneratorFrom(env);
     const todo = cases.filter((k) => !fs.existsSync(recordFile(dir, k.id)));
     console.log(cases.length + " cases, " + todo.length + " to run");
     await pool(todo, opts.concurrency, async (kase) => {
-      const record = await runCase({ generator, kernel, kase, dir });
+      const record = await runCase({ generator, kernel, kase, dir, drawImpl: kernel.draw });
       writeJsonAtomic(recordFile(dir, kase.id), record);
       providerErrors = record.stage1Reason === "provider_error" ? providerErrors + 1 : 0;
       if (providerErrors >= MAX_CONSECUTIVE_PROVIDER_ERRORS) {

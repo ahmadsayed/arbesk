@@ -47,13 +47,18 @@ export async function buildWithClientRepair(ctx, first) {
     /** @type {RoundFailure} */
     let failure;
     try {
-      const run = ctx.kernel.run(design);
+      // Awaited: the MUSE harness's worker kernel is asynchronous; the
+      // in-process kernel's plain return value awaits to itself.
+      const run = await ctx.kernel.run(design);
       const maxBodies = bodyAllowance(design.code, pieces);
       const failed = evaluateKernelGates(run.stats, { maxTriangles: MAX_TRIANGLES, maxBodies, minBodies })
         .find((g) => !g.ok);
       if (!failed) return { run, design, failures, results };
       failure = { gate: failed.gate, error: failed.gate + ": " + failed.error };
     } catch (e) {
+      // A render that ran past the browser's limit ends the case: the browser
+      // renders once and stops, and a repair would rebuild the same runaway part.
+      if (e instanceof Error && e.name === "RenderTimeout") throw e;
       failure = { gate: "kernel", error: e instanceof Error ? e.message : String(e) };
     }
     failures.push(failure);

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { CadGenerationFailed } from "../../packages/cad-gen/src/errors.ts";
+import { RenderTimeout } from "../../scripts/lib/kernel-worker.mjs";
 import { runCase } from "../../scripts/lib/muse-sample.mjs";
 import { box } from "./helpers/bench-meshes.js";
 
@@ -69,6 +70,13 @@ describe("runCase stages", () => {
     expect([r.stage1, r.stage2, r.stage2Reason]).toEqual([true, false, "gate:connected"]);
   });
 
+  it("fails stage 1 with render_timeout when the build runs past the browser's limit", async () => {
+    const kernel = { run: async () => { throw new RenderTimeout("build", 90000); } };
+    const r = await runCase(base({ kernel }));
+    expect([r.stage1, r.stage2, r.stage1Reason]).toEqual([false, false, "render_timeout"]);
+    expect(r.error).toContain("timed out");
+  });
+
   it("fails stage 1 on a provider error, a static failure and a timeout", async () => {
     const provider = await runCase(base({ generator: generatorOf(() => new Error("503")) }));
     expect(provider.stage1Reason).toBe("provider_error");
@@ -97,6 +105,12 @@ describe("runCase artifacts", () => {
     const r = await runCase(base({ draw: true, drawImpl: () => { throw new Error("inkscape failed: boom"); } }));
     expect([r.stage1, r.stage2, r.drawing]).toEqual([true, true, "error"]);
     expect(r.drawingError).toContain("boom");
+  });
+
+  it("records a drawing that timed out as a drawing error", async () => {
+    const r = await runCase(base({ draw: true, drawImpl: async () => { throw new RenderTimeout("drawing", 90000); } }));
+    expect([r.stage2, r.drawing]).toEqual([true, "error"]);
+    expect(r.drawingError).toContain("timed out");
   });
 
   it("writes nothing for a part that failed a stage", async () => {
