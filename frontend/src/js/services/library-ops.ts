@@ -10,9 +10,9 @@ import { writeToIPFS, writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import {
   publishAsset,
-  CollaboratorRole,
 } from "../blockchain/wallet.ts";
-import { computeRoot, saveEditorList } from "@arbesk/asset-core/domain/editors.js";
+import { saveEditorList } from "@arbesk/asset-core/domain/editors.js";
+import { mintInitialEditorState } from "./editor-bootstrap.ts";
 import { updateCollectionManifest } from "./asset-delete.ts";
 import { walletState } from "../state/wallet-state.ts";
 import {
@@ -82,16 +82,10 @@ export async function createNamedCollection(
   });
   log(`[LIBRARY-OPS] collection manifest → ${collectionCid}`);
 
-  const editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
-  const editorRoot = computeRoot(editorList, tokenId, 1);
+  const { editorList, editorRoot, editorListUri } = await mintInitialEditorState(tokenId, walletAddr);
 
-  // Persist the editor list to IPFS and record its CID on-chain. localStorage
-  // only caches the list; the contract's editorListURI is the source of truth.
-  const editorListUri = await writeJSONToIPFS(editorList, null as any, {
-    compress: true,
-    type: "editors",
-    assetId: `token_${tokenId}_v1`,
-  });
+  // localStorage only caches the list; the contract's editorListURI is the
+  // source of truth.
   if (!editorListUri) throw new Error("Failed to persist editor list to IPFS");
   saveEditorList(tokenId, editorList, editorListUri);
 

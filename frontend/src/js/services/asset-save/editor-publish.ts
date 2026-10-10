@@ -2,7 +2,7 @@
  * Editor / collaborator helpers for publish and republish.
  */
 
-import { computeRoot, getProof, makeLeaf } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
+import { getProof, makeLeaf } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
 import * as wallet from "../../blockchain/wallet.ts";
 import { CollaboratorRole } from "../../blockchain/wallet.ts";
 import {
@@ -11,7 +11,7 @@ import {
   getEditorSetVersion,
 } from "@arbesk/asset-core/domain/editors.js";
 import { isOwner } from "../team.ts";
-import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
+import { mintInitialEditorState } from "../editor-bootstrap.ts";
 
 async function getEditorRoot(tokenId: string | number) {
   if (!wallet.contract) return null;
@@ -124,14 +124,10 @@ export async function prepareInitialEditors(
   tokenId: string | number,
   walletAddr: string
 ) {
-  const editorList = [{ address: walletAddr, role: CollaboratorRole.Editor }];
-  const editorRoot = computeRoot(editorList, tokenId, 1);
-  const editorListUri =
-    (await writeJSONToIPFS(editorList, (null as any), {
-      compress: true,
-      type: "editors",
-      assetId: `token_${tokenId}_v1`,
-    })) || "";
+  const { editorList, editorRoot, editorListUri } = await mintInitialEditorState(
+    tokenId,
+    walletAddr
+  );
   saveEditorList((tokenId as string), editorList, editorListUri || null);
   return { editorList, editorRoot, editorListUri };
 }

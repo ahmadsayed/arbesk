@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { nextRunDir, pool, readJson, writeJsonAtomic } from "./lib/bench-io.mjs";
 import { PROJECT_ROOT, cadGeneratorFrom, requireEnv } from "./lib/cad-harness.mjs";
+import { commaList, parseFlags, positiveInt } from "./lib/cli-args.mjs";
 import { CADBENCH_COMMIT, benchmarkScore, fetchCadBench, loadTasks } from "./lib/cadbench.mjs";
 import { VERIFIER_IMAGE, gradeSubmission } from "./lib/cadbench-grade.mjs";
 import { regradeTask, runTask } from "./lib/cadbench-task.mjs";
@@ -42,29 +43,14 @@ export function parseArgs(argv) {
     ids: /** @type {string[] | null} */ (null), limit: Infinity, concurrency: DEFAULT_CONCURRENCY,
     resume: /** @type {string | null} */ (null), regrade: /** @type {string | null} */ (null), out: DEFAULT_OUT,
   };
-  /** @param {string} flag @param {string} raw */
-  const positive = (flag, raw) => {
-    const n = Number(raw);
-    if (!Number.isInteger(n) || n < 1) throw new Error(flag + " must be a positive integer, got " + raw);
-    return n;
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const flag = argv[i];
-    const value = () => {
-      const v = argv[++i];
-      if (v === undefined) throw new Error(flag + " needs a value");
-      return v;
-    };
-    switch (flag) {
-      case "--ids": opts.ids = value().split(",").map((s) => s.trim()).filter(Boolean); break;
-      case "--limit": opts.limit = positive(flag, value()); break;
-      case "--concurrency": opts.concurrency = positive(flag, value()); break;
-      case "--resume": opts.resume = path.resolve(value()); break;
-      case "--regrade": opts.regrade = path.resolve(value()); break;
-      case "--out": opts.out = path.resolve(value()); break;
-      default: throw new Error("unknown argument " + flag);
-    }
-  }
+  parseFlags(argv, {
+    "--ids": (value) => { opts.ids = commaList(value()); },
+    "--limit": (value) => { opts.limit = positiveInt("--limit", value()); },
+    "--concurrency": (value) => { opts.concurrency = positiveInt("--concurrency", value()); },
+    "--resume": (value) => { opts.resume = path.resolve(value()); },
+    "--regrade": (value) => { opts.regrade = path.resolve(value()); },
+    "--out": (value) => { opts.out = path.resolve(value()); },
+  });
   if (opts.regrade && opts.resume) throw new Error("--regrade contradicts --resume");
   return opts;
 }

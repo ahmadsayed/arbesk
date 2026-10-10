@@ -78,6 +78,9 @@
     "alpinejs",
     "autoprefixer",
     "chai",
+    // blockchain/ is a standalone npm package (undeclared workspace) with
+    // dotenv in its own package.json - fallow cannot see that manifest.
+    "dotenv",
     "esbuild",
     "ethers",
     "hardhat",

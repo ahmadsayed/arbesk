@@ -415,7 +415,6 @@ describe("prepareManifestForWrite", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
         clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
@@ -521,7 +520,6 @@ describe("prepareManifestForWrite", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
         clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),
@@ -586,7 +584,6 @@ describe("prepareManifestForWrite", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
         clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest
@@ -655,7 +652,6 @@ describe("prepareManifestForWrite", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
         clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest
@@ -721,7 +717,6 @@ describe("prepareManifestForWrite", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest
           .fn()
           .mockReturnValue(new Set(["linked_child_1"])),
@@ -797,7 +792,6 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(pendingTransforms),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest.fn().mockReturnValue(pendingRemovals),
         clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest.fn().mockReturnValue(pendingOverrides),
@@ -1034,7 +1028,6 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
         clearPendingPostProcessorEdits: jest.fn(),
         getPendingTransformEdits: jest.fn().mockReturnValue(new Map()),
         clearPendingTransformEdits: jest.fn(),
-        clearPendingChildRefs: jest.fn(),
         getPendingChildRefRemovals: jest.fn().mockReturnValue(new Set()),
         clearPendingChildRefRemovals: jest.fn(),
         getPendingSourceOverrides: jest.fn().mockReturnValue(new Map()),

@@ -67,6 +67,10 @@ export async function parseGLB(
     throw new Error(`parseGLB: unsupported GLB version ${version}`);
   }
 
+  // The worker keeps a copy of this extraction (gltf-worker.ts decomposeGlb):
+  // importing it there would drag in `@gltf-transform/core`, unresolvable in
+  // the module worker. Intentional, documented in the worker's header.
+  // fallow-ignore-next-line code-duplication
   const { json, resources } = await getIO().binaryToJSON(
     new Uint8Array(arrayBuffer)
   );
@@ -458,27 +462,68 @@ interface ByteRange {
 }
 
 /**
+ * Rewrites holder.bufferView through fn when present; fn returning a number
+ * replaces the reference.
+ */
+function mapBufferViewSlot(holder: any, fn: (index: number) => number | void): void {
+  if (holder?.bufferView === undefined) return;
+  const mapped = fn(holder.bufferView);
+  if (mapped !== undefined) holder.bufferView = mapped;
+}
+
+/**
+ * Calls fn with every bufferView index referenced by an accessor (direct +
+ * sparse), rewriting the reference when fn returns a number.
+ */
+function forEachAccessorBufferView(
+  accessors: any,
+  fn: (index: number) => number | void
+): void {
+  for (const acc of accessors) {
+    mapBufferViewSlot(acc, fn);
+    mapBufferViewSlot(acc.sparse?.indices, fn);
+    mapBufferViewSlot(acc.sparse?.values, fn);
+  }
+}
+
+/**
+ * Calls fn with every bufferView index referenced by Draco mesh extensions,
+ * rewriting the reference when fn returns a number.
+ */
+function forEachDracoBufferView(
+  meshes: any,
+  fn: (index: number) => number | void
+): void {
+  for (const mesh of meshes) {
+    for (const prim of mesh.primitives || []) {
+      mapBufferViewSlot(prim.extensions?.KHR_draco_mesh_compression, fn);
+    }
+  }
+}
+
+/**
+ * Calls fn with every bufferView index referenced by accessors (incl. sparse)
+ * or mesh extensions (Draco), rewriting the reference when fn returns a
+ * number.
+ * @remarks Pruning one of these would corrupt geometry.
+ */
+function forEachBufferViewRef(
+  composite: any,
+  fn: (index: number) => number | void
+): void {
+  forEachAccessorBufferView(composite.accessors || [], fn);
+  forEachDracoBufferView(composite.meshes || [], fn);
+}
+
+/**
  * Collects the bufferViews referenced by accessors (incl. sparse) or mesh
  * extensions (Draco).
- * @remarks Pruning one of these would corrupt geometry.
  */
 function collectReferencedBufferViews(composite: any): Set<number> {
   const referenced = new Set<number>();
-  for (const acc of composite.accessors || []) {
-    if (acc.bufferView !== undefined) referenced.add(acc.bufferView);
-    if (acc.sparse?.indices?.bufferView !== undefined) {
-      referenced.add(acc.sparse.indices.bufferView);
-    }
-    if (acc.sparse?.values?.bufferView !== undefined) {
-      referenced.add(acc.sparse.values.bufferView);
-    }
-  }
-  for (const mesh of composite.meshes || []) {
-    for (const prim of mesh.primitives || []) {
-      const draco = prim.extensions?.KHR_draco_mesh_compression;
-      if (draco?.bufferView !== undefined) referenced.add(draco.bufferView);
-    }
-  }
+  forEachBufferViewRef(composite, (index) => {
+    referenced.add(index);
+  });
   return referenced;
 }
 
@@ -487,26 +532,7 @@ function collectReferencedBufferViews(composite: any): Set<number> {
  * old→new index mapping after bufferViews were compacted.
  */
 function renumberBufferViewRefs(composite: any, mapping: Map<number, number>): void {
-  for (const acc of composite.accessors || []) {
-    if (acc.bufferView !== undefined)
-      acc.bufferView = mapping.get(acc.bufferView);
-    if (acc.sparse?.indices?.bufferView !== undefined) {
-      acc.sparse.indices.bufferView = mapping.get(
-        acc.sparse.indices.bufferView
-      );
-    }
-    if (acc.sparse?.values?.bufferView !== undefined) {
-      acc.sparse.values.bufferView = mapping.get(acc.sparse.values.bufferView);
-    }
-  }
-  for (const mesh of composite.meshes || []) {
-    for (const prim of mesh.primitives || []) {
-      const draco = prim.extensions?.KHR_draco_mesh_compression;
-      if (draco?.bufferView !== undefined) {
-        draco.bufferView = mapping.get(draco.bufferView);
-      }
-    }
-  }
+  forEachBufferViewRef(composite, (index) => mapping.get(index));
 }
 
 /** Sort ranges by start and merge overlapping/adjacent ones. */

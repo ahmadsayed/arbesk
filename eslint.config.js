@@ -19,6 +19,41 @@ const baseRules = {
   "preserve-caught-error": "off",
 };
 
+// cad-gen environment-agnostic guard: the two blocks below
+// (arbesk/cad-gen-core and arbesk/cad-gen-env-agnostic-imports) share these
+// entries. Flat config resolves a rule to the LAST matching block, so the
+// env-agnostic block re-declares the core block's restrictions for its wider
+// file set - both reference these constants so they cannot drift apart.
+const cadGenHostTreePatterns = {
+  group: [
+    "**/ipfs/remote-ipfs*",
+    "**/ipfs/write-to-ipfs*",
+    "**/ipfs/asset-core-adapter*",
+    "**/services/*",
+    "**/blockchain/*",
+    "**/workers/*",
+    "**/engine/*",
+    "**/ui/*",
+  ],
+  message: "cad-gen core must stay environment-agnostic — consume these via injected ports.",
+};
+
+const cadGenBabylonPattern = {
+  group: ["@babylonjs/*", "babylonjs", "babylon.js"],
+  message: "cad-gen core must not depend on Babylon.js — the host renders the exported mesh.",
+};
+
+const cadGenRestrictedGlobals = [
+  { name: "window", message: "cad-gen core is environment-agnostic; inject via ports." },
+  { name: "document", message: "cad-gen core is environment-agnostic; inject via ports." },
+  { name: "BABYLON", message: "cad-gen core must not touch the 3D engine." },
+  { name: "Web3", message: "use injected ports instead of the Web3 CDN global." },
+  { name: "navigator", message: "cad-gen core is environment-agnostic; inject via ports." },
+  { name: "localStorage", message: "use an injected port instead." },
+  { name: "process", message: "cad-gen core is environment-agnostic; the host injects the kernel and paths." },
+  { name: "Buffer", message: "cad-gen core is environment-agnostic; use Uint8Array/TextEncoder." },
+];
+
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
@@ -176,35 +211,11 @@ export default [
             ],
             message: "cad-gen core must stay environment-agnostic — consume host capabilities via injected ports, never by reaching into the frontend/backend trees.",
           },
-          {
-            group: [
-              "**/ipfs/remote-ipfs*",
-              "**/ipfs/write-to-ipfs*",
-              "**/ipfs/asset-core-adapter*",
-              "**/services/*",
-              "**/blockchain/*",
-              "**/workers/*",
-              "**/engine/*",
-              "**/ui/*",
-            ],
-            message: "cad-gen core must stay environment-agnostic — consume these via injected ports.",
-          },
-          {
-            group: ["@babylonjs/*", "babylonjs", "babylon.js"],
-            message: "cad-gen core must not depend on Babylon.js — the host renders the exported mesh.",
-          },
+          cadGenHostTreePatterns,
+          cadGenBabylonPattern,
         ],
       }],
-      "no-restricted-globals": ["error",
-        { name: "window", message: "cad-gen core is environment-agnostic; inject via ports." },
-        { name: "document", message: "cad-gen core is environment-agnostic; inject via ports." },
-        { name: "BABYLON", message: "cad-gen core must not touch the 3D engine." },
-        { name: "Web3", message: "use injected ports instead of the Web3 CDN global." },
-        { name: "navigator", message: "cad-gen core is environment-agnostic; inject via ports." },
-        { name: "localStorage", message: "use an injected port instead." },
-        { name: "process", message: "cad-gen core is environment-agnostic; the host injects the kernel and paths." },
-        { name: "Buffer", message: "cad-gen core is environment-agnostic; use Uint8Array/TextEncoder." },
-      ],
+      "no-restricted-globals": ["error", ...cadGenRestrictedGlobals],
     },
   },
 
@@ -217,9 +228,9 @@ export default [
     // matching block: this replaces the core block's no-restricted-imports for these files,
     // so it MUST carry every pattern that block had plus the new ones — otherwise the
     // core-only ipfs/services/engine/ui and Babylon.js restrictions would silently vanish.
-    // It ALSO repeats the core block's `no-restricted-globals` entries verbatim, so the globals
-    // half of the invariant covers the browser entry (src/index.ts) and not just core/**. The
-    // entries are identical, so for core/** this simply re-applies the same rule.
+    // It ALSO re-applies the globals half of the invariant to the browser entry
+    // (src/index.ts) and not just core/**. The shared entries come from the
+    // cadGen* constants above, so the two blocks cannot drift apart.
     name: "arbesk/cad-gen-env-agnostic-imports",
     files: ["packages/cad-gen/src/*.ts", "packages/cad-gen/src/core/**/*.ts"],
     rules: {
@@ -231,35 +242,11 @@ export default [
           // exhaustive list: a bare specifier for a module that is not listed (e.g. `dns`) passes.
           { group: ["node:*", "fs", "path", "os", "crypto", "child_process", "buffer", "stream", "util", "events", "zlib", "http", "https", "net", "worker_threads"], message: "cad-gen core is environment-agnostic; the host injects capabilities. Use Uint8Array/TextEncoder, not Buffer." },
           { group: ["**/frontend/**", "**/src/api/**", "**/constants/**"], message: "cad-gen core is environment-agnostic — consume host capabilities via injected ports." },
-          {
-            group: [
-              "**/ipfs/remote-ipfs*",
-              "**/ipfs/write-to-ipfs*",
-              "**/ipfs/asset-core-adapter*",
-              "**/services/*",
-              "**/blockchain/*",
-              "**/workers/*",
-              "**/engine/*",
-              "**/ui/*",
-            ],
-            message: "cad-gen core must stay environment-agnostic — consume these via injected ports.",
-          },
-          {
-            group: ["@babylonjs/*", "babylonjs", "babylon.js"],
-            message: "cad-gen core must not depend on Babylon.js — the host renders the exported mesh.",
-          },
+          cadGenHostTreePatterns,
+          cadGenBabylonPattern,
         ],
       }],
-      "no-restricted-globals": ["error",
-        { name: "window", message: "cad-gen core is environment-agnostic; inject via ports." },
-        { name: "document", message: "cad-gen core is environment-agnostic; inject via ports." },
-        { name: "BABYLON", message: "cad-gen core must not touch the 3D engine." },
-        { name: "Web3", message: "use injected ports instead of the Web3 CDN global." },
-        { name: "navigator", message: "cad-gen core is environment-agnostic; inject via ports." },
-        { name: "localStorage", message: "use an injected port instead." },
-        { name: "process", message: "cad-gen core is environment-agnostic; the host injects the kernel and paths." },
-        { name: "Buffer", message: "cad-gen core is environment-agnostic; use Uint8Array/TextEncoder." },
-      ],
+      "no-restricted-globals": ["error", ...cadGenRestrictedGlobals],
     },
   },
 

@@ -32,6 +32,7 @@ import { CADPROMPT_PIN, fetchCadPrompt, loadSamples } from "./lib/cadprompt.mjs"
 import { runSample } from "./lib/bench-sample.mjs";
 import { createScorer } from "./lib/bench-iou.mjs";
 import { nextRunDir, pool, readJson, writeJsonAtomic } from "./lib/bench-io.mjs";
+import { commaList, parseFlags, positiveInt } from "./lib/cli-args.mjs";
 
 export { pool };
 import { needsTriage, triage } from "./lib/bench-triage.mjs";
@@ -72,67 +73,42 @@ export function parseArgs(argv) {
     resume: /** @type {string | null} */ (null), compare: /** @type {string | null} */ (null),
     agreement: /** @type {string | null} */ (null), out: DEFAULT_OUT,
   };
-  for (let i = 0; i < argv.length; i++) {
-    const flag = argv[i];
-    const value = () => {
-      const v = argv[++i];
-      if (v === undefined) throw new Error(flag + " needs a value");
-      return v;
-    };
-    switch (flag) {
-      case "--variant": {
-        const v = value();
-        if (!["measured", "abstract", "both"].includes(v)) throw new Error("--variant must be measured, abstract or both");
-        opts.variants = v === "both" ? ["measured", "abstract"] : [/** @type {"measured" | "abstract"} */ (v)];
-        break;
+  parseFlags(argv, {
+    "--variant": (value) => {
+      const v = value();
+      if (!["measured", "abstract", "both"].includes(v)) throw new Error("--variant must be measured, abstract or both");
+      opts.variants = v === "both" ? ["measured", "abstract"] : [/** @type {"measured" | "abstract"} */ (v)];
+    },
+    "--limit": (value) => { opts.limit = positiveInt("--limit", value()); },
+    "--ids": (value) => {
+      const raw = commaList(value());
+      if (!raw.length || raw.some((s) => !/^\d{1,8}$/.test(s))) {
+        throw new Error("--ids must be a comma-separated list of numeric prompt ids");
       }
-      case "--limit": {
-        const raw = value();
-        const n = Number(raw);
-        if (!Number.isInteger(n) || n < 1) throw new Error("--limit must be a positive integer, got " + raw);
-        opts.limit = n;
-        break;
-      }
-      case "--ids": {
-        const raw = value().split(",").map((s) => s.trim());
-        if (!raw.length || raw.some((s) => !/^\d{1,8}$/.test(s))) {
-          throw new Error("--ids must be a comma-separated list of numeric prompt ids");
-        }
-        opts.ids = raw.map((s) => s.padStart(8, "0"));
-        break;
-      }
-      case "--concurrency": {
-        const raw = value();
-        const n = Number(raw);
-        if (!Number.isInteger(n) || n < 1) throw new Error("--concurrency must be a positive integer, got " + raw);
-        opts.concurrency = n;
-        break;
-      }
-      case "--model": {
-        const v = value().trim();
-        if (!v) throw new Error("--model needs a model id");
-        opts.model = v;
-        break;
-      }
-      case "--no-jev": opts.jev = false; break;
-      case "--render": opts.render = true; break;
-      case "--no-render": opts.render = false; break;
-      case "--report": opts.report = true; break;
-      case "--no-report": opts.report = false; break;
-      case "--thinking": {
-        const v = value();
-        if (v !== "on" && v !== "off") throw new Error("--thinking must be on or off, got " + v);
-        opts.thinking = v;
-        break;
-      }
-      case "--no-triage": opts.triage = false; break;
-      case "--resume": opts.resume = path.resolve(value()); break;
-      case "--compare": opts.compare = path.resolve(value()); break;
-      case "--agreement": opts.agreement = path.resolve(value()); break;
-      case "--out": opts.out = path.resolve(value()); break;
-      default: throw new Error("unknown argument " + flag);
-    }
-  }
+      opts.ids = raw.map((s) => s.padStart(8, "0"));
+    },
+    "--concurrency": (value) => { opts.concurrency = positiveInt("--concurrency", value()); },
+    "--model": (value) => {
+      const v = value().trim();
+      if (!v) throw new Error("--model needs a model id");
+      opts.model = v;
+    },
+    "--no-jev": () => { opts.jev = false; },
+    "--render": () => { opts.render = true; },
+    "--no-render": () => { opts.render = false; },
+    "--report": () => { opts.report = true; },
+    "--no-report": () => { opts.report = false; },
+    "--thinking": (value) => {
+      const v = value();
+      if (v !== "on" && v !== "off") throw new Error("--thinking must be on or off, got " + v);
+      opts.thinking = v;
+    },
+    "--no-triage": () => { opts.triage = false; },
+    "--resume": (value) => { opts.resume = path.resolve(value()); },
+    "--compare": (value) => { opts.compare = path.resolve(value()); },
+    "--agreement": (value) => { opts.agreement = path.resolve(value()); },
+    "--out": (value) => { opts.out = path.resolve(value()); },
+  });
   return opts;
 }
 

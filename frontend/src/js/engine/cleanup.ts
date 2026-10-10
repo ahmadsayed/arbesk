@@ -10,11 +10,6 @@ import { setActiveManifestCid, clearAssetManifestCids } from "@arbesk/asset-core
 import { uiState } from "../state/ui-state.ts";
 import { notifyPendingEditsChanged } from "../state/unsaved-changes.ts";
 
-export function clearPendingChildRefs() {
-  state.pendingChildRefs.length = 0;
-  notifyPendingEditsChanged();
-}
-
 export function getPendingChildRefs() {
   return state.pendingChildRefs;
 }
