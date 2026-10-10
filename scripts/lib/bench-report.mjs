@@ -43,23 +43,33 @@ const CSS = [
   ".none{background:#241b1b;border-color:#5a3a3a;color:#e58a8a}}",
 ].join("");
 
-/** HTML-escapes text from a record, so a prompt full of angle brackets cannot break the page. */
+/**
+ * HTML-escapes text from a record, so a prompt full of angle brackets cannot break the page.
+ * @param {unknown} v
+ */
 function esc(v) {
   return String(v === undefined || v === null ? "" : v)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-const f3 = (x) => (typeof x === "number" && Number.isFinite(x) ? x.toFixed(3) : "-");
-const pct = (x) => (typeof x === "number" && Number.isFinite(x) ? (x * 100).toFixed(1) + "%" : "-");
-const mi = (m) => (m && Number.isFinite(m.median) ? f3(m.median) + " (" + f3(m.iqr) + ")" : "-");
+const f3 = (/** @type {unknown} */ x) => (typeof x === "number" && Number.isFinite(x) ? x.toFixed(3) : "-");
+const pct = (/** @type {unknown} */ x) => (typeof x === "number" && Number.isFinite(x) ? (x * 100).toFixed(1) + "%" : "-");
+const mi = (/** @type {any} */ m) => (m && Number.isFinite(m.median) ? f3(m.median) + " (" + f3(m.iqr) + ")" : "-");
 
-/** Every sample record in a directory, in id order. */
+/**
+ * Every sample record in a directory, in id order.
+ * @param {string} dir
+ * @returns {any[]}
+ */
 function readSamples(dir) {
   return fs.readdirSync(dir).filter((f) => /^\d{8}\.json$/.test(f)).sort()
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")));
 }
 
-/** The gate (or error) that stopped a sample, for the table and the card. */
+/**
+ * The gate (or error) that stopped a sample, for the table and the card.
+ * @param {any} sample
+ */
 function whyFailed(sample) {
   const failures = sample.clientFailures || [];
   if (failures.length) return failures[failures.length - 1].gate;
@@ -67,7 +77,10 @@ function whyFailed(sample) {
   return "";
 }
 
-/** One card: prompt, part against ground truth, metrics, links. */
+/**
+ * One card: prompt, part against ground truth, metrics, links.
+ * @param {any} sample
+ */
 function card(sample) {
   const id = sample.id;
   const metrics = sample.metrics || {};
@@ -177,7 +190,7 @@ export function writeVariantReport(dir, summary) {
  */
 export function writeSampleText(dir, sample, result) {
   const requestDir = sample.gtStlPath ? path.dirname(sample.gtStlPath) : null;
-  const read = (name) => {
+  const read = (/** @type {string} */ name) => {
     if (!requestDir) return "(dataset file not available)";
     try {
       return fs.readFileSync(path.join(requestDir, name), "utf8").trim();
@@ -192,7 +205,7 @@ export function writeSampleText(dir, sample, result) {
   const triage = result.triage || {};
   const labels = [triage.failureCause && triage.failureCause.label, triage.shapeMismatch && triage.shapeMismatch.label]
     .filter(Boolean);
-  const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(3) : "n/a");
+  const num = (/** @type {unknown} */ v) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(3) : "n/a");
   const lines = [
     "Sample " + sample.id + " - CADPrompt benchmark, " + sample.variant + " variant",
     "=".repeat(72), "",
