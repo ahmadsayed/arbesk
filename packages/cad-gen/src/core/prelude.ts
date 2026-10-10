@@ -18,7 +18,7 @@ import { rack } from "./library/gear-rack.ts";
 export const PRELUDE_NAMES = [
   "box", "cylinder", "sphere",
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
-  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
+  "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gearDistance", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
   "filletEdges", "chamferEdges",
   "bbox", "volume",
@@ -311,6 +311,44 @@ function ringOuterRadius(o: any, radii: GearRadii): number {
     throw new Error("ringGear: the outer diameter must clear the tooth roots (" + (2 * radii.tip).toFixed(2) + " mm)");
   }
   return outer;
+}
+
+/**
+ * Throws when a gearDistance option is outside what the formula can answer.
+ * @remarks teeth1 is the RING's tooth count in an internal mesh, so it must
+ *   exceed teeth2 - a planet cannot be bigger than the ring it runs inside.
+ *   BOSL2's gear_dist() refuses the same case ("Internal gear must have more
+ *   teeth than the mated external gear").
+ */
+function assertGearDistanceSpec(o: any): void {
+  if (!(o.module > 0)) throw new Error("gearDistance needs a positive module");
+  if (!Number.isInteger(o.teeth1) || o.teeth1 < 4) {
+    throw new Error("gearDistance needs a whole number of teeth1, at least 4");
+  }
+  if (!Number.isInteger(o.teeth2) || o.teeth2 < 4) {
+    throw new Error("gearDistance needs a whole number of teeth2, at least 4");
+  }
+  if (o.internal && !(o.teeth1 > o.teeth2)) {
+    throw new Error("gearDistance needs teeth1 > teeth2 for an internal mesh (teeth1 is the ring)");
+  }
+}
+
+/**
+ * The centre distance of two meshing gears, in millimetres.
+ * @remarks The unshifted standard: transverse module mt = module / cos(helix),
+ *   an external pair at mt x (teeth1 + teeth2) / 2, a planet inside a ring
+ *   (internal: true) at mt x (teeth1 - teeth2) / 2 with teeth1 the ring's
+ *   count. This is BOSL2's gear_dist() at profile_shift 0 and backlash 0 - the
+ *   only tooth form spurGear/ringGear cut - where its working-pressure-angle
+ *   correction cancels to 1; gear_dist() additionally covers racks (a zero
+ *   tooth count) and profile shift, which this library does not. Pure maths,
+ *   quoted rather than ported: a formula is a fact and carries no credit.
+ */
+function gearDistanceBetween(o: any): number {
+  assertGearDistanceSpec(o);
+  const { mt } = transverseGear(o.module, undefined, o.helical ?? 0, "gearDistance");
+  const halfTeeth = o.internal ? (o.teeth1 - o.teeth2) / 2 : (o.teeth1 + o.teeth2) / 2;
+  return mt * halfTeeth;
 }
 
 /** The closed 2D outline of a spur gear, as [x, y] millimetre points. */
@@ -1346,6 +1384,19 @@ export function buildPrelude(
      *   rack(): scripts/cad-reference.mjs, cases rack-*.
      */
     rack: (opts: any = {}) => rack(module, opts ?? {}),
+
+    /**
+     * The centre distance between two meshing gears, in millimetres.
+     * @remarks Pass the SAME module and helical angle the gears themselves
+     *   are built with. External pair: gearDistance({ module, teeth1, teeth2
+     *   }); a planet inside a ring: gearDistance({ module, teeth1: z_ring,
+     *   teeth2: z_planet, internal: true }) - teeth1 is always the ring's
+     *   count in an internal mesh. Place every meshing pair, gear train or
+     *   planetary set with this rather than computing the distance by hand;
+     *   see gearDistanceBetween for the formula and the BOSL2 convention it
+     *   matches.
+     */
+    gearDistance: (opts: any = {}) => gearDistanceBetween(opts ?? {}),
 
     /**
      * A filament spool arm that bolts onto 2020 aluminium extrusion.
