@@ -37,6 +37,15 @@ describe("cadGenConfigFromEnv", () => {
     });
   });
 
+  it("turns repair-round thinking off only for an explicit false, 0, no or off", () => {
+    for (const off of ["false", "0", "no", " OFF "]) {
+      expect(cadGenConfigFromEnv({ DEEPSEEK_API_KEY: "k", CAD_REPAIR_THINKING: off }, {}).repairThinking).toBe(false);
+    }
+    for (const on of [undefined, "", "true", "yes"]) {
+      expect(cadGenConfigFromEnv({ DEEPSEEK_API_KEY: "k", CAD_REPAIR_THINKING: on }, {})).not.toHaveProperty("repairThinking");
+    }
+  });
+
   it("leaves Jev out when its key is blank", () => {
     expect(cadGenConfigFromEnv({ DEEPSEEK_API_KEY: "k", JEV_API_KEY: "  " }, {})).not.toHaveProperty("jev");
   });

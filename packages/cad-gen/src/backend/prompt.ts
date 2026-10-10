@@ -318,6 +318,8 @@ export function buildRepairMessages(
         "",
         "FIX THE SCRIPT and return the complete corrected JSON object. Do not change",
         "the requested design intent, and keep every dimension in PARAMETERS.",
+        "The checks are deterministic: the same script fails the same way, so change",
+        "the geometry the error names - returning this script unchanged cannot pass.",
       ].join("\n"),
     },
   ];

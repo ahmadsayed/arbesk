@@ -31,11 +31,18 @@ export interface DeepSeekConfig {
 export class ProviderError extends Error {
   readonly status: number;
   readonly code: string;
-  constructor(message: string, status: number, code: string) {
+  /**
+   * Why a transport failure happened, when it carried no HTTP status.
+   * @remarks Lets a caller retry a timeout without also retrying a request the
+   *   user cancelled - the two share PROVIDER_ERROR on the wire.
+   */
+  readonly reason?: TransportReason;
+  constructor(message: string, status: number, code: string, reason?: TransportReason) {
     super(message);
     this.name = "ProviderError";
     this.status = status;
     this.code = code;
+    if (reason) this.reason = reason;
   }
 }
 
@@ -47,7 +54,7 @@ export interface DeepSeekClient {
 }
 
 /** Why a request failed, when there is no HTTP status to report. */
-type TransportReason = "timeout" | "abort" | "network";
+export type TransportReason = "timeout" | "abort" | "network";
 
 /** Status for failures that carry no HTTP status of their own (gateway-class). */
 const PROVIDER_FAILURE_STATUS = 502;
@@ -154,6 +161,7 @@ function transportFailure(
     "deepseek " + what + ": " + detail,
     PROVIDER_FAILURE_STATUS,
     "PROVIDER_ERROR",
+    reason,
   );
 }
 

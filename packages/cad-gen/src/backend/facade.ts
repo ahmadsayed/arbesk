@@ -10,8 +10,8 @@ import { parseDesign } from "../core/document.ts";
 import { attributionsFor } from "../core/attribution.ts";
 import type { Attribution } from "../core/attribution.ts";
 import { validateStatic } from "./validate.ts";
-import { createDeepSeekClient } from "./deepseek.ts";
-import type { LlmMessage } from "./deepseek.ts";
+import { createDeepSeekClient, ProviderError } from "./deepseek.ts";
+import type { DeepSeekClient, LlmMessage } from "./deepseek.ts";
 import { buildTurnMessages, buildRepairMessages } from "./prompt.ts";
 import type { TurnInput } from "./prompt.ts";
 import { generateWithRepair } from "./repair.ts";
@@ -38,6 +38,16 @@ export interface CadGenConfig {
   model?: string;
   /** Provider thinking mode. Off by default - see buildPayload's measurements. */
   thinking?: boolean;
+  /**
+   * Answer client repair rounds in thinking mode. On unless set to false.
+   * @remarks On CADPrompt (2026-10-10) the plain model returned the failing
+   *   script byte for byte on 11 of 11 parts a cut had severed; in thinking mode
+   *   it rebuilt 10 of them as one solid. Repairs are a small share of requests,
+   *   so the latency lands only where a part already failed.
+   */
+  repairThinking?: boolean;
+  /** Wall clock for one thinking repair call before falling back to plain mode. */
+  repairThinkingTimeoutMs?: number;
   limits?: Partial<CadLimits>;
   fetchImpl?: typeof fetch;
   /** Jev, for library selection. Without it every request sees the whole catalog. */
@@ -114,11 +124,14 @@ export const DEFAULT_CAD_MODEL = "deepseek-flash";
  *   found itself, so the two paths cannot drift apart.
  */
 function openingMessages(input: CadGenerateInput): LlmMessage[] {
-  const base = buildTurnMessages(input);
   const failures = input.failures ?? [];
-  if (failures.length === 0 || !input.priorDesign) return base;
+  if (failures.length === 0 || !input.priorDesign) return buildTurnMessages(input);
+  // The failed design is the assistant's reply, NOT the turn's CURRENT DESIGN:
+  // framed as the state to edit, under "preserve everything the user did not
+  // ask to change", the model returned the failing script byte for byte.
+  const { priorDesign: _failed, ...request } = input;
   return buildRepairMessages(
-    base,
+    buildTurnMessages(request),
     input.priorDesign,
     failures.map((f) => f.gate + ": " + f.error).join("; "),
     failures.map((f) => ({ gate: f.gate, ok: false, error: f.error })),
@@ -147,6 +160,32 @@ function selectionDiagnostics(selection: LibrarySelection): CadDiagnostics["sele
 }
 
 /**
+ * Thinking-mode repair calls that take longer than this fall back to plain mode.
+ * @remarks Thinking answered in a median 19 s (p90 50 s) on CADPrompt, but 9% of
+ *   calls ran into the provider's 120 s limit. A repair that fails on a timeout
+ *   would lose a part plain mode might still have fixed.
+ */
+const REPAIR_THINKING_TIMEOUT_MS = 90000;
+
+/**
+ * Retries a timed-out call on the fallback client.
+ * @remarks Only a timeout falls back: a caller's abort, an auth failure or a
+ *   rate limit would fail the same way on the second client.
+ */
+function withPlainFallback(primary: DeepSeekClient, fallback: DeepSeekClient): DeepSeekClient {
+  return {
+    async complete(messages, signal) {
+      try {
+        return await primary.complete(messages, signal);
+      } catch (err) {
+        if (err instanceof ProviderError && err.reason === "timeout") return fallback.complete(messages, signal);
+        throw err;
+      }
+    },
+  };
+}
+
+/**
  * Builds the CAD generator.
  * @remarks repairAttempts is capped by the configured maximum, so a caller
  *   cannot buy more provider spend than the server allows.
@@ -154,13 +193,21 @@ function selectionDiagnostics(selection: LibrarySelection): CadDiagnostics["sele
 export function createCadGenerator(config: CadGenConfig): CadGenerator {
   const limits: CadLimits = { ...DEFAULTS, ...config.limits };
   const model = config.model ?? DEFAULT_CAD_MODEL;
-  const client = createDeepSeekClient({
+  const wire = {
     apiKey: config.apiKey,
     baseUrl: config.baseUrl ?? "https://api.deepseek.com",
     model,
-    ...(config.thinking ? { thinking: true } : {}),
     ...(config.fetchImpl ? { fetchImpl: config.fetchImpl } : {}),
-  });
+  };
+  const client = createDeepSeekClient({ ...wire, ...(config.thinking ? { thinking: true } : {}) });
+  const repairClient = config.repairThinking === false || config.thinking
+    ? client
+    : withPlainFallback(
+      createDeepSeekClient({
+        ...wire, thinking: true, timeoutMs: config.repairThinkingTimeoutMs ?? REPAIR_THINKING_TIMEOUT_MS,
+      }),
+      client,
+    );
 
   const jev = config.jev?.apiKey ? createJevClient(config.jev) : undefined;
 
@@ -177,7 +224,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
       const turn = { ...input, libraries: selection.libraries, libraryFit: selection.fit };
 
       const outcome = await generateWithRepair({
-        client,
+        client: input.failures?.length ? repairClient : client,
         parseDesign,
         buildRepairMessages,
         // Static only, and deliberately so: the server never runs the kernel.

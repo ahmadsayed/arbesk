@@ -138,4 +138,65 @@ describe("createCadGenerator", () => {
       diagnostics: { attempts: [{ index: 0 }] },
     });
   }, 60000);
+
 });
+
+// A client repair round: the browser's kernel rejected a design the server
+// passed. Measured on CADPrompt (2026-10-10), the plain model returned the
+// failing script byte for byte on 11 of 11 cut-severed parts; in thinking mode
+// it rebuilt 10 of them as one connected solid.
+describe("client repair rounds", () => {
+  const FAILED = { code: "return box(P.s, P.s, P.s);", parameters: { s: { value: 10, unit: "mm" } }, summary: "a cube", turn: 1 };
+  const failures = [{ gate: "kernel", error: "connected: the part is 2 separate bodies" }];
+  const reply = (content) => new Response(JSON.stringify({
+    choices: [{ message: { content } }],
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  }), { status: 200 });
+  const capture = (config = {}, onFetch) => {
+    const seen = [];
+    const g = createCadGenerator({
+      apiKey: "k",
+      ...config,
+      fetchImpl: async (_u, init) => {
+        const sent = JSON.parse(init.body);
+        seen.push(sent);
+        return onFetch ? onFetch(sent, init) : reply(VALID);
+      },
+    });
+    return { g, seen };
+  };
+
+  it("answers a repair round in thinking mode and a first turn without it", async () => {
+    const { g, seen } = capture();
+    await g.generate({ prompt: "a cube" });
+    await g.generate({ prompt: "a cube", priorDesign: FAILED, failures });
+    expect(seen.map((s) => s.thinking)).toEqual([{ type: "disabled" }, { type: "enabled" }]);
+  }, 40000);
+
+  it("keeps repair rounds plain when repairThinking is false", async () => {
+    const { g, seen } = capture({ repairThinking: false });
+    await g.generate({ prompt: "a cube", priorDesign: FAILED, failures });
+    expect(seen[0].thinking).toEqual({ type: "disabled" });
+  }, 40000);
+
+  it("falls back to plain mode when the thinking call times out", async () => {
+    const { g, seen } = capture({ repairThinkingTimeoutMs: 50 }, (sent, init) =>
+      sent.thinking.type === "enabled"
+        ? new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)))
+        : reply(VALID));
+    const r = await g.generate({ prompt: "a cube", priorDesign: FAILED, failures });
+    expect(r.design.code).toBe("return box(P.s, P.s, P.s);");
+    expect(seen.map((s) => s.thinking.type)).toEqual(["enabled", "disabled"]);
+  }, 40000);
+
+  it("puts the failed design in the assistant's turn, not the request's CURRENT DESIGN", async () => {
+    const { g, seen } = capture();
+    await g.generate({ prompt: "a cube", priorDesign: FAILED, failures });
+    const messages = seen[0].messages;
+    const users = messages.filter((m) => m.role === "user").map((m) => String(m.content));
+    expect(users.some((c) => c.includes("CURRENT DESIGN"))).toBe(false);
+    expect(messages.find((m) => m.role === "assistant").content).toContain(FAILED.code);
+    expect(users.at(-1)).toContain("connected: the part is 2 separate bodies");
+  }, 40000);
+});
+

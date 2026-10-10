@@ -220,6 +220,15 @@ describe("buildRepairMessages", () => {
     expect(text).toContain("kernel");
   });
 
+  it("warns that the same script will fail the same way", () => {
+    // CADPrompt 2026-10-10: told only "FIX THE SCRIPT", the model returned the
+    // failing script byte for byte on 11 of 11 severed parts.
+    const msgs = buildRepairMessages(base, design("Create a box"), "connected: 2 bodies", [
+      { gate: "connected", ok: false, error: "connected: 2 bodies" },
+    ]);
+    expect(String(msgs[3].content)).toContain("fails the same way");
+  });
+
   it("hands back the failing script so the model edits instead of re-deriving", () => {
     const previous = {
       code: "return hole(box(P.s, P.s, P.s), { diameter: 400 });",
