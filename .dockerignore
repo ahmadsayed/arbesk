@@ -19,6 +19,7 @@ test-results
 .idea
 .env
 .env.*
+.env.gemini
 !.env.example
 *.log
 docker-compose.yml

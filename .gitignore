@@ -20,6 +20,7 @@ out/
 .env.pinata
 .env.production
 .env.k3s
+.env.gemini
 
 # Logs
 *.log
