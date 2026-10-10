@@ -200,12 +200,12 @@ export const CATALOG: CatalogEntry[] = [
   {
     id: "gear",
     helpers: ["spurGear", "ringGear", "rack"],
-    summary: "spur, helical and herringbone gears, gear pairs, ring (internal) gears, planetary gearboxes, racks and rack-and-pinion drives - anything with involute teeth",
+    summary: "spur, helical, herringbone and internal ring gears, gear pairs, planetary gearboxes, racks and rack-and-pinion drives - involute teeth",
     helperRows: [
       "spurGear({ module, teeth, thickness, bore?, pressureAngle?, helical?, herringbone? })",
       "                                      involute gear; helical = helix angle in degrees",
       "ringGear({ module, teeth, thickness, backing?, outerDiameter?, pressureAngle?, helical?, herringbone? })",
-      "                                      internal (ring) gear: teeth on the inside",
+      "                                      internal ring gear: teeth on the inside",
       "rack({ module, teeth, thickness, pressureAngle?, backing? })     straight gear rack",
     ],
     guidance: [
