@@ -44,6 +44,7 @@ const mockGenerateAsset = jest.fn();
 const mockCancelGenerationTask = jest.fn();
 const mockGetOrCreateSession = jest.fn();
 const mockGetProviderBalance = jest.fn();
+const mockJudgeFollowupIntent = jest.fn();
 
 const mockCreateChatPreview = jest.fn();
 const mockDisposeChatPreview = jest.fn();
@@ -102,6 +103,7 @@ mock.module("../../frontend/src/js/services/api.js", () => ({
   cancelGenerationTask: mockCancelGenerationTask,
   getOrCreateSession: mockGetOrCreateSession,
   getProviderBalance: mockGetProviderBalance,
+  judgeFollowupIntent: mockJudgeFollowupIntent,
 }));
 mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
   createChatPreview: mockCreateChatPreview,
@@ -213,6 +215,8 @@ beforeEach(() => {
   // tests drive the click path directly, so pin the enabled precondition.
   generateBtn.disabled = false;
   generateBtn.classList.remove("generating");
+  // No Jev reading by default: typed follow-ups keep the retexture route.
+  mockJudgeFollowupIntent.mockResolvedValue(null);
   // Break any refine chain leaked by a previous test's tripo3d generation.
   document.getElementById("refineIndicatorDetach").click();
 
@@ -411,6 +415,91 @@ test("typed follow-up after a tripo3d generation retextures the active version",
     "system",
     expect.stringContaining('Refining "a robot"')
   );
+  expect(mockJudgeFollowupIntent).toHaveBeenCalledWith({
+    prompt: "make it metallic",
+    modelName: "a robot",
+    actions: ["retexture", "retopo", "auto-rig", "animate"],
+  });
+});
+
+/** A Jev reading as the follow-up-intent route returns it. */
+function reading(action, confidence, extra = {}) {
+  return { action, confidence, probabilities: { [action]: confidence }, animations: [], inPlace: true, ...extra };
+}
+
+/** Generates "a robot" with tripo3d, leaving its mesh chip attached. */
+async function generateRobot() {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-test-key");
+  providerSelect.value = "tripo3d";
+  promptInput.value = "a robot";
+  await clickGenerate();
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+}
+
+test("typed animate follow-up opens the Animate dialog with Jev's motions checked", async () => {
+  await generateRobot();
+  mockJudgeFollowupIntent.mockResolvedValue(
+    reading("animate", 1, { animations: ["preset:run"], inPlace: false }),
+  );
+  mockShowCustomDialog.mockResolvedValue(undefined); // the user cancels
+
+  promptInput.value = "run across the room";
+  await clickGenerate();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1); // nothing retextured
+  const [title, wrap] = mockShowCustomDialog.mock.calls[0];
+  expect(title).toBe("Rig & Animate");
+  const box = (v) => wrap.querySelector(`input[value="${v}"]`).checked;
+  expect(box("preset:run")).toBe(true);
+  expect(box("preset:walk")).toBe(false); // a row default, overridden
+  expect(box("option:in-place")).toBe(false);
+});
+
+test("typed shape change offers a new model, which starts fresh", async () => {
+  await generateRobot();
+  mockJudgeFollowupIntent.mockResolvedValue(reading("new_model", 0.95));
+
+  promptInput.value = "give it wings";
+  await clickGenerate();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const [, choices, onPick] = mockAddChoiceMessage.mock.calls[0];
+  expect(choices.map((c) => c.value)).toEqual(["new-model", "retexture"]);
+
+  const echoes = mockAddChatMessage.mock.calls.filter(([role]) => role === "user").length;
+  onPick("new-model");
+  await flush(); await flush(); await flush();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(2);
+  const fresh = mockGenerateAsset.mock.calls[1][0];
+  expect(fresh.prompt).toBe("give it wings");
+  expect(fresh.retexture).toBeUndefined();
+  // The prompt was echoed once, when typed - not again on the pick.
+  expect(mockAddChatMessage.mock.calls.filter(([role]) => role === "user").length).toBe(echoes);
+});
+
+test("an uncertain reading asks, and Retexture runs the old route", async () => {
+  await generateRobot();
+  mockJudgeFollowupIntent.mockResolvedValue({
+    action: "retexture", confidence: 0.36, animations: [], inPlace: true,
+    probabilities: { retexture: 0.45, new_model: 0.4, animate: 0.1, unclear: 0.05 },
+  });
+
+  promptInput.value = "make it look scary";
+  await clickGenerate();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const [, choices, onPick] = mockAddChoiceMessage.mock.calls[0];
+  expect(choices.map((c) => c.label)).toEqual(["Retexture", "New model"]);
+
+  onPick("retexture");
+  await flush(); await flush(); await flush();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(2);
+  const followup = mockGenerateAsset.mock.calls[1][0];
+  expect(followup.retexture).toBe(true);
+  expect(followup.prompt).toBe("make it look scary");
 });
 
 test("single attached image goes out as legacy imageData/imageMime with a synthesized prompt", async () => {

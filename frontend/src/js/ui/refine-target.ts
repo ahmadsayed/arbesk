@@ -17,6 +17,12 @@ export interface ActiveVersion {
   name: string;
   /** cad only: set from a generation result, or loaded on first send. */
   design?: CadDesign;
+  /**
+   * The chat bubble this version came from, when there is one.
+   * @remarks Lets a typed mesh follow-up run that bubble's actions (retopo,
+   *   rig, animate) instead of always retexturing; absent, it retextures.
+   */
+  generationId?: string;
 }
 
 export type GenerationRoute =

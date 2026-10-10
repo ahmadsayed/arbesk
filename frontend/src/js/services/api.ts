@@ -11,6 +11,8 @@ import { log, warn, error } from "../utils/log.ts";
 import { base64ToBytes } from "@arbesk/asset-core/utils/encoding.js";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 import type { CadDesign } from "@arbesk/cad-gen";
+import type { FollowupAction } from "@arbesk/asset-core/domain/generation-actions.js";
+import type { FollowupIntent } from "../ui/followup-route.ts";
 import {
   API_BASE,
   ApiError,
@@ -279,6 +281,31 @@ export async function cancelGenerationTask(taskId: string): Promise<{ status: st
  */
 export async function getProviderBalance(providerKey: string): Promise<{ balance: number; frozen: number }> {
   return fetchJsonOrThrow("/generations/balance", { body: { providerKey } }, "Balance check failed");
+}
+
+/** Wait this long for a follow-up reading before keeping the default route. */
+const FOLLOWUP_INTENT_TIMEOUT_MS = 4000;
+
+/**
+ * Asks the backend what a typed follow-up on a mesh means (Jev, server-side).
+ * @returns null on any failure - no key, an outage, a timeout - so the caller
+ *   keeps its default route; a reading is a hint, never a requirement.
+ */
+export async function judgeFollowupIntent(input: {
+  prompt: string;
+  modelName?: string;
+  actions: FollowupAction[];
+}): Promise<FollowupIntent | null> {
+  try {
+    return await fetchJsonOrThrow(
+      "/followup-intent",
+      { body: input, signal: AbortSignal.timeout(FOLLOWUP_INTENT_TIMEOUT_MS) },
+      "Follow-up intent failed",
+    );
+  } catch (err) {
+    warn(`[GEN] follow-up intent unavailable: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
 }
 
 /**

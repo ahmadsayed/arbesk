@@ -419,3 +419,10 @@ export const cadRepairSchema = z.object({
   failures: z.array(cadFailureSchema).min(1).max(8),
   repairAttempts: cadRepairAttempts.optional(),
 });
+
+/** Body of POST /api/v1/followup-intent. */
+export const followupIntentSchema = z.object({
+  prompt: z.string().trim().min(1).max(2000),
+  modelName: z.string().max(200).optional(),
+  actions: z.array(z.enum(["retexture", "retopo", "auto-rig", "animate"])).min(1).max(4),
+});

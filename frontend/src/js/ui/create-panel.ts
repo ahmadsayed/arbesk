@@ -73,6 +73,8 @@ import {
   isPriorDesignRejection,
 } from "./refine-target.ts";
 import type { ActiveVersion, RefineKind } from "./refine-target.ts";
+import { decideFollowup } from "./followup-route.ts";
+import type { FollowupOption, FollowupPlan } from "./followup-route.ts";
 import type { CadDesign } from "@arbesk/cad-gen";
 
 // ─── DOM References ───
@@ -697,6 +699,7 @@ function availableCadChip(manifest: any, manifestCid: string, name: string): Act
  *   designs; other providers (mock) attach no chip.
  */
 function activateSentVersion(record: {
+  id: string;
   provider?: string;
   sourceAssetCid: string;
   assetManifestCid: string | null;
@@ -709,6 +712,7 @@ function activateSentVersion(record: {
     sourceAssetCid: record.sourceAssetCid,
     manifestCid: record.assetManifestCid,
     name: record.prompt,
+    generationId: record.id,
   });
 }
 
@@ -1204,7 +1208,7 @@ function presentGenerationResult(
     ...(rigModel && { rigModel }),
   });
 
-  activateResultVersion(result, provider, prompt);
+  activateResultVersion(result, provider, prompt, generationId);
 
   const assetMessage = addAssetMessage({ prompt, format: result.format, generationId });
   if (assetMessage) {
@@ -1223,7 +1227,7 @@ function presentGenerationResult(
  * replaced: Tripo3D results for typed retexture, CAD results (carrying their
  * design) for typed design edits.
  */
-function activateResultVersion(result: any, provider: string, prompt: string) {
+function activateResultVersion(result: any, provider: string, prompt: string, generationId: string) {
   const kind = chipKindFor(provider);
   if (!kind) return;
   setActiveVersion({
@@ -1231,6 +1235,7 @@ function activateResultVersion(result: any, provider: string, prompt: string) {
     sourceAssetCid: result.sourceAssetCid,
     manifestCid: result.assetManifestCid,
     name: prompt,
+    generationId,
     ...(result.design && { design: result.design }),
   });
 }
@@ -1299,6 +1304,7 @@ function presentStagedModel({
     sourceAssetCid: source.cid,
     manifestCid: assetManifestCid,
     name,
+    generationId,
   });
 
   const assetMessage = addAssetMessage({ prompt, format: source.format, generationId });
@@ -1786,10 +1792,28 @@ async function onAutoRig(generationId: string) {
   }
 }
 
+/** Presets to pre-check in the Animate dialog, from a typed follow-up. */
+interface AnimateSuggestion {
+  presets: string[];
+  inPlace: boolean;
+}
+
+/** Whether a dialog row starts checked: the suggestion when given, else the row default. */
+function presetStartsChecked(
+  opt: { value: string; checked?: boolean },
+  suggestion: AnimateSuggestion | undefined,
+): boolean {
+  if (!suggestion) return !!opt.checked;
+  if (opt.value === IN_PLACE_OPTION) return suggestion.inPlace;
+  return suggestion.presets.includes(opt.value);
+}
+
 /**
  * Rigs and animates a generation bubble into an animated GLB bubble.
+ * @param suggestion Pre-checks these presets (a typed "make it walk");
+ *   unknown preset ids simply match no row.
  */
-async function onAnimate(generationId: string) {
+async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
 
@@ -1840,7 +1864,7 @@ async function onAnimate(generationId: string) {
       const input = document.createElement("input");
       input.type = "checkbox";
       input.value = opt.value;
-      input.checked = !!opt.checked;
+      input.checked = presetStartsChecked(opt, suggestion);
       const counts = opt.countsTowardMax !== false;
       input.addEventListener("change", () => {
         const checkedCount = boxes.filter((b) => b.input.checked && b.counts).length;
@@ -2160,6 +2184,11 @@ function echoPromptInChat({
   } else {
     addChatMessage("user", effectivePrompt);
   }
+  resetComposer();
+}
+
+/** Empties the composer for the next input. */
+function resetComposer() {
   promptInput.value = "";
   promptInput.style.height = "auto";
   clearAttachedImage();
@@ -2286,7 +2315,114 @@ async function planGeneration(selectedProvider: string, hasImage: boolean) {
   return priorDesign ? { route, retextureSource, priorDesign } : null;
 }
 
-async function onGenerate() {
+/** Chat labels for the follow-up options. */
+const FOLLOWUP_OPTION_LABELS: Record<FollowupOption, string> = {
+  retexture: "Retexture",
+  retopo: "Retopo",
+  "auto-rig": "Auto-rig",
+  animate: "Animate…",
+  "new-model": "New model",
+};
+
+/**
+ * Reads a typed prompt on a mesh chip and runs what it asks for.
+ * @remarks Only a mesh chip with its bubble still live is routed; anything
+ *   else - a cad chip, no chip, an attached image, a restored history version -
+ *   takes the existing route. Jev answers in ~300 ms; the composer is locked
+ *   meanwhile.
+ * @returns true when the prompt was handled here; false to generate as before
+ *   (which, on a mesh chip, retextures).
+ */
+async function routeTypedFollowup(prompt: string, hasImage: boolean): Promise<boolean> {
+  const version = activeVersion;
+  if (hasImage || version?.kind !== "mesh" || !version.generationId) return false;
+  const record = getPendingGeneration(version.generationId);
+  const actions = record ? followupActionsFor(record as any) : [];
+  if (actions.length === 0) return false;
+  setGenerating(true);
+  const intent = await api.judgeFollowupIntent({ prompt, modelName: version.name, actions });
+  setGenerating(false);
+  return runFollowupPlan(decideFollowup(intent, actions), prompt, version.generationId);
+}
+
+/**
+ * Carries out a follow-up plan.
+ * @remarks Retopo, rig and animate open their usual dialogs, so the user
+ *   confirms before any credits are spent.
+ * @returns false for a retexture, which the normal generate path runs.
+ */
+function runFollowupPlan(plan: FollowupPlan, prompt: string, generationId: string): boolean {
+  switch (plan.kind) {
+    case "retexture":
+      return false;
+    case "retopo":
+      void onRetopo(generationId);
+      return true;
+    case "auto-rig":
+      void onAutoRig(generationId);
+      return true;
+    case "animate":
+      void onAnimate(
+        generationId,
+        plan.animations.length > 0 ? { presets: plan.animations, inPlace: plan.inPlace } : undefined,
+      );
+      return true;
+    case "new-model":
+      addChoiceMessage(
+        "Retexturing can't change the model's shape. Start a new model from this prompt?",
+        [
+          { label: "New model", value: "new-model" },
+          { label: "Retexture anyway", value: "retexture" },
+        ],
+        (picked) => pickFollowupOption(picked, prompt, generationId),
+      );
+      return true;
+    case "ask":
+      addChoiceMessage(
+        "What should this do to the model?",
+        plan.options.map((o) => ({ label: FOLLOWUP_OPTION_LABELS[o], value: o })),
+        (picked) => pickFollowupOption(picked, prompt, generationId),
+      );
+      return true;
+  }
+}
+
+/**
+ * Runs the option the user picked from a follow-up choice.
+ * @remarks Retexture and New model go through the normal generate path with
+ *   the original prompt; New model detaches the chip first so it starts fresh.
+ */
+function pickFollowupOption(option: FollowupOption, prompt: string, generationId: string) {
+  if (option === "retexture" || option === "new-model") {
+    if (option === "new-model") setActiveVersion(null);
+    promptInput.value = prompt;
+    void onGenerate({ resubmit: true });
+    return;
+  }
+  runFollowupPlan(option === "animate" ? { kind: "animate", animations: [], inPlace: true } : { kind: option }, prompt, generationId);
+}
+
+/**
+ * Echoes a typed prompt and routes it when it is a mesh follow-up.
+ * @param resubmit Already echoed and routed: only empty the composer.
+ * @returns true when routing handled the prompt and onGenerate should stop.
+ */
+async function echoAndRoute(payload: PromptAndImagePayload, resubmit: boolean): Promise<boolean> {
+  if (resubmit) {
+    resetComposer();
+    return false;
+  }
+  echoPromptInChat(payload);
+  return routeTypedFollowup(payload.effectivePrompt, !!payload.imagePayload);
+}
+
+/**
+ * Sends the composer's prompt.
+ * @param options - Send options.
+ * @param options.resubmit - The prompt was already echoed and routed (the user
+ *   picked "Retexture" or "New model" from a follow-up choice), so skip both.
+ */
+async function onGenerate(options: { resubmit?: boolean } = {}) {
   const payload = buildPromptAndImagePayload();
   if (!payload) return;
   const { effectivePrompt, imagePayload } = payload;
@@ -2308,7 +2444,7 @@ async function onGenerate() {
     return;
   }
 
-  echoPromptInChat(payload);
+  if (await echoAndRoute(payload, !!options.resubmit)) return;
 
   setGenerating(true);
   // Stop button only makes sense for async providers — the mock returns
@@ -2385,7 +2521,7 @@ async function onGenerate() {
 
 // ─── Event Bindings ───
 
-generateBtn.addEventListener("click", onGenerate);
+generateBtn.addEventListener("click", () => void onGenerate());
 
 clearChatBtn?.addEventListener("click", clearChat);
 
