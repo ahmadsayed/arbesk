@@ -176,10 +176,12 @@ export function renderMesh(mesh, opts = {}) {
  * @param {{ pos: Float32Array, idx: Uint32Array, cx: Float64Array,
  *   cy: Float64Array, cz: Float64Array, scale: number, W: number, H: number,
  *   depth: Float64Array, shade: Float64Array, lit: Uint8Array,
- *   light: number[] }} s Projected geometry and the buffers to fill.
+ *   light: number[], ids?: Int32Array }} s Projected geometry and the buffers
+ *   to fill; ids, when given, receives the index of the triangle nearest at
+ *   each pixel (the drawing's hidden-line test needs to know whose pixel it is).
  */
 export function rasterize(s) {
-  const { pos, idx, cx, cy, cz, scale, W, H, depth, shade, lit, light } = s;
+  const { pos, idx, cx, cy, cz, scale, W, H, depth, shade, lit, light, ids } = s;
   for (let t = 0; t < idx.length; t += 3) {
     const a = idx[t];
     const b = idx[t + 1];
@@ -216,6 +218,7 @@ export function rasterize(s) {
           depth[o] = d;
           shade[o] = tone;
           lit[o] = 1;
+          if (ids) ids[o] = t / 3;
         }
       }
     }
@@ -270,9 +273,11 @@ function resolve(s) {
  * @param {{ forward: number[], up: number[] }} view Viewing direction and screen up.
  * @param {{ centre: number[], scale: number, W: number, H: number }} frame World
  *   point at the panel centre, px per mm, and panel size in px.
- * @returns {{ depth: Float64Array, project: (p: number[]) => number[] }} depth is
- *   W*H, Infinity where nothing is drawn; project maps a world point to
- *   [px x, px y, depth].
+ * @returns {{ depth: Float64Array, ids: Int32Array, project: (p: number[]) => number[],
+ *   basis: { right: number[], up: number[], forward: number[] } }} depth is W*H,
+ *   Infinity where nothing is drawn; ids holds the nearest triangle per pixel
+ *   (-1 for none); project maps a world point to
+ *   [px x, px y, depth]; basis is the camera frame in world coordinates.
  */
 export function orthoDepth(mesh, view, frame) {
   const { centre, scale, W, H } = frame;
@@ -291,14 +296,15 @@ export function orthoDepth(mesh, view, frame) {
     cz[i] = dot(p, forward);
   }
   const depth = new Float64Array(W * H).fill(Infinity);
+  const ids = new Int32Array(W * H).fill(-1);
   rasterize({
     pos, idx: mesh.indices, cx, cy, cz, scale, W, H, depth,
-    shade: new Float64Array(W * H), lit: new Uint8Array(W * H), light: forward,
+    shade: new Float64Array(W * H), lit: new Uint8Array(W * H), light: forward, ids,
   });
   /** @param {number[]} p */
   const project = (p) => {
     const q = sub(p, centre);
     return [W / 2 + dot(q, right) * scale, H / 2 - dot(q, camUp) * scale, dot(q, forward)];
   };
-  return { depth, project };
+  return { depth, ids, project, basis: { right, up: camUp, forward } };
 }
