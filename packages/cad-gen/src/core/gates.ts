@@ -120,9 +120,11 @@ function severedAlong(b: Box, main: Box): string | undefined {
   return axis === undefined ? undefined : "xyz"[axis];
 }
 
+/** A point as gate errors print it: one decimal per axis. */
+const fmt = (v: number[]) => "[" + v.map((x) => x.toFixed(1)).join(", ") + "]";
+
 /** The connected-gate failure, naming every loose piece so a repair can join it. */
 function disconnectedError(bodies: NonNullable<CadStats["bodies"]>, allowed: number): string {
-  const fmt = (v: number[]) => "[" + v.map((x) => x.toFixed(1)).join(", ") + "]";
   const main = bodies.boxes[0];
   const listed = bodies.boxes.map((b, i) =>
     "  body " + (i + 1) + (i === 0 ? " (main)" : "") + ": " + fmt(b.min) + " to " + fmt(b.max) +
@@ -268,6 +270,30 @@ function piecesGate(stats: CadStats, min: number): GateResult {
     : { gate: "pieces", ok: false, error: fusedError(bodies.count, min) };
 }
 
+/**
+ * Fails a cavity a cut left entirely inside the solid.
+ * @remarks The kernel reports these apart from bodies (CadStats.voids). Before
+ *   that, CADPrompt 00851553, 00520726 and 00522865 - hollows cut from the
+ *   centre instead of through a face - failed the connected gate as a piece
+ *   "INSIDE the main body's bounds" that "only TOUCHES it", and three repair
+ *   rounds each went looking for a loose piece that was not there.
+ */
+function sealedGate(stats: CadStats): GateResult {
+  const voids = stats.voids;
+  if (voids === undefined || voids.count === 0) return { gate: "sealed", ok: true };
+  const listed = voids.boxes.map((b, i) =>
+    "  void " + (i + 1) + (b.part ? " (part " + b.part + ")" : "") + ": " + fmt(b.min) + " to " + fmt(b.max));
+  return {
+    gate: "sealed", ok: false,
+    error: "the part has " + voids.count + " cavit" + (voids.count === 1 ? "y" : "ies") + " sealed inside " +
+      "the part - a cut (a hollow, pocket or hole) lies entirely within the solid and never reaches a " +
+      "face, leaving a hidden void. Bounding boxes:\n" + listed.join("\n") + "\n" +
+      "If the cut should be open, extend it through the face it should open from (a pocket or hollow " +
+      "usually opens through the top or bottom face: make it reach that face and pass 0.5mm beyond); " +
+      "if the part should be solid there, remove the cut.",
+  };
+}
+
 /** Gates evaluated against a successful kernel run. */
 export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): GateResult[] {
   return [
@@ -281,6 +307,7 @@ export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): Gate
 
     connectedGate(stats, limits.maxBodies ?? 1, limits.maxBodiesPerPart ?? 1),
     piecesGate(stats, limits.minBodies ?? 1),
+    sealedGate(stats),
 
     stats.triangles <= limits.maxTriangles
       ? { gate: "budget", ok: true }

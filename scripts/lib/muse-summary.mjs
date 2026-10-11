@@ -28,7 +28,7 @@ export const PAPER_BASELINES = Object.freeze([
 /** How this harness differs from the paper - printed in every report. */
 export const DEVIATIONS = Object.freeze([
   "Code is cad-gen's Manifold-prelude JavaScript, not CadQuery; \"executes\" means the in-process kernel produced a mesh.",
-  "Stage 2 is stricter and partly guaranteed by construction: Manifold output is watertight, manifold, self-intersection free and overlap free, and a part cad-gen's own kernel gates reject (connected, pieces, nonempty, budget) fails Stage 2 because the product would not deliver it.",
+  "Stage 2 is stricter and partly guaranteed by construction: Manifold output is watertight, manifold, self-intersection free and overlap free, and a part cad-gen's own kernel gates reject (connected, pieces, sealed, nonempty, budget) fails Stage 2 because the product would not deliver it.",
   "Drawings come from arbesk's own renderer in MUSE's sheet layout, not from MUSE's unpublished DrawCAD; feature dimensions such as diameters are not drawn.",
   "One sample per case, judged by Gemini-3.1-Pro at temperature 0; the paper does not state its judge temperature.",
   "The prompt is each case's design_description.md verbatim, with no hints or rewrites.",

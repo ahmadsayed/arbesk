@@ -212,16 +212,38 @@ function withoutFlakes(module: ManifoldModule, result: any): { solid: any; dropp
 /** Bodies listed in a repair message; past this the count says enough. */
 const MAX_BODY_BOXES = 8;
 
-/** The solid's separate bodies, largest first; nothing when the host cannot decompose. */
-function bodiesOf(result: any): Pick<CadStats, "bodies"> {
-  if (typeof result.decompose !== "function") return {};
-  const parts: any[] = result.decompose().filter((p: any) => !isDegenerate(p));
-  const boxes = parts
-    .map((p) => ({ volume: p.volume(), box: p.boundingBox() as ManifoldBox }))
-    .sort((a, b) => b.volume - a.volume)
+type Component = { volume: number; box: ManifoldBox; part?: number };
+
+/**
+ * A solid's non-flake components, split into bodies and sealed voids.
+ * @remarks A cut that never reaches a face leaves a cavity whose skin
+ *   decomposes as its own component with NEGATIVE volume (CADPrompt 00851553:
+ *   -78398 mm3). It is not a body: counting it sent the connected gate's repair
+ *   after a "loose piece" no edit could move. It is reported as a void instead.
+ */
+function componentsOf(solid: any, part?: number): { bodies: Component[]; voids: Component[] } {
+  const all: Component[] = solid.decompose().filter((p: any) => !isDegenerate(p))
+    .map((p: any) => ({ volume: p.volume() as number, box: p.boundingBox() as ManifoldBox, ...(part ? { part } : {}) }));
+  return { bodies: all.filter((c) => c.volume > 0), voids: all.filter((c) => c.volume < 0) };
+}
+
+/** Components as stats list them: largest first (by magnitude), capped, part kept when set. */
+function listed(components: Component[]): NonNullable<CadStats["bodies"]> {
+  const boxes = [...components]
+    .sort((a, b) => Math.abs(b.volume) - Math.abs(a.volume))
     .slice(0, MAX_BODY_BOXES)
-    .map(({ box }) => ({ min: [...box.min] as [number, number, number], max: [...box.max] as [number, number, number] }));
-  return { bodies: { count: parts.length, boxes } };
+    .map(({ box, part }) => ({
+      min: [...box.min] as [number, number, number], max: [...box.max] as [number, number, number],
+      ...(part ? { part } : {}),
+    }));
+  return { count: components.length, boxes };
+}
+
+/** The solid's separate bodies and sealed voids; nothing when the host cannot decompose. */
+function bodiesOf(result: any): Pick<CadStats, "bodies" | "voids"> {
+  if (typeof result.decompose !== "function") return {};
+  const { bodies, voids } = componentsOf(result);
+  return { bodies: listed(bodies), ...(voids.length > 0 ? { voids: listed(voids) } : {}) };
 }
 
 type Box = { min: [number, number, number]; max: [number, number, number] };
@@ -234,22 +256,17 @@ function unionBox(boxes: Box[]): Box {
   return { min: min as Box["min"], max: max as Box["max"] };
 }
 
-/** Every part's bodies, tagged with their 1-based part, plus each part's body count. */
-function partBodiesOf(solids: any[]): { bodies?: CadStats["bodies"]; bodyCounts: number[] } {
+/** Every part's bodies and voids, tagged with their 1-based part, plus each part's body count. */
+function partBodiesOf(solids: any[]): Pick<CadStats, "bodies" | "voids"> & { bodyCounts: number[] } {
   if (solids.length === 0 || typeof solids[0].decompose !== "function") {
     return { bodyCounts: solids.map(() => 1) };
   }
-  const tagged = solids.map((s, i) => s.decompose().filter((p: any) => !isDegenerate(p))
-    .map((p: any) => ({ volume: p.volume() as number, box: p.boundingBox() as ManifoldBox, part: i + 1 })));
-  const all = tagged.flat().sort((a: { volume: number }, b: { volume: number }) => b.volume - a.volume);
+  const tagged = solids.map((s, i) => componentsOf(s, i + 1));
+  const voids = tagged.flatMap((t) => t.voids);
   return {
-    bodies: {
-      count: all.length,
-      boxes: all.slice(0, MAX_BODY_BOXES).map(({ box, part }: { box: ManifoldBox; part: number }) => ({
-        min: [...box.min] as Box["min"], max: [...box.max] as Box["max"], part,
-      })),
-    },
-    bodyCounts: tagged.map((t) => t.length),
+    bodies: listed(tagged.flatMap((t) => t.bodies)),
+    ...(voids.length > 0 ? { voids: listed(voids) } : {}),
+    bodyCounts: tagged.map((t) => t.bodies.length),
   };
 }
 
@@ -287,7 +304,7 @@ function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
     const b = boundsOf(s, s.numTri());
     return { min: [...b.min] as Box["min"], max: [...b.max] as Box["max"] };
   });
-  const { bodies, bodyCounts } = partBodiesOf(solids);
+  const { bodies, voids, bodyCounts } = partBodiesOf(solids);
   return {
     triangles: solids.reduce((n, s) => n + s.numTri(), 0),
     vertices: solids.reduce((n, s) => n + s.numVert(), 0),
@@ -296,6 +313,7 @@ function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
     ...(helpers.lastFilletMode ? { filletMode: helpers.lastFilletMode } : {}),
     ...(helpers.lastFilletQuality ? { filletQuality: helpers.lastFilletQuality } : {}),
     ...(bodies ? { bodies } : {}),
+    ...(voids ? { voids } : {}),
     parts: { count: solids.length, array: true, boxes, bodyCounts, ...overlapsOf(solids, boxes) },
   };
 }
