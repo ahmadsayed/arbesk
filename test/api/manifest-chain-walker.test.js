@@ -328,6 +328,90 @@ describe("walkManifestChain", () => {
     expect(Array.from(allReachable).sort()).toEqual(["bafySource", cid]);
   });
 
+  it("marks reference_image and reference_images CIDs as shared", async () => {
+    const cid = putManifest({
+      version: 1,
+      scene: {
+        nodes: [
+          {
+            node_id: "n",
+            source: { cid: "bafySource" },
+            reference_image: { cid: "bafyRefFront" },
+            reference_images: [
+              { cid: "bafyRefFront", view: "front" },
+              { cid: "bafyRefSide", view: "side" },
+            ],
+          },
+        ],
+      },
+    });
+
+    const { assetUnique, shared, allReachable } = await walk(cid);
+
+    expect(Array.from(assetUnique)).toEqual([cid]);
+    expect(Array.from(shared).sort()).toEqual(["bafyRefFront", "bafyRefSide", "bafySource"]);
+    expect(allReachable.has("bafyRefSide")).toBe(true);
+  });
+
+  it("gives each collection asset chain its own maxDepth budget", async () => {
+    // Three assets, two versions each: 1 collection + 6 asset manifests.
+    const assets = {};
+    const allAssetCids = [];
+    for (const id of ["a1", "a2", "a3"]) {
+      const v1 = putManifest({ version: 1, prev_asset_manifest_cid: null, scene: {} });
+      const v2 = putManifest({ version: 2, prev_asset_manifest_cid: v1, scene: {} });
+      assets[id] = v2;
+      allAssetCids.push(v1, v2);
+    }
+    const collectionCid = putManifest({ version: 1, type: "collection", assets });
+
+    const { allReachable, errors } = await walk(collectionCid, {
+      recurseIntoCollectionAssets: true,
+      maxDepth: 2,
+    });
+
+    expect(errors).toHaveLength(0);
+    for (const c of [collectionCid, ...allAssetCids]) {
+      expect(allReachable.has(c)).toBe(true);
+    }
+  });
+
+  it("records an error when a chain is truncated at maxDepth", async () => {
+    let prev = null;
+    for (let i = 0; i < 4; i++) {
+      prev = putManifest({ version: i + 1, prev_asset_manifest_cid: prev, scene: {} });
+    }
+
+    const { visited, errors } = await walk(prev, { maxDepth: 3 });
+
+    expect(visited.size).toBe(3);
+    expect(errors.some((e) => /truncated at maxDepth=3/.test(e))).toBe(true);
+  });
+
+  it("does not record an error for a binary (non-JSON) source when recurseIntoSources is true", async () => {
+    ipfsStorage.set("bafyBinarySource", new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02, 0x00]));
+    const cid = putManifest({
+      version: 1,
+      scene: { nodes: [{ node_id: "n", source: { cid: "bafyBinarySource" } }] },
+    });
+
+    const { allReachable, errors } = await walk(cid, { recurseIntoSources: true });
+
+    expect(errors).toHaveLength(0);
+    expect(allReachable.has("bafyBinarySource")).toBe(true);
+  });
+
+  it("records an error for an unreadable source when recurseIntoSources is true", async () => {
+    const cid = putManifest({
+      version: 1,
+      scene: { nodes: [{ node_id: "n", source: { cid: "bafyMissingSource" } }] },
+    });
+
+    const { errors } = await walk(cid, { recurseIntoSources: true });
+
+    expect(errors.some((e) => /bafyMissingSource/.test(e))).toBe(true);
+  });
+
   it("ignores non-string source CIDs gracefully", async () => {
     const cid = putManifest({
       version: 1,

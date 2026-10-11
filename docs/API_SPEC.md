@@ -595,6 +595,8 @@ Batch version of `/ipfs/upload-url`. Session-gated and rate-limited per wallet (
 
 Runs the reachability garbage collector. Requires session auth **plus** an admin token in the `X-Admin-Token` header (configured via `GC_ADMIN_TOKEN`). Shared glTF source data (buffers/images) and bundle CIDs that were skipped by `/ipfs/unpin` are reclaimed here when no reachable manifest references them anymore.
 
+Unpinning is mark-and-sweep with a grace period: a live run unpins only CIDs that an earlier live run already saw orphaned at least `IPFS_GC_GRACE_HOURS` ago (default 168), because content is pinned before its mint or Publish lands. First-seen times persist in `.data/ipfs-gc-state.json`, per storage backend and chain. A live run that hit any error (RPC failure, unreadable manifest or source, truncated chain) skips unpinning, records no marks, and returns `aborted: true`. The response reports `orphans` (all unreachable pins) and `eligible` (those past the grace period).
+
 Request body (all optional):
 ```json
 {
