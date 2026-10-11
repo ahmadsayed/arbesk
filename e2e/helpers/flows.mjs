@@ -227,6 +227,9 @@ export async function sendPendingGenerationToStudio(page) {
  */
 export async function generateToChatBubble(page, prompt = DEFAULT_PROMPT) {
   await openCreate(page);
+  // The composer defaults to "Auto (recommended)"; the mock stack has no Jev
+  // key, so pin the mock provider explicitly for these mock-generation flows.
+  await page.locator(SELECTORS.providerSelect).selectOption("mock");
   // Pin the new bubble by index: a `.last()` locator re-resolves as later
   // generations append more bubbles.
   const sendButtons = page.locator(SELECTORS.assetBubbleSend);

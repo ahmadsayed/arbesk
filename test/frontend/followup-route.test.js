@@ -61,4 +61,15 @@ describe("decideFollowup", () => {
       kind: "ask", options: ["animate", "retexture"], animations: ["preset:biped:dance_01"], inPlace: false,
     });
   });
+
+  test("speculative texture/retopo readings ride on the intent for the panel", () => {
+    // The plan ignores them; the panel reads them off the intent when the
+    // retexture/retopo dispatches run.
+    const retexture = reading("retexture", 0.95, { textureQuality: "fast" });
+    expect(decideFollowup(retexture, ALL)).toEqual({ kind: "retexture" });
+    expect(retexture.textureQuality).toBe("fast");
+    const retopo = reading("retopo", 0.9, { retopoFaceLimit: 2000 });
+    expect(decideFollowup(retopo, ALL)).toEqual({ kind: "retopo" });
+    expect(retopo.retopoFaceLimit).toBe(2000);
+  });
 });

@@ -388,6 +388,12 @@ interface TripoGenerationInput {
   animations?: string[];
   faceLimit?: number;
   textureQuality?: string;
+  /** Geometry model override (tripo3d only) → provider `model` option. */
+  tripoModel?: string;
+  /** Texture model line (tripo3d only); v3.5 enables fast quality + delight. */
+  textureVersion?: string;
+  /** Strip baked-in lighting (tripo3d only; v3.5 texture model only). */
+  delight?: boolean;
   imageData?: string;
   imageMime?: string;
   images?: { imageData: string; imageMime: string; view: string }[];
@@ -466,7 +472,7 @@ async function startSourceFollowUp(
   sourceAssetCid: string,
   body: TripoGenerationInput,
 ): Promise<Response | undefined> {
-  const { prompt, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality } = body;
+  const { prompt, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, textureVersion, delight } = body;
   const fileToken = await provider.uploadSource({ kind: "cid", cid: sourceAssetCid });
   const source: SourceRef = { kind: "fileToken", fileToken };
 
@@ -490,7 +496,7 @@ async function startSourceFollowUp(
   // retexture (schema guarantees exactly one action flag)
   if (retexture) {
     console.log(`[GEN] starting retexture source=${sourceAssetCid}`);
-    const refineId = await provider.retexture({ prompt: prompt as string, source, textureQuality });
+    const refineId = await provider.retexture({ prompt: prompt as string, source, textureQuality, textureVersion, delight });
     const taskId = registerTask({ tripoTaskId: refineId, providerKey: key, userAddress });
     return c.json({ taskId, provider: "tripo3d", status: "running", refined: true }, 202);
   }
@@ -510,13 +516,20 @@ async function startFreshGeneration(
   userAddress: string,
   body: TripoGenerationInput,
 ): Promise<Response> {
-  const { prompt, textureQuality, imageData, imageMime, images } = body;
+  const { prompt, textureQuality, tripoModel, textureVersion, delight, faceLimit, imageData, imageMime, images } = body;
   // Do not log user-authored prompt text — it may contain PII. Log only the
   // non-sensitive input mode (text / image / multiview).
   const inputKind = images ? "multiview" : imageData ? "image" : "text";
   console.log(
     `[GEN] using Tripo3D adapter input=${inputKind}${images ? ` views=${images.length}` : ""}`,
   );
+  const tripoOptions = {
+    textureQuality,
+    model: tripoModel,
+    textureVersion,
+    delight,
+    faceLimit,
+  };
   const tripoTaskId = images
     ? await provider.multiviewToModel({
         views: images.map((img: { imageData: string; imageMime: string; view: string }) => ({
@@ -524,15 +537,15 @@ async function startFreshGeneration(
           image: Buffer.from(img.imageData, "base64"),
           mime: img.imageMime,
         })) as MultiviewImage[],
-        textureQuality,
+        ...tripoOptions,
       })
     : imageData
       ? await provider.imageToModel({
           image: Buffer.from(imageData, "base64"),
           mime: imageMime as string,
-          textureQuality,
+          ...tripoOptions,
         })
-      : await provider.textToModel({ prompt: prompt as string, textureQuality });
+      : await provider.textToModel({ prompt: prompt as string, ...tripoOptions });
   const taskId = registerTask({
     tripoTaskId,
     providerKey: key,

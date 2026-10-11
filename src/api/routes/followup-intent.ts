@@ -14,28 +14,10 @@ import { sendError } from "../errors.ts";
 import authenticate from "../authentication.ts";
 import type { AuthEnv } from "../authentication.ts";
 import { followupIntentRateLimit } from "../rate-limiter.ts";
+import { jevConfig } from "./jev-env.ts";
+import type { JevRouteDeps } from "./jev-env.ts";
 
-export interface FollowupIntentDeps {
-  /** Jev transport, injected by tests. */
-  fetchImpl?: typeof fetch;
-}
-
-/**
- * Jev wiring from the environment, read per request.
- * @returns null when JEV_API_KEY is unset.
- */
-function jevConfig(fetchImpl?: typeof fetch) {
-  const apiKey = (process.env.JEV_API_KEY ?? "").trim();
-  if (!apiKey) return null;
-  const baseUrl = (process.env.JEV_BASE_URL ?? "").trim();
-  const model = (process.env.JEV_MODEL ?? "").trim();
-  return {
-    apiKey,
-    ...(baseUrl ? { baseUrl } : {}),
-    ...(model ? { model } : {}),
-    ...(fetchImpl ? { fetchImpl } : {}),
-  };
-}
+export type FollowupIntentDeps = JevRouteDeps;
 
 export default function followupIntentRoutes(deps: FollowupIntentDeps = {}) {
   const app = new Hono<AuthEnv>();

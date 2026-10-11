@@ -112,10 +112,28 @@ export const generateAssetSchema = z
     // root displacement.
     animateInPlace: z.boolean().optional(),
     animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
-    // Texture quality (tripo3d only): generation + retexture.
-    textureQuality: z.enum(["standard", "detailed", "extreme"]).optional(),
-    // Smart retopology polygon budget (tripo3d only): adaptive when omitted.
-    faceLimit: z.number().int().min(500).max(20000).optional(),
+    // Texture quality (tripo3d only): generation + retexture. "fast" needs
+    // the v3.5 texture model — the adapter auto-selects it when no explicit
+    // textureVersion is given (Tripo rejects "fast" otherwise, code 1004).
+    textureQuality: z.enum(["standard", "detailed", "extreme", "fast"]).optional(),
+    // Geometry model override (tripo3d only): P-series geometry models or a
+    // pinned v3/v2.5 line. Defaults to the env-pinned TRIPO_3D_MODEL.
+    tripoModel: z.enum([
+      "v3.1-20260211",
+      "v3.0-20250812",
+      "v2.5-20250123",
+      "P1-20260311",
+      "P2-20260801",
+    ]).optional(),
+    // Texture model line (tripo3d only): v3.5 unlocks texture_quality "fast"
+    // and the delight flag.
+    textureVersion: z.enum(["v3.5-20260815", "v3.0-20250812", "v2.5-20250123"]).optional(),
+    // Strip baked-in lighting (tripo3d only); forwarded solely when the
+    // resolved texture_version is v3.5-20260815.
+    delight: z.boolean().optional(),
+    // Face budget (tripo3d only): 48–2,000,000 at generation; the retopo
+    // (decimate) path still targets 500–20,000 upstream.
+    faceLimit: z.number().int().min(48).max(2000000).optional(),
     // Image-to-3D (tripo3d only): base64 image bytes + MIME type.
     imageData: z
       .string()
@@ -425,4 +443,11 @@ export const followupIntentSchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   modelName: z.string().max(200).optional(),
   actions: z.array(z.enum(["retexture", "retopo", "auto-rig", "animate"])).min(1).max(4),
+});
+
+/** Body of POST /api/v1/generation-advice. */
+export const generationAdviceSchema = z.object({
+  prompt: z.string().min(1, "prompt is required").max(1024),
+  hasImage: z.boolean().optional(),
+  cadAvailable: z.boolean().optional(),
 });

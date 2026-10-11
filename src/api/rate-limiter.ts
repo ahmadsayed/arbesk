@@ -96,6 +96,16 @@ export const LIMITER_SPECS: Record<string, LimiterSpec> = {
     windowMs: HOUR_MS,
     message: "Follow-up intent rate limit exceeded.",
   },
+  /**
+   * One Jev call per generation prompt (~1k input tokens). Same shape as the
+   * follow-up limiter: it only bounds a client calling the advisor in a loop,
+   * and a hit just costs the client its default engine/config choice.
+   */
+  generationAdvice: {
+    max: () => Number(process.env.GENERATION_ADVICE_RATE_LIMIT_MAX || 120),
+    windowMs: HOUR_MS,
+    message: "Generation advice rate limit exceeded.",
+  },
 };
 
 /**
@@ -252,6 +262,7 @@ export const emailOtpVerifyRateLimit = limiters.emailOtpVerify.middleware;
 export const walletRelayRateLimit = limiters.walletRelay.middleware;
 export const cadRateLimit = limiters.cad.middleware;
 export const followupIntentRateLimit = limiters.followupIntent.middleware;
+export const generationAdviceRateLimit = limiters.generationAdvice.middleware;
 
 /**
  * Generation rate-limit middleware.

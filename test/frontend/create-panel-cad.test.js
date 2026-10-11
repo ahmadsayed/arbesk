@@ -151,9 +151,10 @@ const FRAGMENT = `
   <button id="clearChatBtn" type="button"></button>
   <div id="assetNameDisplay" class="form-input">Untitled Asset</div>
   <details id="composerSettings" class="composer-settings" open>
-    <summary class="composer-settings-summary">Provider &amp; Quality</summary>
+    <summary class="composer-settings-summary">Provider</summary>
   </details>
   <select id="providerSelect" class="form-select">
+    <option value="auto">Auto (recommended)</option>
     <option value="mock">Mock (Local)</option>
     <option value="tripo3d">Tripo 3D</option>
     <option value="cad">Parametric CAD</option>
@@ -161,13 +162,6 @@ const FRAGMENT = `
   <button id="providerKeyBtn" class="provider-key-btn" type="button" hidden></button>
   <p id="providerKeyHint" class="provider-key-hint" hidden></p>
   <p id="providerBalance" class="provider-balance" hidden></p>
-  <div id="textureQualityRow" class="form-group" hidden>
-    <select id="textureQualitySelect" class="form-select">
-      <option value="standard">Standard</option>
-      <option value="detailed">Detailed (slower, more credits)</option>
-      <option value="extreme">Extreme 8K (most credits)</option>
-    </select>
-  </div>
   <button id="imageAttachBtn" class="messagebar-attach" type="button" hidden></button>
   <input id="imageAttachInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
   <div id="imageAttachChips" class="image-attach-chips" hidden></div>
@@ -725,7 +719,7 @@ describe("cad option availability gating", () => {
 
     expect(document.querySelector('option[value="cad"]')).toBeNull();
     // The select falls back to a known provider rather than a dead value.
-    expect(document.getElementById("providerSelect").value).toBe("mock");
+    expect(document.getElementById("providerSelect").value).toBe("auto");
   });
 
   test("keeps the cad option when the config fetch fails (default visible)", async () => {

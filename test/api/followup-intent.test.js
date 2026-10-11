@@ -19,7 +19,7 @@ const WALLET = "0x1234567890123456789012345678901234567890";
 const ALL = ["retexture", "retopo", "auto-rig", "animate"];
 
 /** A Jev reply body with the given action distribution and motion nouls. */
-function reply({ choice = "animate", confidence = 0.95, motions = {}, travel = 0.1 } = {}) {
+function reply({ choice = "animate", confidence = 0.95, motions = {}, travel = 0.1, texture, retopo } = {}) {
   const answers = {
     [intent.ACTION_QUESTION]: { type: "choice", choice, confidence, probabilities: { [choice]: confidence } },
     [intent.TRAVEL_QUESTION]: { type: "noul", noul: travel },
@@ -27,6 +27,8 @@ function reply({ choice = "animate", confidence = 0.95, motions = {}, travel = 0
   for (const [id, noul] of Object.entries(motions)) {
     answers[intent.MOTION_PREFIX + id] = { type: "noul", noul };
   }
+  if (texture) answers[intent.TEXTURE_QUALITY_QUESTION] = { type: "choice", choice: texture, confidence: 0.9 };
+  if (retopo) answers[intent.RETOPO_TIER_QUESTION] = { type: "choice", choice: retopo, confidence: 0.9 };
   return { model: "jev-latest", answers, usage: { input_tokens: 1100, output_tokens: 0 } };
 }
 
@@ -51,6 +53,16 @@ describe("followupQuestions", () => {
       .map((k) => k.slice(intent.MOTION_PREFIX.length));
     expect(motionIds).toEqual(Object.keys(intent.ANIMATION_MOTIONS));
     expect(withAnimate[intent.TRAVEL_QUESTION].type).toBe("noul");
+  });
+
+  test("asks texture quality and retopo tier on every request, with or without animate", () => {
+    for (const actions of [["retexture", "retopo"], ALL]) {
+      const q = intent.followupQuestions(actions);
+      expect(q[intent.TEXTURE_QUALITY_QUESTION].type).toBe("choice");
+      expect(Object.keys(q[intent.TEXTURE_QUALITY_QUESTION].criteria)).toEqual(["fast", "standard", "detailed", "extreme"]);
+      expect(q[intent.RETOPO_TIER_QUESTION].type).toBe("choice");
+      expect(Object.keys(q[intent.RETOPO_TIER_QUESTION].criteria)).toEqual(["light", "medium", "heavy"]);
+    }
   });
 });
 
@@ -82,6 +94,20 @@ describe("readFollowupIntent", () => {
 
   test("refuses an action that was not offered", () => {
     expect(() => intent.readFollowupIntent(reply({ choice: "retopo" }), ["animate"])).toThrow(/not offered/);
+  });
+
+  test("maps the retopo tier to its face budget", () => {
+    expect(intent.readFollowupIntent(reply({ retopo: "heavy" }), ALL).retopoFaceLimit).toBe(2000);
+    expect(intent.readFollowupIntent(reply({ retopo: "medium" }), ALL).retopoFaceLimit).toBe(8000);
+    expect(intent.readFollowupIntent(reply({ retopo: "light" }), ALL).retopoFaceLimit).toBe(20000);
+  });
+
+  test("passes the texture quality through and tolerates absent answers", () => {
+    expect(intent.readFollowupIntent(reply({ texture: "extreme" }), ALL).textureQuality).toBe("extreme");
+
+    const read = intent.readFollowupIntent(reply(), ALL);
+    expect(read.textureQuality).toBeUndefined();
+    expect(read.retopoFaceLimit).toBeUndefined();
   });
 });
 

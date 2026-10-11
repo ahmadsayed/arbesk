@@ -87,6 +87,8 @@ test.describe("resize regression", () => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await connectStudio(page);
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);

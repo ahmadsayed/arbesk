@@ -146,12 +146,6 @@ const FRAGMENT = `
   <div id="providerKeyHint"></div>
   <span id="bottomBarProvider"></span>
   <div id="providerBalance"></div>
-  <div id="textureQualityRow"></div>
-  <select id="textureQualitySelect">
-    <option value="standard">Standard</option>
-    <option value="detailed">Detailed</option>
-    <option value="extreme">Extreme</option>
-  </select>
   <details id="composerSettings"></details>
   <div id="refineIndicator">
     <span id="refineIndicatorText"></span>

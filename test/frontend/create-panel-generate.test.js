@@ -41,10 +41,14 @@ const mockRenderChatProvenance = jest.fn();
 const mockClearHistoryBubbles = jest.fn();
 
 const mockGenerateAsset = jest.fn();
+const mockGenerateCadAsset = jest.fn();
 const mockCancelGenerationTask = jest.fn();
 const mockGetOrCreateSession = jest.fn();
 const mockGetProviderBalance = jest.fn();
 const mockJudgeFollowupIntent = jest.fn();
+
+const mockFetchGenerationAdvice = jest.fn();
+const mockDecideGenerationPlan = jest.fn(() => ({ kind: "fallback" }));
 
 const mockCreateChatPreview = jest.fn();
 const mockDisposeChatPreview = jest.fn();
@@ -100,10 +104,54 @@ mock.module("../../frontend/src/js/services/api.js", () => ({
     }
   },
   generateAsset: mockGenerateAsset,
+  generateCadAsset: mockGenerateCadAsset,
   cancelGenerationTask: mockCancelGenerationTask,
   getOrCreateSession: mockGetOrCreateSession,
   getProviderBalance: mockGetProviderBalance,
   judgeFollowupIntent: mockJudgeFollowupIntent,
+}));
+// The advisor policy is mocked: fetchGenerationAdvice resolves null (no Jev
+// key, an outage) by default so decideGenerationPlan sees no advice.
+// CONFIG_BUNDLES is a copy of the real mapping (pinned by
+// generation-advice.test.js) so the panel's pick→fields wiring is exercised.
+mock.module("../../frontend/src/js/ui/generation-advice.js", () => ({
+  CONFIG_BUNDLES: {
+    "fast-draft": {
+      id: "fast-draft",
+      label: "Fast draft",
+      blurb: "Tripo v3.1 · fast textures",
+      fields: { tripoModel: "v3.1-20260211", textureQuality: "fast", textureVersion: "v3.5-20260815", delight: true },
+    },
+    balanced: {
+      id: "balanced",
+      label: "Balanced",
+      blurb: "Tripo v3.1 · standard quality",
+      fields: { tripoModel: "v3.1-20260211", textureQuality: "standard" },
+    },
+    "hero-detail": {
+      id: "hero-detail",
+      label: "Hero detail",
+      blurb: "Tripo v3.1 · detailed textures",
+      fields: { tripoModel: "v3.1-20260211", textureQuality: "detailed" },
+    },
+    "game-ready": {
+      id: "game-ready",
+      label: "Game-ready (low poly)",
+      blurb: "Tripo P1 · 5K faces",
+      fields: { tripoModel: "P1-20260311", textureQuality: "standard", faceLimit: 5000 },
+    },
+    "clean-topo": {
+      id: "clean-topo",
+      label: "Clean topology (P2)",
+      blurb: "Tripo P2 · clean topology",
+      fields: { tripoModel: "P2-20260801", textureQuality: "standard" },
+    },
+  },
+  decideGenerationPlan: mockDecideGenerationPlan,
+  fetchGenerationAdvice: mockFetchGenerationAdvice,
+}));
+mock.module("../../frontend/src/js/services/app-config.js", () => ({
+  getConfig: jest.fn(async () => ({ cadGeneration: true })),
 }));
 mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
   createChatPreview: mockCreateChatPreview,
@@ -141,8 +189,10 @@ const FRAGMENT = `
   <div id="multiviewHint"></div>
   <span id="assetNameDisplay"></span>
   <select id="providerSelect">
+    <option value="auto">Auto (recommended)</option>
     <option value="mock">Mock</option>
     <option value="tripo3d">Tripo 3D</option>
+    <option value="cad">Parametric CAD</option>
   </select>
   <select id="tierSelect">
     <option value="">Auto</option>
@@ -154,12 +204,6 @@ const FRAGMENT = `
   <div id="providerKeyHint"></div>
   <span id="bottomBarProvider"></span>
   <div id="providerBalance"></div>
-  <div id="textureQualityRow"></div>
-  <select id="textureQualitySelect">
-    <option value="standard">Standard</option>
-    <option value="detailed">Detailed</option>
-    <option value="extreme">Extreme</option>
-  </select>
   <details id="composerSettings"></details>
   <div id="refineIndicator">
     <span id="refineIndicatorText"></span>
@@ -168,6 +212,8 @@ const FRAGMENT = `
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
+/** @type {typeof import("../../frontend/src/js/ui/create-panel.js")} */
+let panel;
 /** @type {typeof import("../../frontend/src/js/services/api.js")} */
 let api;
 let walletState;
@@ -175,7 +221,6 @@ let pendingGens;
 let promptInput;
 let generateBtn;
 let providerSelect;
-let textureQualitySelect;
 
 const GENERATION_RESULT = {
   assetManifestCid: "bafyAssetCid",
@@ -185,14 +230,13 @@ const GENERATION_RESULT = {
 
 beforeAll(async () => {
   document.body.innerHTML = FRAGMENT;
-  await import("../../frontend/src/js/ui/create-panel.js");
+  panel = await import("../../frontend/src/js/ui/create-panel.js");
   api = await import("../../frontend/src/js/services/api.js");
   ({ walletState } = await import("../../frontend/src/js/state/wallet-state.js"));
   pendingGens = await import("../../frontend/src/js/state/pending-generations.js");
   promptInput = document.getElementById("promptInput");
   generateBtn = document.getElementById("generateBtn");
   providerSelect = document.getElementById("providerSelect");
-  textureQualitySelect = document.getElementById("textureQualitySelect");
 });
 
 beforeEach(() => {
@@ -200,13 +244,16 @@ beforeEach(() => {
   localStorage.clear();
   walletState.reset();
   pendingGens._resetPendingGenerations();
+  panel._resetAdvisorDispatch();
   assetDomainState.name = null;
   assetDomainState.activeCid = null;
   assetDomainState.latestCid = null;
   assetDomainState.tokenId = null;
 
   promptInput.value = "";
-  textureQualitySelect.value = "standard";
+  // No Jev advice by default: the advisor falls back to the plain route.
+  mockFetchGenerationAdvice.mockResolvedValue(null);
+  mockDecideGenerationPlan.mockReturnValue({ kind: "fallback" });
   // Switching back to the mock provider discards attached images (module
   // behavior) — resets the image state leaked from a previous test.
   providerSelect.value = "mock";
@@ -222,6 +269,13 @@ beforeEach(() => {
 
   mockGetOrCreateSession.mockResolvedValue("session-token");
   mockGenerateAsset.mockResolvedValue({ ...GENERATION_RESULT });
+  mockGenerateCadAsset.mockResolvedValue({
+    assetManifestCid: "bafyCadManifest",
+    sourceAssetCid: "bafyCadSource",
+    format: "3mf",
+    path: "asset.3mf",
+    design: { nodes: [] },
+  });
   mockGetProviderBalance.mockResolvedValue({ balance: 5 });
   mockShowCustomDialog.mockResolvedValue(null);
   // No asset bubble handle: skips preview wiring, keeps the flow linear.
@@ -304,10 +358,12 @@ test("happy path (mock provider): user message, payload shape, cleanup", async (
   });
   expect(args.nodeId).toMatch(/^untitled_asset_\d+$/);
   expect(args.transformMatrix).toHaveLength(16);
-  // Mock provider: no BYOK key, no texture quality, no stoppable wiring.
+  // Mock provider: no BYOK key, no texture quality, no stoppable wiring, and
+  // the advisor is never consulted.
   expect(args.providerKey).toBeUndefined();
   expect(args.textureQuality).toBeUndefined();
   expect(args.signal).toBeUndefined();
+  expect(mockFetchGenerationAdvice).not.toHaveBeenCalled();
 
   // Result registered as a pending generation + create pulse dismissed.
   const records = pendingGens.listPendingGenerations();
@@ -356,24 +412,55 @@ test("Enter key (without shift) submits like the Generate button", async () => {
   expect(mockGenerateAsset.mock.calls[0][0].prompt).toBe("a rock");
 });
 
-test("real provider without a BYOK key opens the key dialog instead of generating", async () => {
+test("tripo-bound generation without a BYOK key posts the key message and chip instead of generating", async () => {
   connectWallet();
   providerSelect.value = "tripo3d";
   promptInput.value = "a rock";
   await clickGenerate();
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  // The guided gate: explanation + platform link + one chip, no bare dialog.
+  expect(mockShowCustomDialog).not.toHaveBeenCalled();
+  const [text, choices, onPick, options] = mockAddChoiceMessage.mock.calls[0];
+  expect(text).toContain("add your Tripo 3D API key");
+  expect(choices).toEqual([{ label: "Add API key", value: "add-key" }]);
+  expect(options.link).toEqual({
+    href: "https://platform.tripo3d.ai",
+    label: "Get a key at platform.tripo3d.ai",
+  });
+  expect(generateBtn.disabled).toBe(false);
+
+  // Picking the chip opens the key dialog; saving a key retries the pending
+  // generation with the same route.
+  let resolveDialog;
+  mockShowCustomDialog.mockReturnValue(
+    new Promise((r) => {
+      resolveDialog = r;
+    }),
+  );
+  onPick("add-key");
+  await flush();
   expect(mockShowCustomDialog).toHaveBeenCalledWith(
     "Tripo 3D API Key",
-    expect.any(HTMLElement)
+    expect.any(HTMLElement),
   );
   expect(mockGenerateAsset).not.toHaveBeenCalled();
-  expect(generateBtn.disabled).toBe(false);
+
+  localStorage.setItem("arbesk-byok-key", "sk-late-key");
+  resolveDialog(null);
+  await flush();
+  await flush();
+  await flush();
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const retried = mockGenerateAsset.mock.calls[0][0];
+  expect(retried.provider).toBe("tripo3d");
+  expect(retried.providerKey).toBe("sk-late-key");
+  expect(retried.textureQuality).toBe("standard");
 });
 
-test("tripo3d with a key sends providerKey, texture quality, and stoppable wiring", async () => {
+test("tripo3d with a key sends providerKey, standard quality, and stoppable wiring", async () => {
   connectWallet();
   localStorage.setItem("arbesk-byok-key", "sk-test-key");
   providerSelect.value = "tripo3d";
-  textureQualitySelect.value = "detailed";
   promptInput.value = "a rock";
   await clickGenerate();
 
@@ -381,7 +468,9 @@ test("tripo3d with a key sends providerKey, texture quality, and stoppable wirin
   const args = mockGenerateAsset.mock.calls[0][0];
   expect(args.provider).toBe("tripo3d");
   expect(args.providerKey).toBe("sk-test-key");
-  expect(args.textureQuality).toBe("detailed");
+  // No advice, no bundle: the old selector's default survives.
+  expect(args.textureQuality).toBe("standard");
+  expect(args.tripoModel).toBeUndefined();
   expect(args.signal).toBeInstanceOf(AbortSignal);
   expect(typeof args.onTaskId).toBe("function");
   expect(typeof args.onProgress).toBe("function");
@@ -658,4 +747,192 @@ test("the working message is removed in finally, success or failure", async () =
   mockGenerateAsset.mockRejectedValue(new Error("boom"));
   await clickGenerate();
   expect(working.remove).toHaveBeenCalledTimes(2);
+});
+
+// ─── Generation advisor (Jev) ───
+
+const ADVICE = {
+  provider: "tripo3d",
+  providerConfidence: 0.9,
+  providerProbabilities: { tripo3d: 0.9 },
+  config: "balanced",
+  configConfidence: 0.9,
+  configProbabilities: { balanced: 0.9 },
+};
+
+test("advisor auto-pick threads the config bundle fields into the dispatch", async () => {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-test-key");
+  providerSelect.value = "auto";
+  mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
+  mockDecideGenerationPlan.mockReturnValue({
+    kind: "auto",
+    provider: "tripo3d",
+    configId: "game-ready",
+  });
+  promptInput.value = "a low-poly treasure chest";
+  await clickGenerate();
+
+  expect(mockFetchGenerationAdvice).toHaveBeenCalledWith("a low-poly treasure chest", {
+    hasImage: false,
+    cadAvailable: true,
+  });
+  expect(mockAddChatMessage).toHaveBeenCalledWith(
+    "system",
+    "Using Game-ready (low poly) — Tripo P1 · 5K faces.",
+  );
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateAsset.mock.calls[0][0];
+  expect(args).toMatchObject({
+    provider: "tripo3d",
+    providerKey: "sk-test-key",
+    tripoModel: "P1-20260311",
+    textureQuality: "standard",
+    faceLimit: 5000,
+  });
+});
+
+test("advisor auto-pick of CAD flips the provider and runs the CAD flow", async () => {
+  connectWallet();
+  providerSelect.value = "auto";
+  mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
+  mockDecideGenerationPlan.mockReturnValue({ kind: "auto", provider: "cad" });
+  promptInput.value = "a 40 by 30 by 20 mm bracket";
+  await clickGenerate();
+
+  expect(mockAddChatMessage).toHaveBeenCalledWith(
+    "system",
+    "Routing to Parametric CAD — this looks like an engineering part.",
+  );
+  expect(providerSelect.value).toBe("cad");
+  expect(localStorage.getItem("arbesk-provider")).toBe("cad");
+  expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+});
+
+test("an unsure advisor asks; the Tripo pick dispatches with that config", async () => {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-test-key");
+  providerSelect.value = "auto";
+  mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
+  mockDecideGenerationPlan.mockReturnValue({
+    kind: "ask",
+    options: [
+      { value: "tripo3d:hero-detail", label: "Hero detail", recommended: true },
+      { value: "cad", label: "Parametric CAD", recommended: false },
+    ],
+  });
+  promptInput.value = "something ambiguous";
+  await clickGenerate();
+
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  const [text, choices, onPick] = mockAddChoiceMessage.mock.calls[0];
+  expect(text).toContain("my recommendation");
+  expect(choices).toEqual([
+    { value: "tripo3d:hero-detail", label: "Hero detail (Recommended)" },
+    { value: "cad", label: "Parametric CAD" },
+  ]);
+
+  onPick("tripo3d:hero-detail");
+  await flush();
+  await flush();
+  await flush();
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateAsset.mock.calls[0][0];
+  expect(args).toMatchObject({
+    provider: "tripo3d",
+    tripoModel: "v3.1-20260211",
+    textureQuality: "detailed",
+  });
+  expect(mockAddChatMessage).toHaveBeenCalledWith(
+    "system",
+    "Using Hero detail — Tripo v3.1 · detailed textures.",
+  );
+});
+
+test("an unsure advisor asks; the CAD pick flips the provider and dispatches CAD", async () => {
+  connectWallet();
+  providerSelect.value = "auto";
+  mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
+  mockDecideGenerationPlan.mockReturnValue({
+    kind: "ask",
+    options: [
+      { value: "cad", label: "Parametric CAD", recommended: true },
+      { value: "tripo3d:balanced", label: "Balanced", recommended: false },
+    ],
+  });
+  promptInput.value = "maybe a gear?";
+  await clickGenerate();
+
+  const [, , onPick] = mockAddChoiceMessage.mock.calls[0];
+  onPick("cad");
+  await flush();
+  await flush();
+  await flush();
+  expect(providerSelect.value).toBe("cad");
+  expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+});
+
+test("advice failure (null) falls back to Tripo with the balanced defaults", async () => {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-test-key");
+  providerSelect.value = "auto";
+  mockFetchGenerationAdvice.mockResolvedValue(null); // 503 / network failure
+  promptInput.value = "a rock";
+  await clickGenerate();
+
+  expect(mockDecideGenerationPlan).toHaveBeenCalledWith(null, {
+    cadAvailable: true,
+    provider: "auto",
+  });
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateAsset.mock.calls[0][0];
+  expect(args).toMatchObject({
+    provider: "tripo3d",
+    tripoModel: "v3.1-20260211",
+    textureQuality: "standard",
+  });
+});
+
+test("auto without a BYOK key posts the key message and retries with the same bundle", async () => {
+  connectWallet();
+  providerSelect.value = "auto";
+  mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
+  mockDecideGenerationPlan.mockReturnValue({
+    kind: "auto",
+    provider: "tripo3d",
+    configId: "game-ready",
+  });
+  promptInput.value = "a low-poly treasure chest";
+  await clickGenerate();
+
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  const [text, , onPick] = mockAddChoiceMessage.mock.calls[0];
+  expect(text).toContain("add your Tripo 3D API key");
+
+  let resolveDialog;
+  mockShowCustomDialog.mockReturnValue(
+    new Promise((r) => {
+      resolveDialog = r;
+    }),
+  );
+  onPick("add-key");
+  await flush();
+  localStorage.setItem("arbesk-byok-key", "sk-late-key");
+  resolveDialog(null);
+  await flush();
+  await flush();
+  await flush();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateAsset.mock.calls[0][0];
+  // The retry keeps the advisor's route — no second Jev round-trip.
+  expect(mockFetchGenerationAdvice).toHaveBeenCalledTimes(1);
+  expect(args).toMatchObject({
+    provider: "tripo3d",
+    tripoModel: "P1-20260311",
+    textureQuality: "standard",
+    faceLimit: 5000,
+  });
 });

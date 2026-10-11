@@ -47,16 +47,16 @@ export function createTripoProvider(config: GenerationConfig): GenerationProvide
     capabilities,
     can: (cap) => capabilities.has(cap),
 
-    textToModel: ({ prompt, textureQuality }) => {
+    textToModel: ({ prompt, textureQuality, model, textureVersion, delight, faceLimit }) => {
       requireCapability(id, capabilities, "text-to-3d");
-      return createTask(prompt, apiKey, { textureQuality });
+      return createTask(prompt, apiKey, { textureQuality, model, textureVersion, delight, faceLimit });
     },
-    imageToModel: async ({ image, mime, textureQuality }) => {
+    imageToModel: async ({ image, mime, textureQuality, model, textureVersion, delight, faceLimit }) => {
       requireCapability(id, capabilities, "image-to-3d");
       const token = await uploadImage(Buffer.from(image), mime, apiKey);
-      return createImageTask(token, apiKey, { textureQuality });
+      return createImageTask(token, apiKey, { textureQuality, model, textureVersion, delight, faceLimit });
     },
-    multiviewToModel: async ({ views, textureQuality }) => {
+    multiviewToModel: async ({ views, textureQuality, model, textureVersion, delight, faceLimit }) => {
       requireCapability(id, capabilities, "multiview-to-3d");
       const pairs = await Promise.all(
         views.map(async (v) => ({
@@ -68,12 +68,16 @@ export function createTripoProvider(config: GenerationConfig): GenerationProvide
       for (const pair of pairs) tokens[pair.view] = pair.token;
       return createMultiviewTask(tokens as unknown as MultiviewViewTokens, apiKey, {
         textureQuality,
+        model,
+        textureVersion,
+        delight,
+        faceLimit,
       });
     },
     uploadSource: (source) => sourceToken(source),
-    retexture: async ({ prompt, source, textureQuality }) => {
+    retexture: async ({ prompt, source, textureQuality, textureVersion, delight }) => {
       requireCapability(id, capabilities, "retexture");
-      return createRefineTask(prompt, await sourceToken(source), apiKey, { textureQuality });
+      return createRefineTask(prompt, await sourceToken(source), apiKey, { textureQuality, textureVersion, delight });
     },
     retopo: async ({ source, faceLimit, quad }) => {
       requireCapability(id, capabilities, "retopo");

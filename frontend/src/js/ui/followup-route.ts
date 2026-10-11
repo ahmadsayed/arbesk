@@ -16,6 +16,10 @@ export interface FollowupIntent {
   probabilities: Record<string, number>;
   animations: string[];
   inPlace: boolean;
+  /** Texture tier implied by the request (speculative reading). */
+  textureQuality?: "fast" | "standard" | "detailed" | "extreme";
+  /** Retopo face budget implied by the request (speculative reading). */
+  retopoFaceLimit?: number;
 }
 
 /** One option offered when the reading is too uncertain to act on. */

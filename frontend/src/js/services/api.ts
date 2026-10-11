@@ -382,8 +382,14 @@ export interface GenerateAssetParams {
   animateInPlace?: boolean;
   /** target faces for retopo (adaptive when omitted) */
   faceLimit?: number;
-  /** "detailed" for HD textures (tripo3d) */
+  /** "fast" | "standard" | "detailed" | "extreme" texture tier (tripo3d) */
   textureQuality?: string;
+  /** Tripo text-to-model endpoint version, e.g. "v3.1-20260211" */
+  tripoModel?: string;
+  /** Tripo texture pipeline version, e.g. "v3.5-20260815" (fast-draft bundle) */
+  textureVersion?: string;
+  /** strip baked-in lighting from the texture (fast-draft bundle) */
+  delight?: boolean;
   /** base64 image bytes for Tripo3D image-to-3D (starts a fresh model; skips refine) */
   imageData?: string;
   /** MIME type of imageData (image/jpeg, image/png, image/webp) */
@@ -447,6 +453,9 @@ function buildGenerationBody(args: any, chainId: number | null): Record<string, 
     animations,
     faceLimit,
     textureQuality,
+    tripoModel,
+    textureVersion,
+    delight,
     imageData,
     imageMime,
     images,
@@ -466,6 +475,9 @@ function buildGenerationBody(args: any, chainId: number | null): Record<string, 
       ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations, ...(animateInPlace && { animateInPlace: true }) }), ...(rigModel && { rigModel }) }),
     }),
     ...(textureQuality && { textureQuality }),
+    ...(tripoModel && { tripoModel }),
+    ...(textureVersion && { textureVersion }),
+    ...(delight && { delight: true }),
     ...(imageData && { imageData, imageMime }),
     // Multiview (2+ images): canonical-ordered views, no legacy imageData,
     // no imageName on the wire.
@@ -659,6 +671,9 @@ export async function generateAsset({
   animations,
   faceLimit,
   textureQuality,
+  tripoModel,
+  textureVersion,
+  delight,
   imageData,
   imageMime,
   imageName,
@@ -689,6 +704,9 @@ export async function generateAsset({
       animations,
       faceLimit,
       textureQuality,
+      tripoModel,
+      textureVersion,
+      delight,
       imageData,
       imageMime,
       images,

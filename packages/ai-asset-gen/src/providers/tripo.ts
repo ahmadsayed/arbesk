@@ -14,7 +14,14 @@ const TRIPO_RIG_BIPED_MODEL =
   process.env.TRIPO_3D_RIG_BIPED_MODEL || "v1.0-20240301";
 
 /** Valid Tripo texture_quality levels (generation ≥ v3.0 and models/texture). */
-const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
+const TEXTURE_QUALITIES = ["standard", "detailed", "extreme", "fast"];
+
+/**
+ * Texture model line that unlocks texture_quality "fast" and the delight
+ * flag. Tripo rejects "fast" with code 1004 on older texture models, so the
+ * field auto-selects when quality is "fast" and no explicit version is set.
+ */
+const TEXTURE_V35_VERSION = "v3.5-20260815";
 
 /**
  * Upstream timeout for calls that make Tripo ingest an uploaded model
@@ -24,10 +31,21 @@ const TEXTURE_QUALITIES = ["standard", "detailed", "extreme"];
  */
 const TRIPO_INGEST_TIMEOUT_MS = 240_000;
 
-/** Options shared by generation task creators. */
+/** Options shared by generation task creators (kept name for API compat). */
 export interface TextureQualityOptions {
   /** One of TEXTURE_QUALITIES. */
   textureQuality?: string;
+  /** Geometry model override (e.g. a P-series id); defaults to
+   *  TRIPO_MODEL_VERSION. Only sent when provided. */
+  model?: string;
+  /** Texture model line ("v3.5-20260815" enables fast quality + delight).
+   *  Only sent when provided. */
+  textureVersion?: string;
+  /** Strip baked-in lighting; only meaningful with the v3.5 texture model, so
+   *  it is sent only when texture_version resolves to "v3.5-20260815". */
+  delight?: boolean;
+  /** Target face budget for the generated mesh; generation calls only. */
+  faceLimit?: number;
 }
 
 /** file_token per view, from uploadImage(). */
@@ -198,6 +216,53 @@ function textureQualityField(options: TextureQualityOptions): { texture_quality?
 }
 
 /**
+ * Maps the texture model options to Tripo's texture_version/delight fields.
+ * @remarks textureQuality "fast" requires the v3.5 texture model (Tripo
+ *   rejects it with code 1004 otherwise), so it auto-selects v3.5 when no
+ *   explicit textureVersion is given. `delight` strips baked-in lighting and
+ *   exists only on the v3.5 texture line, so it is forwarded solely when the
+ *   resolved texture_version is v3.5.
+ */
+function textureModelFields(options: TextureQualityOptions): {
+  texture_version?: string;
+  delight?: boolean;
+} {
+  const version =
+    options.textureVersion ||
+    (options.textureQuality === "fast" ? TEXTURE_V35_VERSION : undefined);
+  if (!version) return {};
+  return {
+    texture_version: version,
+    ...(options.delight && version === TEXTURE_V35_VERSION && { delight: true }),
+  };
+}
+
+/**
+ * Shared payload fields for the three generation endpoints (text/image/
+ * multiview-to-model): geometry model default, texture flags, meshopt
+ * compression, and the texture option mappings.
+ * @remarks face_limit targets the generated mesh, so it is forwarded here
+ *   only — retexture/decimate build their own payloads.
+ */
+function generationPayload(
+  options: TextureQualityOptions,
+): Record<string, unknown> {
+  return {
+    model: options.model || TRIPO_MODEL_VERSION,
+    texture: true,
+    pbr: true,
+    // Scale to estimated real-world meters — without this Tripo models often
+    // arrive tiny and the Studio camera has to hunt for them.
+    auto_size: true,
+    // Experiment: EXT_meshopt_compression output to measure size/load wins.
+    compress: "geometry",
+    ...textureQualityField(options),
+    ...textureModelFields(options),
+    ...(options.faceLimit && { face_limit: options.faceLimit }),
+  };
+}
+
+/**
  * Create a text-to-3D task.
  * @returns task_id
  */
@@ -209,19 +274,11 @@ export async function createTask(
   requireString(prompt, "prompt");
   requireString(apiKey, "apiKey");
   console.log(
-    `[GEN] Tripo createTask prompt_len=${prompt.length} tq=${options.textureQuality || "standard"}`,
+    `[GEN] Tripo createTask prompt_len=${prompt.length} tq=${options.textureQuality || "standard"} model=${options.model || TRIPO_MODEL_VERSION} face_limit=${options.faceLimit ?? "default"}`,
   );
   const taskId = await startTask("generation/text-to-model", apiKey, {
     prompt,
-    model: TRIPO_MODEL_VERSION,
-    texture: true,
-    pbr: true,
-    // Scale to estimated real-world meters — without this Tripo models often
-    // arrive tiny and the Studio camera has to hunt for them.
-    auto_size: true,
-    // Experiment: EXT_meshopt_compression output to measure size/load wins.
-    compress: "geometry",
-    ...textureQualityField(options),
+    ...generationPayload(options),
   });
   console.log(`[GEN] Tripo task created task_id=${taskId}`);
   return taskId;
@@ -319,17 +376,11 @@ export async function createImageTask(
   requireString(fileToken, "fileToken");
   requireString(apiKey, "apiKey");
   console.log(
-    `[GEN] Tripo createImageTask file_token=${fileToken} tq=${options.textureQuality || "standard"}`,
+    `[GEN] Tripo createImageTask file_token=${fileToken} tq=${options.textureQuality || "standard"} model=${options.model || TRIPO_MODEL_VERSION} face_limit=${options.faceLimit ?? "default"}`,
   );
   const taskId = await startTask("generation/image-to-model", apiKey, {
     file: { file_token: fileToken },
-    model: TRIPO_MODEL_VERSION,
-    texture: true,
-    pbr: true,
-    auto_size: true,
-    // Experiment: EXT_meshopt_compression output to measure size/load wins.
-    compress: "geometry",
-    ...textureQualityField(options),
+    ...generationPayload(options),
   });
   console.log(`[GEN] Tripo image task created task_id=${taskId}`);
   return taskId;
@@ -373,18 +424,12 @@ export async function createMultiviewTask(
   }
   requireString(apiKey, "apiKey");
   console.log(
-    `[GEN] Tripo createMultiviewTask views=${present.join(",")} tq=${options.textureQuality || "standard"}`,
+    `[GEN] Tripo createMultiviewTask views=${present.join(",")} tq=${options.textureQuality || "standard"} model=${options.model || TRIPO_MODEL_VERSION} face_limit=${options.faceLimit ?? "default"}`,
   );
   const taskId = await startTask("generation/multiview-to-model", apiKey, {
     // View-key array in canonical order: [{front: t}, {left: t}, ...].
     inputs: present.map((v) => ({ [v]: viewTokens[v] })),
-    model: TRIPO_MODEL_VERSION,
-    texture: true,
-    pbr: true,
-    auto_size: true,
-    // Experiment: EXT_meshopt_compression output to measure size/load wins.
-    compress: "geometry",
-    ...textureQualityField(options),
+    ...generationPayload(options),
   });
   console.log(`[GEN] Tripo multiview task created task_id=${taskId}`);
   return taskId;
@@ -406,13 +451,18 @@ export async function createRefineTask(
   requireString(prompt, "prompt");
   requireString(fileToken, "fileToken");
   requireString(apiKey, "apiKey");
-  console.log(`[GEN] Tripo refine prompt_len=${prompt.length}`);
+  console.log(`[GEN] Tripo refine prompt_len=${prompt.length} tq=${options.textureQuality || "standard"}${options.model ? ` model=${options.model}` : ""}`);
   const taskId = await startTask("models/texture", apiKey, {
     input: fileToken,
     text_prompt: prompt,
     texture: true,
     pbr: true,
+    // No default model here (unlike the generation endpoints) — a model
+    // override is forwarded only when explicitly provided. face_limit never
+    // applies to retexture (geometry is unchanged).
+    ...(options.model && { model: options.model }),
     ...textureQualityField(options),
+    ...textureModelFields(options),
   }, TRIPO_INGEST_TIMEOUT_MS);
   console.log(`[GEN] Tripo refine task created task_id=${taskId}`);
   return taskId;

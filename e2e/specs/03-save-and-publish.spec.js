@@ -27,7 +27,9 @@ test.describe("save and publish", () => {
       "Sign In",
     );
 
-    // 1. Generate → Show in Studio (auto-saves the draft).
+    // 1. Generate → Show in Studio (auto-saves the draft). The composer
+    // defaults to Auto; pin the mock provider (the e2e stack has no Jev key).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);

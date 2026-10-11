@@ -834,6 +834,128 @@ describe("textureQuality", () => {
   });
 });
 
+describe("generation options (model / texture_version / delight / face_limit)", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { task_id: "task_1" } }),
+    });
+  });
+
+  it("keeps the createTask payload byte-identical when no options are given", async () => {
+    await createTask("a knight", "key");
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({
+      prompt: "a knight",
+      model: "v3.1-20260211",
+      texture: true,
+      pbr: true,
+      auto_size: true,
+      compress: "geometry",
+    });
+  });
+
+  it("passes texture_quality fast through", async () => {
+    await createTask("a knight", "key", { textureQuality: "fast" });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.texture_quality).toBe("fast");
+  });
+
+  it("auto-selects the v3.5 texture model for fast quality", async () => {
+    await createTask("a knight", "key", { textureQuality: "fast" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_version).toBe(
+      "v3.5-20260815",
+    );
+  });
+
+  it("an explicit textureVersion wins over the fast auto-select", async () => {
+    await createTask("a knight", "key", {
+      textureQuality: "fast",
+      textureVersion: "v3.0-20250812",
+    });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_version).toBe(
+      "v3.0-20250812",
+    );
+  });
+
+  it("omits texture_version when quality is not fast and no version is given", async () => {
+    await createTask("a knight", "key", { textureQuality: "detailed" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_version).toBeUndefined();
+  });
+
+  it("a model override replaces the default geometry model", async () => {
+    await createTask("a knight", "key", { model: "P1-20260311" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).model).toBe("P1-20260311");
+  });
+
+  it("sends delight only with the v3.5 texture model", async () => {
+    await createTask("a knight", "key", {
+      textureVersion: "v3.5-20260815",
+      delight: true,
+    });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.texture_version).toBe("v3.5-20260815");
+    expect(body.delight).toBe(true);
+
+    global.fetch.mockClear();
+    // fast quality auto-selects v3.5, so delight applies there too.
+    await createTask("a knight", "key", { textureQuality: "fast", delight: true });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).delight).toBe(true);
+  });
+
+  it("drops delight when the resolved texture model is not v3.5", async () => {
+    await createTask("a knight", "key", {
+      textureVersion: "v3.0-20250812",
+      delight: true,
+    });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.texture_version).toBe("v3.0-20250812");
+    expect(body.delight).toBeUndefined();
+  });
+
+  it("drops delight entirely when no texture model is resolved", async () => {
+    await createTask("a knight", "key", { delight: true });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.texture_version).toBeUndefined();
+    expect(body.delight).toBeUndefined();
+  });
+
+  it("forwards face_limit on the three generation calls", async () => {
+    await createTask("a knight", "key", { faceLimit: 100000 });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).face_limit).toBe(100000);
+
+    await createImageTask("ftok_123", "key", { faceLimit: 48000 });
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body).face_limit).toBe(48000);
+
+    await createMultiviewTask({ front: "ftok_f", left: "ftok_l" }, key, {
+      faceLimit: 2000000,
+    });
+    expect(JSON.parse(global.fetch.mock.calls[2][1].body).face_limit).toBe(2000000);
+  });
+
+  it("never sends face_limit on retexture (geometry unchanged)", async () => {
+    await createRefineTask("rusty", "file_glb_1", "key", { faceLimit: 100000 });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.face_limit).toBeUndefined();
+    expect(body.model).toBeUndefined();
+  });
+
+  it("createRefineTask passes texture_version and delight through", async () => {
+    await createRefineTask("rusty", "file_glb_1", "key", {
+      textureQuality: "fast",
+      delight: true,
+    });
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.texture_quality).toBe("fast");
+    expect(body.texture_version).toBe("v3.5-20260815");
+    expect(body.delight).toBe(true);
+  });
+
+  it("createRefineTask sends a model override only when provided", async () => {
+    await createRefineTask("rusty", "file_glb_1", "key", { model: "v3.5-20260815" });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).model).toBe("v3.5-20260815");
+  });
+});
+
 describe("compress: geometry scope", () => {
   beforeEach(() => {
     global.fetch = jest.fn().mockResolvedValue({

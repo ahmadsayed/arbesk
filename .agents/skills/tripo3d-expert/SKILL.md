@@ -37,6 +37,9 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 | Generation (default) | `v3.1-20260211` | H3.1 "HD" — best quality, PBR by default |
 | Generation (stable) | `v3.0-20250812` | |
 | Generation (turbo) | `v2.5-20250123` | Faster, lighter; **lacks** `texture_quality`/`geometry_quality`/`auto_size`/`quad`/`smart_low_poly` (those need ≥ v3.0) |
+| Generation (P-series low-poly) | `P1-20260311` | Smart Mesh — clean game-asset topology, strict 50–20,000 face control, ~10s base mesh (docs 2026-10-11, not yet verified live) |
+| Generation (P-series clean-topo) | `P2-20260801` | Next-gen Smart Mesh, adds quad output, 48–50,000 tri / 48–25,000 quad faces (docs 2026-10-11; whether `quad: true` here still forces FBX is UNVERIFIED — keep `quad: false` until tested) |
+| Texture (newest) | `v3.5-20260815` | Pin via `texture_version` (independent of geometry `model`); enables `texture_quality: "fast"` (standard cost/speed) and `delight` (strips baked-in lighting from the reference image; older texture versions ignore it) |
 | Rig — humanoid biped | `v1.0-20240301` | 90+ biped presets (`preset:biped:*`) |
 | Rig — creatures | `v2.5-20260210` | quadruped/hexapod/octopod/serpentine/aquatic/avian + 11 generic biped presets (`preset:idle`…) |
 
@@ -53,7 +56,9 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 
 ## Generation Parameters That Matter
 
-- `texture_quality`: `standard` | `detailed` | `extreme` (8K). Texture-only upgrade — does nothing for geometry/topology, so it does NOT help rigging; it does give the decimate bake a better source.
+- `texture_quality`: `fast` | `standard` | `detailed` | `extreme` (8K). Texture-only upgrade — does nothing for geometry/topology, so it does NOT help rigging; it does give the decimate bake a better source. `fast` requires `texture_version: "v3.5-20260815"` (any other texture version → code 1004, no silent fallback) and costs the same as `standard`.
+- `texture_version`: pins the texture model independently of the geometry `model` (`v3.5-20260815` newest; `v3.0-20250812` default for v3.x and P-series geometry).
+- `delight` (default true): strips baked-in lighting/shading from the reference image before texturing — big quality win on image-to-3D from photos. Only the v3.5 texture model reads it.
 - `geometry_quality: "detailed"` — Ultra geometry (≥ v3.0).
 - `face_limit` at generation: adaptive if omitted; table max 1.5M (v3.1). Game-ready target 50–100K.
 - `smart_low_poly: true` — clean hand-crafted-style topology, fixed 500–20K faces; best for simple inputs.

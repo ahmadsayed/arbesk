@@ -13,6 +13,7 @@ const {
 import generateAssetNode from "./assets/generate-node.ts";
 import cadRoutes from "./routes/cad.ts";
 import followupIntentRoutes from "./routes/followup-intent.ts";
+import generationAdviceRoutes from "./routes/generation-advice.ts";
 import type { StorageAdapter } from "./storage/index.ts";
 import type { ArbeskCore } from "@arbesk/asset-core/facade.js";
 import sessionRouter from "./sessions.ts";
@@ -76,6 +77,10 @@ export default (deps: ApiDeps) => {
   // ─── Follow-up intent (Jev reads what a typed follow-up asks for) ─────────
 
   v1.route("/followup-intent", followupIntentRoutes());
+
+  // ─── Generation advice (Jev picks the engine + Tripo config) ──────────────
+
+  v1.route("/generation-advice", generationAdviceRoutes());
 
   // ─── Comments Archive ─────────────────────────────────────────────────────
 

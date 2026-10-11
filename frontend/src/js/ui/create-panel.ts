@@ -74,7 +74,13 @@ import {
 } from "./refine-target.ts";
 import type { ActiveVersion, RefineKind } from "./refine-target.ts";
 import { decideFollowup } from "./followup-route.ts";
-import type { FollowupOption, FollowupPlan } from "./followup-route.ts";
+import type { FollowupIntent, FollowupOption, FollowupPlan } from "./followup-route.ts";
+import {
+  CONFIG_BUNDLES,
+  decideGenerationPlan,
+  fetchGenerationAdvice,
+} from "./generation-advice.ts";
+import type { ConfigBundleFields, GenerationPlan } from "./generation-advice.ts";
 import type { CadDesign } from "@arbesk/cad-gen";
 
 // ─── DOM References ───
@@ -139,19 +145,6 @@ export function shouldUseStoppable(provider: string): boolean {
 // ─── Provider Balance (BYOK) ───
 
 const providerBalance = document.getElementById("providerBalance");
-const textureQualityRow = document.getElementById("textureQualityRow");
-const textureQualitySelect = document.getElementById(
-  "textureQualitySelect"
-) as HTMLSelectElement | null;
-const TEXTURE_QUALITY_STORAGE = "arbesk-texture-quality";
-
-/**
- * Current panel texture quality for Tripo3D calls.
- */
-function getTextureQuality(): "standard" | "detailed" | "extreme" {
-  const v = textureQualitySelect?.value;
-  return v === "detailed" || v === "extreme" ? v : "standard";
-}
 
 /** key the latest balance fetch was issued for */
 let balanceFetchKey: string | null = null;
@@ -200,8 +193,9 @@ async function fetchProviderBalance(key: string) {
  */
 function refreshProviderBalance({ force = false }: { force?: boolean } = {}) {
   const key = getByokKey();
+  const provider = getProvider();
   const show =
-    getProvider() === "tripo3d" &&
+    (provider === "tripo3d" || provider === "auto") &&
     key.length > 0 &&
     !!walletState.get().walletAddress;
   if (!show) {
@@ -247,12 +241,14 @@ function clearAttachedImage() {
 }
 
 /**
- * Syncs the attach button; it only applies to Tripo3D (image-to-3D).
+ * Syncs the attach button; it only applies to Tripo3D (image-to-3D), which
+ * the auto provider may route to.
  * @remarks Switching back to the mock provider hides it and discards attached
  *   images.
  */
 function syncImageAttachUI() {
-  const enabled = getProvider() === "tripo3d";
+  const provider = getProvider();
+  const enabled = provider === "tripo3d" || provider === "auto";
   if (imageAttachBtn) imageAttachBtn.hidden = !enabled;
   if (!enabled) clearAttachedImage();
 }
@@ -389,18 +385,20 @@ if (imageAttachBtn && imageAttachInput) {
 
 // ─── BYOK Key Dialog ───
 
-// Persist + hydrate the generation provider. A stored value that no longer
-// exists among the select options (e.g. a removed provider) is ignored, so
-// the markup default (mock) wins.
+// Persist + hydrate the generation provider. The markup default is "auto"
+// (first option); a stored value that no longer exists among the options is
+// ignored.
 const PROVIDER_STORAGE = "arbesk-provider";
 
 /**
  * Sync provider-dependent UI for the current selection: the key configure
- * button only applies to BYOK providers (Tripo 3D), the hint + attention
- * state flag a missing key, and the bottom bar mirrors the active selection.
+ * button only applies to BYOK providers (Tripo 3D — including auto, whose
+ * advisor may route to Tripo), the hint + attention state flag a missing key,
+ * and the bottom bar mirrors the active selection.
  */
 function syncProviderUI() {
-  const real = isRealProvider(getProvider());
+  const provider = getProvider();
+  const real = isRealProvider(provider) || provider === "auto";
   const missingKey = real && getByokKey().length === 0;
   if (providerKeyBtn) {
     providerKeyBtn.hidden = !real;
@@ -408,11 +406,9 @@ function syncProviderUI() {
   }
   if (providerKeyHint) providerKeyHint.hidden = !missingKey;
   if (bottomBarProvider && providerSelect) {
-    const label = providerSelect.selectedOptions[0]?.textContent || "Mock";
+    const label = providerSelect.selectedOptions[0]?.textContent || "Auto";
     bottomBarProvider.textContent = `Provider: ${label}`;
   }
-  // Texture quality selector applies to Tripo3D only.
-  if (textureQualityRow) textureQualityRow.hidden = getProvider() !== "tripo3d";
   refreshProviderBalance();
 }
 
@@ -447,17 +443,7 @@ if (providerSelect) {
   });
 }
 
-if (textureQualitySelect) {
-  const stored = localStorage.getItem(TEXTURE_QUALITY_STORAGE);
-  if (stored && ["standard", "detailed", "extreme"].includes(stored)) {
-    textureQualitySelect.value = stored;
-  }
-  textureQualitySelect.addEventListener("change", () => {
-    localStorage.setItem(TEXTURE_QUALITY_STORAGE, textureQualitySelect.value);
-  });
-}
-
-// Collapsible provider/quality section — open by default, persisted so the
+// Collapsible provider section — open by default, persisted so the
 // user's preference survives reloads.
 const composerSettings = document.getElementById(
   "composerSettings"
@@ -810,7 +796,7 @@ async function sendGenerationToStudio(
 
     await autoSaveSentVersion(assetMessage);
 
-    addChatMessage("system", `Model carved via ${getProvider()}.`);
+    addChatMessage("system", `Model carved via ${record.provider || getProvider()}.`);
   } catch (err) {
     console.error("Show in Studio failed:", err);
     updatePendingGeneration(generationId, { status: "pending" });
@@ -1592,16 +1578,17 @@ async function retryAnimate(generationId: string, rigModel: string) {
 
 /**
  * Shows the polygon-budget dialog for retopo.
+ * @param faceLimitHint - Jev's reading pre-fills the budget (user-editable).
  * @returns the face limit, undefined for adaptive, or null when cancelled.
  */
-function showFaceLimitDialog(): Promise<number | undefined | null> {
+function showFaceLimitDialog(faceLimitHint?: number): Promise<number | undefined | null> {
   return new Promise<number | undefined | null>((resolve) => {
     const wrap = document.createElement("div");
     wrap.innerHTML = `
       <p style="margin:0 0 var(--size-2)">Target polygon count (500–20,000 triangles). Leave empty for adaptive — adaptive is aggressive and can melt faces.</p>
       <div class="form-group">
         <label class="form-label" for="faceLimitInput">Polygon budget</label>
-        <input id="faceLimitInput" class="form-control" type="number" min="500" max="20000" step="100" value="20000">
+        <input id="faceLimitInput" class="form-control" type="number" min="500" max="20000" step="100" value="${faceLimitHint ?? 20000}">
       </div>
       <button id="faceLimitGo" class="btn btn-primary" type="button" style="margin-top:var(--size-2)">Retopo</button>`;
     const input = wrap.querySelector("#faceLimitInput") as HTMLInputElement;
@@ -1658,7 +1645,7 @@ async function onRetexture(generationId: string) {
       providerKey: getByokKey(),
       sourceAssetCid: record.sourceAssetCid,
       retexture: true,
-      textureQuality: getTextureQuality(),
+      textureQuality: "standard",
       prevAssetManifestCid,
       transformMatrix,
       tier: getTier(),
@@ -1685,12 +1672,13 @@ async function onRetexture(generationId: string) {
  * Rebuilds a completed generation with clean topology and baked textures.
  * @remarks The retopo'd model lands as a new bubble and can itself be rigged
  *   and animated — clean topology deforms better than raw output.
+ * @param faceLimitHint - Jev's reading pre-fills the polygon budget dialog.
  */
-async function onRetopo(generationId: string) {
+async function onRetopo(generationId: string, faceLimitHint?: number) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
 
-  const faceLimit = await showFaceLimitDialog();
+  const faceLimit = await showFaceLimitDialog(faceLimitHint);
   if (faceLimit === null) return; // cancelled
 
   if (!(await ensureFollowupGates("retopo"))) return;
@@ -2194,6 +2182,189 @@ function resetComposer() {
   clearAttachedImage();
 }
 
+// ─── Generation advisor (Jev) ───
+
+/**
+ * A Jev-routed dispatch: the provider to generate with, the config-bundle
+ * fields to send, and the chat info line announcing the route.
+ */
+interface AdvisorDispatch {
+  provider: string;
+  fields: ConfigBundleFields | null;
+  announce: string | null;
+  prompt: string;
+}
+
+/**
+ * A dispatch decided by the advisor but waiting on the user: an "ask" pick or
+ * a saved Tripo key. The next onGenerate consumes it and skips the advisor
+ * call, so the retry runs the same route.
+ */
+let pendingAdvisorDispatch: AdvisorDispatch | null = null;
+
+/** Test hook: clear advisor/follow-up state leaked between cases. */
+// Consumed by test/frontend/create-panel-generate.test.js via a module-namespace
+// import, which the fallow graph cannot see.
+// fallow-ignore-next-line unused-export
+export function _resetAdvisorDispatch() {
+  pendingAdvisorDispatch = null;
+  followupTextureHint = null;
+}
+
+/** Chat line announcing an advisor-routed CAD dispatch. */
+const CAD_ADVICE_LINE = "Routing to Parametric CAD — this looks like an engineering part.";
+
+/** Chat info line announcing an advisor-routed Tripo config pick. */
+function advisorAnnounce(provider: string, configId: string | null): string | null {
+  if (provider === "cad") return CAD_ADVICE_LINE;
+  const bundle = configId ? CONFIG_BUNDLES[configId] : undefined;
+  return bundle ? `Using ${bundle.label} — ${bundle.blurb}.` : null;
+}
+
+/**
+ * Points the provider selector at a provider without a user gesture
+ * (persisted, like the CAD→Tripo retry offer does).
+ */
+function selectProviderProgrammatically(provider: string) {
+  if (!providerSelect) return;
+  if (!Array.from(providerSelect.options).some((o) => o.value === provider)) return;
+  providerSelect.value = provider;
+  localStorage.setItem(PROVIDER_STORAGE, provider);
+  syncProviderUI();
+  syncImageAttachUI();
+}
+
+/**
+ * Consults the generation advisor for a fresh generation and maps the plan to
+ * a dispatch descriptor.
+ * @returns the dispatch to run, or null when the flow already ended here -
+ *   an "ask" choice message is waiting for a pick, or the BYOK gate posted
+ *   the key message.
+ */
+async function resolveAdvisorDispatch(payload: PromptAndImagePayload): Promise<AdvisorDispatch | null> {
+  const stashed = pendingAdvisorDispatch;
+  pendingAdvisorDispatch = null;
+  if (stashed) {
+    if (stashed.provider === "cad") selectProviderProgrammatically("cad");
+    return stashed;
+  }
+
+  const selection = getProvider();
+  // Chip-locked refinements (retexture / cad-edit) and the mock / manual-CAD
+  // selections keep the pre-advisor flow; mock and manual CAD never call Jev.
+  if ((activeVersion && !payload.imagePayload) || selection === "mock" || selection === "cad") {
+    return { provider: selection, fields: null, announce: null, prompt: payload.effectivePrompt };
+  }
+
+  const plan = await fetchGenerationPlan(payload, selection);
+  return planDispatch(plan, selection, payload.effectivePrompt);
+}
+
+/** Asks Jev for a reading of the fresh-generation prompt. */
+async function fetchGenerationPlan(
+  payload: PromptAndImagePayload,
+  selection: string,
+): Promise<GenerationPlan> {
+  const config = await getConfig();
+  const cadAvailable = config?.cadGeneration !== false;
+  const advice = await fetchGenerationAdvice(payload.effectivePrompt, {
+    hasImage: !!payload.imagePayload,
+    cadAvailable,
+  });
+  return decideGenerationPlan(advice, { cadAvailable, provider: selection });
+}
+
+/**
+ * Maps an advice plan to the dispatch that runs it.
+ * @returns null for an "ask" plan - the choice message is waiting for a pick.
+ */
+function planDispatch(
+  plan: GenerationPlan,
+  selection: string,
+  prompt: string,
+): AdvisorDispatch | null {
+  switch (plan.kind) {
+    case "fallback":
+      // No advice (or an unconvinced advisor): auto falls back to Tripo 3D
+      // with the balanced default; a manual Tripo pick keeps today's plain
+      // behavior.
+      return selection === "auto"
+        ? { provider: "tripo3d", fields: CONFIG_BUNDLES.balanced.fields, announce: null, prompt }
+        : { provider: "tripo3d", fields: null, announce: null, prompt };
+    case "auto":
+      return plan.provider === "cad"
+        ? cadAdviceDispatch(prompt)
+        : tripoAdviceDispatch(plan.configId, prompt);
+    case "ask":
+      postAdvisorAsk(plan, prompt);
+      return null;
+  }
+}
+
+/** An auto CAD pick: point the selector at CAD and dispatch it. */
+function cadAdviceDispatch(prompt: string): AdvisorDispatch {
+  selectProviderProgrammatically("cad");
+  return { provider: "cad", fields: null, announce: CAD_ADVICE_LINE, prompt };
+}
+
+/** An auto Tripo config pick: dispatch with the bundle's fields. */
+function tripoAdviceDispatch(configId: string, prompt: string): AdvisorDispatch {
+  return {
+    provider: "tripo3d",
+    fields: CONFIG_BUNDLES[configId].fields,
+    announce: advisorAnnounce("tripo3d", configId),
+    prompt,
+  };
+}
+
+/**
+ * Too uncertain to act: offer the likeliest routes, Jev's favorite first.
+ * The pick is stashed as a pending dispatch and resubmits the prompt, so the
+ * retry runs the same route without a second Jev round-trip.
+ */
+function postAdvisorAsk(plan: Extract<GenerationPlan, { kind: "ask" }>, prompt: string) {
+  addChoiceMessage(
+    "A couple of ways to generate this — my recommendation:",
+    plan.options.map((o) => ({
+      value: o.value,
+      label: o.recommended ? `${o.label} (Recommended)` : o.label,
+    })),
+    (value) => {
+      const configId = value === "cad" ? null : String(value).split(":")[1];
+      const provider = value === "cad" ? "cad" : "tripo3d";
+      pendingAdvisorDispatch = {
+        provider,
+        fields: configId ? (CONFIG_BUNDLES[configId]?.fields ?? null) : null,
+        announce: advisorAnnounce(provider, configId),
+        prompt,
+      };
+      promptInput.value = prompt;
+      void onGenerate({ resubmit: true });
+    },
+  );
+}
+
+/**
+ * The BYOK gate for Tripo-bound dispatches: instead of a bare dialog, post an
+ * explanation with a platform link and an "Add API key" chip; saving a key in
+ * the dialog retries the pending generation with the same route.
+ */
+function requestProviderKey(dispatch: AdvisorDispatch) {
+  pendingAdvisorDispatch = dispatch;
+  addChoiceMessage(
+    "This request needs advanced AI generation — please add your Tripo 3D API key to continue.",
+    [{ label: "Add API key", value: "add-key" }],
+    () => {
+      void showProviderKeyDialog().then(() => {
+        if (getByokKey().length === 0) return;
+        promptInput.value = dispatch.prompt;
+        void onGenerate({ resubmit: true });
+      });
+    },
+    { link: { href: "https://platform.tripo3d.ai", label: "Get a key at platform.tripo3d.ai" } },
+  );
+}
+
 /**
  * The full argument set a provider dispatch needs: the shared request fields
  * plus the save-context fields the mesh path threads into generateAsset.
@@ -2210,6 +2381,29 @@ interface GenerationRequestArgs {
   priorDesign?: CadDesign;
   imagePayload: SingleImagePayload | MultiviewImagePayload | null;
   stoppable: ReturnType<typeof addStoppableWorkingMessage> | null;
+  /** Advisor config-bundle fields for Tripo dispatches (null = defaults). */
+  advisorFields?: ConfigBundleFields | null;
+}
+
+/** Advisor bundle fields that spread into the request only when set. */
+const OPTIONAL_TRIPO_FIELDS = ["tripoModel", "textureVersion", "delight", "faceLimit"] as const;
+
+/**
+ * Tripo generation fields from an advisor config bundle: the texture quality
+ * defaults to standard (the old selector's default); the optional bundle
+ * fields copy over only when present.
+ */
+function advisorTripoFields(
+  advisorFields: ConfigBundleFields | null | undefined,
+): ConfigBundleFields {
+  const fields: ConfigBundleFields = {
+    textureQuality: advisorFields?.textureQuality ?? "standard",
+  };
+  for (const key of OPTIONAL_TRIPO_FIELDS) {
+    const value = advisorFields?.[key];
+    if (value) (fields as Record<string, unknown>)[key] = value;
+  }
+  return fields;
 }
 
 /**
@@ -2226,6 +2420,7 @@ function buildGenerateAssetArgs({
   retextureSource,
   imagePayload,
   stoppable,
+  advisorFields,
 }: GenerationRequestArgs) {
   return {
     prompt: effectivePrompt,
@@ -2238,7 +2433,8 @@ function buildGenerateAssetArgs({
     ...(isRealProvider(provider) && { providerKey }),
     ...(retextureSource && { sourceAssetCid: retextureSource.sourceAssetCid, retexture: true }),
     ...(imagePayload && (imagePayload as any)),
-    ...(provider === "tripo3d" && { textureQuality: getTextureQuality() }),
+    // The texture-quality selector is gone: the advisor bundle decides.
+    ...(provider === "tripo3d" && advisorTripoFields(advisorFields)),
     ...(stoppable && { signal: stoppable.signal, onTaskId: stoppable.onTaskId, onProgress: stoppable.onProgress }),
   };
 }
@@ -2342,21 +2538,51 @@ async function routeTypedFollowup(prompt: string, hasImage: boolean): Promise<bo
   setGenerating(true);
   const intent = await api.judgeFollowupIntent({ prompt, modelName: version.name, actions });
   setGenerating(false);
-  return runFollowupPlan(decideFollowup(intent, actions), prompt, version.generationId);
+  return runFollowupPlan(decideFollowup(intent, actions), prompt, version.generationId, intent);
+}
+
+/**
+ * Texture fields from Jev's speculative texture-tier reading, stashed for the
+ * retexture dispatch that follows (the retexture plan returns false and the
+ * normal generate path runs it).
+ */
+let followupTextureHint: ConfigBundleFields | null = null;
+
+function textureHintFromIntent(intent?: FollowupIntent | null): ConfigBundleFields | null {
+  const quality = intent?.textureQuality;
+  if (!quality) return null;
+  return quality === "fast"
+    ? { textureQuality: quality, textureVersion: "v3.5-20260815", delight: true }
+    : { textureQuality: quality };
+}
+
+/** Reads and clears the stashed retexture texture fields. */
+function takeFollowupTextureHint(): ConfigBundleFields | null {
+  const hint = followupTextureHint;
+  followupTextureHint = null;
+  return hint;
 }
 
 /**
  * Carries out a follow-up plan.
  * @remarks Retopo, rig and animate open their usual dialogs, so the user
- *   confirms before any credits are spent.
+ *   confirms before any credits are spent. The intent rides along so the
+ *   retexture/retopo dispatches can use Jev's speculative texture/budget
+ *   readings.
  * @returns false for a retexture, which the normal generate path runs.
  */
-function runFollowupPlan(plan: FollowupPlan, prompt: string, generationId: string): boolean {
+function runFollowupPlan(
+  plan: FollowupPlan,
+  prompt: string,
+  generationId: string,
+  intent?: FollowupIntent | null,
+): boolean {
   switch (plan.kind) {
     case "retexture":
+      followupTextureHint = textureHintFromIntent(intent);
       return false;
     case "retopo":
-      void onRetopo(generationId);
+      void onRetopo(generationId, intent?.retopoFaceLimit);
       return true;
     case "auto-rig":
       void onAutoRig(generationId);
@@ -2374,14 +2600,14 @@ function runFollowupPlan(plan: FollowupPlan, prompt: string, generationId: strin
           { label: "New model", value: "new-model" },
           { label: "Retexture anyway", value: "retexture" },
         ],
-        (picked) => pickFollowupOption(picked, prompt, generationId),
+        (picked) => pickFollowupOption(picked, prompt, generationId, undefined, intent),
       );
       return true;
     case "ask":
       addChoiceMessage(
         "What should this do to the model?",
         plan.options.map((o) => ({ label: FOLLOWUP_OPTION_LABELS[o], value: o })),
-        (picked) => pickFollowupOption(picked, prompt, generationId, plan),
+        (picked) => pickFollowupOption(picked, prompt, generationId, plan, intent),
       );
       return true;
   }
@@ -2398,6 +2624,7 @@ function pickFollowupOption(
   prompt: string,
   generationId: string,
   motions: { animations: string[]; inPlace: boolean } = { animations: [], inPlace: true },
+  intent?: FollowupIntent | null,
 ) {
   if (option === "retexture" || option === "new-model") {
     if (option === "new-model") setActiveVersion(null);
@@ -2411,6 +2638,7 @@ function pickFollowupOption(
       : { kind: option },
     prompt,
     generationId,
+    intent,
   );
 }
 
@@ -2437,36 +2665,107 @@ async function echoAndRoute(payload: PromptAndImagePayload, resubmit: boolean): 
 async function onGenerate(options: { resubmit?: boolean } = {}) {
   const payload = buildPromptAndImagePayload();
   if (!payload) return;
-  const { effectivePrompt, imagePayload } = payload;
 
-  if (!walletState.get().walletAddress) {
-    alert("Please log in or sign up first.");
+  if (!(await ensureGenerateReady())) return;
+  if (await echoAndRoute(payload, !!options.resubmit)) return;
+
+  setGenerating(true);
+
+  // Advisor phase (fresh generations only): decides the provider (CAD vs
+  // Tripo) and the Tripo config bundle, or posts a choice message when Jev
+  // is unsure. null → the flow already ended (ask/no-key message posted).
+  const advisorDispatch = await resolveAdvisorDispatch(payload);
+  if (!advisorDispatch) {
+    setGenerating(false);
+    return;
+  }
+  if (advisorDispatch.announce) addChatMessage("system", advisorDispatch.announce);
+
+  if (!ensureProviderKey(advisorDispatch)) {
+    setGenerating(false);
     return;
   }
 
-  // Ensure authenticated before payment so sign popup comes first
+  const { stoppable, working } = beginGenerationWorking(advisorDispatch.provider);
+  await runGeneration({
+    payload,
+    provider: advisorDispatch.provider,
+    advisorFields: advisorDispatch.fields,
+    stoppable,
+    working,
+  });
+}
+
+/**
+ * The wallet + session gates every generation runs through.
+ * @remarks Ensures authenticated before payment so the sign popup comes
+ *   first; alerts/toasts and returns false when generation can't start.
+ */
+async function ensureGenerateReady(): Promise<boolean> {
+  if (!walletState.get().walletAddress) {
+    alert("Please log in or sign up first.");
+    return false;
+  }
   try {
     await getOrCreateSession();
+    return true;
   } catch {
     showToast({
       type: "warning",
       title: "Sign In Required",
       message: "Sign in to generate assets.",
     });
-    return;
+    return false;
   }
+}
 
-  if (await echoAndRoute(payload, !!options.resubmit)) return;
+/**
+ * The BYOK gate for a provider dispatch: Tripo 3D (including advisor-routed
+ * auto) requires a key; mock and Parametric CAD do not. A missing key posts a
+ * guided message (platform link + chip) instead of a dead-end dialog.
+ * @returns true when the key is present (or unneeded) and generation proceeds.
+ */
+function ensureProviderKey(dispatch: AdvisorDispatch): boolean {
+  if (!isRealProvider(dispatch.provider) || getByokKey().length > 0) return true;
+  requestProviderKey(dispatch);
+  return false;
+}
 
-  setGenerating(true);
-  // Stop button only makes sense for async providers — the mock returns
-  // synchronously, so there is nothing to cancel. Tripo 3D and Parametric
-  // CAD both poll a cancellable backend task.
-  const stoppable = shouldUseStoppable(getProvider())
+/**
+ * Posts the "Carving your model…" working message for the dispatch.
+ * @remarks The Stop button only makes sense for async providers — the mock
+ *   returns synchronously, so there is nothing to cancel. Tripo 3D and
+ *   Parametric CAD both poll a cancellable backend task.
+ */
+function beginGenerationWorking(provider: string) {
+  const stoppable = shouldUseStoppable(provider)
     ? addStoppableWorkingMessage("Carving your model…")
     : null;
   const working = stoppable?.working ?? addWorkingMessage("Carving your model…");
+  return { stoppable, working };
+}
 
+/** Everything a dispatched generation needs beyond the advisor dispatch. */
+interface GenerationRun {
+  payload: PromptAndImagePayload;
+  provider: string;
+  advisorFields: ConfigBundleFields | null;
+  stoppable: ReturnType<typeof addStoppableWorkingMessage> | null;
+  working: WorkingMessageHandle | null;
+}
+
+/**
+ * Runs a dispatched generation end to end: routes the prompt, dispatches it,
+ * presents the result, and always restores the composer UI.
+ */
+async function runGeneration({
+  payload,
+  provider,
+  advisorFields,
+  stoppable,
+  working,
+}: GenerationRun) {
+  const { effectivePrompt, imagePayload } = payload;
   const assetName = getAssetName();
   const nodeId = `${assetName
     .toLowerCase()
@@ -2477,23 +2776,14 @@ async function onGenerate(options: { resubmit?: boolean } = {}) {
 
   try {
     const tier = getTier();
-    const provider = getProvider();
     const providerKey = getByokKey();
-
-    // BYOK providers (Tripo 3D) require a key; mock and Parametric CAD do
-    // not. A missing key opens the key dialog directly — a guided flow, not a
-    // dead-end toast.
-    if (isRealProvider(provider) && providerKey.length === 0) {
-      showProviderKeyDialog();
-      setGenerating(false);
-      return;
-    }
 
     const plan = await planGeneration(provider, !!imagePayload);
     if (!plan) return; // finally restores the UI
     const { route, retextureSource, priorDesign } = plan;
     editingCad = route.mode === "cad-edit";
 
+    const retextureHint = takeFollowupTextureHint();
     const result = await dispatchGeneration({
       effectivePrompt,
       nodeId,
@@ -2506,6 +2796,7 @@ async function onGenerate(options: { resubmit?: boolean } = {}) {
       ...(priorDesign && { priorDesign }),
       imagePayload,
       stoppable,
+      advisorFields: advisorFields ?? (route.mode === "retexture" ? retextureHint : null),
     });
 
     // Defer the Studio viewport load: register the result, show an asset

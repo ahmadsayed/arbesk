@@ -16,6 +16,12 @@ interface ChatMsgBase {
   dateTime: string;
 }
 
+/** An external reference rendered after a message (e.g. the BYOK platform). */
+export interface ChatMsgLink {
+  href: string;
+  label: string;
+}
+
 interface TextMsg extends ChatMsgBase {
   kind: "text";
   role: "user" | "system";
@@ -25,6 +31,7 @@ interface TextMsg extends ChatMsgBase {
   sourceCid?: string;
   generationId?: string;
   followups?: Array<{ id: string; label: string }>;
+  link?: ChatMsgLink;
 }
 
 interface ImageMsg extends ChatMsgBase {
@@ -41,6 +48,7 @@ interface ChoiceMsg extends ChatMsgBase {
   choices: Array<{ label: string; value: any }>;
   picked: boolean;
   pickedValue: any;
+  link?: ChatMsgLink;
 }
 
 interface WorkingMsg extends ChatMsgBase {
@@ -127,6 +135,7 @@ export function addChatMessage(
     manifestCid?: string;
     sourceCid?: string;
     generationId?: string;
+    link?: ChatMsgLink;
   } = {}
 ): TextMsg {
   const t = timeFor(options.timestamp);
@@ -141,6 +150,7 @@ export function addChatMessage(
     ...(options.manifestCid ? { manifestCid: options.manifestCid } : {}),
     ...(options.sourceCid ? { sourceCid: options.sourceCid } : {}),
     ...(options.generationId ? { generationId: options.generationId } : {}),
+    ...(options.link ? { link: options.link } : {}),
   };
   push(msg);
   return msg;
@@ -174,7 +184,8 @@ export function addImageMessage(
 export function addChoiceMessage(
   text: string,
   choices: Array<{ label: string; value: any }>,
-  onPick: (value: any) => void
+  onPick: (value: any) => void,
+  options: { link?: ChatMsgLink } = {}
 ): void {
   const id = nextId();
   const t = timeFor();
@@ -186,6 +197,7 @@ export function addChoiceMessage(
     choices,
     picked: false,
     pickedValue: null,
+    ...(options.link ? { link: options.link } : {}),
     time: t.time,
     dateTime: t.dateTime,
   });

@@ -7,6 +7,11 @@
  *   offer, one Noul per motion - several motions may apply, so they are
  *   separate yes/no questions rather than one Choice. All questions go in the
  *   same request; the client ignores the motion answers on other routes.
+ *   Two speculative Choices also ride along on EVERY request - the texture
+ *   quality tier and the retopo reduction aggressiveness - so a follow-up that
+ *   lands on retexture/retopo can prefill those dialogs; when Jev returns no
+ *   reading for them (or the request routes elsewhere) the client leaves the
+ *   fields undefined and keeps its own defaults.
  *
  *   Measured live on 22 prompts against a "knight character" (2026-10-10):
  *   unambiguous requests land at confidence 0.92-1.00 on the right operation
@@ -27,6 +32,10 @@ export type IntentOutcome = MeshAction | "new_model" | "unclear";
 
 export const ACTION_QUESTION = "followup_action";
 export const TRAVEL_QUESTION = "travel";
+/** Speculative question id for the texture quality tier. */
+export const TEXTURE_QUALITY_QUESTION = "texture_quality";
+/** Speculative question id for the retopo reduction tier. */
+export const RETOPO_TIER_QUESTION = "retopo_tier";
 /** Motion questions are keyed by this prefix plus the Tripo preset id. */
 export const MOTION_PREFIX = "motion:";
 
@@ -40,6 +49,17 @@ export const MAX_MOTIONS = 5;
  *   bare motion stays in place - the Animate dialog's own default.
  */
 export const TRAVEL_THRESHOLD = 0.5;
+
+/** Texture tiers a regeneration step can target; mirrors the create panel. */
+export const TEXTURE_QUALITIES = ["fast", "standard", "detailed", "extreme"] as const;
+export type TextureQuality = (typeof TEXTURE_QUALITIES)[number];
+
+/**
+ * Retopo tier id -> the face budget it implies.
+ * @remarks "light" keeps fine detail, "medium" is the balanced default and
+ *   "heavy" is stylized/game-ready; all inside the adapter's 500-20000 range.
+ */
+export const RETOPO_TIERS: Record<string, number> = { light: 20000, medium: 8000, heavy: 2000 };
 
 const ACTION_CRITERIA: Record<IntentOutcome, string> = {
   retexture: "Change only its surface: colour, material, texture, paint or finish, keeping the shape",
@@ -100,6 +120,10 @@ export interface FollowupIntent {
   /** Motions asked for, strongest first; empty unless Animate was offered. */
   animations: string[];
   inPlace: boolean;
+  /** Texture tier implied by the request; undefined when Jev gave no reading. */
+  textureQuality?: TextureQuality;
+  /** Retopo face budget implied by the request; undefined when none. */
+  retopoFaceLimit?: number;
 }
 
 /** The questions for one follow-up, restricted to the bubble's actions. */
@@ -111,6 +135,27 @@ export function followupQuestions(actions: readonly MeshAction[]): Record<string
       instructions: "The user has a generated 3D model open and typed `request` as a follow-up about it. " +
         "Which operation on that existing model does the request ask for?",
       criteria: Object.fromEntries(offered.map((o) => [o, ACTION_CRITERIA[o]])),
+    },
+    [TEXTURE_QUALITY_QUESTION]: {
+      type: "choice",
+      instructions: "If the request is carried out with an AI texture or mesh regeneration step, " +
+        "which texture quality tier fits what the user asked for?",
+      criteria: {
+        fast: "A quick preview or iteration where speed matters more than fidelity",
+        standard: "Normal quality, the everyday default",
+        detailed: "High fidelity, accepting a slower generation",
+        extreme: "Maximum 8K detail, only when the user explicitly demands the best, highest or 8K quality",
+      },
+    },
+    [RETOPO_TIER_QUESTION]: {
+      type: "choice",
+      instructions: "If the request asks to rebuild/reduce the mesh topology, " +
+        "how aggressive should the polygon reduction be?",
+      criteria: {
+        light: "Light reduction, about 20000 faces: keeps fine detail and faces",
+        medium: "Medium reduction, about 8000 faces: a balanced default",
+        heavy: "Heavy reduction, about 2000 faces: very low poly, stylized or game-ready",
+      },
     },
   };
   if (!actions.includes("animate")) return questions;
@@ -149,12 +194,17 @@ export function readFollowupIntent(body: any, actions: readonly MeshAction[]): F
     throw new JevError("jev chose an action that was not offered: " + action, 502);
   }
   const travel = answers[TRAVEL_QUESTION]?.noul;
+  const texture = answers[TEXTURE_QUALITY_QUESTION]?.choice;
   return {
     action,
     confidence: typeof choice.confidence === "number" ? choice.confidence : 0,
     probabilities: choice.probabilities ?? {},
     animations: askedMotions(answers),
     inPlace: !(typeof travel === "number" && travel >= TRAVEL_THRESHOLD),
+    textureQuality: (TEXTURE_QUALITIES as readonly string[]).includes(texture)
+      ? (texture as TextureQuality)
+      : undefined,
+    retopoFaceLimit: RETOPO_TIERS[answers[RETOPO_TIER_QUESTION]?.choice],
   };
 }
 

@@ -16,6 +16,32 @@ import { createMockProvider } from "./providers/mock-provider.ts";
 import { createTripoProvider } from "./providers/tripo-provider.ts";
 import { createProviderRegistry } from "./registry.ts";
 
+/**
+ * Per-request generation options forwarded to providers that honor them
+ * (Tripo3D). Mock/CAD providers ignore the extras.
+ */
+export interface GenerationTaskOptions {
+  /** One of the provider's texture quality levels ("fast" needs the v3.5
+   *  texture model). */
+  textureQuality?: string;
+  /** Geometry model override (e.g. a P-series id); provider default when
+   *  omitted. */
+  model?: string;
+  /** Texture model line; "v3.5-20260815" enables texture_quality "fast" and
+   *  the delight flag. */
+  textureVersion?: string;
+  /** Strip baked-in lighting (only meaningful with the v3.5 texture model). */
+  delight?: boolean;
+  /** Target face budget for the generated mesh (generation calls only). */
+  faceLimit?: number;
+}
+
+/** Retexture takes the texture-side options only — geometry stays untouched. */
+export type RetextureTaskOptions = Pick<
+  GenerationTaskOptions,
+  "textureQuality" | "textureVersion" | "delight"
+>;
+
 export interface GenerationProvider {
   readonly id: string;
   /** Declared capabilities — the single source of truth. */
@@ -24,9 +50,9 @@ export interface GenerationProvider {
   can(capability: GenerationCapability): boolean;
 
   // ── fresh generation → provider taskId ──────────────────────────────────
-  textToModel(input: { prompt: string; textureQuality?: string; priorDesign?: CadDesign }): Promise<string>;
-  imageToModel(input: { image: Uint8Array; mime: string; textureQuality?: string }): Promise<string>;
-  multiviewToModel(input: { views: MultiviewImage[]; textureQuality?: string }): Promise<string>;
+  textToModel(input: { prompt: string; priorDesign?: CadDesign } & GenerationTaskOptions): Promise<string>;
+  imageToModel(input: { image: Uint8Array; mime: string } & GenerationTaskOptions): Promise<string>;
+  multiviewToModel(input: { views: MultiviewImage[] } & GenerationTaskOptions): Promise<string>;
 
   // ── follow-ups (source-based) → provider taskId ─────────────────────────
   /**
@@ -34,7 +60,7 @@ export interface GenerationProvider {
    * @remarks A multi-step chain (rig-check → rig) uploads once and reuses.
    */
   uploadSource(source: SourceRef): Promise<string>;
-  retexture(input: { prompt: string; source: SourceRef; textureQuality?: string }): Promise<string>;
+  retexture(input: { prompt: string; source: SourceRef } & RetextureTaskOptions): Promise<string>;
   retopo(input: { source: SourceRef; faceLimit?: number; quad?: boolean }): Promise<string>;
   rigCheck(input: { source: SourceRef }): Promise<string>;
   rig(input: { source: SourceRef; rigType?: string; model?: string }): Promise<{ taskId: string; model: string }>;

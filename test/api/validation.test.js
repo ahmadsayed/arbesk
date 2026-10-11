@@ -324,6 +324,83 @@ describe("API schemas", () => {
     });
   });
 
+  describe("generateAssetSchema tripo3d options", () => {
+    const base = { prompt: "cowboy", nodeId: "n1", provider: "tripo3d" };
+
+    it("accepts textureQuality fast", () => {
+      expect(
+        generateAssetSchema.safeParse({ ...base, textureQuality: "fast" }).success,
+      ).toBe(true);
+    });
+
+    it("rejects an unknown textureQuality", () => {
+      expect(
+        generateAssetSchema.safeParse({ ...base, textureQuality: "ultra" }).success,
+      ).toBe(false);
+    });
+
+    it("accepts P-series and pinned v3/v2.5 tripoModel values", () => {
+      for (const tripoModel of [
+        "P1-20260311",
+        "P2-20260801",
+        "v3.1-20260211",
+        "v3.0-20250812",
+        "v2.5-20250123",
+      ]) {
+        expect(
+          generateAssetSchema.safeParse({ ...base, tripoModel }).success,
+        ).toBe(true);
+      }
+    });
+
+    it("rejects an unknown tripoModel", () => {
+      expect(
+        generateAssetSchema.safeParse({ ...base, tripoModel: "P9-99999999" }).success,
+      ).toBe(false);
+    });
+
+    it("accepts a valid textureVersion and delight", () => {
+      expect(
+        generateAssetSchema.safeParse({
+          ...base,
+          textureVersion: "v3.5-20260815",
+          delight: true,
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects an unknown textureVersion and a non-boolean delight", () => {
+      expect(
+        generateAssetSchema.safeParse({ ...base, textureVersion: "v4.0-20990101" })
+          .success,
+      ).toBe(false);
+      expect(
+        generateAssetSchema.safeParse({ ...base, delight: "yes" }).success,
+      ).toBe(false);
+    });
+
+    it("accepts generation faceLimit bounds (48–2,000,000)", () => {
+      expect(
+        generateAssetSchema.safeParse({ ...base, faceLimit: 48 }).success,
+      ).toBe(true);
+      expect(
+        generateAssetSchema.safeParse({ ...base, faceLimit: 2000000 }).success,
+      ).toBe(true);
+    });
+
+    it("rejects faceLimit outside the bounds and non-integers", () => {
+      expect(
+        generateAssetSchema.safeParse({ ...base, faceLimit: 47 }).success,
+      ).toBe(false);
+      expect(
+        generateAssetSchema.safeParse({ ...base, faceLimit: 2000001 }).success,
+      ).toBe(false);
+      expect(
+        generateAssetSchema.safeParse({ ...base, faceLimit: 100.5 }).success,
+      ).toBe(false);
+    });
+  });
+
   describe("snapshotCommentsSchema", () => {
     it("coerces numeric tokenId to string", () => {
       const result = snapshotCommentsSchema.safeParse({

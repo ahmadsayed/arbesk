@@ -299,6 +299,16 @@
   }
 }
 
+// External reference after a message (e.g. the BYOK key platform).
+.chat-msg-link {
+  display: inline-block;
+  margin-top: var(--size-1);
+  font-size: var(--font-size-0);
+  color: var(--accent-bg);
+  text-decoration: underline;
+  text-underline-offset: var(--size-1);
+}
+
 // ─── Composer — provider controls + prompt input, pinned at pane bottom ───
 
 .chat-composer {
@@ -407,6 +417,7 @@
       content: "▸";
       font-size: var(--font-size-1);
       transition: transform var(--duration-quick) var(--ease-out-3);
+      transform: rotate(var(--composer-chevron-rotate, 0deg));
     }
 
     &:hover {
@@ -414,8 +425,11 @@
     }
   }
 
-  &[open] .composer-settings-summary::after {
-    transform: rotate(90deg);
+  // Open state flips the chevron: a flat attribute rule sets a custom
+  // property the summary's ::after reads (a descendant + pseudo-element
+  // selector here would be the file's most complex rule).
+  &[open] {
+    --composer-chevron-rotate: 90deg;
   }
 
   .composer-settings-body {

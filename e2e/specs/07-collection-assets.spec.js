@@ -38,6 +38,8 @@ test.describe.serial("Collection/asset model", () => {
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -76,6 +78,8 @@ test.describe.serial("Collection/asset model", () => {
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -101,6 +105,8 @@ test.describe.serial("Collection/asset model", () => {
     await page.fill(SELECTORS.dialogInput, "Table");
     await page.click(SELECTORS.dialogConfirmBtn);
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_2);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -144,6 +150,8 @@ test.describe.serial("Collection/asset model", () => {
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -194,6 +202,8 @@ test.describe.serial("Collection/asset model", () => {
       .inputValue();
     expect(savedCollectionId).toBeTruthy();
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -224,6 +234,8 @@ test.describe.serial("Collection/asset model", () => {
       savedCollectionId,
     );
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_2);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -256,6 +268,8 @@ test.describe.serial("Collection/asset model", () => {
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
+    // The composer defaults to Auto; pin the mock provider (no Jev key here).
+    await page.locator(SELECTORS.providerSelect).selectOption("mock");
     await page.fill(SELECTORS.promptInput, PROMPT_1);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);

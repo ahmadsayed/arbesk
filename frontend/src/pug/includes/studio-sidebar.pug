@@ -42,6 +42,8 @@
             )
               template(x-if="msg.kind === 'text'")
                 span.chat-bubble-content(x-text="msg.text")
+              template(x-if="msg.kind === 'text' && msg.link")
+                a.chat-msg-link(:href="msg.link.href" target="_blank" rel="noopener" x-text="msg.link.label")
               template(x-if="msg.kind === 'text'")
                 time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
               template(x-if="msg.kind === 'image'")
@@ -70,6 +72,8 @@
                       x-text="choice.label"
                       @click="pickChoice(msg, choice)"
                     )
+              template(x-if="msg.kind === 'choice' && msg.link")
+                a.chat-msg-link(:href="msg.link.href" target="_blank" rel="noopener" x-text="msg.link.label")
               template(x-if="msg.kind === 'choice'")
                 time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
               template(x-if="msg.kind === 'working'")
@@ -105,12 +109,13 @@
                 time.chat-bubble-time(:datetime="msg.dateTime" x-text="msg.time")
       .chat-composer
         details#composerSettings.composer-settings(open)
-          summary.composer-settings-summary Provider &amp; Quality
+          summary.composer-settings-summary Provider
           .composer-settings-body
             .form-group
               label.form-label(for="providerSelect") Generation Provider
               .provider-row
                 select#providerSelect.form-select
+                  option(value="auto") Auto (recommended)
                   option(value="mock") Mock (Local)
                   option(value="tripo3d") Tripo 3D
                   option(value="cad") Parametric CAD
@@ -119,12 +124,6 @@
                     use(href="/icons.svg#key")
               p#providerKeyHint.provider-key-hint(hidden) API key required — select the key icon to add it.
               p#providerBalance.provider-balance(hidden)
-              #textureQualityRow.form-group(hidden)
-                label.form-label(for="textureQualitySelect") Texture quality
-                select#textureQualitySelect.form-select
-                  option(value="standard") Standard
-                  option(value="detailed") Detailed (slower, more credits)
-                  option(value="extreme") Extreme 8K (most credits)
         //- Multiview attach chips (rendered by create-panel.js from the
         //- attachedImages array, canonical view order front/left/back/right).
         #imageAttachChips.image-attach-chips(hidden)

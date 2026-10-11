@@ -605,6 +605,115 @@ describe("Arbesk API", () => {
         );
       });
 
+      it("threads tripoModel/textureQuality fast/delight/faceLimit into the text-to-model payload", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_opts" } }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A low-poly cabin",
+            nodeId: "node_tripo_opts",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+            tripoModel: "P2-20260801",
+            textureQuality: "fast",
+            delight: true,
+            faceLimit: 80000,
+          });
+
+        expect(res.status).toBe(202);
+        expect(fetchSpy.mock.calls[0][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/generation/text-to-model",
+        );
+        expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+          model: "P2-20260801",
+          texture_quality: "fast",
+          texture_version: "v3.5-20260815",
+          delight: true,
+          face_limit: 80000,
+        });
+
+        fetchSpy.mockRestore();
+      });
+
+      it("sends an unchanged default payload when the new option fields are absent", async () => {
+        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 0, data: { task_id: "task_defaults" } }),
+        });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            prompt: "A plain default",
+            nodeId: "node_tripo_defaults",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+          });
+
+        expect(res.status).toBe(202);
+        const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+        expect(body.model).toBe("v3.1-20260211");
+        expect(body.texture_version).toBeUndefined();
+        expect(body.delight).toBeUndefined();
+        expect(body.face_limit).toBeUndefined();
+
+        fetchSpy.mockRestore();
+      });
+
+      it("threads textureVersion/delight (no face_limit) into the retexture payload", async () => {
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        const fetchSpy = jest
+          .spyOn(global, "fetch")
+          // 1: source GLB upload → file_token
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { file_token: "file_1" } }),
+          })
+          // 2: models/texture task
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ code: 0, data: { task_id: "task_refine" } }),
+          });
+
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "node_tripo_retexture_opts",
+            provider: "tripo3d",
+            providerKey: "tsk_test_secret_key",
+            sourceAssetCid: "bafySource",
+            retexture: true,
+            prompt: "make it mossy",
+            textureQuality: "fast",
+            textureVersion: "v3.5-20260815",
+            delight: true,
+            faceLimit: 12345,
+          });
+
+        expect(res.status).toBe(202);
+        expect(res.body.refined).toBe(true);
+        expect(fetchSpy.mock.calls[1][0]).toBe(
+          "https://openapi.tripo3d.ai/v3/models/texture",
+        );
+        const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
+        expect(body).toMatchObject({
+          texture_quality: "fast",
+          texture_version: "v3.5-20260815",
+          delight: true,
+        });
+        // face_limit is a generation-only option — never on retexture.
+        expect(body.face_limit).toBeUndefined();
+
+        fetchSpy.mockRestore();
+      });
+
       it("returns 400 VALIDATION_ERROR when neither prompt nor imageData is sent", async () => {
         const res = await request(app)
           .post("/api/v1/generations")

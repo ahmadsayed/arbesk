@@ -761,12 +761,17 @@ describe("AI Generation sidebar", () => {
   const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
   const pug = () => renderPugSource(STUDIO_PUG_PATH);
 
-  test("provider select offers only Mock and Tripo 3D", () => {
+  test("provider select offers Auto, Mock, Tripo 3D and Parametric CAD", () => {
     const content = pug();
+    expect(content).toContain('option(value="auto") Auto (recommended)');
     expect(content).toContain('option(value="mock") Mock (Local)');
     expect(content).toContain('option(value="tripo3d") Tripo 3D');
+    expect(content).toContain('option(value="cad") Parametric CAD');
     expect(content).not.toContain('value="meshy"');
     expect(content).not.toContain('value="hunyuan3d"');
+    // The texture-quality selector was replaced by the generation advisor.
+    expect(content).not.toContain("textureQualitySelect");
+    expect(content).not.toContain("textureQualityRow");
   });
 
   test("prompt input lives in the sidebar, before the main stage", () => {
