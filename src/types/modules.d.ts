@@ -25,7 +25,9 @@ declare module "ipfs-http-client" {
     pin: {
       add(cid: string): Promise<void>;
       rm(cid: string): Promise<void>;
-      ls(): AsyncIterable<KuboPinEntry>;
+      ls(options?: {
+        type?: "recursive" | "direct" | "indirect" | "all";
+      }): AsyncIterable<KuboPinEntry>;
     };
     cat(
       cid: string,

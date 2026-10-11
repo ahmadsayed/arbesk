@@ -10,6 +10,10 @@
  *   bun scripts/run-ipfs-gc.mjs --dry-run
  *   bun scripts/run-ipfs-gc.mjs --live --max-unpin 500
  *   bun scripts/run-ipfs-gc.mjs --chain-id 31337 --live
+ *
+ * A live run unpins only CIDs that a previous live run already saw orphaned
+ * at least --grace-hours ago (state in .data/ipfs-gc-state.json), so the
+ * first live run just marks.
  */
 
 import { Command } from "commander";
@@ -43,6 +47,11 @@ const program = new Command()
     Infinity,
   )
   .option(
+    "--grace-hours <hours>",
+    "Only unpin CIDs orphaned for at least this long (default: env IPFS_GC_GRACE_HOURS, else 168)",
+    parseFloat,
+  )
+  .option(
     "--chain-id <id>",
     "Override chain ID (default: env CHAIN_ID)",
     process.env.CHAIN_ID,
@@ -64,6 +73,7 @@ async function main() {
     dryRun,
     maxUnpin: opts.maxUnpin,
     chainId: opts.chainId,
+    graceMs: opts.graceHours === undefined ? undefined : opts.graceHours * 3600000,
   }, storage);
 
   console.log("\n[GC-CLI] result:");

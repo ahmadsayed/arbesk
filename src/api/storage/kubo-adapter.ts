@@ -78,13 +78,17 @@ export function createKuboAdapter(
     },
 
     /**
-     * List all pinned CIDs from the local Kubo node.
+     * List the root pins (recursive + direct) on the local Kubo node.
+     * @remarks Kubo's default `type=all` also yields every indirect block
+     *   under a recursive pin - GC would count each as an orphan.
      */
     async listPinned() {
       const cids: string[] = [];
-      for await (const entry of ipfs.pin.ls()) {
-        if (entry?.cid) {
-          cids.push(entry.cid.toString());
+      for (const type of ["recursive", "direct"] as const) {
+        for await (const entry of ipfs.pin.ls({ type })) {
+          if (entry?.cid) {
+            cids.push(entry.cid.toString());
+          }
         }
       }
       return cids;

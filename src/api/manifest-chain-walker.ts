@@ -19,15 +19,23 @@ async function collectEmbeddedIpfsCids(
   storage: StorageAdapter,
 ): Promise<void> {
   if (!cid || cids.has(`__json_failed_${cid}`)) return;
+  let text: string;
   try {
-    const raw = await storage.catBytes(cid);
-    const decompressed = await maybeDecompress(raw);
-    const json = JSON.parse(decompressed);
-    extractIpfsCids(json, cids);
+    text = await maybeDecompress(await storage.catBytes(cid));
   } catch (e) {
-    // Not a JSON object (e.g., raw buffer/image) - nothing to recurse into.
+    // Unreadable source: its embedded CIDs are unknown, so GC must not trust
+    // the reachable set.
     errors.push(`read refs from ${cid}: ${(e as Error).message}`);
+    return;
   }
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Not JSON (binary GLB, 3MF, image) - no embedded refs to collect.
+    return;
+  }
+  extractIpfsCids(json, cids);
 }
 
 export interface WalkOptions {
@@ -37,7 +45,8 @@ export interface WalkOptions {
   /** For collection manifests, recurse into each `assets[assetId]` manifest
    * chain. */
   recurseIntoCollectionAssets?: boolean;
-  /** Maximum manifests to walk per chain. */
+  /** Maximum manifests to walk per chain (each collection asset's chain
+   * gets its own budget). Hitting it records an error. */
   maxDepth?: number;
 }
 
@@ -153,24 +162,53 @@ async function processAssetManifest(
   // Source asset CIDs are potentially shared via dedup.
   const nodes = getSceneNodes(manifest);
   for (const node of nodes) {
-    if (node?.source?.cid && typeof node.source.cid === "string") {
-      ctx.shared.add(node.source.cid);
-      ctx.allReachable.add(node.source.cid);
-      if (ctx.recurseIntoSources) {
-        await collectEmbeddedIpfsCids(
-          node.source.cid,
-          ctx.allReachable,
-          ctx.errors,
-          storage,
-        );
-      }
+    await addNodeSource(node, ctx, storage);
+    addReferenceImages(node, ctx);
+  }
+}
+
+/** Collects a node's source and bundle CIDs (shared via dedup). */
+async function addNodeSource(
+  node: any,
+  ctx: WalkContext,
+  storage: StorageAdapter,
+): Promise<void> {
+  if (node?.source?.cid && typeof node.source.cid === "string") {
+    ctx.shared.add(node.source.cid);
+    ctx.allReachable.add(node.source.cid);
+    if (ctx.recurseIntoSources) {
+      await collectEmbeddedIpfsCids(
+        node.source.cid,
+        ctx.allReachable,
+        ctx.errors,
+        storage,
+      );
     }
-    if (
-      node?.source?.bundleCid &&
-      typeof node.source.bundleCid === "string"
-    ) {
-      ctx.shared.add(node.source.bundleCid);
-      ctx.allReachable.add(node.source.bundleCid);
+  }
+  if (
+    node?.source?.bundleCid &&
+    typeof node.source.bundleCid === "string"
+  ) {
+    ctx.shared.add(node.source.bundleCid);
+    ctx.allReachable.add(node.source.bundleCid);
+  }
+}
+
+/**
+ * Collects a node's image-to-3D reference images (bare CIDs, not ipfs://
+ * URIs).
+ * @remarks Shared: a copied node carries the same reference image into
+ *   another token.
+ */
+function addReferenceImages(node: any, ctx: WalkContext): void {
+  const referenceImages = [
+    node?.reference_image,
+    ...(Array.isArray(node?.reference_images) ? node.reference_images : []),
+  ];
+  for (const image of referenceImages) {
+    if (image?.cid && typeof image.cid === "string") {
+      ctx.shared.add(image.cid);
+      ctx.allReachable.add(image.cid);
     }
   }
 }
@@ -181,11 +219,21 @@ async function walkSingleChain(
   storage: StorageAdapter,
 ): Promise<void> {
   let currentCid: string | null = startCid;
+  // Per-chain budget: `visited` is shared with collection-asset walks, so
+  // its size would cap the whole collection, not this chain.
+  let depth = 0;
 
-  while (currentCid && ctx.visited.size < ctx.maxDepth) {
+  while (currentCid) {
     if (ctx.visited.has(currentCid)) {
       break;
     }
+    if (depth >= ctx.maxDepth) {
+      ctx.errors.push(
+        `chain from ${startCid} truncated at maxDepth=${ctx.maxDepth} (next ${currentCid})`,
+      );
+      break;
+    }
+    depth++;
     ctx.visited.add(currentCid);
 
     const manifest = await readManifest(currentCid, ctx, storage);

@@ -87,6 +87,26 @@ describe("kubo adapter", () => {
     expect(await a.unpin("bafyX")).toBe(true);
   });
 
+  it("listPinned() returns recursive and direct pins, never indirect blocks", async () => {
+    const ipfs = fakeIpfs();
+    const byType = {
+      recursive: ["bafyRoot1", "bafyRoot2"],
+      direct: ["bafyDirect"],
+      indirect: ["bafyChunk1", "bafyChunk2"],
+    };
+    ipfs.pin.ls = jest.fn(async function* ({ type } = {}) {
+      const types = !type || type === "all" ? Object.keys(byType) : [type];
+      for (const t of types) {
+        for (const cid of byType[t]) yield { type: t, cid: { toString: () => cid } };
+      }
+    });
+    const a = createKuboAdapter(ipfs, {
+      apiUrl: "http://127.0.0.1:5001",
+      gatewayBase: "http://127.0.0.1:8080/ipfs/",
+    });
+    expect(await a.listPinned()).toEqual(["bafyRoot1", "bafyRoot2", "bafyDirect"]);
+  });
+
   it("mintUploadCredential() returns the kubo shape", async () => {
     const a = createKuboAdapter(fakeIpfs(), {
       apiUrl: "http://127.0.0.1:5001",
