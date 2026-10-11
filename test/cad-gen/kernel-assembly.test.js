@@ -94,3 +94,34 @@ describe("overlaps", () => {
     expect(run.stats.parts.overlapCount).toBeUndefined();
   });
 });
+
+describe("sealed voids", () => {
+  // CADPrompt 00851553: a hollow cut centred in its block never reaches a face.
+  // Manifold decomposes the cavity's skin as a NEGATIVE-volume component.
+  const SEALED = "P.s; return box(30, 20, 20).subtract(box(20, 10, 10));";
+
+  it("are not counted as bodies", () => {
+    const run = kernel.run(design(SEALED));
+    expect(run.stats.bodies.count).toBe(1);
+  });
+
+  it("are reported with their bounds", () => {
+    const run = kernel.run(design(SEALED));
+    expect(run.stats.voids).toEqual({
+      count: 1, boxes: [{ min: [-10, -5, -5], max: [10, 5, 5] }],
+    });
+  });
+
+  it("are not reported for a cut that opens through a face", () => {
+    const run = kernel.run(design("P.s; return box(30, 20, 20).subtract(box(20, 10, 10).translate([0, 0, 6]));"));
+    expect(run.stats.bodies.count).toBe(1);
+    expect(run.stats.voids).toBeUndefined();
+  });
+
+  it("are reported for a part of an array return", () => {
+    const run = kernel.run(design("return [box(P.s, P.s, P.s).translate([40, 0, 0]), " + SEALED.slice("P.s; return ".length, -1) + "];"));
+    expect(run.stats.bodies.count).toBe(2);
+    expect(run.stats.voids.count).toBe(1);
+    expect(run.stats.voids.boxes[0].part).toBe(2);
+  });
+});

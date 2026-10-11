@@ -48,6 +48,16 @@ export interface CadStats {
     /** `part` is the 1-based part a body belongs to; set for array returns only. */
     boxes: { min: [number, number, number]; max: [number, number, number]; part?: number }[];
   };
+  /**
+   * Sealed internal voids: cavities a cut left entirely inside the solid.
+   * @remarks Absent when there are none. Not bodies - Manifold decomposes a
+   *   cavity's skin as a negative-volume component - so the connected gate
+   *   never counts them; the sealed gate fails them instead.
+   */
+  voids?: {
+    count: number;
+    boxes: { min: [number, number, number]; max: [number, number, number]; part?: number }[];
+  };
   /** Zero-volume flakes the kernel removed from the solid (see DEGENERATE_BODY_MM3). */
   degenerateBodiesDropped?: number;
   /**

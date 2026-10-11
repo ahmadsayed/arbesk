@@ -89,6 +89,22 @@ describe("evaluateKernelGates", () => {
     expect(connected.error).toContain("wider than the material");
   });
 
+  it("fails the sealed gate for a cut left entirely inside the solid, naming it", () => {
+    // CADPrompt 00851553: the workbench top's hollow was centred in the block,
+    // so it never opened through the bottom face the ground truth cuts from.
+    const voids = { count: 1, boxes: [{ min: [-47.7, -13.1, -15.7], max: [47.7, 13.1, 15.7] }] };
+    const sealed = evaluateKernelGates({ ...stats, voids }, LIMITS)
+      .find((g) => g.gate === "sealed");
+    expect(sealed.ok).toBe(false);
+    expect(sealed.error).toContain("sealed inside the part");
+    expect(sealed.error).toContain("[-47.7, -13.1, -15.7] to [47.7, 13.1, 15.7]");
+    expect(sealed.error).toContain("through the face it should open from");
+  });
+
+  it("passes the sealed gate when the solid has no void", () => {
+    expect(evaluateKernelGates(stats, LIMITS).find((g) => g.gate === "sealed").ok).toBe(true);
+  });
+
   it("tells a piece resting inside a cavity apart from one floating away", () => {
     // attempt#10 gf-bin: the base's top sat in the cavity, touching the floor.
     const bodies = { count: 2, boxes: [
