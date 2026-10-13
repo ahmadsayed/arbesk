@@ -703,6 +703,8 @@ Returns the token IDs **owned** by an address on a given chain. Backs the asset 
 
 A background poll catches up every ~15s. The route also runs an inline catch-up before responding if the last one was more than 30s ago, or always when `force=true` is passed — letting the frontend request an immediate refresh right after publishing.
 
+The inline catch-up wait is capped at `INDEXER_CATCHUP_WAIT_MS` (default 5000ms). Concurrent requests share one in-flight catch-up, which on a cold start can be a long backfill of a public chain; past the cap the route responds with the indexer's current state (`lastScannedBlock` shows how far it has scanned) while the catch-up continues in the background.
+
 For tokens where the address is an editor but not the owner, see `GET /api/v1/indexer/shared`.
 
 **Query Parameters**
