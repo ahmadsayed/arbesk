@@ -17,6 +17,7 @@ describe("Arbesk API", () => {
   let mockIPFS;
   let logSpy;
   let createSession;
+  let savedPaidContract;
 
   beforeAll(async () => {
     // Suppress noisy production logs/warnings during API tests.
@@ -215,6 +216,13 @@ describe("Arbesk API", () => {
     process.env.UPLOAD_URL_RATE_LIMIT_MAX = "5";
     process.env.CONTRACT_ADDRESS = "0xArbeskContractAddress";
     process.env.GC_ADMIN_TOKEN = "test-admin-token";
+    // GC reads these from process.env directly. A root .env's
+    // PAID_CONTRACT_ADDRESS would add a second scanned contract; blank (not
+    // delete) it, since src/index.ts reloads .env without overriding set vars.
+    // Grace 0 lets the route-level GC tests unpin orphans on first sight.
+    savedPaidContract = process.env.PAID_CONTRACT_ADDRESS;
+    process.env.PAID_CONTRACT_ADDRESS = "";
+    process.env.IPFS_GC_GRACE_HOURS = "0";
 
     const sessions = await import("../src/api/sessions.ts");
     createSession = sessions.createSession;
@@ -237,6 +245,12 @@ describe("Arbesk API", () => {
     delete process.env.UPLOAD_URL_RATE_LIMIT_MAX;
     delete process.env.UNPIN_RATE_LIMIT_MAX;
     delete process.env.GC_RATE_LIMIT_MAX;
+    delete process.env.IPFS_GC_GRACE_HOURS;
+    if (savedPaidContract === undefined) {
+      delete process.env.PAID_CONTRACT_ADDRESS;
+    } else {
+      process.env.PAID_CONTRACT_ADDRESS = savedPaidContract;
+    }
   });
 
   async function makeSessionHeader(
