@@ -314,6 +314,10 @@ async function startBackend(i) {
         PUBLIC_NOSTR_URL: ports.nostrUrl,
         IPFS_BACKEND: "kubo",
         MOCK_3D_GENERATION: "true",
+        // E2E is Hardhat-only. Without this the backend indexes public Base
+        // Sepolia; a cold .data/ means a long sweep, and /indexer/owned for
+        // chain 84532 blocks on it, hanging cold /studio/<subject> loads.
+        INDEXER_DISABLE_TESTNET: "true",
         // Parametric CAD mock provider (deterministic canned box); the
         // unsuitable toggle lets the CAD rejection/retry UX spec exercise the
         // CadRequestUnsuitable path without a DeepSeek key.
