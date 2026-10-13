@@ -10,11 +10,22 @@ function ts(): string {
   return new Date().toLocaleTimeString();
 }
 
+const DEFAULT_CATCHUP_WAIT_MS = 5000;
+
+/** Max time a request waits on catch-up (env `INDEXER_CATCHUP_WAIT_MS`). */
+function catchUpWaitMs(): number {
+  const ms = Number(process.env.INDEXER_CATCHUP_WAIT_MS ?? DEFAULT_CATCHUP_WAIT_MS);
+  return Number.isFinite(ms) && ms >= 0 ? ms : DEFAULT_CATCHUP_WAIT_MS;
+}
+
 /**
  * Resolves the indexer for a chain and forces a catch-up before returning so
  * freshly minted tokens show up.
  * @remarks Catch-up is skipped if one ran recently (the 15s background poll
- *   covers the gap); `force=true` bypasses the throttle.
+ *   covers the gap); `force=true` bypasses the throttle. The wait is capped:
+ *   concurrent callers share one in-flight catch-up, which on a cold public
+ *   chain can be a sweep of millions of blocks, so past the cap the request
+ *   serves current state and the catch-up keeps running in the background.
  */
 async function withFreshIndexer(
   chainId: number,
@@ -25,18 +36,32 @@ async function withFreshIndexer(
   const catchUpStart = Date.now();
   const msSinceCatchUp = Date.now() - indexer.lastCatchUpAt;
   if (force || msSinceCatchUp > 30000) {
+    const waitMs = catchUpWaitMs();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const capped = new Promise<"capped">((resolve) => {
+      timer = setTimeout(() => resolve("capped"), waitMs);
+    });
+    let outcome: "done" | "capped" = "done";
     try {
-      await indexer.catchUp();
+      outcome = await Promise.race([
+        indexer.catchUp().then(() => "done" as const),
+        capped,
+      ]);
     } catch (catchUpErr) {
       console.warn(
         `[${ts()}] [INDEXER-API] catchUp failed for chain`,
         chainId,
         String((catchUpErr as Error).message)
       );
+    } finally {
+      clearTimeout(timer);
     }
     console.log(
-      `[${ts()}] [INDEXER-API] catchUp for chain ${chainId} took ` +
-        `${Date.now() - catchUpStart}ms, lastScannedBlock=${indexer.lastScannedBlock}` +
+      `[${ts()}] [INDEXER-API] catchUp for chain ${chainId} ` +
+        (outcome === "capped"
+          ? `still running after ${waitMs}ms cap, serving current state`
+          : `took ${Date.now() - catchUpStart}ms`) +
+        `, lastScannedBlock=${indexer.lastScannedBlock}` +
         (force ? " (forced)" : "")
     );
   } else {
