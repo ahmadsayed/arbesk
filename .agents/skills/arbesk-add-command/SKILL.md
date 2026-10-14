@@ -27,8 +27,8 @@ Follow the steps in order. Do not skip the decision gate (step 4).
      - **Option B** — create a new SDK package under `packages/`.
      Wait for the explicit choice before writing any code.
    - Either way: if the plan adds or changes code in a shared SDK (even under the gate), say so explicitly in the plan and mark frontend regression tests as mandatory (step 6).
-5. **Plan.** Write the implementation plan (use the writing-plans skill for large features). The plan must name: CLI module(s), SDK changes (if any), relay/adapter changes, and the README row being closed.
-6. **Tests first** (REQUIRED SUB-SKILL: test-driven-development):
+5. **Plan.** Write the implementation plan (use the superpowers:writing-plans skill for large features). The plan must name: CLI module(s), SDK changes (if any), relay/adapter changes, and the README row being closed.
+6. **Tests first** (REQUIRED SUB-SKILL: superpowers:test-driven-development):
    - New CLI behavior → new `test/besk-*.test.js` suite following `test/besk-catalog-write.test.js` (`mock.module` from `bun:test` on `relay.ts`/`adapters.ts`).
    - MCP parity → update `test/besk-mcp.test.js`: add the tool name to `EXPECTED_TOOLS` and at least one `callTool` dispatch test (use `open: false`-style flags so tests never launch browsers or prompt).
    - If the dedup touched a shared SDK or frontend code → also run/update `bun run test:frontend` (deployment integrity included); E2E (`e2e/`) only if Studio UI behavior changed.
