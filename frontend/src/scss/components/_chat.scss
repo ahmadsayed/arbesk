@@ -415,19 +415,19 @@
 }
 
 // Input + submit sit on one row; the hint (when shown) drops below it.
+// Prompt on top at full width; actions row underneath.
 .messagebar-row {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--size-2);
 }
 
-// Right-side action column: image attach stacked above the send button.
+// Actions row: photo attach on the left, Generate pinned right.
 .messagebar-actions {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: var(--size-1);
-  flex-shrink: 0;
 }
 
 .messagebar-input {
@@ -461,6 +461,7 @@
   justify-content: center;
   gap: var(--size-2);
   flex-shrink: 0;
+  margin-left: auto;
 
   &:disabled {
     cursor: not-allowed;

@@ -693,4 +693,14 @@ describe("Insert panel cards", () => {
     assetStore.set(OPEN);
     expect(document.getElementById("insertNoAsset").hidden).toBe(true);
   });
+
+  test("signed out, the no-asset notice stays hidden (New empty asset needs a wallet)", async () => {
+    _wallet = { walletAddress: null, chainId: 31415822 };
+    const { initAssetLibrary } = await loadModule();
+    initAssetLibrary();
+    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
+    _wallet = { walletAddress: "0xOwner", chainId: 31415822 };
+    emit(EVENTS.WALLET_CONNECTED);
+    expect(document.getElementById("insertNoAsset").hidden).toBe(false);
+  });
 });

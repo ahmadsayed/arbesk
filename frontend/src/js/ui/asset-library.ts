@@ -809,7 +809,9 @@ function updateInsertChrome(): void {
   const hint = document.getElementById("insertPanelHint");
   if (hint) hint.textContent = visitor ? BROWSE_HINT : INSERT_HINT;
   const notice = document.getElementById("insertNoAsset");
-  if (notice) notice.hidden = visitor || isAssetOpen();
+  // Signed out, "New empty asset" can't start a draft — the sign-in empty
+  // state below says what to do instead.
+  if (notice) notice.hidden = visitor || isAssetOpen() || !walletState.get().walletAddress;
 }
 
 function cachedAssetName(assetID: string | null): string {
@@ -1358,6 +1360,7 @@ on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
 });
 
 on(EVENTS.WALLET_CONNECTED, async () => {
+  updateInsertChrome();
   const params = new URLSearchParams(window.location.search);
   const assetTokenId = params.get("asset");
   const assetId = params.get("assetId");
