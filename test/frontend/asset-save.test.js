@@ -7,6 +7,8 @@ let _publishResult = { tokenId: "123", isNew: false };
 let _walletAddress = "0xOwner";
 let _activeAssetName = "My Hat";
 let _activeAssetTokenId = null;
+let _entries = [];
+let _unsaved = false;
 
 beforeEach(() => {
   resetModules();
@@ -15,6 +17,8 @@ beforeEach(() => {
   _walletAddress = "0xOwner";
   _activeAssetName = "My Hat";
   _activeAssetTokenId = null;
+  _entries = [];
+  _unsaved = false;
 });
 
 async function loadModule() {
@@ -85,6 +89,24 @@ async function loadModule() {
     () => ({
       updateUrlAsset: jest.fn(),
       updateUrlManifest: jest.fn(),
+    })
+  );
+
+  await mock.module(
+    "@arbesk/asset-core/domain/version-history-store.js",
+    () => ({
+      getState: () => ({ entries: _entries, activeCid: null, publishedCid: null, isLoading: false }),
+      activeIndex: () => _entries.length - 1,
+      subscribe: () => () => {},
+    })
+  );
+  await mock.module(
+    "../../frontend/src/js/state/unsaved-changes.js",
+    () => ({
+      hasUnsavedChanges: () => _unsaved,
+      registerPendingSource: () => () => {},
+      notifyPendingEditsChanged: () => {},
+      onBeforeUnload: () => {},
     })
   );
 
@@ -172,7 +194,30 @@ describe("success toasts", () => {
     });
   });
 
-  test("publish toast names the new version", async () => {
+  test("publish toast: unsaved edits over 2 versions -> v3", async () => {
+    _entries = [{ cid: "a" }, { cid: "b" }];
+    _unsaved = true;
+    const { onPublishAsset } = await loadModule();
+    const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
+    await onPublishAsset(); // store not refreshed: still 2 entries
+    expect(showToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "Published v3 — your team can see it now",
+    });
+  });
+
+  test("publish toast: saved draft, no edits, 2 versions -> v2", async () => {
+    _entries = [{ cid: "a" }, { cid: "b" }];
+    const { onPublishAsset } = await loadModule();
+    const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
+    await onPublishAsset();
+    expect(showToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "Published v2 — your team can see it now",
+    });
+  });
+
+  test("publish toast: no history -> v1", async () => {
     const { onPublishAsset } = await loadModule();
     const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
     await onPublishAsset();

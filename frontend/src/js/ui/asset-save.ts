@@ -20,8 +20,7 @@ import {
   getActiveAssetName,
   getActiveAssetTokenId,
 } from "@arbesk/asset-core/domain/asset.js";
-import { getState as getVersionState } from "@arbesk/asset-core/domain/version-history-store.js";
-import { renderChrome } from "./asset-chrome.ts";
+import { renderChrome, publishVersionNumber } from "./asset-chrome.ts";
 import { error } from "../utils/log.ts";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.ts";
 import { verifyCanEdit } from "../services/asset-save/editor-publish.ts";
@@ -34,9 +33,6 @@ import {
   finishTaskProgress,
   failTaskProgress,
 } from "./task-progress.ts";
-
-const SAVE_TITLE =
-  "Kept in this tab only. Publish to share with your team and keep it. (Ctrl+S)";
 
 const saveBtn = document.getElementById("saveAssetBtn") as HTMLButtonElement | null;
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -188,15 +184,14 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
     isSaving = false;
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.title = SAVE_TITLE;
+      renderChrome(); // restores the title the busy state replaced
     }
     if (saveBtnText) saveBtnText.textContent = "Save draft";
   }
 }
 
-/** Success feedback; N is the version count after publish (refreshed or not). */
-function announcePublished(isNew: boolean | undefined, versionsBefore: number): void {
-  const version = Math.max(getVersionState().entries.length, versionsBefore + 1);
+/** Success feedback naming the version captured before publishing. */
+function announcePublished(isNew: boolean | undefined, version: number): void {
   announceStatus("Published.");
   finishTaskProgress("Published.");
   showToast({
@@ -211,7 +206,7 @@ async function onPublishAsset(): Promise<void> {
   if (!requireWallet()) return;
 
   isPublishing = true;
-  const versionsBefore = getVersionState().entries.length;
+  const publishedVersion = publishVersionNumber();
   if (publishBtn) {
     publishBtn.disabled = true;
     publishBtn.title = "Publishing…";
@@ -267,7 +262,7 @@ async function onPublishAsset(): Promise<void> {
     }
     if (outcome.outcome === "aborted") return;
 
-    announcePublished(outcome.isNew, versionsBefore);
+    announcePublished(outcome.isNew, publishedVersion);
   } catch (err) {
     error("Publish asset failed:", err);
     const rateLimited = isRateLimitError(err);

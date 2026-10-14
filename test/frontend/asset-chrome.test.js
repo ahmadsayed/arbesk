@@ -212,18 +212,26 @@ test("meta gains 'Unsaved changes' and Save gets the dot while edits are pending
   expect(save.getAttribute("aria-label")).toBe("Save draft");
 });
 
-test("publish title names the next version", () => {
+test("publish title names the version that will be published", () => {
   resetForNewAsset();
   renameAsset("Stand");
   walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
   const publish = document.getElementById("publishAssetBtn");
   expect(publish.getAttribute("aria-label")).toBe("Publish");
-  expect(publish.title).toBe("Share this version with your team (creates v1)");
+  // no history -> v1
+  expect(publish.title).toBe("Share this version with your team (v1)");
+  // saved versions, no edits -> latest saved version
   versionStore.entries = [{ cid: "a" }, { cid: "b" }];
   versionStore.active = 1;
   notifyVersionSubs();
-  expect(publish.title).toBe("Share this version with your team (creates v3)");
+  expect(publish.title).toBe("Share this version with your team (v2)");
+  // unsaved edits -> publish saves a new version first
+  state.pendingTransformEdits.set("n1", [1]);
+  emit(EVENTS.PENDING_EDITS_CHANGED);
+  expect(publish.title).toBe("Share this version with your team (v3)");
+  state.pendingTransformEdits.clear();
+  emit(EVENTS.PENDING_EDITS_CHANGED);
 });
 
 const OWNER = "0x00000000000000000000000000000000000000a1";

@@ -41,15 +41,28 @@ function _renderSaveButton(visible: boolean, dirty: boolean): void {
   if (!saveBtn) return;
   saveBtn.hidden = !visible;
   saveBtn.classList.toggle("has-unsaved", dirty);
+  saveBtn.title = SAVE_TITLE;
   saveBtn.setAttribute("aria-label", dirty ? `${SAVE_LABEL} (unsaved changes)` : SAVE_LABEL);
 }
 
-/** Publish tooltip: names the version a publish would create. */
+const SAVE_TITLE =
+  "Kept in this tab only. Publish to share with your team and keep it. (Ctrl+S)";
+
+/**
+ * The version a publish right now would share: a new one when there are
+ * unsaved edits (publish saves them first), else the latest saved version.
+ */
+export function publishVersionNumber(): number {
+  const saved = getVersionState().entries.length;
+  return hasUnsavedChanges() ? saved + 1 : Math.max(saved, 1);
+}
+
+/** Publish tooltip: names the version that will be published. */
 function _renderPublishButton(visible: boolean): void {
   if (!publishBtn) return;
   publishBtn.hidden = !visible;
   publishBtn.setAttribute("aria-label", "Publish");
-  publishBtn.title = `Share this version with your team (creates v${getVersionState().entries.length + 1})`;
+  publishBtn.title = `Share this version with your team (v${publishVersionNumber()})`;
 }
 
 function _renderTitle(
@@ -73,9 +86,10 @@ function _renderTitle(
 
 /**
  * Renders the chrome from current state.
- * @remarks Idempotent.
+ * @remarks Idempotent. ui/asset-save.ts calls it after a publish to restore
+ *   the button titles it overwrote while busy.
  */
-function renderChrome(): void {
+export function renderChrome(): void {
   const s = getAssetState();
   const hasAsset = hasOpenAsset();
   const hasWallet = !!walletState.get().walletAddress;
@@ -109,4 +123,3 @@ on(EVENTS.PENDING_EDITS_CHANGED, renderChrome);
 window.addEventListener("beforeunload", (e) => {
   if (canEdit()) onBeforeUnload(e, hasUnpublishedDraft());
 });
-export { renderChrome };
