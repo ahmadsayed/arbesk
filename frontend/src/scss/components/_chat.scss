@@ -332,50 +332,23 @@
   }
 }
 
-// Provider select + key configure button on one row.
-.provider-row {
-  display: flex;
-  align-items: center;
-  gap: var(--size-2);
-
-  .form-select {
-    flex: 1;
-    min-width: 0;
-  }
+// Key status line under the generator select: dim caption plus a link-style
+// Add key / Change button.
+.provider-key-status {
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
 }
 
-.provider-key-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  color: var(--dim-fg);
-  border-radius: var(--radius-3);
-  flex-shrink: 0;
-
-  &:hover {
-    color: var(--view-fg);
-  }
+.provider-key-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent-bg);
+  text-decoration: underline;
 
   &:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
-  }
-
-  // Tripo 3D selected but no key stored yet.
-  &.attention {
-    color: var(--warning);
-  }
-}
-
-.provider-key-hint {
-  margin: 0;
-  font-size: var(--font-size-0);
-  color: var(--warning);
-
-  &[hidden] {
-    display: none;
   }
 }
 
@@ -485,45 +458,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background-color: var(--accent-bg);
-  color: var(--accent-fg);
-  border-radius: var(--radius-round);
+  gap: var(--size-2);
   flex-shrink: 0;
-  transition: background-color var(--duration-quick) var(--ease-out-3);
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
 
   &:disabled {
-    opacity: 0.5;
     cursor: not-allowed;
   }
 
-  &:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-  }
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  // Spinner state (replaces icon during generation)
+  // Spinner state (replaces the label during generation)
   &.generating {
-    .messagebar-submit-icon { display: none; }
+    .messagebar-submit-label { display: none; }
     .messagebar-spinner { display: block; }
   }
 }
 
 .messagebar-spinner {
   display: none;
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--accent-fg);
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
 }

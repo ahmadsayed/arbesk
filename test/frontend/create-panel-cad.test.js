@@ -150,8 +150,8 @@ const FRAGMENT = `
   <p id="generateHint" class="messagebar-hint" hidden></p>
   <button id="clearChatBtn" type="button"></button>
   <div id="assetNameDisplay" class="form-input">Untitled Asset</div>
-  <details id="composerSettings" class="composer-settings" open>
-    <summary class="composer-settings-summary">Provider</summary>
+  <details id="composerAdvanced" class="composer-settings">
+    <summary class="composer-settings-summary">Advanced</summary>
   </details>
   <select id="providerSelect" class="form-select">
     <option value="auto">Auto (recommended)</option>
@@ -159,8 +159,7 @@ const FRAGMENT = `
     <option value="tripo3d">Tripo 3D</option>
     <option value="cad">Parametric CAD</option>
   </select>
-  <button id="providerKeyBtn" class="provider-key-btn" type="button" hidden></button>
-  <p id="providerKeyHint" class="provider-key-hint" hidden></p>
+  <p id="providerKeyStatus"><span id="providerKeyStatusText"></span><button id="providerKeyLink" type="button"></button></p>
   <p id="providerBalance" class="provider-balance" hidden></p>
   <button id="imageAttachBtn" class="messagebar-attach" type="button" hidden></button>
   <input id="imageAttachInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
@@ -189,8 +188,6 @@ let pendingGens;
 let promptInput;
 let generateBtn;
 let providerSelect;
-let providerKeyBtn;
-let providerKeyHint;
 let bottomBarProvider;
 
 const CAD_RESULT = {
@@ -209,8 +206,6 @@ function buildDom() {
   promptInput = document.getElementById("promptInput");
   generateBtn = document.getElementById("generateBtn");
   providerSelect = document.getElementById("providerSelect");
-  providerKeyBtn = document.getElementById("providerKeyBtn");
-  providerKeyHint = document.getElementById("providerKeyHint");
   bottomBarProvider = document.getElementById("bottomBarProvider");
 }
 
@@ -329,8 +324,6 @@ test("cad provider routes through generateCadAsset with no BYOK key", async () =
   expect(mockGenerateAsset).not.toHaveBeenCalled();
   // …and no BYOK key dialog opens for the server-paid provider.
   expect(mockShowCustomDialog).not.toHaveBeenCalled();
-  expect(providerKeyBtn.hidden).toBe(true);
-  expect(providerKeyHint.hidden).toBe(true);
   expect(bottomBarProvider.textContent).toBe("Provider: Parametric CAD");
   // Working message carries the Stop affordance.
   expect(mockAddWorkingMessage).toHaveBeenCalledWith(

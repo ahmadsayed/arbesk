@@ -105,8 +105,8 @@ const assetNameDisplay = document.getElementById("assetNameDisplay");
 const providerSelect = document.getElementById("providerSelect") as HTMLSelectElement | null;
 const tierSelect = document.getElementById("tierSelect") as HTMLSelectElement | null;
 const collectionSelect = document.getElementById("collectionSelect") as HTMLSelectElement | null;
-const providerKeyBtn = document.getElementById("providerKeyBtn");
-const providerKeyHint = document.getElementById("providerKeyHint");
+const providerKeyStatusText = document.getElementById("providerKeyStatusText");
+const providerKeyLink = document.getElementById("providerKeyLink");
 const bottomBarProvider = document.getElementById("bottomBarProvider");
 
 // BYOK (Bring Your Own Key): a user-supplied generation provider key. Tripo
@@ -391,20 +391,16 @@ if (imageAttachBtn && imageAttachInput) {
 const PROVIDER_STORAGE = "arbesk-provider";
 
 /**
- * Sync provider-dependent UI for the current selection: the key configure
- * button only applies to BYOK providers (Tripo 3D — including auto, whose
- * advisor may route to Tripo), the hint + attention state flag a missing key,
- * and the bottom bar mirrors the active selection.
+ * Sync provider-dependent UI for the current selection: the Tripo 3D key
+ * status line ("added" / "not added" plus its Add key / Change link), the
+ * bottom bar mirror of the active selection, and the balance caption.
  */
 function syncProviderUI() {
-  const provider = getProvider();
-  const real = isRealProvider(provider) || provider === "auto";
-  const missingKey = real && getByokKey().length === 0;
-  if (providerKeyBtn) {
-    providerKeyBtn.hidden = !real;
-    providerKeyBtn.classList.toggle("attention", missingKey);
+  const hasKey = getByokKey().length > 0;
+  if (providerKeyStatusText) {
+    providerKeyStatusText.textContent = `Tripo 3D API key: ${hasKey ? "added" : "not added"} · `;
   }
-  if (providerKeyHint) providerKeyHint.hidden = !missingKey;
+  if (providerKeyLink) providerKeyLink.textContent = hasKey ? "Change" : "Add key";
   if (bottomBarProvider && providerSelect) {
     const label = providerSelect.selectedOptions[0]?.textContent || "Auto";
     bottomBarProvider.textContent = `Provider: ${label}`;
@@ -413,6 +409,17 @@ function syncProviderUI() {
 }
 
 if (providerSelect) {
+  // Mock is a dev-only generator: offered on localhost, inserted before the
+  // stored/URL provider is hydrated so a stored "mock" still restores there.
+  if (
+    (location.hostname === "localhost" || location.hostname === "127.0.0.1") &&
+    !providerSelect.querySelector('option[value="mock"]')
+  ) {
+    const mockOption = document.createElement("option");
+    mockOption.value = "mock";
+    mockOption.textContent = "Mock (local)";
+    providerSelect.insertBefore(mockOption, providerSelect.querySelector('option[value="tripo3d"]'));
+  }
   const knownOption = (value: string | null) =>
     Array.from(providerSelect.options).some((o) => o.value === value);
   // A ?provider= deep link (landing-page personas) beats the stored choice
@@ -443,19 +450,18 @@ if (providerSelect) {
   });
 }
 
-// Collapsible provider section — open by default, persisted so the
+// Collapsible Advanced section — closed by default, persisted so the
 // user's preference survives reloads.
-const composerSettings = document.getElementById(
-  "composerSettings"
+const composerAdvanced = document.getElementById(
+  "composerAdvanced"
 ) as HTMLDetailsElement | null;
-const COMPOSER_SETTINGS_STORAGE = "arbesk-composer-settings-open";
-if (composerSettings) {
-  composerSettings.open =
-    localStorage.getItem(COMPOSER_SETTINGS_STORAGE) !== "0";
-  composerSettings.addEventListener("toggle", () => {
+const COMPOSER_ADVANCED_STORAGE = "arbesk-create-advanced";
+if (composerAdvanced) {
+  composerAdvanced.open = localStorage.getItem(COMPOSER_ADVANCED_STORAGE) === "1";
+  composerAdvanced.addEventListener("toggle", () => {
     localStorage.setItem(
-      COMPOSER_SETTINGS_STORAGE,
-      composerSettings.open ? "1" : "0"
+      COMPOSER_ADVANCED_STORAGE,
+      composerAdvanced.open ? "1" : "0"
     );
   });
 }
@@ -516,8 +522,8 @@ function showProviderKeyDialog() {
   return showCustomDialog("Tripo 3D API Key", buildProviderKeyBody());
 }
 
-if (providerKeyBtn) {
-  providerKeyBtn.addEventListener("click", () => {
+if (providerKeyLink) {
+  providerKeyLink.addEventListener("click", () => {
     showProviderKeyDialog();
   });
 }

@@ -761,11 +761,11 @@ describe("AI Generation sidebar", () => {
   const STUDIO_PUG_PATH = resolve(ROOT_DIR, "frontend/src/pug/app.pug");
   const pug = () => renderPugSource(STUDIO_PUG_PATH);
 
-  test("provider select offers Auto, Mock, Tripo 3D and Parametric CAD", () => {
+  test("provider select offers plain names; mock is added by script on localhost only", () => {
     const content = pug();
-    expect(content).toContain('option(value="auto") Auto (recommended)');
-    expect(content).toContain('option(value="mock") Mock (Local)');
-    expect(content).toContain('option(value="tripo3d") Tripo 3D');
+    expect(content).toContain('option(value="auto") Choose for me');
+    expect(content).not.toContain('option(value="mock")');
+    expect(content).toContain('option(value="tripo3d") AI model (Tripo 3D)');
     expect(content).toContain('option(value="cad") Parametric CAD');
     expect(content).not.toContain('value="meshy"');
     expect(content).not.toContain('value="hunyuan3d"');
@@ -795,10 +795,10 @@ describe("AI Generation sidebar", () => {
     expect(rail).not.toContain('data-view="settings"');
   });
 
-  test("provider row has a configure-key button and a missing-key hint", () => {
+  test("generator section has a key status line with an Add key / Change link", () => {
     const content = pug();
-    expect(content).toContain("button#providerKeyBtn");
-    expect(content).toContain("#providerKeyHint");
+    expect(content).toContain("#providerKeyStatus");
+    expect(content).toContain("button#providerKeyLink");
   });
 
   test("BYOK key input is not inlined (it lives in the key dialog)", () => {

@@ -200,11 +200,10 @@ const FRAGMENT = `
     <option value="1">Paid</option>
   </select>
   <select id="collectionSelect"></select>
-  <button id="providerKeyBtn" type="button"></button>
-  <div id="providerKeyHint"></div>
+  <span id="providerKeyStatusText"></span><button id="providerKeyLink" type="button"></button>
   <span id="bottomBarProvider"></span>
   <div id="providerBalance"></div>
-  <details id="composerSettings"></details>
+  <details id="composerAdvanced"></details>
   <div id="refineIndicator">
     <span id="refineIndicatorText"></span>
     <button id="refineIndicatorDetach" type="button"></button>
