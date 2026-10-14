@@ -628,7 +628,7 @@ async function _handleLinkedAssetDropped(event: any) {
 
     // An explicit mode (Insert panel) skips the dialog; a self-drop can never
     // be a live-ref, so it is downgraded to a fork instead of refused.
-    let choice: "live-ref" | "fork" | undefined;
+    let choice: "live-ref" | "fork" | null | undefined;
     if (detail.mode) {
       choice = isSelfDrop ? "fork" : detail.mode;
     } else {
