@@ -1,11 +1,13 @@
 ---
 name: arbesk-worktree
-description: Use when the user asks to create a git worktree, run tests in a linked worktree, isolate Docker/test infrastructure from the main checkout, or verify changes from a fresh worktree.
+description: Use when the user asks to create a git worktree, run tests in a linked worktree, isolate Docker/test infrastructure from the main checkout, or verify changes from a fresh worktree. In this repo, use this instead of superpowers:using-git-worktrees.
 ---
 
 # Arbesk Worktree Testing
 
 Create a git worktree and run the full test stack without colliding with the main checkout's Docker containers or ports.
+
+**Precedence:** in this repo, this skill replaces `superpowers:using-git-worktrees` — including when `executing-plans` or `subagent-driven-development` asks for a worktree. The generic skill skips the per-worktree Compose project, port and `IPFS_BACKEND=kubo` setup.
 
 ## Quick Decision
 
