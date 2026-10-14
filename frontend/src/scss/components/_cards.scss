@@ -40,11 +40,11 @@
 
 // Asset library card
 .asset-card {
+  position: relative;
   background-color: var(--card-bg);
   border: var(--border-size-1) solid var(--hairline);
   border-radius: var(--radius-2);
-  padding: var(--size-3);
-  cursor: pointer;
+  padding: 0;
   transition: border-color var(--duration-quick) var(--ease-out-3),
               background-color var(--duration-quick) var(--ease-out-3),
               box-shadow var(--duration-quick) var(--ease-out-3);
@@ -54,10 +54,8 @@
     background-color: var(--surface-overlay-hover);
   }
 
-  &:focus-visible {
-    outline: none;
+  &:focus-within {
     border-color: var(--accent-bg);
-    box-shadow: var(--focus-ring);
   }
 
   &.active {
@@ -108,48 +106,6 @@
   text-overflow: ellipsis;
 }
 
-.asset-card-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--size-2);
-}
-
-.asset-card-badge {
-  font-size: var(--font-size-0);
-  font-weight: var(--font-weight-6);
-  padding: 2px var(--size-2);
-  border-radius: var(--radius-round);
-  border: var(--border-size-1) solid var(--border-color);
-  background-color: transparent;
-  color: var(--dim-fg);
-
-  &.badge-owner {
-    background-color: color-mix(in srgb, var(--accent-bg) 15%, transparent);
-    color: var(--accent-bg);
-    border-color: color-mix(in srgb, var(--accent-bg) 40%, transparent);
-  }
-
-  &.badge-editor {
-    background-color: var(--surface-overlay-hover);
-    color: var(--dim-fg);
-    border-color: var(--border-color);
-  }
-}
-
-.asset-card-actions {
-  display: flex;
-  gap: var(--size-2);
-  margin-top: var(--size-3);
-
-  .btn {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
-
 .asset-card-error {
   border-color: var(--danger-text);
   background-color: color-mix(in srgb, var(--danger-text) 8%, var(--card-bg));
@@ -194,11 +150,68 @@
   }
 }
 
-.asset-card--inaccessible {
-  opacity: 0.55;
+// Primary action: the whole card body inserts the asset.
+.asset-card-main {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: var(--size-3);
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 
-  .asset-card-thumbnail {
-    background: color-mix(in srgb, var(--warning) 8%, var(--card-bg));
-    color: var(--warning);
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .asset-card-name {
+    margin-bottom: 0;
+  }
+}
+
+// Secondary actions (⋯) float over the thumbnail's top-right corner.
+.asset-card-menu {
+  position: absolute;
+  top: var(--size-4);
+  right: var(--size-4);
+}
+
+.asset-card-more {
+  background-color: var(--card-bg);
+  color: var(--card-fg);
+  border: var(--border-size-1) solid var(--hairline);
+  border-radius: var(--radius-round);
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--surface-overlay-hover);
+  }
+}
+
+// The retry overlay is a sibling of the main button (no nested buttons), so
+// it is positioned over the thumbnail area itself.
+.asset-card > .asset-card-reload {
+  inset: var(--size-3) var(--size-3) auto;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+// Summary of tokens whose metadata could not be loaded.
+.asset-library-failed {
+  font-size: var(--font-size-1);
+  color: var(--dim-fg);
+
+  a {
+    color: var(--accent-text);
   }
 }

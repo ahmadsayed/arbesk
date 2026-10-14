@@ -1,6 +1,7 @@
 // @test-env dom
 import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { assetStore, _resetForTesting as resetAssetState } from "@arbesk/asset-core/domain/asset-store.js";
+import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 
 let _tokenURIs = {};
@@ -26,6 +27,10 @@ function makeFakeContract() {
   };
 }
 
+const adoptSpy = jest.fn();
+const linkedSpy = jest.fn();
+on(EVENTS.ASSET_ADD_LINKED_REQUESTED, (payload) => linkedSpy(payload));
+
 const closeAssetSpy = jest.fn(() => {
   assetStore.set({
     activeAssetManifestCid: null,
@@ -40,6 +45,8 @@ const closeAssetSpy = jest.fn(() => {
 beforeEach(() => {
   resetAssetState();
   closeAssetSpy.mockClear();
+  adoptSpy.mockClear();
+  linkedSpy.mockClear();
   _wallet = { walletAddress: "0xOwner", chainId: 31415822 };
   _ownedByChain = {};
   _sharedTokens = [];
@@ -143,7 +150,7 @@ async function loadModule() {
       getActiveAssetName: () => assetStore.get().activeAssetName,
       getCurrentManifest: () => assetStore.get().currentManifest,
       subscribeAsset: jest.fn(),
-      adoptOpenedAsset: jest.fn(),
+      adoptOpenedAsset: adoptSpy,
       activateAssetManifest: jest.fn(),
       setActiveManifestCid: jest.fn(),
       setLatestManifestCid: jest.fn(),
@@ -197,7 +204,7 @@ describe("renderAssetLibrary", () => {
     expect(document.querySelector(".empty-state")).not.toBeNull();
   });
 
-  test("renders inaccessible card for token whose IPFS load fails", async () => {
+  test("a token whose IPFS load fails is summarised, not rendered as a card", async () => {
     const { initAssetLibrary, renderAssetLibrary } = await loadModule();
     initAssetLibrary();
 
@@ -206,10 +213,8 @@ describe("renderAssetLibrary", () => {
 
     await renderAssetLibrary(["3"], []);
 
-    const inaccessible = document.querySelector(".asset-card--inaccessible");
-    expect(inaccessible).not.toBeNull();
-    // Normal asset cards should not appear for the failing token
-    expect(document.querySelector(".asset-card:not(.asset-card--inaccessible)")).toBeNull();
+    expect(document.querySelector(".asset-card")).toBeNull();
+    expect(document.querySelector(".asset-library-failed")).not.toBeNull();
   });
 });
 
@@ -242,6 +247,14 @@ describe("updateActiveAssetCard", () => {
     const updated = await updateActiveAssetCard();
 
     expect(updated).toBe(true);
+    // The open asset's own card is hidden; it returns, updated, once closed.
+    expect(document.querySelector('.asset-card[data-asset-id="asset-a"]')).toBeNull();
+    assetStore.set({
+      activeAssetTokenId: null,
+      activeAssetId: null,
+      activeAssetManifestCid: null,
+      currentManifest: null,
+    });
     const card = document.querySelector(
       '.asset-card[data-token-id="1"][data-asset-id="asset-a"]'
     );
@@ -364,14 +377,10 @@ describe("Gallery panel visitor mode (public profile in the studio sidebar)", ()
     const badge = document.getElementById("galleryVisitorBadge");
     expect(badge.hidden).toBe(false);
     expect(badge.textContent).toBe("Read-only · public profile");
-    // Read-only chrome: no delete, no Add to Scene, no drag.
-    expect(document.querySelector(".asset-card-delete")).toBeNull();
-    const actionTexts = [
-      ...document.querySelectorAll(".asset-card-actions button"),
-    ].map((b) => b.textContent);
-    expect(actionTexts.some((t) => t.includes("Add to Scene"))).toBe(false);
-    expect(actionTexts.some((t) => t.includes("Download"))).toBe(true);
+    // Read-only chrome: no menu, no drag, never disabled.
+    expect(document.querySelector(".asset-card-more")).toBeNull();
     expect(document.querySelector(".asset-card").draggable).toBe(false);
+    expect(document.querySelector(".asset-card-main").disabled).toBe(false);
     // Section is labeled for a profile, not "My Assets".
     expect(
       document.querySelector(".asset-library-section-title").textContent
@@ -421,17 +430,127 @@ describe("Gallery panel visitor mode (public profile in the studio sidebar)", ()
     expect(names).toEqual(
       expect.arrayContaining(["Asset A", "Asset B", "Asset C"])
     );
-    expect(
-      document.querySelector(".asset-card-delete").hidden
-    ).toBe(false);
-    const actionTexts = [
-      ...document.querySelectorAll(".asset-card-actions button"),
-    ].map((b) => b.textContent);
-    expect(actionTexts.some((t) => t.includes("Add to Scene"))).toBe(true);
+    expect(document.querySelector(".asset-card-more")).not.toBeNull();
     expect(document.querySelector(".asset-card").draggable).toBe(true);
     expect(document.getElementById("galleryVisitorBadge").hidden).toBe(true);
     expect(
       document.querySelector(".asset-library-section-title").textContent
-    ).toBe("My Assets");
+    ).toBe("Your assets");
+  });
+});
+
+describe("Insert panel cards", () => {
+  const OPEN = { activeAssetManifestCid: "bafyOpen", activeAssetTokenId: "9", activeAssetId: "asset-open" };
+  const waitFor = async (fn) => {
+    for (let i = 0; i < 50 && !fn(); i++) await new Promise((r) => setTimeout(r, 5));
+  };
+
+  async function renderOwned(owned = ["1", "2"], shared = []) {
+    const mod = await loadModule();
+    mod.initAssetLibrary();
+    await mod.renderAssetLibrary(owned, shared);
+    return mod;
+  }
+  const cardNamed = (name) =>
+    [...document.querySelectorAll(".asset-card")].find(
+      (c) => c.querySelector(".asset-card-name").textContent === name
+    );
+
+  test("card click emits ASSET_ADD_LINKED_REQUESTED with mode live-ref", async () => {
+    assetStore.set(OPEN);
+    await renderOwned();
+    const main = cardNamed("Asset A").querySelector(".asset-card-main");
+    expect(main.getAttribute("aria-label")).toBe("Insert Asset A");
+    main.click();
+    expect(linkedSpy).toHaveBeenCalledTimes(1);
+    const payload = linkedSpy.mock.calls[0][0];
+    expect(payload.mode).toBe("live-ref");
+    expect(payload.token_id).toBe("1");
+    expect(payload.assetID).toBe("asset-a");
+  });
+
+  test("Insert a copy emits mode fork", async () => {
+    assetStore.set(OPEN);
+    await renderOwned();
+    const card = cardNamed("Asset A");
+    const more = card.querySelector(".asset-card-more");
+    expect(more.getAttribute("aria-label")).toBe("More actions for Asset A");
+    more.click();
+    const items = [...card.querySelectorAll(".menu-popover [role=menuitem]")];
+    expect(items.map((i) => i.textContent)).toEqual([
+      "Insert a copy",
+      "Open Asset A",
+      "Show in Library",
+    ]);
+    card.querySelector('[data-action="insert-copy"]').click();
+    expect(linkedSpy).toHaveBeenCalledTimes(1);
+    expect(linkedSpy.mock.calls[0][0].mode).toBe("fork");
+  });
+
+  test("Open item opens the asset", async () => {
+    assetStore.set(OPEN);
+    await renderOwned();
+    const card = cardNamed("Asset A");
+    card.querySelector(".asset-card-more").click();
+    card.querySelector('[data-action="open"]').click();
+    await waitFor(() => adoptSpy.mock.calls.length > 0);
+    expect(adoptSpy).toHaveBeenCalledTimes(1);
+    expect(adoptSpy.mock.calls[0][0]).toBe("bafyA");
+    expect(linkedSpy).not.toHaveBeenCalled();
+  });
+
+  test("cards have no Download, Delete, Burn or role badge", async () => {
+    _tokenURIs[3] = "bafyBroken";
+    await renderOwned(["1", "3"], ["2"]);
+    expect(document.querySelector(".asset-card-actions")).toBeNull();
+    expect(document.querySelector(".asset-card-badge")).toBeNull();
+    expect(document.querySelector(".asset-card--inaccessible")).toBeNull();
+  });
+
+  test("sections are 'Your assets' and 'Shared with you'", async () => {
+    await renderOwned(["1"], ["2"]);
+    const titles = [...document.querySelectorAll(".asset-library-section-title")].map(
+      (h) => h.textContent
+    );
+    expect(titles).toEqual(["Your assets", "Shared with you"]);
+  });
+
+  test("failed tokens render one summary line linking to /library", async () => {
+    _tokenURIs[3] = "bafyBroken";
+    await renderOwned(["1", "3"]);
+    const failed = document.querySelectorAll(".asset-library-failed");
+    expect(failed).toHaveLength(1);
+    expect(failed[0].textContent).toBe("1 asset can't be loaded. Manage in Library");
+    expect(failed[0].querySelector("a").getAttribute("href")).toBe("/library");
+
+    _tokenURIs[4] = "bafyBroken";
+    await renderOwned(["3", "4"]);
+    expect(document.querySelector(".asset-library-failed").textContent).toContain(
+      "2 assets can't be loaded."
+    );
+  });
+
+  test("the open asset's own card is hidden", async () => {
+    assetStore.set({ activeAssetId: "asset-b", activeCollectionTokenId: null });
+    await renderOwned(["2"]);
+    expect(cardNamed("Asset B")).toBeUndefined();
+    expect(cardNamed("Asset C")).toBeDefined();
+  });
+
+  test("with no asset open cards are disabled and emit nothing", async () => {
+    await renderOwned();
+    const main = cardNamed("Asset A").querySelector(".asset-card-main");
+    expect(main.disabled).toBe(true);
+    main.click();
+    expect(linkedSpy).not.toHaveBeenCalled();
+    expect(adoptSpy).not.toHaveBeenCalled();
+  });
+
+  test("cards enable when an asset opens, without refetching", async () => {
+    await renderOwned();
+    const main = cardNamed("Asset A").querySelector(".asset-card-main");
+    expect(main.disabled).toBe(true);
+    assetStore.set(OPEN);
+    expect(cardNamed("Asset A").querySelector(".asset-card-main").disabled).toBe(false);
   });
 });

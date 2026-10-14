@@ -15,13 +15,13 @@ import { getActiveContract, getReadClient } from "../blockchain/wallet.ts";
 import { getReadableContract } from "../blockchain/read-contract.ts";
 import { getContractAddress } from "../blockchain/network-config.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
-import { deleteAssetFromCollection } from "../services/asset-delete.ts";
-import { trimTokenId } from "../utils/library-items.ts";
 import {
   extractThumbnailCid,
   loadThumbnailInto,
 } from "../utils/thumbnail.ts";
-import { showToast } from "./toasts.ts";
+import { hasOpenAsset } from "../state/edit-mode.ts";
+import { confirmDiscardChanges } from "./confirm-discard.ts";
+import { initMenuButton, type MenuButtonHandle } from "./menu-button.ts";
 
 import { updateUrlAsset, clearUrlAssetParams } from "../services/url-utils.ts";
 import { switchView, getActiveView } from "./sidebar.ts";
@@ -624,9 +624,13 @@ export async function openAssetByTokenId(
 }
 
 /**
- * Build a payload for drag-drop / "Add to Scene" using the card's asset entry.
+ * Build a payload for drag-drop / card insert using the card's asset entry.
+ * @param mode - `live-ref` links the latest version; `fork` inserts a copy.
  */
-function buildLinkedAssetPayload(entry: any): Record<string, any> {
+function buildLinkedAssetPayload(
+  entry: any,
+  mode: "live-ref" | "fork"
+): Record<string, any> {
   const { chainId: walletChainId, contractAddress: walletContractAddress } =
     walletState.get();
   const payload: Record<string, any> = {
@@ -636,6 +640,7 @@ function buildLinkedAssetPayload(entry: any): Record<string, any> {
     resolution: "latest",
     chainId: Number(walletChainId || CHAIN_IDS.HARDHAT_LOCAL),
     contractAddress: walletContractAddress || null,
+    mode,
   };
   if (entry.assetId) payload.assetID = entry.assetId;
   return payload;
@@ -691,17 +696,89 @@ async function renderAssetLibrary(
       })
     ),
   ]);
-  const ownedEntries = ownedNested.flat();
-  const sharedEntries = sharedNested.flat();
+  _lastRender = {
+    ownedEntries: ownedNested.flat(),
+    sharedEntries: sharedNested.flat(),
+    visitor,
+  };
+  renderSections();
+}
 
-  assetLibraryBody.appendChild(
-    createSection(visitor ? "Public Assets" : "My Assets", ownedEntries, visitor)
-  );
-  if (sharedEntries.length > 0) {
-    assetLibraryBody.appendChild(
-      createSection("Shared Assets", sharedEntries, visitor)
+/** Last fetched entries, kept so open/close can re-render without refetching. */
+let _lastRender: { ownedEntries: any[]; sharedEntries: any[]; visitor: boolean } | null =
+  null;
+let _menuHandles: MenuButtonHandle[] = [];
+let _lastOwnCardKey = "";
+
+/** Identity of the open asset; its own card is hidden from the Insert list. */
+function ownCardKey(): string {
+  const { activeAssetTokenId, activeAssetId, activeAssetManifestCid } = getAssetState();
+  return `${normalizeTokenId(activeAssetTokenId)}|${activeAssetId ?? ""}|${
+    activeAssetManifestCid ? "open" : ""
+  }`;
+}
+
+/** The open asset can't be inserted into itself, so its card is not listed. */
+function isOwnCard(entry: any): boolean {
+  const { activeAssetTokenId, activeAssetId, activeAssetManifestCid } = getAssetState();
+  const tokenId = normalizeTokenId(activeAssetTokenId);
+  if (activeAssetId) {
+    return (
+      entry.assetId === String(activeAssetId) &&
+      (!tokenId || normalizeTokenId(entry.tokenId) === tokenId)
     );
   }
+  return (
+    Boolean(tokenId && activeAssetManifestCid) &&
+    !entry.assetId &&
+    normalizeTokenId(entry.tokenId) === tokenId
+  );
+}
+
+function failedSummary(count: number): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "asset-library-failed";
+  el.append(`${count} ${count === 1 ? "asset" : "assets"} can't be loaded. `);
+  const link = document.createElement("a");
+  link.href = "/library";
+  link.setAttribute("data-nav", "");
+  link.textContent = "Manage in Library";
+  el.appendChild(link);
+  return el;
+}
+
+function renderSections(): void {
+  if (!assetLibraryBody || !_lastRender) return;
+  const { ownedEntries, sharedEntries, visitor } = _lastRender;
+  for (const h of _menuHandles) h.destroy();
+  _menuHandles = [];
+  assetLibraryBody.innerHTML = "";
+  _lastOwnCardKey = ownCardKey();
+
+  const loadable = (list: any[]) => list.filter((e) => e.type !== "inaccessible");
+  const visible = (list: any[]) =>
+    loadable(list).filter((e) => visitor || !isOwnCard(e));
+  const ownedLoadable = loadable(ownedEntries);
+  const ownedVisible = visible(ownedEntries);
+  const sharedLoadable = loadable(sharedEntries);
+  const sharedVisible = visible(sharedEntries);
+
+  // Only the open asset left in a section: nothing to list, nothing to explain.
+  if (ownedVisible.length > 0 || ownedLoadable.length === 0) {
+    assetLibraryBody.appendChild(
+      createSection(visitor ? "Public Assets" : "Your assets", ownedVisible, visitor)
+    );
+  }
+  if (sharedVisible.length > 0) {
+    assetLibraryBody.appendChild(
+      createSection("Shared with you", sharedVisible, visitor)
+    );
+  }
+  const failed =
+    ownedEntries.length -
+    ownedLoadable.length +
+    (sharedEntries.length - sharedLoadable.length);
+  if (failed > 0) assetLibraryBody.appendChild(failedSummary(failed));
 }
 
 function createEmptyState(title: string, sub: string): HTMLDivElement {
@@ -745,7 +822,7 @@ function createSection(title: string, entries: any[], visitor: boolean = false):
           "No public assets yet",
           "This profile hasn't published any assets yet."
         )
-      : title === "My Assets"
+      : title === "Your assets"
         ? createEmptyState(
             "No assets yet",
             "Create your first asset to see it here."
@@ -761,149 +838,15 @@ function createSection(title: string, entries: any[], visitor: boolean = false):
   const list = document.createElement("div");
   list.className = "asset-library-list";
   for (const entry of entries) {
-    list.appendChild(
-      entry.type === "inaccessible"
-        ? createInaccessibleCard(entry)
-        : createAssetCard(entry, visitor)
-    );
+    list.appendChild(createAssetCard(entry, visitor));
   }
   section.appendChild(list);
   return section;
 }
 
-/** @param entry - `{type:"inaccessible"}` entry */
-function createInaccessibleCard(entry: any): HTMLDivElement {
-  const item = document.createElement("div");
-  item.className = "asset-card asset-card--inaccessible";
-  item.dataset.tokenId = entry.tokenId;
-  item.title = entry.errorReason || "Unknown error";
-  item.setAttribute("role", "group");
-  item.setAttribute("aria-label", `Inaccessible token ${trimTokenId(entry.tokenId)}`);
-
-  const thumbnailEl = document.createElement("div");
-  thumbnailEl.className = "asset-card-thumbnail asset-card-thumbnail-empty";
-  thumbnailEl.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-    <line x1="12" y1="17" x2="12.01" y2="17"/>
-  </svg>`;
-
-  const nameEl = document.createElement("div");
-  nameEl.className = "asset-card-name";
-  nameEl.textContent = trimTokenId(entry.tokenId);
-
-  const badge = document.createElement("span");
-  badge.className = `asset-card-badge ${
-    entry.role === "owner" ? "badge-owner" : "badge-editor"
-  }`;
-  badge.textContent = entry.role === "owner" ? "Owner" : "Editor";
-
-  const meta = document.createElement("div");
-  meta.className = "asset-card-meta";
-  meta.appendChild(badge);
-
-  const burnBtn = document.createElement("button");
-  burnBtn.className = "btn btn-outline btn-danger btn-sm";
-  burnBtn.textContent = "Burn Token";
-  burnBtn.title = "Burn this token to remove it from your wallet";
-  burnBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    try {
-      const { showBurnCollectionDialog } = await import("./dialog.ts");
-      const { burnCollection } = await import("../services/asset-delete.ts");
-      const label = trimTokenId(entry.tokenId);
-      const confirmed = await showBurnCollectionDialog(label);
-      if (confirmed !== "burn") return;
-      await burnCollection(entry.tokenId);
-      showToast({ type: "success", title: "Token burned", message: `Token ${label} removed.` });
-      item.remove();
-    } catch (err) {
-      showToast({ type: "error", title: "Burn failed", message: (err as Error).message || "Could not burn token." });
-    }
-  });
-
-  const actions = document.createElement("div");
-  actions.className = "asset-card-actions";
-  actions.appendChild(burnBtn);
-
-  item.appendChild(thumbnailEl);
-  item.appendChild(nameEl);
-  item.appendChild(meta);
-  item.appendChild(actions);
-
-  return item;
-}
-
-/** @param entry - gallery entry; visitor mode renders read-only chrome */
-function buildAddToSceneButton(entry: any): HTMLButtonElement {
-  const addBtn = document.createElement("button");
-  addBtn.className = "btn btn-outline btn-sm";
-  addBtn.textContent = "Add to Scene";
-  addBtn.title = "Add this asset as a linked asset in the current scene";
-  addBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry));
-  });
-  return addBtn;
-}
-
-function buildDownloadButton(entry: any): HTMLButtonElement {
-  const downloadBtn = document.createElement("button");
-  downloadBtn.className = "btn btn-outline btn-sm";
-  downloadBtn.title = "Download the model file (GLB/glTF)";
-  downloadBtn.setAttribute("aria-label", `Download asset ${entry.name}`);
-  downloadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg><span>Download</span>`;
-  downloadBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    if (downloadBtn.disabled) return;
-    downloadBtn.disabled = true;
-    try {
-      const { downloadAssetByManifestCid } = await import(
-        "../services/asset-download.ts"
-      );
-      const filename = await downloadAssetByManifestCid(
-        entry.manifestCid,
-        entry.name
-      );
-      showToast({
-        type: "success",
-        title: "Download Started",
-        message: filename,
-      });
-    } catch (err) {
-      showToast({
-        type: "error",
-        title: "Download Failed",
-        message: (err as Error).message || "Could not download the model.",
-      });
-    } finally {
-      downloadBtn.disabled = false;
-    }
-  });
-  return downloadBtn;
-}
-
-function buildDeleteButton(entry: any): HTMLButtonElement {
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "btn btn-outline btn-danger btn-sm asset-card-delete";
-  deleteBtn.title = "Remove this asset from its collection";
-  deleteBtn.setAttribute("aria-label", `Delete asset ${entry.name}`);
-  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M3 6h18"/>
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-  </svg><span>Delete</span>`;
-  deleteBtn.addEventListener("click", (e) => onDeleteAsset(e, entry));
-  return deleteBtn;
-}
-
 function wireCardDrag(item: HTMLDivElement, entry: any): void {
   item.addEventListener("dragstart", (event) => {
-    const payload = buildLinkedAssetPayload(entry);
+    const payload = buildLinkedAssetPayload(entry, "live-ref");
     const dt = event.dataTransfer;
     if (!dt) return;
     dt.effectAllowed = "copy";
@@ -937,28 +880,6 @@ function buildCardThumbnail(): {
   return { thumbnailEl, reloadBtn };
 }
 
-function buildCardBadge(role?: string): HTMLSpanElement {
-  const badge = document.createElement("span");
-  badge.className = `asset-card-badge ${
-    role === "owner" ? "badge-owner" : "badge-editor"
-  }`;
-  badge.textContent = role === "owner" ? "Owner" : "Editor";
-  return badge;
-}
-
-// Click or keyboard activate anywhere on the card (except action buttons).
-function wireCardActivation(item: HTMLDivElement, entry: any): void {
-  item.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".asset-card-actions button")) return;
-    openAssetEntry(entry);
-  });
-  item.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    openAssetEntry(entry);
-  });
-}
-
 function wireCardThumbnailLoading(
   entry: any,
   thumbnailEl: HTMLDivElement,
@@ -973,34 +894,100 @@ function wireCardThumbnailLoading(
   runLoad();
 }
 
-/**
- * Assemble the card's meta row + action buttons.
- * @remarks Read-only profile panel: open (card click) and Download stay;
- *   scene-edit, delete, and the role badge are owner-only (every card in a
- *   public profile belongs to the subject, so the badge is meaningless).
- */
-function buildCardFooter(
-  entry: any,
-  visitor: boolean
-): {
-  meta: HTMLDivElement;
-  actions: HTMLDivElement;
-  deleteBtn: HTMLButtonElement | null;
-} {
-  const meta = document.createElement("div");
-  meta.className = "asset-card-meta";
-  if (!visitor) meta.appendChild(buildCardBadge(entry.role));
+/** Opens the entry after confirming that unsaved edits may be discarded. */
+async function openEntryConfirmed(entry: any): Promise<void> {
+  if (!(await confirmDiscardChanges())) return;
+  await openAssetEntry(entry);
+}
 
-  const actions = document.createElement("div");
-  actions.className = "asset-card-actions";
-  let deleteBtn: HTMLButtonElement | null = null;
-  if (!visitor) actions.appendChild(buildAddToSceneButton(entry));
-  actions.appendChild(buildDownloadButton(entry));
-  if (!visitor) {
-    deleteBtn = buildDeleteButton(entry);
-    actions.appendChild(deleteBtn);
+/**
+ * Navigates to /library through the router's delegated `a[data-nav]` handler.
+ * @remarks router.ts imports this module, so importing navigate() here would
+ *   create a cycle; a transient data-nav link reuses the same path.
+ */
+function goToLibrary(): void {
+  const link = document.createElement("a");
+  link.href = "/library";
+  link.setAttribute("data-nav", "");
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+let _menuSeq = 0;
+
+/**
+ * The card's ⋯ button and its popover: Insert a copy / Open / Show in Library.
+ * @remarks Owner chrome only; visitors get a read-only card with no menu.
+ */
+function buildCardMenu(entry: any): { anchor: HTMLDivElement; moreBtn: HTMLButtonElement } {
+  const menuId = `assetCardMenu${++_menuSeq}`;
+  const name = entry.name || `asset #${entry.tokenId}`;
+
+  const anchor = document.createElement("div");
+  anchor.className = "menu-anchor asset-card-menu";
+
+  const moreBtn = document.createElement("button");
+  moreBtn.type = "button";
+  moreBtn.className = "btn btn-icon asset-card-more";
+  moreBtn.setAttribute("aria-haspopup", "menu");
+  moreBtn.setAttribute("aria-expanded", "false");
+  moreBtn.setAttribute("aria-controls", menuId);
+  moreBtn.setAttribute("aria-label", `More actions for ${name}`);
+  moreBtn.title = "More actions";
+  moreBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="/icons.svg#more-horizontal"/></svg>`;
+
+  const menu = document.createElement("ul");
+  menu.id = menuId;
+  menu.className = "menu-popover";
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", `Actions for ${name}`);
+  menu.hidden = true;
+  const labels: Array<[string, string]> = [
+    ["insert-copy", "Insert a copy"],
+    ["open", `Open ${name}`],
+    ["library", "Show in Library"],
+  ];
+  for (const [action, label] of labels) {
+    const li = document.createElement("li");
+    li.className = "menu-item";
+    li.setAttribute("role", "menuitem");
+    li.tabIndex = -1;
+    li.dataset.action = action;
+    li.textContent = label;
+    menu.appendChild(li);
   }
-  return { meta, actions, deleteBtn };
+  anchor.append(moreBtn, menu);
+
+  _menuHandles.push(
+    initMenuButton(moreBtn, menu, {
+      align: "end",
+      onSelect(item) {
+        switch (item.dataset.action) {
+          case "insert-copy":
+            emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry, "fork"));
+            break;
+          case "open":
+            void openEntryConfirmed(entry);
+            break;
+          case "library":
+            goToLibrary();
+            break;
+        }
+      },
+    })
+  );
+  return { anchor, moreBtn };
+}
+
+/** Insert needs a scene to insert into: cards are inert until an asset is open. */
+function applyInsertAvailability(card: HTMLElement, enabled: boolean): void {
+  const main = card.querySelector<HTMLButtonElement>(".asset-card-main");
+  if (main) main.disabled = !enabled;
+  card
+    .querySelector<HTMLElement>('[data-action="insert-copy"]')
+    ?.setAttribute("aria-disabled", String(!enabled));
 }
 
 function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
@@ -1014,10 +1001,6 @@ function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
   if (entry.collectionCid) item.dataset.collectionCid = entry.collectionCid;
   // Dragging an asset into the scene is an edit affordance — owners only.
   item.draggable = !visitor;
-  item.tabIndex = 0;
-  item.setAttribute("role", "button");
-  item.setAttribute("aria-label", `Open asset ${entry.name}`);
-
   if (!visitor) wireCardDrag(item, entry);
 
   const { thumbnailEl, reloadBtn } = buildCardThumbnail();
@@ -1026,51 +1009,33 @@ function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
   nameEl.className = "asset-card-name";
   nameEl.textContent = entry.name || `Loading… #${entry.tokenId}`;
 
-  wireCardActivation(item, entry);
+  // The card body is the primary action: Insert (visitors can only open).
+  const main = document.createElement("button");
+  main.type = "button";
+  main.className = "asset-card-main";
+  main.setAttribute(
+    "aria-label",
+    `${visitor ? "Open" : "Insert"} ${entry.name || `asset #${entry.tokenId}`}`
+  );
+  main.append(thumbnailEl, nameEl);
+  main.addEventListener("click", () => {
+    if (visitor) {
+      void openEntryConfirmed(entry);
+      return;
+    }
+    emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry, "live-ref"));
+  });
+  item.appendChild(main);
+  // Sibling of the main button (nested buttons are invalid), overlaid by CSS.
+  item.appendChild(reloadBtn);
 
-  const { meta, actions, deleteBtn } = buildCardFooter(entry, visitor);
-
-  item.appendChild(thumbnailEl);
-  item.appendChild(nameEl);
-  item.appendChild(meta);
-  item.appendChild(actions);
+  if (!visitor) {
+    item.appendChild(buildCardMenu(entry).anchor);
+    applyInsertAvailability(item, hasOpenAsset());
+  }
 
   wireCardThumbnailLoading(entry, thumbnailEl, reloadBtn);
-  if (deleteBtn) resolveDeleteVisibility(deleteBtn, entry.role);
   return item;
-}
-
-function resolveDeleteVisibility(deleteBtn: HTMLButtonElement, role?: string): void {
-  deleteBtn.hidden = role !== "owner";
-}
-
-async function onDeleteAsset(event: MouseEvent, entry: any): Promise<void> {
-  event.stopPropagation();
-
-  if (!entry.isCollection || !entry.assetId) {
-    showToast({
-      type: "warning",
-      title: "Cannot Delete",
-      message: "This asset is not part of a collection.",
-    });
-    return;
-  }
-
-  try {
-    await deleteAssetFromCollection({
-      tokenId: entry.tokenId,
-      assetId: entry.assetId,
-      assetName: entry.name,
-      onAfterDelete: refreshAssetLibrary,
-    });
-  } catch (err) {
-    console.error("[ASSET-LIBRARY] Delete asset failed:", err);
-    showToast({
-      type: "error",
-      title: "Delete Failed",
-      message: (err as Error).message || "Could not remove asset from collection.",
-    });
-  }
 }
 
 /**
@@ -1160,30 +1125,51 @@ async function updateActiveAssetCard(): Promise<boolean> {
     return false;
   }
 
+  // The open asset's own card is hidden, so patch the cached entry (shown
+  // again when the asset closes) as well as any card currently in the DOM.
+  const cached = findCachedEntry(tokenId, assetId);
   const selector = `.asset-card[data-token-id="${tokenId}"][data-asset-id="${assetId}"]`;
   const oldCard = assetLibraryBody.querySelector(selector) as HTMLElement | null;
-  if (!oldCard) return false;
+  if (!cached && !oldCard) return false;
 
-  const role = oldCard.classList.contains("asset-card--editor")
-    ? "editor"
-    : "owner";
-  const collectionCid = oldCard.dataset.collectionCid || null;
-
+  const prior = cached ?? entryFromCard(oldCard as HTMLElement);
   const entry = {
     type: "asset",
     tokenId: String(activeAssetTokenId),
     assetId,
     manifestCid: activeAssetManifestCid,
-    collectionCid,
+    collectionCid: prior.collectionCid,
     name: currentManifest.name || assetId,
     thumbnail: currentManifest.thumbnail || null,
-    isCollection: Boolean(collectionCid),
-    role,
+    isCollection: Boolean(prior.collectionCid),
+    role: prior.role,
   };
 
-  const newCard = createAssetCard(entry);
-  oldCard.replaceWith(newCard);
+  if (cached) Object.assign(cached, entry);
+  if (oldCard) oldCard.replaceWith(createAssetCard(entry));
   return true;
+}
+
+/** The cached gallery entry for an asset, if the last render included it. */
+function findCachedEntry(tokenId: string, assetId: string): any | null {
+  if (!_lastRender) return null;
+  const all = [..._lastRender.ownedEntries, ..._lastRender.sharedEntries];
+  return (
+    all.find(
+      (e) =>
+        e.type !== "inaccessible" &&
+        normalizeTokenId(e.tokenId) === tokenId &&
+        e.assetId === assetId
+    ) ?? null
+  );
+}
+
+/** Role and collection recovered from a rendered card's markup. */
+function entryFromCard(card: HTMLElement): { role: string; collectionCid: string | null } {
+  return {
+    role: card.classList.contains("asset-card--editor") ? "editor" : "owner",
+    collectionCid: card.dataset.collectionCid || null,
+  };
 }
 
 function highlightActiveAsset(): void {
@@ -1329,7 +1315,27 @@ on(EVENTS.ASSET_STATE_CHANGED, (state) => {
     _lastRenderedCollectionTokenId = tokenId;
     refreshGalleryWhenVisible();
   }
+  syncInsertState();
 });
+on(EVENTS.PENDING_EDITS_CHANGED, syncInsertState);
+
+/**
+ * Reflects the open asset on the rendered cards without refetching.
+ * @remarks Opening/closing flips the disabled state; a different open asset
+ *   also changes which card is hidden, which re-renders from the cached
+ *   entries.
+ */
+function syncInsertState(): void {
+  if (!assetLibraryBody || !_lastRender) return;
+  if (ownCardKey() !== _lastOwnCardKey) {
+    renderSections();
+    return;
+  }
+  const enabled = hasOpenAsset();
+  assetLibraryBody
+    .querySelectorAll<HTMLElement>(".asset-card")
+    .forEach((card) => applyInsertAvailability(card, enabled));
+}
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
   _lastRenderedCollectionTokenId = null;
