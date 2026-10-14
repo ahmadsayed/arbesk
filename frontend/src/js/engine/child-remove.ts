@@ -1,6 +1,7 @@
 /**
  * Child asset removal (TODO #18): unlinks selected child assets (manifest
- * nodes carrying `child_ref`) from the current asset.
+ * nodes carrying `child_ref`, plus not-yet-saved "Insert a copy" fork nodes)
+ * from the current asset.
  * @remarks The unlink is staged in memory and persisted on the next
  *   Save Draft / Publish; Ctrl/Cmd+Z restores a removed child.
  */
@@ -29,11 +30,16 @@ export function collectRemovableChildIds(
   return [...selectedIds].filter((id) => childSet.has(id));
 }
 
-/** Every node_id in the current asset that is a child asset (child_ref). */
+/**
+ * Every node_id in the current asset that is a child asset.
+ * @remarks Pending inserts count whether live (child_ref) or a copy (fork
+ *   node with a `source`), so Undo on an "Insert a copy" toast unlinks it.
+ *   Saved plain-geometry nodes are never removable.
+ */
 function childRefNodeIds(): Set<string> {
   const ids = new Set<string>();
   for (const n of state.pendingChildRefs) {
-    if (n?.child_ref && n.node_id) ids.add(n.node_id);
+    if ((n?.child_ref || n?.source) && n.node_id) ids.add(n.node_id);
   }
   for (const n of getManifestNodes(getCurrentManifest()) || []) {
     if (n?.child_ref && n.node_id) ids.add(n.node_id);
@@ -46,7 +52,7 @@ function childRefNodeIds(): Set<string> {
 const _inFlightReloads = new Map<string, Promise<void>>();
 
 function reloadChildAssetNode(node: any): void {
-  if (!node?.child_ref) return;
+  if (!node?.child_ref && !node?.source) return;
   const parent = state.rootSceneAnchor || state.scene;
   if (!parent) return;
   const p = loadNode(node, parent, 0, new Set())

@@ -190,3 +190,57 @@ describe("child_ref undo applier", () => {
     expect(_disposeNodeSubtree).toHaveBeenCalledWith("childA");
   });
 });
+
+describe("Insert a copy (pending fork node) unlink + undo", () => {
+  const FORK = {
+    node_id: "linked_7_lamp",
+    transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    source: { cid: "bafyModel", path: "model.glb", format: "glb" },
+  };
+
+  test("a pending fork node (source, no child_ref) is unlinked with its own undo entry", async () => {
+    const { mod, state } = await loadModule();
+    setManifestNodes([REGULAR]);
+    state.pendingChildRefs = [FORK];
+
+    mod.removeChildAssetNodes([FORK.node_id]);
+
+    expect(state.pendingChildRefs).toHaveLength(0);
+    expect(_disposeNodeSubtree).toHaveBeenCalledWith(FORK.node_id);
+    expect(_pushUndoEntry).toHaveBeenCalledTimes(1);
+    const entry = _pushUndoEntry.mock.calls[0][0];
+    expect(entry.type).toBe("child_ref");
+    expect(entry.items).toEqual([
+      { nodeId: FORK.node_id, before: { node: FORK, fromPending: true }, after: null },
+    ]);
+  });
+
+  test("saved plain-geometry nodes stay non-removable", async () => {
+    const { mod, state } = await loadModule();
+    setManifestNodes([REGULAR]);
+    state.pendingChildRefs = [FORK];
+
+    mod.removeChildAssetNodes(["regular"]);
+
+    expect(_pushUndoEntry).not.toHaveBeenCalled();
+    expect(state.pendingChildRefs).toEqual([FORK]);
+  });
+
+  test("Ctrl+Z after unlinking a fork re-inserts and reloads it", async () => {
+    const { mod, state } = await loadModule();
+    state.rootSceneAnchor = {};
+    setManifestNodes([REGULAR]);
+    state.pendingChildRefs = [FORK];
+
+    mod.removeChildAssetNodes([FORK.node_id]);
+    const item = _pushUndoEntry.mock.calls[0][0].items[0];
+    const applier = _registerUndoApplier.mock.calls[0][1];
+
+    applier(item, "before");
+    expect(state.pendingChildRefs).toEqual([FORK]);
+    expect(_loadNode).toHaveBeenCalledWith(FORK, state.rootSceneAnchor, 0, expect.any(Set));
+
+    applier(item, "after");
+    expect(state.pendingChildRefs).toHaveLength(0);
+  });
+});
