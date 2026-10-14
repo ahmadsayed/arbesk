@@ -526,14 +526,41 @@ export interface LinkedSceneNode {
   node_id: string;
   transform_matrix: number[];
   source?: { cid: string; path?: string; format?: string };
+  post_processor?: any;
   child_ref?: object;
+}
+
+type ModelSource = { cid: string; path?: string; format?: string };
+
+/** What a fork copies from the child's single model node. */
+export interface ForkTemplate {
+  source: ModelSource;
+  post_processor?: any;
+  transform_matrix?: number[];
+}
+
+/**
+ * The fork node's own copy of the child's model node fields.
+ * @remarks Deep copies: the template comes from a cached child manifest.
+ */
+function forkNodeFields(template: ForkTemplate) {
+  const tm = template.transform_matrix;
+  return {
+    transform_matrix:
+      Array.isArray(tm) && tm.length === 16 ? [...tm] : identityMatrix(),
+    source: { ...template.source },
+    ...(template.post_processor && {
+      post_processor: structuredClone(template.post_processor),
+    }),
+  };
 }
 
 /**
  * Builds the scene node added when a user pulls in another collection's asset.
- * @remarks "fork" freezes the current CID into a plain source node; "live-ref"
- *   embeds a child_ref so future edits propagate. `nodeId` lets callers
- *   reference the same asset more than once.
+ * @remarks "fork" freezes the child's model node (source, post_processor,
+ *   transform_matrix) into a plain source node; "live-ref" embeds a child_ref
+ *   so future edits propagate. `nodeId` lets callers reference the same asset
+ *   more than once.
  */
 function buildForkOrLiveRefNode(
   choice: "fork" | "live-ref",
@@ -541,7 +568,7 @@ function buildForkOrLiveRefNode(
   assetID: string,
   resolvedAssetCid: string,
   nodeId?: string,
-  forkSource?: { cid: string; path?: string; format?: string }
+  forkTemplate?: ForkTemplate
 ): LinkedSceneNode {
   const resolvedNodeId = nodeId || `linked_${ref.collectionRef.tokenId}_${assetID}`;
   const baseNode = {
@@ -549,10 +576,9 @@ function buildForkOrLiveRefNode(
     transform_matrix: identityMatrix(),
   };
   if (choice === "fork") {
-    return {
-      ...baseNode,
-      source: forkSource || { cid: resolvedAssetCid },
-    };
+    return forkTemplate
+      ? { node_id: resolvedNodeId, ...forkNodeFields(forkTemplate) }
+      : { ...baseNode, source: { cid: resolvedAssetCid } };
   }
   if (choice === "live-ref") {
     return {
@@ -604,20 +630,21 @@ function isSelfLinkedAssetDrop(
  */
 const _inFlightLinkedDrops = new Set<Promise<void>>();
 
-type ModelSource = { cid: string; path?: string; format?: string };
-
 /**
- * Model source of a single-model asset manifest.
+ * The model node of a single-model asset manifest, as a fork template.
  * @remarks A fork freezes the model file, not the child's manifest, because
- *   loadAsset needs a {cid, path, format} source. Composite assets (several
- *   nodes, or child_refs) cannot be flattened into one node: returns undefined.
+ *   loadAsset needs a {cid, path, format} source; the node's post_processor
+ *   (scale compensation, colour overlay) and transform travel with it.
+ *   Composite assets (several nodes, or child_refs) cannot be flattened into
+ *   one node: returns undefined.
  */
-async function readSingleModelSource(
+async function readSingleModelNode(
   manifestCid: string
-): Promise<ModelSource | undefined> {
+): Promise<ForkTemplate | undefined> {
   const nodes = getManifestNodes(await getFromRemoteIPFS(manifestCid));
-  if (nodes.length !== 1 || nodes[0].child_ref) return undefined;
-  return nodes[0].source;
+  if (nodes.length !== 1 || nodes[0].child_ref || !nodes[0].source) return undefined;
+  const { source, post_processor, transform_matrix } = nodes[0];
+  return { source, post_processor, transform_matrix };
 }
 
 /**
@@ -640,11 +667,13 @@ async function loadInsertedNode(
   };
   try {
     // loadTokenChildNode reports depth/cycle/load failures as error
-    // placeholders; loadAsset swallows load errors into a flagged box.
+    // placeholders; loadAsset swallows load errors into a flagged box. A fork
+    // loads through loadNode, like a saved manifest node, so its transform
+    // and post_processor (colour/scale) apply on first load.
     const meshes: any[] =
       choice === "live-ref"
         ? await loadTokenChildNode(nodeEntry, parentNode, 1, new Set())
-        : await loadAsset(nodeEntry.source, parentNode, nodeEntry.node_id);
+        : (await loadNode(nodeEntry, parentNode, 0, new Set())).meshes;
     const failed =
       choice === "live-ref"
         ? meshes.length > 0
@@ -729,10 +758,10 @@ async function _handleLinkedAssetDropped(event: any) {
       ...state.pendingChildRefs.map((n) => n.node_id),
       ...state.nodeAnchors.keys(),
     ]);
-    let forkSource: ModelSource | undefined;
+    let forkTemplate: ForkTemplate | undefined;
     if (choice === "fork") {
-      forkSource = await readSingleModelSource(resolution.manifestCid);
-      if (!forkSource) {
+      forkTemplate = await readSingleModelNode(resolution.manifestCid);
+      if (!forkTemplate) {
         emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
           assetID: detail.assetID,
           reason: "Insert a copy supports single-model assets only",
@@ -746,7 +775,7 @@ async function _handleLinkedAssetDropped(event: any) {
       detail.assetID,
       resolution.manifestCid,
       nextLinkedNodeId(existingIds, tokenId, detail.assetID),
-      forkSource
+      forkTemplate
     );
     state.pendingChildRefs.push(nodeEntry);
     notifyPendingEditsChanged();

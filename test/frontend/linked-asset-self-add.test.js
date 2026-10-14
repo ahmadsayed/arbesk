@@ -304,6 +304,52 @@ describe("insert mode", () => {
     expect(state.pendingChildRefs[0].source.cid).not.toBe(RESOLVED_CID);
   });
 
+  test("fork carries the child node's post_processor and transform_matrix", async () => {
+    const TM = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 1, 2, 3, 1];
+    const PP = { color: "#ff0000", scale: { x: 0.25, y: 0.25, z: 0.25 } };
+    _childManifest = {
+      type: "asset",
+      scene: { nodes: [
+        { node_id: "model", source: MODEL_SOURCE, transform_matrix: TM, post_processor: PP },
+      ] },
+    };
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    const node = state.pendingChildRefs[0];
+    expect(node.source).toEqual(MODEL_SOURCE);
+    expect(node.post_processor).toEqual(PP);
+    expect(node.transform_matrix).toEqual(TM);
+    // Copies, not shared references into the child's cached manifest.
+    expect(node.post_processor).not.toBe(PP);
+    expect(node.transform_matrix).not.toBe(TM);
+  });
+
+  test("fork without a valid child transform falls back to identity", async () => {
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    const node = state.pendingChildRefs[0];
+    expect(node.transform_matrix).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    expect(node.post_processor).toBeUndefined();
+  });
+
+  test("fork applies the carried colour and scale on first load", async () => {
+    const PP = { color: "#00ff00", scale: { x: 3, y: 3, z: 3 } };
+    _childManifest = {
+      type: "asset",
+      scene: { nodes: [{ node_id: "model", source: MODEL_SOURCE, post_processor: PP }] },
+    };
+    const { sceneLoader } = await loadModule();
+    const mesh = { parent: null, metadata: {} };
+    global.BABYLON.SceneLoader.ImportMeshAsync.mockResolvedValue({
+      meshes: [mesh],
+      transformNodes: [],
+    });
+    const tt = await import("../../frontend/src/js/engine/time-travel.js");
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    expect(tt.applyScale).toHaveBeenCalledWith([mesh], PP.scale);
+    expect(tt.applyColor).toHaveBeenCalledWith([mesh], PP.color, null);
+  });
+
   test("fork of a composite (multi-node) asset fails without adding a node", async () => {
     _childManifest = {
       type: "asset",

@@ -4,6 +4,7 @@ import {
   fetchManifest,
   fetchTokenManifest,
   assertCollectionManifest,
+  findAssetCidByName,
 } from "../helpers/manifest.mjs";
 import {
   connectStudio,
@@ -70,6 +71,19 @@ test.describe("fork vs live-reference", () => {
     expect(forkNode.child_ref).toBeUndefined();
     // Fork nodes have no local history - the CID is a frozen snapshot.
     expect(forkNode.history).toBeUndefined();
+
+    // The copy freezes the child's MODEL file (not its manifest CID) and
+    // carries the model node's post_processor (scale compensation / colour)
+    // and transform.
+    const childCollection = await fetchTokenManifest(childTokenHex);
+    const childAssetCid = await findAssetCidByName(childCollection, CHILD_NAME);
+    expect(childAssetCid).toBeTruthy();
+    const childModelNode = (await fetchManifest(childAssetCid)).scene.nodes[0];
+    expect(forkNode.source.cid).not.toBe(childAssetCid);
+    expect(forkNode.source).toEqual(childModelNode.source);
+    expect(childModelNode.post_processor?.scale).toBeTruthy();
+    expect(forkNode.post_processor).toEqual(childModelNode.post_processor);
+    expect(forkNode.transform_matrix).toEqual(childModelNode.transform_matrix);
   });
 
   test("live-referencing another collection's asset creates a child_ref", async ({
