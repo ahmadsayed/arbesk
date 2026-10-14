@@ -2333,10 +2333,7 @@ function selectProviderProgrammatically(provider: string) {
 async function resolveAdvisorDispatch(payload: PromptAndImagePayload): Promise<AdvisorDispatch | null> {
   const stashed = pendingAdvisorDispatch;
   pendingAdvisorDispatch = null;
-  if (stashed) {
-    if (stashed.provider === "cad") selectProviderProgrammatically("cad");
-    return stashed;
-  }
+  if (stashed) return stashed;
 
   const selection = getProvider();
   // Chip-locked refinements (retexture / cad-edit) and the mock / manual-CAD
@@ -2390,9 +2387,19 @@ function planDispatch(
   }
 }
 
-/** An auto CAD pick: point the selector at CAD and dispatch it. */
+/**
+ * The advisor routed this request to CAD.
+ * @remarks Under "Choose for me" (`auto`) it is a one-off: the dispatch
+ *   carries the provider and the selection stays `auto`. An explicit
+ *   selection follows the route, as before.
+ */
+function followAdvisorToCad(): void {
+  if (getProvider() !== "auto") selectProviderProgrammatically("cad");
+}
+
+/** An auto CAD pick: dispatch it (see followAdvisorToCad for the selector). */
 function cadAdviceDispatch(prompt: string): AdvisorDispatch {
-  selectProviderProgrammatically("cad");
+  followAdvisorToCad();
   return { provider: "cad", fields: null, announce: CAD_ADVICE_LINE, prompt };
 }
 
@@ -2421,6 +2428,7 @@ function postAdvisorAsk(plan: Extract<GenerationPlan, { kind: "ask" }>, prompt: 
     (value) => {
       const configId = value === "cad" ? null : String(value).split(":")[1];
       const provider = value === "cad" ? "cad" : "tripo3d";
+      if (provider === "cad") followAdvisorToCad();
       pendingAdvisorDispatch = {
         provider,
         fields: configId ? (CONFIG_BUNDLES[configId]?.fields ?? null) : null,
@@ -2436,8 +2444,9 @@ function postAdvisorAsk(plan: Extract<GenerationPlan, { kind: "ask" }>, prompt: 
 /**
  * The BYOK gate for Tripo-bound dispatches: a dialog explains why a key is
  * needed and offers "Save key and generate" (replays the original request,
- * photos included) or "Use Parametric CAD" (re-runs the prompt with cad;
- * hidden when photos were sent or CAD is unavailable). Closing it cancels:
+ * photos included) or "Use Parametric CAD" (re-runs the prompt with cad once,
+ * leaving the Generator selection alone; hidden when photos were sent or CAD
+ * is unavailable). Closing it cancels:
  * the prompt and photos return to the composer and the pending dispatch is
  * dropped.
  * @param error - provider message shown under the key field (a rejected key).
@@ -2460,8 +2469,9 @@ function requestProviderKey(dispatch: AdvisorDispatch, error?: string) {
       return;
     }
     if (useCad) {
-      pendingAdvisorDispatch = null;
-      selectProviderProgrammatically("cad");
+      // One-off: this request runs with cad; the Generator selection (and
+      // the next prompt's routing) is untouched.
+      pendingAdvisorDispatch = { provider: "cad", fields: null, announce: null, prompt: dispatch.prompt };
     }
     void onGenerate({ resubmit: true });
   });

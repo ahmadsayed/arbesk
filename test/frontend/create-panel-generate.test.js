@@ -477,6 +477,7 @@ test("missing key opens the dialog; Save key and generate retries the same dispa
 test("Use Parametric CAD re-runs the prompt with cad", async () => {
   connectWallet();
   providerSelect.value = "tripo3d";
+  providerSelect.dispatchEvent(new Event("change"));
   promptInput.value = "a rock";
   const dlg = openKeyDialogHandle();
   await clickGenerate();
@@ -488,10 +489,44 @@ test("Use Parametric CAD re-runs the prompt with cad", async () => {
   await flush();
   await flush();
 
-  expect(providerSelect.value).toBe("cad");
   expect(mockGenerateAsset).not.toHaveBeenCalled();
   expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
   expect(mockGenerateCadAsset.mock.calls[0][0].prompt).toBe("a rock");
+  // One-off (spec 3.2): the Tripo 3D selection is not replaced by cad.
+  expect(localStorage.getItem("arbesk-provider")).toBe("tripo3d");
+  document.getElementById("refineIndicatorDetach").click();
+  expect(providerSelect.value).toBe("tripo3d");
+});
+
+test("Use Parametric CAD is a one-off: the Choose for me selection stays and the next prompt asks again", async () => {
+  connectWallet();
+  providerSelect.value = "auto";
+  providerSelect.dispatchEvent(new Event("change"));
+  expect(localStorage.getItem("arbesk-provider")).toBe("auto");
+  promptInput.value = "a dragon";
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  dlg.wrap.querySelector("#providerKeyUseCad").click();
+  await flush();
+  await flush();
+  await flush();
+
+  expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
+  expect(mockGenerateCadAsset.mock.calls[0][0].prompt).toBe("a dragon");
+  expect(localStorage.getItem("arbesk-provider")).toBe("auto");
+  // A result chip may lock the selector while attached; detaching shows the
+  // user's own selection, which never changed.
+  document.getElementById("refineIndicatorDetach").click();
+  expect(providerSelect.value).toBe("auto");
+
+  // The next keyless organic prompt routes to Tripo again and asks for a key.
+  const again = openKeyDialogHandle();
+  promptInput.value = "a sleeping cat";
+  await clickGenerate();
+  expect(again.title).toBe("This model needs an AI generator");
+  expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
 });
 
 test("with photos attached the CAD button is absent", async () => {
@@ -957,9 +992,10 @@ test("advisor auto-pick threads the config bundle fields into the dispatch", asy
   });
 });
 
-test("advisor auto-pick of CAD flips the provider and runs the CAD flow", async () => {
+test("advisor auto-pick of CAD runs the CAD flow once; Choose for me stays selected", async () => {
   connectWallet();
   providerSelect.value = "auto";
+  providerSelect.dispatchEvent(new Event("change"));
   mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
   mockDecideGenerationPlan.mockReturnValue({ kind: "auto", provider: "cad" });
   promptInput.value = "a 40 by 30 by 20 mm bracket";
@@ -969,10 +1005,11 @@ test("advisor auto-pick of CAD flips the provider and runs the CAD flow", async 
     "system",
     "Routing to Parametric CAD — this looks like an engineering part.",
   );
-  expect(providerSelect.value).toBe("cad");
-  expect(localStorage.getItem("arbesk-provider")).toBe("cad");
+  expect(localStorage.getItem("arbesk-provider")).toBe("auto");
   expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
   expect(mockGenerateAsset).not.toHaveBeenCalled();
+  document.getElementById("refineIndicatorDetach").click();
+  expect(providerSelect.value).toBe("auto");
 });
 
 test("an unsure advisor asks; the Tripo pick dispatches with that config", async () => {
@@ -1015,9 +1052,10 @@ test("an unsure advisor asks; the Tripo pick dispatches with that config", async
   );
 });
 
-test("an unsure advisor asks; the CAD pick flips the provider and dispatches CAD", async () => {
+test("an unsure advisor asks; the CAD pick dispatches CAD once under Choose for me", async () => {
   connectWallet();
   providerSelect.value = "auto";
+  providerSelect.dispatchEvent(new Event("change"));
   mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
   mockDecideGenerationPlan.mockReturnValue({
     kind: "ask",
@@ -1034,7 +1072,7 @@ test("an unsure advisor asks; the CAD pick flips the provider and dispatches CAD
   await flush();
   await flush();
   await flush();
-  expect(providerSelect.value).toBe("cad");
+  expect(localStorage.getItem("arbesk-provider")).toBe("auto");
   expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
   expect(mockGenerateAsset).not.toHaveBeenCalled();
 });
