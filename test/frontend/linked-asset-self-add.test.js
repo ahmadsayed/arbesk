@@ -174,7 +174,7 @@ beforeEach(() => {
         .mockResolvedValue({ meshes: [], transformNodes: [] }),
     },
     MeshBuilder: {
-      CreateBox: jest.fn(() => ({ parent: null, metadata: {} })),
+      CreateBox: jest.fn(() => ({ parent: null, metadata: {}, isDisposed: () => false, dispose: jest.fn() })),
     },
   };
   global.URL.createObjectURL = jest.fn(() => "blob:mock");
@@ -258,5 +258,118 @@ describe("handleLinkedAssetDropped - self-add guard", () => {
 
     const liveRefNodes = state.pendingChildRefs.filter((n) => n.child_ref);
     expect(liveRefNodes).toHaveLength(1);
+  });
+});
+
+describe("insert mode", () => {
+  async function emitted(name) {
+    const bus = await import("@arbesk/asset-core/events/bus.js");
+    return bus.emit.mock.calls.filter((c) => c[0] === name).map((c) => c[1]);
+  }
+
+  test("mode live-ref skips the dialog and emits ASSET_LINKED_INSERTED", async () => {
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" }));
+    expect(_dialogCalls).toHaveLength(0);
+    expect(state.pendingChildRefs).toHaveLength(1);
+    expect(await emitted("ASSET_LINKED_INSERTED")).toEqual([
+      { nodeId: state.pendingChildRefs[0].node_id, assetID: ASSET_ID, mode: "live-ref" },
+    ]);
+  });
+
+  test("mode fork skips the dialog and inserts a copy", async () => {
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    expect(_dialogCalls).toHaveLength(0);
+    expect(state.pendingChildRefs).toHaveLength(1);
+    expect(state.pendingChildRefs[0].child_ref).toBeUndefined();
+    expect(await emitted("ASSET_LINKED_INSERTED")).toEqual([
+      { nodeId: state.pendingChildRefs[0].node_id, assetID: ASSET_ID, mode: "fork" },
+    ]);
+  });
+
+  test("no mode still asks", async () => {
+    const { sceneLoader } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop());
+    expect(_dialogCalls).toHaveLength(1);
+  });
+
+  test("live-ref self-add with mode is downgraded to fork, not refused", async () => {
+    const { sceneLoader, state } = await loadModule();
+    setActiveAsset(state);
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" }));
+    expect(_dialogCalls).toHaveLength(0);
+    expect(state.pendingChildRefs).toHaveLength(1);
+    expect(state.pendingChildRefs[0].child_ref).toBeUndefined();
+    const events = await emitted("ASSET_LINKED_INSERTED");
+    expect(events).toHaveLength(1);
+    expect(events[0].mode).toBe("fork");
+  });
+
+  test("two rapid inserts get distinct node ids and two events", async () => {
+    const { sceneLoader, state } = await loadModule();
+    await Promise.all([
+      sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" })),
+      sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" })),
+    ]);
+    const ids = state.pendingChildRefs.map((n) => n.node_id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    const events = await emitted("ASSET_LINKED_INSERTED");
+    expect(events.map((e) => e.nodeId).sort()).toEqual([...ids].sort());
+  });
+
+  test("unresolvable asset emits ASSET_LINKED_INSERT_FAILED and adds nothing", async () => {
+    _resolveResult = { resolved: false, error: "nope" };
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" }));
+    expect(state.pendingChildRefs).toHaveLength(0);
+    expect(await emitted("ASSET_LINKED_INSERTED")).toHaveLength(0);
+    expect(await emitted("ASSET_LINKED_INSERT_FAILED")).toHaveLength(1);
+  });
+
+  test("a live-ref load failure (cycle) rolls back and emits FAILED, not INSERTED", async () => {
+    const { sceneLoader, state } = await loadModule();
+    // Resolve OK for the drop, then fail the child resolution.
+    const resolver = await import("../../frontend/src/js/blockchain/token-resolver.js");
+    resolver.resolveCollectionChildRef
+      .mockResolvedValueOnce({ resolved: true, manifestCid: RESOLVED_CID })
+      .mockResolvedValueOnce({ resolved: false, error: "boom" });
+
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" }));
+
+    expect(state.pendingChildRefs).toHaveLength(0);
+    expect(await emitted("ASSET_LINKED_INSERTED")).toHaveLength(0);
+    const failed = await emitted("ASSET_LINKED_INSERT_FAILED");
+    expect(failed).toHaveLength(1);
+    expect(failed[0].assetID).toBe(ASSET_ID);
+    expect(typeof failed[0].reason).toBe("string");
+  });
+
+  test("a failed fork load (placeholder box) rolls back and emits FAILED", async () => {
+    const { sceneLoader, state } = await loadModule();
+    global.BABYLON.SceneLoader.ImportMeshAsync.mockRejectedValue(new Error("load blew up"));
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+
+    expect(state.pendingChildRefs).toHaveLength(0);
+    expect(await emitted("ASSET_LINKED_INSERTED")).toHaveLength(0);
+    const failed = await emitted("ASSET_LINKED_INSERT_FAILED");
+    expect(failed).toHaveLength(1);
+    expect(typeof failed[0].reason).toBe("string");
+  });
+
+  test("a thrown error rolls back the pending entry and emits FAILED", async () => {
+    const { sceneLoader, state } = await loadModule();
+    const ph = await import("../../frontend/src/js/engine/placeholders.js");
+    ph.createPlaceholder.mockImplementationOnce(() => {
+      throw new Error("placeholder blew up");
+    });
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "live-ref" }));
+
+    expect(state.pendingChildRefs).toHaveLength(0);
+    expect(await emitted("ASSET_LINKED_INSERTED")).toHaveLength(0);
+    const failed = await emitted("ASSET_LINKED_INSERT_FAILED");
+    expect(failed).toHaveLength(1);
+    expect(failed[0].reason).toContain("placeholder blew up");
   });
 });

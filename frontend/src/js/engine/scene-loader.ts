@@ -13,6 +13,7 @@ import {
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { activateAssetManifest, getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
+import { selectNodeById } from "./scene-selection.ts";
 import { state, MAX_CHILD_ASSET_DEPTH } from "./state.ts";
 import type { CollectionRef } from "./state.ts";
 import {
@@ -65,7 +66,7 @@ async function loadAsset(
       state.scene
     );
     box.parent = parentNode;
-    box.metadata = { nodeId };
+    box.metadata = { nodeId, loadFailed: true };
     applyDefaultMaterial([box]);
     return [box];
   }
@@ -625,10 +626,17 @@ async function _handleLinkedAssetDropped(event: any) {
     };
     const isSelfDrop = isSelfLinkedAssetDrop(collectionRef, detail.assetID);
 
-    const { showForkOrLiveRefDialog } = await import("../ui/dialog.ts");
-    const choice = await showForkOrLiveRefDialog(detail.assetID, {
-      allowLiveRef: !isSelfDrop,
-    });
+    // An explicit mode (Insert panel) skips the dialog; a self-drop can never
+    // be a live-ref, so it is downgraded to a fork instead of refused.
+    let choice: "live-ref" | "fork" | undefined;
+    if (detail.mode) {
+      choice = isSelfDrop ? "fork" : detail.mode;
+    } else {
+      const { showForkOrLiveRefDialog } = await import("../ui/dialog.ts");
+      choice = await showForkOrLiveRefDialog(detail.assetID, {
+        allowLiveRef: !isSelfDrop,
+      });
+    }
     if (!choice) return; // user cancelled
     if (isSelfDrop && choice === "live-ref") {
       console.warn(
@@ -648,6 +656,10 @@ async function _handleLinkedAssetDropped(event: any) {
       console.warn(
         `[SCENE] could not resolve dropped asset ${detail.assetID}: ${resolution.error}`
       );
+      emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
+        assetID: detail.assetID,
+        reason: resolution.error || "Could not resolve the asset",
+      });
       return;
     }
 
@@ -673,11 +685,53 @@ async function _handleLinkedAssetDropped(event: any) {
     notifyPendingEditsChanged();
 
     const parentNode = state.rootSceneAnchor || state.scene;
-    if (choice === "live-ref") {
-      await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
-    } else {
-      await loadAsset(nodeEntry.source, parentNode, nodeEntry.node_id);
+    // Undo the optimistic push so a failed insert leaves nothing behind.
+    const rollback = (placeholders: BABYLON.Mesh[] = []) => {
+      for (const ph of placeholders) disposePlaceholder(ph);
+      const idx = state.pendingChildRefs.indexOf(nodeEntry);
+      if (idx >= 0) state.pendingChildRefs.splice(idx, 1);
+      disposeNodeSubtree(nodeEntry.node_id);
+      notifyPendingEditsChanged();
+    };
+    try {
+      if (choice === "live-ref") {
+        // loadTokenChildNode reports depth/cycle/load failures as error
+        // placeholders rather than throwing.
+        const failed = await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
+        if (failed.length > 0) {
+          rollback(failed as BABYLON.Mesh[]);
+          emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
+            assetID: detail.assetID,
+            reason: "Could not load the linked asset",
+          });
+          return;
+        }
+      } else {
+        // loadAsset swallows load errors into a flagged placeholder box.
+        const meshes = await loadAsset(
+          nodeEntry.source,
+          parentNode,
+          nodeEntry.node_id
+        );
+        if (meshes.some((m: any) => m?.metadata?.loadFailed)) {
+          rollback(meshes as BABYLON.Mesh[]);
+          emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
+            assetID: detail.assetID,
+            reason: "Could not load the asset copy",
+          });
+          return;
+        }
+      }
+    } catch (err) {
+      rollback();
+      throw err; // wrapper emits ASSET_LINKED_INSERT_FAILED
     }
+    emit(EVENTS.ASSET_LINKED_INSERTED, {
+      nodeId: nodeEntry.node_id,
+      assetID: detail.assetID,
+      mode: choice,
+    });
+    selectNodeById(nodeEntry.node_id);
     return;
   }
 
@@ -698,6 +752,10 @@ function handleLinkedAssetDropped(event: any): Promise<void> {
   const p = _handleLinkedAssetDropped(event)
     .catch((err) => {
       console.warn("[SCENE] linked asset drop failed:", err?.message || err);
+      emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
+        assetID: event?.assetID ?? null,
+        reason: err?.message || String(err),
+      });
     })
     .finally(() => {
       _inFlightLinkedDrops.delete(p);

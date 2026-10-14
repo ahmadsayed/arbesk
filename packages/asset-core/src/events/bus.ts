@@ -18,6 +18,10 @@ export const EVENTS = {
   ASSET_FILE_DROPPED:         "asset:fileDropped",
   ASSET_FILE_STAGED:          "asset:fileStaged",
   ASSET_LINKED_DROPPED:       "asset:linkedDropped",
+  // ASSET_LINKED_INSERTED detail: { nodeId: string, assetID: string, mode: "live-ref" | "fork" }
+  // ASSET_LINKED_INSERT_FAILED detail: { assetID: string | null, reason: string }
+  ASSET_LINKED_INSERTED:      "asset:linkedInserted",
+  ASSET_LINKED_INSERT_FAILED: "asset:linkedInsertFailed",
   ASSET_OPEN_BY_TOKEN_ID:     "asset:openByTokenId",
   ASSET_PUBLISHED:            "asset:published",
   ASSET_PUBLISH_PENDING:      "asset:publishPending",
