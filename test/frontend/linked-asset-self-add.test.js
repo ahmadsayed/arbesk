@@ -13,9 +13,12 @@ const CONTRACT = "0xCollectionContract";
 const TOKEN_ID = "42";
 const ASSET_ID = "asset_1";
 const RESOLVED_CID = "bafyResolvedAsset";
+const MODEL_CID = "bafyModelFile";
+const MODEL_SOURCE = { cid: MODEL_CID, path: "model.glb", format: "gltf" };
 
 let _dialogChoice = "fork";
 let _dialogCalls = [];
+let _childManifest = null;
 let _resolveResult = { resolved: true, manifestCid: RESOLVED_CID };
 
 async function loadModule() {
@@ -25,10 +28,14 @@ async function loadModule() {
     "../../frontend/src/js/ipfs/remote-ipfs.js",
     () => ({
       gatewayBase: jest.fn().mockResolvedValue("http://127.0.0.1:8080/ipfs/"),
-      getFromRemoteIPFS: jest.fn().mockResolvedValue({
-        type: "asset",
-        scene: { nodes: [] },
-      }),
+      getFromRemoteIPFS: jest.fn(() =>
+        Promise.resolve(
+          _childManifest || {
+            type: "asset",
+            scene: { nodes: [{ node_id: "model", source: MODEL_SOURCE }] },
+          }
+        )
+      ),
       getBase64FromRemoteIPFS: jest.fn(),
       getBlobFromRemoteIPFS: jest.fn(),
       getArrayBufferFromRemoteIPFS: jest.fn(),
@@ -166,6 +173,7 @@ beforeEach(() => {
   resetModules();
   _dialogChoice = "fork";
   _resolveResult = { resolved: true, manifestCid: RESOLVED_CID };
+  _childManifest = null;
 
   global.BABYLON = {
     SceneLoader: {
@@ -204,7 +212,7 @@ describe("handleLinkedAssetDropped - self-add guard", () => {
     );
     // Fork still works: node frozen to the resolved CID, no child_ref.
     expect(state.pendingChildRefs).toHaveLength(1);
-    expect(state.pendingChildRefs[0].source).toEqual({ cid: RESOLVED_CID });
+    expect(state.pendingChildRefs[0].source).toEqual(MODEL_SOURCE);
     expect(state.pendingChildRefs[0].child_ref).toBeUndefined();
   });
 
@@ -286,6 +294,28 @@ describe("insert mode", () => {
     expect(await emitted("ASSET_LINKED_INSERTED")).toEqual([
       { nodeId: state.pendingChildRefs[0].node_id, assetID: ASSET_ID, mode: "fork" },
     ]);
+  });
+
+  test("fork freezes the model file CID from the child manifest, not the manifest CID", async () => {
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    expect(state.pendingChildRefs).toHaveLength(1);
+    expect(state.pendingChildRefs[0].source).toEqual(MODEL_SOURCE);
+    expect(state.pendingChildRefs[0].source.cid).not.toBe(RESOLVED_CID);
+  });
+
+  test("fork of a composite (multi-node) asset fails without adding a node", async () => {
+    _childManifest = {
+      type: "asset",
+      scene: { nodes: [
+        { node_id: "a", source: MODEL_SOURCE },
+        { node_id: "b", source: MODEL_SOURCE },
+      ] },
+    };
+    const { sceneLoader, state } = await loadModule();
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    expect(state.pendingChildRefs).toHaveLength(0);
+    expect(await emitted("ASSET_LINKED_INSERT_FAILED")).toHaveLength(1);
   });
 
   test("no mode still asks", async () => {

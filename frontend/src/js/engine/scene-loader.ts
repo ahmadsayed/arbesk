@@ -525,7 +525,7 @@ function nextLinkedNodeId(
 export interface LinkedSceneNode {
   node_id: string;
   transform_matrix: number[];
-  source?: { cid: string };
+  source?: { cid: string; path?: string; format?: string };
   child_ref?: object;
 }
 
@@ -540,7 +540,8 @@ function buildForkOrLiveRefNode(
   ref: { collectionRef: CollectionRef },
   assetID: string,
   resolvedAssetCid: string,
-  nodeId?: string
+  nodeId?: string,
+  forkSource?: { cid: string; path?: string; format?: string }
 ): LinkedSceneNode {
   const resolvedNodeId = nodeId || `linked_${ref.collectionRef.tokenId}_${assetID}`;
   const baseNode = {
@@ -550,7 +551,7 @@ function buildForkOrLiveRefNode(
   if (choice === "fork") {
     return {
       ...baseNode,
-      source: { cid: resolvedAssetCid },
+      source: forkSource || { cid: resolvedAssetCid },
     };
   }
   if (choice === "live-ref") {
@@ -602,6 +603,60 @@ function isSelfLinkedAssetDrop(
  *   pushed its node.
  */
 const _inFlightLinkedDrops = new Set<Promise<void>>();
+
+type ModelSource = { cid: string; path?: string; format?: string };
+
+/**
+ * Model source of a single-model asset manifest.
+ * @remarks A fork freezes the model file, not the child's manifest, because
+ *   loadAsset needs a {cid, path, format} source. Composite assets (several
+ *   nodes, or child_refs) cannot be flattened into one node: returns undefined.
+ */
+async function readSingleModelSource(
+  manifestCid: string
+): Promise<ModelSource | undefined> {
+  const nodes = getManifestNodes(await getFromRemoteIPFS(manifestCid));
+  if (nodes.length !== 1 || nodes[0].child_ref) return undefined;
+  return nodes[0].source;
+}
+
+/**
+ * Loads a freshly pushed insert node; on failure undoes the push.
+ * @returns a failure reason, or null on success. Throws after rollback if the
+ *   load itself throws (the caller's wrapper reports it).
+ */
+async function loadInsertedNode(
+  nodeEntry: any,
+  choice: "live-ref" | "fork",
+  parentNode: BABYLON.TransformNode
+): Promise<string | null> {
+  // Undo the optimistic push so a failed insert leaves nothing behind.
+  const rollback = (placeholders: BABYLON.Mesh[] = []) => {
+    for (const ph of placeholders) disposePlaceholder(ph);
+    const idx = state.pendingChildRefs.indexOf(nodeEntry);
+    if (idx >= 0) state.pendingChildRefs.splice(idx, 1);
+    disposeNodeSubtree(nodeEntry.node_id);
+    notifyPendingEditsChanged();
+  };
+  try {
+    // loadTokenChildNode reports depth/cycle/load failures as error
+    // placeholders; loadAsset swallows load errors into a flagged box.
+    const meshes: any[] =
+      choice === "live-ref"
+        ? await loadTokenChildNode(nodeEntry, parentNode, 1, new Set())
+        : await loadAsset(nodeEntry.source, parentNode, nodeEntry.node_id);
+    const failed =
+      choice === "live-ref"
+        ? meshes.length > 0
+        : meshes.some((m) => m?.metadata?.loadFailed);
+    if (!failed) return null;
+    rollback(meshes);
+    return "Could not load the asset";
+  } catch (err) {
+    rollback();
+    throw err;
+  }
+}
 
 /** @param event - ASSET_LINKED_DROPPED event detail */
 async function _handleLinkedAssetDropped(event: any) {
@@ -674,57 +729,39 @@ async function _handleLinkedAssetDropped(event: any) {
       ...state.pendingChildRefs.map((n) => n.node_id),
       ...state.nodeAnchors.keys(),
     ]);
+    let forkSource: ModelSource | undefined;
+    if (choice === "fork") {
+      forkSource = await readSingleModelSource(resolution.manifestCid);
+      if (!forkSource) {
+        emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
+          assetID: detail.assetID,
+          reason: "Insert a copy supports single-model assets only",
+        });
+        return;
+      }
+    }
     const nodeEntry = buildForkOrLiveRefNode(
       choice,
       { collectionRef },
       detail.assetID,
       resolution.manifestCid,
-      nextLinkedNodeId(existingIds, tokenId, detail.assetID)
+      nextLinkedNodeId(existingIds, tokenId, detail.assetID),
+      forkSource
     );
     state.pendingChildRefs.push(nodeEntry);
     notifyPendingEditsChanged();
 
-    const parentNode = state.rootSceneAnchor || state.scene;
-    // Undo the optimistic push so a failed insert leaves nothing behind.
-    const rollback = (placeholders: BABYLON.Mesh[] = []) => {
-      for (const ph of placeholders) disposePlaceholder(ph);
-      const idx = state.pendingChildRefs.indexOf(nodeEntry);
-      if (idx >= 0) state.pendingChildRefs.splice(idx, 1);
-      disposeNodeSubtree(nodeEntry.node_id);
-      notifyPendingEditsChanged();
-    };
-    try {
-      if (choice === "live-ref") {
-        // loadTokenChildNode reports depth/cycle/load failures as error
-        // placeholders rather than throwing.
-        const failed = await loadTokenChildNode(nodeEntry, parentNode, 1, new Set());
-        if (failed.length > 0) {
-          rollback(failed as BABYLON.Mesh[]);
-          emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
-            assetID: detail.assetID,
-            reason: "Could not load the linked asset",
-          });
-          return;
-        }
-      } else {
-        // loadAsset swallows load errors into a flagged placeholder box.
-        const meshes = await loadAsset(
-          nodeEntry.source,
-          parentNode,
-          nodeEntry.node_id
-        );
-        if (meshes.some((m: any) => m?.metadata?.loadFailed)) {
-          rollback(meshes as BABYLON.Mesh[]);
-          emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
-            assetID: detail.assetID,
-            reason: "Could not load the asset copy",
-          });
-          return;
-        }
-      }
-    } catch (err) {
-      rollback();
-      throw err; // wrapper emits ASSET_LINKED_INSERT_FAILED
+    const failure = await loadInsertedNode(
+      nodeEntry,
+      choice,
+      state.rootSceneAnchor || state.scene
+    );
+    if (failure) {
+      emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
+        assetID: detail.assetID,
+        reason: failure,
+      });
+      return;
     }
     emit(EVENTS.ASSET_LINKED_INSERTED, {
       nodeId: nodeEntry.node_id,
