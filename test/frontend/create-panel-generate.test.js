@@ -568,7 +568,7 @@ test("an invalid-key failure reopens the key dialog with the message; a new key 
   localStorage.setItem("arbesk-byok-key", "sk-bad");
   providerSelect.value = "tripo3d";
   promptInput.value = "a rock";
-  mockGenerateAsset.mockRejectedValueOnce(new api.ApiError("unauthorized", 401, null));
+  mockGenerateAsset.mockRejectedValueOnce(new api.ApiError("unauthorized", 401, "PROVIDER_AUTH_FAILED"));
   const dlg = openKeyDialogHandle();
   await clickGenerate();
 
@@ -595,6 +595,23 @@ test("an invalid-key failure reopens the key dialog with the message; a new key 
   const retried = mockGenerateAsset.mock.calls[1][0];
   expect(retried.providerKey).toBe("sk-good");
   expect(retried.prompt).toBe("a rock");
+});
+
+test("a session 401 posts a chat error and does not open the key dialog", async () => {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-fine");
+  providerSelect.value = "tripo3d";
+  promptInput.value = "a rock";
+  mockGenerateAsset.mockRejectedValueOnce(new api.ApiError("bad session", 401, "INVALID_SESSION"));
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  expect(dlg.wrap).toBeNull();
+  expect(mockShowCustomDialog).not.toHaveBeenCalled();
+  expect(mockAddChatMessage).toHaveBeenCalledWith(
+    "system",
+    "Your sign-in expired. Sign in again and retry.",
+  );
 });
 
 test("tripo3d with a key sends providerKey, standard quality, and stoppable wiring", async () => {
@@ -834,7 +851,8 @@ test("attaching an image suppresses the typed-follow-up retexture path", async (
 const ERROR_CASES = [
   ["400 with message", { message: "prompt is required", status: 400 }, "prompt is required"],
   ["400 without message", { message: "", status: 400 }, "Missing required generation parameter."],
-  ["401", { message: "unauthorized", status: 401 }, "Invalid Tripo3D API key. Check your key in the provider settings."],
+  ["401 provider auth", { message: "unauthorized", status: 401, code: "PROVIDER_AUTH_FAILED" }, "Invalid Tripo3D API key. Check your key in the provider settings."],
+  ["401 session", { message: "bad session", status: 401, code: "INVALID_SESSION" }, "Your sign-in expired. Sign in again and retry."],
   ["402", { message: "no credits", status: 402 }, "Tripo3D account has insufficient credits."],
   ["429", { message: "slow down", status: 429 }, "Rate limit reached. Please wait before generating again."],
   ["504", { message: "gateway timeout", status: 504 }, "Generation timed out. Try again later."],

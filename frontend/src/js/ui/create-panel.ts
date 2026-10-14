@@ -2065,6 +2065,13 @@ function cadErrorMessage(err: ApiError): string | null {
   }
 }
 
+/** A 401 is either the provider rejecting the key or an expired session. */
+function unauthorizedMessage(err: ApiError): string {
+  return err.code === "PROVIDER_AUTH_FAILED"
+    ? "Invalid Tripo3D API key. Check your key in the provider settings."
+    : "Your sign-in expired. Sign in again and retry.";
+}
+
 /**
  * Maps a generation failure to user-facing chat copy.
  */
@@ -2077,7 +2084,7 @@ function generationErrorMessage(err: unknown): string {
     } else if (err.status === 429) {
       return "Rate limit reached. Please wait before generating again.";
     } else if (err.status === 401) {
-      return "Invalid Tripo3D API key. Check your key in the provider settings.";
+      return unauthorizedMessage(err);
     } else if (err.status === 402) {
       return "Tripo3D account has insufficient credits.";
     } else if (err.status === 504 || err.code === "GENERATION_TIMEOUT") {
@@ -2836,14 +2843,13 @@ function beginGenerationWorking(provider: string) {
   return { stoppable, working };
 }
 
-/** Everything a dispatched generation needs beyond the advisor dispatch. */
 /**
  * The provider rejected the key (401): reopen the key dialog for this same
  * request with the provider's message under the field.
  * @returns true when the dialog was reopened.
  */
 function reopenKeyDialogOnRejectedKey(err: unknown, dispatch: AdvisorDispatch): boolean {
-  if (!(err instanceof ApiError) || err.status !== 401 || !isRealProvider(dispatch.provider)) {
+  if (!(err instanceof ApiError) || err.code !== "PROVIDER_AUTH_FAILED" || !isRealProvider(dispatch.provider)) {
     return false;
   }
   requestProviderKey(dispatch, generationErrorMessage(err));
@@ -2861,6 +2867,7 @@ function handleGenerationFailure(err: unknown, dispatch: AdvisorDispatch) {
   addChatMessage("system", generationErrorMessage(err));
 }
 
+/** Everything a dispatched generation needs beyond the advisor dispatch. */
 interface GenerationRun {
   payload: PromptAndImagePayload;
   provider: string;
