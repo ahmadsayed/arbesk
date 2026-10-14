@@ -466,26 +466,82 @@ if (composerAdvanced) {
   });
 }
 
+/** Body variants of the Tripo key dialog. */
+interface ProviderKeyBodyOptions {
+  /**
+   * On-demand variant shown when a generation needs a key: explanatory copy,
+   * a key link, optional "Use Parametric CAD" and "Save key and generate"
+   * buttons that close the dialog with "cad" / "save". Absent → the Advanced
+   * settings variant, which saves on input.
+   */
+  gate?: { allowCad: boolean };
+}
+
 /**
  * Builds the key dialog body (password input, show/hide toggle, Clear Key).
- * @remarks All markup is static — no user content is injected.
+ * @remarks All markup is static — no user content is injected. In gate mode
+ *   the key is stored only by "Save key and generate", so closing the dialog
+ *   leaves storage untouched.
  */
-function buildProviderKeyBody(): HTMLElement {
+function buildProviderKeyBody(options: ProviderKeyBodyOptions = {}): HTMLElement {
+  const gate = options.gate;
   const wrap = document.createElement("div");
   wrap.innerHTML = `
-    <p style="margin:0 0 var(--size-2)">Bring your own Tripo 3D key to generate without the free-tier on-chain quota. The key is stored only in this browser and sent with each generation request.</p>
+    <p style="margin:0 0 var(--size-2)">${
+      gate
+        ? "Organic shapes like this are made with Tripo 3D, which uses your own API key. You can also try Parametric CAD, which is free but best for geometric parts."
+        : "Bring your own Tripo 3D key to generate without the free-tier on-chain quota. The key is stored only in this browser and sent with each generation request."
+    }</p>
     <div class="form-group">
-      <label class="form-label" for="providerKeyInput">Tripo 3D API Key</label>
+      <label class="form-label" for="providerKeyInput">Tripo 3D API key</label>
       <div class="byok-field">
         <input id="providerKeyInput" class="form-control" type="password" placeholder="sk-…" autocomplete="off">
         <button id="providerKeyToggle" class="byok-toggle" type="button" aria-label="Show API key">Show</button>
       </div>
     </div>
-    <button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear Key</button>
-    <p id="providerKeyBalance" class="provider-balance" style="margin-top:var(--size-2)"></p>`;
+    <p style="margin:var(--size-2) 0 0"><a href="https://platform.tripo3d.ai" target="_blank" rel="noopener noreferrer">Get a key from Tripo 3D</a></p>
+    ${
+      gate
+        ? `<div class="dialog-actions" style="display:flex;gap:var(--size-2);justify-content:flex-end;margin-top:var(--size-3)">
+      ${gate.allowCad ? '<button id="providerKeyUseCad" class="btn btn-secondary" type="button">Use Parametric CAD</button>' : ""}
+      <button id="providerKeySave" class="btn btn-primary" type="button" disabled>Save key and generate</button>
+    </div>`
+        : `<button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear key</button>
+    <p id="providerKeyBalance" class="provider-balance" style="margin-top:var(--size-2)"></p>`
+    }`;
 
   const input = wrap.querySelector("#providerKeyInput") as HTMLInputElement;
   const toggle = wrap.querySelector("#providerKeyToggle") as HTMLButtonElement;
+
+  toggle.addEventListener("click", () => {
+    const hidden = input.type === "password";
+    input.type = hidden ? "text" : "password";
+    toggle.setAttribute("aria-label", hidden ? "Hide API key" : "Show API key");
+    toggle.textContent = hidden ? "Hide" : "Show";
+  });
+
+  if (gate) {
+    const save = wrap.querySelector("#providerKeySave") as HTMLButtonElement;
+    const useCad = wrap.querySelector("#providerKeyUseCad") as HTMLButtonElement | null;
+    // showCustomDialog attaches wrap.closeDialog; resolve at click time.
+    const closeWith = (value: string) => {
+      const w = wrap as any;
+      if (typeof w.closeDialog === "function") w.closeDialog(value);
+    };
+    input.addEventListener("input", () => {
+      save.disabled = input.value.trim().length === 0;
+    });
+    save.addEventListener("click", () => {
+      const key = input.value.trim();
+      if (!key) return;
+      localStorage.setItem(BYOK_KEY_STORAGE, key);
+      syncProviderUI();
+      closeWith("save");
+    });
+    useCad?.addEventListener("click", () => closeWith("cad"));
+    return wrap;
+  }
+
   const clear = wrap.querySelector("#providerKeyClear") as HTMLButtonElement;
 
   // Prefill the balance line from the provider-row caption (when a fresh
@@ -501,13 +557,6 @@ function buildProviderKeyBody(): HTMLElement {
     syncProviderUI();
   });
 
-  toggle.addEventListener("click", () => {
-    const hidden = input.type === "password";
-    input.type = hidden ? "text" : "password";
-    toggle.setAttribute("aria-label", hidden ? "Hide API key" : "Show API key");
-    toggle.textContent = hidden ? "Hide" : "Show";
-  });
-
   clear.addEventListener("click", () => {
     input.value = "";
     localStorage.removeItem(BYOK_KEY_STORAGE);
@@ -519,7 +568,7 @@ function buildProviderKeyBody(): HTMLElement {
 
 function showProviderKeyDialog() {
   refreshProviderBalance({ force: true });
-  return showCustomDialog("Tripo 3D API Key", buildProviderKeyBody());
+  return showCustomDialog("Tripo 3D API key", buildProviderKeyBody());
 }
 
 if (providerKeyLink) {
@@ -2351,24 +2400,32 @@ function postAdvisorAsk(plan: Extract<GenerationPlan, { kind: "ask" }>, prompt: 
 }
 
 /**
- * The BYOK gate for Tripo-bound dispatches: instead of a bare dialog, post an
- * explanation with a platform link and an "Add API key" chip; saving a key in
- * the dialog retries the pending generation with the same route.
+ * The BYOK gate for Tripo-bound dispatches: a dialog explains why a key is
+ * needed and offers "Save key and generate" (retries the pending dispatch) or
+ * "Use Parametric CAD" (re-runs the prompt with cad; hidden when photos are
+ * attached or CAD is unavailable). Closing it cancels: the prompt stays in the
+ * composer and the pending dispatch is dropped.
  */
-function requestProviderKey(dispatch: AdvisorDispatch) {
+function requestProviderKey(dispatch: AdvisorDispatch, hasPhotos: boolean) {
   pendingAdvisorDispatch = dispatch;
-  addChoiceMessage(
-    "This request needs advanced AI generation — please add your Tripo 3D API key to continue.",
-    [{ label: "Add API key", value: "add-key" }],
-    () => {
-      void showProviderKeyDialog().then(() => {
-        if (getByokKey().length === 0) return;
-        promptInput.value = dispatch.prompt;
-        void onGenerate({ resubmit: true });
-      });
-    },
-    { link: { href: "https://platform.tripo3d.ai", label: "Get a key at platform.tripo3d.ai" } },
-  );
+  // The composer already reset on send, so photos are known from the payload.
+  const allowCad = !hasPhotos && cadAvailable();
+  void showCustomDialog(
+    "This model needs an AI generator",
+    buildProviderKeyBody({ gate: { allowCad } }),
+  ).then((outcome) => {
+    if (outcome === "cad") {
+      pendingAdvisorDispatch = null;
+      selectProviderProgrammatically("cad");
+    } else if (outcome !== "save" || getByokKey().length === 0) {
+      // Cancelled: no generation, and the sent prompt returns to the composer.
+      pendingAdvisorDispatch = null;
+      promptInput.value = dispatch.prompt;
+      return;
+    }
+    promptInput.value = dispatch.prompt;
+    void onGenerate({ resubmit: true });
+  });
 }
 
 /**
@@ -2687,7 +2744,7 @@ async function onGenerate(options: { resubmit?: boolean } = {}) {
   }
   if (advisorDispatch.announce) addChatMessage("system", advisorDispatch.announce);
 
-  if (!ensureProviderKey(advisorDispatch)) {
+  if (!ensureProviderKey(advisorDispatch, !!payload.imagePayload)) {
     setGenerating(false);
     return;
   }
@@ -2727,13 +2784,13 @@ async function ensureGenerateReady(): Promise<boolean> {
 
 /**
  * The BYOK gate for a provider dispatch: Tripo 3D (including advisor-routed
- * auto) requires a key; mock and Parametric CAD do not. A missing key posts a
- * guided message (platform link + chip) instead of a dead-end dialog.
+ * auto) requires a key; mock and Parametric CAD do not. A missing key opens
+ * the on-demand key dialog instead of a dead end.
  * @returns true when the key is present (or unneeded) and generation proceeds.
  */
-function ensureProviderKey(dispatch: AdvisorDispatch): boolean {
+function ensureProviderKey(dispatch: AdvisorDispatch, hasPhotos: boolean): boolean {
   if (!isRealProvider(dispatch.provider) || getByokKey().length > 0) return true;
-  requestProviderKey(dispatch);
+  requestProviderKey(dispatch, hasPhotos);
   return false;
 }
 

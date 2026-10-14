@@ -307,6 +307,25 @@ async function attachImages(files) {
   await flush();
 }
 
+
+/**
+ * Make the mocked showCustomDialog behave like the real one: it hands the body
+ * a closeDialog(value) that resolves the dialog's promise. Returns a handle to
+ * the opened body.
+ */
+function openKeyDialogHandle() {
+  const handle = { wrap: null, title: null, close: null };
+  mockShowCustomDialog.mockImplementation((title, wrap) => {
+    handle.title = title;
+    handle.wrap = wrap;
+    return new Promise((resolve) => {
+      wrap.closeDialog = resolve;
+      handle.close = resolve;
+    });
+  });
+  return handle;
+}
+
 // ─── Tests ───
 
 test("ignores an empty prompt with no attached images", async () => {
@@ -411,49 +430,97 @@ test("Enter key (without shift) submits like the Generate button", async () => {
   expect(mockGenerateAsset.mock.calls[0][0].prompt).toBe("a rock");
 });
 
-test("tripo-bound generation without a BYOK key posts the key message and chip instead of generating", async () => {
+test("missing key opens the dialog; Save key and generate retries the same dispatch", async () => {
   connectWallet();
   providerSelect.value = "tripo3d";
   promptInput.value = "a rock";
+  const dlg = openKeyDialogHandle();
   await clickGenerate();
+
   expect(mockGenerateAsset).not.toHaveBeenCalled();
-  // The guided gate: explanation + platform link + one chip, no bare dialog.
-  expect(mockShowCustomDialog).not.toHaveBeenCalled();
-  const [text, choices, onPick, options] = mockAddChoiceMessage.mock.calls[0];
-  expect(text).toContain("add your Tripo 3D API key");
-  expect(choices).toEqual([{ label: "Add API key", value: "add-key" }]);
-  expect(options.link).toEqual({
-    href: "https://platform.tripo3d.ai",
-    label: "Get a key at platform.tripo3d.ai",
-  });
+  expect(mockAddChoiceMessage).not.toHaveBeenCalled();
+  expect(dlg.title).toBe("This model needs an AI generator");
+  expect(dlg.wrap.textContent).toContain("Organic shapes like this are made with Tripo 3D");
+  const link = dlg.wrap.querySelector("a");
+  expect(link.getAttribute("href")).toBe("https://platform.tripo3d.ai");
+  expect(link.textContent).toBe("Get a key from Tripo 3D");
   expect(generateBtn.disabled).toBe(false);
 
-  // Picking the chip opens the key dialog; saving a key retries the pending
-  // generation with the same route.
-  let resolveDialog;
-  mockShowCustomDialog.mockReturnValue(
-    new Promise((r) => {
-      resolveDialog = r;
-    }),
-  );
-  onPick("add-key");
+  const save = dlg.wrap.querySelector("#providerKeySave");
+  const field = dlg.wrap.querySelector("#providerKeyInput");
+  expect(save.textContent).toBe("Save key and generate");
+  expect(save.disabled).toBe(true);
+  field.value = "sk-late-key";
+  field.dispatchEvent(new Event("input"));
+  expect(save.disabled).toBe(false);
+  save.click();
   await flush();
-  expect(mockShowCustomDialog).toHaveBeenCalledWith(
-    "Tripo 3D API Key",
-    expect.any(HTMLElement),
-  );
-  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  await flush();
+  await flush();
 
-  localStorage.setItem("arbesk-byok-key", "sk-late-key");
-  resolveDialog(null);
-  await flush();
-  await flush();
-  await flush();
+  expect(localStorage.getItem("arbesk-byok-key")).toBe("sk-late-key");
   expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
   const retried = mockGenerateAsset.mock.calls[0][0];
   expect(retried.provider).toBe("tripo3d");
+  expect(retried.prompt).toBe("a rock");
   expect(retried.providerKey).toBe("sk-late-key");
   expect(retried.textureQuality).toBe("standard");
+});
+
+test("Use Parametric CAD re-runs the prompt with cad", async () => {
+  connectWallet();
+  providerSelect.value = "tripo3d";
+  promptInput.value = "a rock";
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  const cad = dlg.wrap.querySelector("#providerKeyUseCad");
+  expect(cad.textContent).toBe("Use Parametric CAD");
+  cad.click();
+  await flush();
+  await flush();
+  await flush();
+
+  expect(providerSelect.value).toBe("cad");
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  expect(mockGenerateCadAsset).toHaveBeenCalledTimes(1);
+  expect(mockGenerateCadAsset.mock.calls[0][0].prompt).toBe("a rock");
+});
+
+test("with photos attached the CAD button is absent", async () => {
+  connectWallet();
+  providerSelect.value = "tripo3d";
+  await attachImages([new File(["px"], "front.png", { type: "image/png" })]);
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  expect(dlg.wrap).not.toBeNull();
+  expect(dlg.wrap.querySelector("#providerKeyUseCad")).toBeNull();
+  expect(dlg.wrap.querySelector("#providerKeySave")).not.toBeNull();
+});
+
+test("Escape closes the dialog, nothing generates, prompt kept", async () => {
+  connectWallet();
+  providerSelect.value = "tripo3d";
+  promptInput.value = "a rock";
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  dlg.close(null); // Escape / backdrop / close resolve null
+  await flush();
+  await flush();
+
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  expect(promptInput.value).toBe("a rock");
+  expect(generateBtn.disabled).toBe(false);
+
+  // The pending dispatch was cleared: a later keyless submit asks again
+  // instead of silently replaying the stale route.
+  mockShowCustomDialog.mockClear();
+  const again = openKeyDialogHandle();
+  await clickGenerate();
+  expect(again.wrap).not.toBeNull();
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
 });
 
 test("tripo3d with a key sends providerKey, standard quality, and stoppable wiring", async () => {
@@ -894,7 +961,7 @@ test("advice failure (null) falls back to Tripo with the balanced defaults", asy
   });
 });
 
-test("auto without a BYOK key posts the key message and retries with the same bundle", async () => {
+test("auto without a BYOK key opens the dialog and retries with the same bundle", async () => {
   connectWallet();
   providerSelect.value = "auto";
   mockFetchGenerationAdvice.mockResolvedValue(ADVICE);
@@ -904,22 +971,16 @@ test("auto without a BYOK key posts the key message and retries with the same bu
     configId: "game-ready",
   });
   promptInput.value = "a low-poly treasure chest";
+  const dlg = openKeyDialogHandle();
   await clickGenerate();
 
   expect(mockGenerateAsset).not.toHaveBeenCalled();
-  const [text, , onPick] = mockAddChoiceMessage.mock.calls[0];
-  expect(text).toContain("add your Tripo 3D API key");
+  expect(dlg.title).toBe("This model needs an AI generator");
 
-  let resolveDialog;
-  mockShowCustomDialog.mockReturnValue(
-    new Promise((r) => {
-      resolveDialog = r;
-    }),
-  );
-  onPick("add-key");
-  await flush();
-  localStorage.setItem("arbesk-byok-key", "sk-late-key");
-  resolveDialog(null);
+  const field = dlg.wrap.querySelector("#providerKeyInput");
+  field.value = "sk-late-key";
+  field.dispatchEvent(new Event("input"));
+  dlg.wrap.querySelector("#providerKeySave").click();
   await flush();
   await flush();
   await flush();

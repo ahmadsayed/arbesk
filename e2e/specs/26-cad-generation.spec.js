@@ -108,20 +108,12 @@ test.describe("CAD generation (parametric, client-rendered)", () => {
 
     // Picking the retry flips the provider select to Tripo 3D and
     // re-dispatches the prompt — which, with no BYOK key configured in the
-    // e2e stack, posts the key message + "Add API key" chip instead of
-    // dispatching; the chip opens the provider-key dialog.
+    // e2e stack, opens the on-demand key dialog instead of dispatching.
     await expect(page.locator(SELECTORS.providerSelect)).toHaveValue(
       "tripo3d",
     );
-    // The retry bubble stays in the feed, so target the newest one.
-    const keyGate = page.locator(SELECTORS.choiceBubble).last();
-    await expect(keyGate).toContainText(
-      "please add your Tripo 3D API key to continue",
-    );
-    await expect(keyGate).toContainText("platform.tripo3d.ai");
-    await page.locator(SELECTORS.choiceButton("Add API key")).click();
     await expect(
       page.locator("#appDialogHost .dialog-title"),
-    ).toHaveText("Tripo 3D API Key");
+    ).toHaveText("This model needs an AI generator");
   });
 });
