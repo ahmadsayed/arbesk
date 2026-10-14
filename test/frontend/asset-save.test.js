@@ -127,7 +127,7 @@ describe("onSaveAssetDraft", () => {
 
     expect(result).toBeUndefined();
     expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Save Failed" })
+      expect.objectContaining({ title: "Save failed" })
     );
   });
 });
@@ -161,6 +161,40 @@ describe("adoptManifestName", () => {
   });
 });
 
+describe("success toasts", () => {
+  test("draft toast says kept in this tab only", async () => {
+    const { onSaveAssetDraft } = await loadModule();
+    const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
+    await onSaveAssetDraft();
+    expect(showToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "Draft saved — kept in this tab only",
+    });
+  });
+
+  test("publish toast names the new version", async () => {
+    const { onPublishAsset } = await loadModule();
+    const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
+    await onPublishAsset();
+    expect(showToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "Published v1 — your team can see it now",
+    });
+  });
+
+  test("first publish adds the on-chain message", async () => {
+    _publishResult = { tokenId: "123", isNew: true };
+    const { onPublishAsset } = await loadModule();
+    const { showToast } = await import("../../frontend/src/js/ui/toasts.js");
+    await onPublishAsset();
+    expect(showToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "Published v1 — your team can see it now",
+      message: "Asset created on-chain",
+    });
+  });
+});
+
 describe("onPublishAsset", () => {
   test("publishes normally when saveAssetDraftCore succeeds", async () => {
     const { onPublishAsset } = await loadModule();
@@ -191,7 +225,7 @@ describe("onPublishAsset", () => {
     await onPublishAsset();
 
     expect(showToast).not.toHaveBeenCalledWith(
-      expect.objectContaining({ title: "No Changes" })
+      expect.objectContaining({ title: "No changes" })
     );
     expect(publishCollectionForAsset).toHaveBeenCalledWith(
       "bafyExistingAsset",
@@ -212,7 +246,7 @@ describe("onPublishAsset", () => {
 
     expect(publishCollectionForAsset).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Nothing to Publish" })
+      expect.objectContaining({ title: "Nothing to publish" })
     );
   });
 });
@@ -222,20 +256,20 @@ describe("button labels after completion", () => {
   // exist before loadModule().
   beforeEach(() => {
     document.body.innerHTML = `
-      <button id="saveAssetBtn"><span id="saveAssetBtnText">Save</span></button>
-      <button id="publishAssetBtn"><span id="publishAssetBtnText">Besk it</span></button>
+      <button id="saveAssetBtn"><span id="saveAssetBtnText">Save draft</span></button>
+      <button id="publishAssetBtn"><span id="publishAssetBtnText">Publish</span></button>
       <button id="downloadAssetBtn"></button>`;
   });
 
-  test("save restores the Save label on success", async () => {
+  test("save restores the Save draft label on success", async () => {
     const { onSaveAssetDraft } = await loadModule();
     await onSaveAssetDraft();
     expect(document.getElementById("saveAssetBtnText").textContent).toBe(
-      "Save"
+      "Save draft"
     );
   });
 
-  test("save restores the Save label on failure", async () => {
+  test("save restores the Save draft label on failure", async () => {
     const { onSaveAssetDraft } = await loadModule();
     const { saveAssetDraftCore } = await import(
       "../../frontend/src/js/services/asset-save/manifest-builder.js"
@@ -243,19 +277,19 @@ describe("button labels after completion", () => {
     saveAssetDraftCore.mockRejectedValueOnce(new Error("ipfs down"));
     await onSaveAssetDraft();
     expect(document.getElementById("saveAssetBtnText").textContent).toBe(
-      "Save"
+      "Save draft"
     );
   });
 
-  test("publish restores the Besk it label on success", async () => {
+  test("publish restores the Publish label on success", async () => {
     const { onPublishAsset } = await loadModule();
     await onPublishAsset();
     expect(document.getElementById("publishAssetBtnText").textContent).toBe(
-      "Besk it"
+      "Publish"
     );
   });
 
-  test("publish restores the Besk it label when cancelled at the name dialog", async () => {
+  test("publish restores the Publish label when cancelled at the name dialog", async () => {
     _activeAssetName = "Untitled Asset"; // force the name prompt
     const { onPublishAsset } = await loadModule();
     const { showDialog } = await import("../../frontend/src/js/ui/dialog.js");
@@ -268,7 +302,7 @@ describe("button labels after completion", () => {
 
     expect(publishCollectionForAsset).not.toHaveBeenCalled();
     expect(document.getElementById("publishAssetBtnText").textContent).toBe(
-      "Besk it"
+      "Publish"
     );
   });
 });

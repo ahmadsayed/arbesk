@@ -44,7 +44,7 @@ describe("task-progress", () => {
   });
 
   test("setTaskProgress advances the fill and updates the label", () => {
-    startTaskProgress("Besking — preparing…", 0.1);
+    startTaskProgress("Publishing — preparing…", 0.1);
     setTaskProgress(0.6, "Confirm the transaction in your wallet…");
     const { label, fill } = els();
     expect(label.textContent).toBe("Confirm the transaction in your wallet…");
@@ -72,7 +72,7 @@ describe("task-progress", () => {
   });
 
   test("failTaskProgress applies error styling and hides after a longer delay", () => {
-    startTaskProgress("Besking…", 0.6);
+    startTaskProgress("Publishing…", 0.6);
     failTaskProgress("Publish failed.");
     const { overlay } = els();
     expect(overlay.classList.contains("error")).toBe(true);

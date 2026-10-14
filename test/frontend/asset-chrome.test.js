@@ -203,13 +203,27 @@ test("meta gains 'Unsaved changes' and Save gets the dot while edits are pending
   expect(meta()).toBe("v1 · Draft · Unsaved changes");
   const save = document.getElementById("saveAssetBtn");
   expect(save.classList.contains("has-unsaved")).toBe(true);
-  expect(save.getAttribute("aria-label")).toBe("Save Draft (unsaved changes)");
+  expect(save.getAttribute("aria-label")).toBe("Save draft (unsaved changes)");
 
   state.pendingTransformEdits.clear();
   emit(EVENTS.PENDING_EDITS_CHANGED);
   expect(meta()).toBe("v1 · Draft");
   expect(save.classList.contains("has-unsaved")).toBe(false);
-  expect(save.getAttribute("aria-label")).toBe("Save Draft");
+  expect(save.getAttribute("aria-label")).toBe("Save draft");
+});
+
+test("publish title names the next version", () => {
+  resetForNewAsset();
+  renameAsset("Stand");
+  walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
+  emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
+  const publish = document.getElementById("publishAssetBtn");
+  expect(publish.getAttribute("aria-label")).toBe("Publish");
+  expect(publish.title).toBe("Share this version with your team (creates v1)");
+  versionStore.entries = [{ cid: "a" }, { cid: "b" }];
+  versionStore.active = 1;
+  notifyVersionSubs();
+  expect(publish.title).toBe("Share this version with your team (creates v3)");
 });
 
 const OWNER = "0x00000000000000000000000000000000000000a1";
@@ -321,7 +335,7 @@ test("an unpublished draft with no pending edits shows plain Draft, no unsaved m
   expect(meta()).toBe("v3 · Draft");
   const save = document.getElementById("saveAssetBtn");
   expect(save.classList.contains("has-unsaved")).toBe(false);
-  expect(save.getAttribute("aria-label")).toBe("Save Draft");
+  expect(save.getAttribute("aria-label")).toBe("Save draft");
   expect(beforeUnloadPrevented()).toBe(true);
   state.pendingTransformEdits.set("n1", [1]);
   emit(EVENTS.PENDING_EDITS_CHANGED);

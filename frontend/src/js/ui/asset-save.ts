@@ -20,6 +20,8 @@ import {
   getActiveAssetName,
   getActiveAssetTokenId,
 } from "@arbesk/asset-core/domain/asset.js";
+import { getState as getVersionState } from "@arbesk/asset-core/domain/version-history-store.js";
+import { renderChrome } from "./asset-chrome.ts";
 import { error } from "../utils/log.ts";
 import { saveAssetDraftCore } from "../services/asset-save/manifest-builder.ts";
 import { verifyCanEdit } from "../services/asset-save/editor-publish.ts";
@@ -32,6 +34,9 @@ import {
   finishTaskProgress,
   failTaskProgress,
 } from "./task-progress.ts";
+
+const SAVE_TITLE =
+  "Kept in this tab only. Publish to share with your team and keep it. (Ctrl+S)";
 
 const saveBtn = document.getElementById("saveAssetBtn") as HTMLButtonElement | null;
 const saveBtnText = document.getElementById("saveAssetBtnText");
@@ -142,14 +147,14 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
         finishTaskProgress("Nothing to save.");
         showToast({
           type: "warning",
-          title: "Nothing to Save",
+          title: "Nothing to save",
           message: "Generate an asset or add linked assets first.",
         });
       } else if (result.reason === "no-changes") {
         finishTaskProgress("No changes to save.");
         showToast({
           type: "info",
-          title: "No Changes",
+          title: "No changes",
           message: "Nothing new to save.",
         });
       }
@@ -157,6 +162,7 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
     }
 
     announceStatus("Draft saved.");
+    showToast({ type: "success", title: "Draft saved — kept in this tab only" });
     finishTaskProgress("Draft saved.");
     return result;
   } catch (err) {
@@ -172,7 +178,7 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
     );
     showToast({
       type: "error",
-      title: rateLimited ? "Upload Rate Limited" : "Save Failed",
+      title: rateLimited ? "Upload rate limited" : "Save failed",
       message: rateLimited
         ? "Too many upload requests. Please wait a moment and try again."
         : (err as Error).message,
@@ -182,10 +188,22 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
     isSaving = false;
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.title = "Save Draft (Ctrl+S)";
+      saveBtn.title = SAVE_TITLE;
     }
-    if (saveBtnText) saveBtnText.textContent = "Save";
+    if (saveBtnText) saveBtnText.textContent = "Save draft";
   }
+}
+
+/** Success feedback; N is the version count after publish (refreshed or not). */
+function announcePublished(isNew: boolean, versionsBefore: number): void {
+  const version = Math.max(getVersionState().entries.length, versionsBefore + 1);
+  announceStatus("Published.");
+  finishTaskProgress("Published.");
+  showToast({
+    type: "success",
+    title: `Published v${version} — your team can see it now`,
+    ...(isNew ? { message: "Asset created on-chain" } : {}),
+  });
 }
 
 async function onPublishAsset(): Promise<void> {
@@ -193,24 +211,25 @@ async function onPublishAsset(): Promise<void> {
   if (!requireWallet()) return;
 
   isPublishing = true;
+  const versionsBefore = getVersionState().entries.length;
   if (publishBtn) {
     publishBtn.disabled = true;
-    publishBtn.title = "Besking…";
+    publishBtn.title = "Publishing…";
   }
-  if (publishBtnText) publishBtnText.textContent = "Besking…";
+  if (publishBtnText) publishBtnText.textContent = "Publishing…";
   announceStatus(
     getActiveAssetTokenId()
       ? "Republishing asset…"
       : "Publishing asset…"
   );
-  startTaskProgress("Besking — preparing asset…", 0.1);
+  startTaskProgress("Publishing — preparing asset…", 0.1);
 
   try {
     const assetName = await ensureExplicitName();
     if (!assetName) {
       isPublishing = false;
       if (publishBtn) publishBtn.disabled = false;
-      finishTaskProgress("Besking cancelled.");
+      finishTaskProgress("Publishing cancelled.");
       return;
     }
 
@@ -241,21 +260,14 @@ async function onPublishAsset(): Promise<void> {
       finishTaskProgress("Nothing to publish.");
       showToast({
         type: "warning",
-        title: "Nothing to Publish",
+        title: "Nothing to publish",
         message: "Generate an asset or add linked assets first.",
       });
       return;
     }
     if (outcome.outcome === "aborted") return;
 
-    announceStatus(
-      outcome.isNew
-        ? "Default collection published and minted."
-        : "Collection republished successfully."
-    );
-    finishTaskProgress(
-      outcome.isNew ? "Published — collection minted on-chain." : "Republished."
-    );
+    announcePublished(outcome.isNew, versionsBefore);
   } catch (err) {
     error("Publish asset failed:", err);
     const rateLimited = isRateLimitError(err);
@@ -269,7 +281,7 @@ async function onPublishAsset(): Promise<void> {
     );
     showToast({
       type: "error",
-      title: rateLimited ? "Upload Rate Limited" : "Publish Failed",
+      title: rateLimited ? "Upload rate limited" : "Publish failed",
       message: rateLimited
         ? "Too many upload requests. The asset was not anchored on-chain. Please wait a moment and try again."
         : (err as Error).message,
@@ -279,9 +291,10 @@ async function onPublishAsset(): Promise<void> {
     isPublishing = false;
     if (publishBtn) {
       publishBtn.disabled = false;
-      publishBtn.title = "Besk it: publish this asset";
+      // Title (names the next version) is owned by asset-chrome.
+      renderChrome();
     }
-    if (publishBtnText) publishBtnText.textContent = "Besk it";
+    if (publishBtnText) publishBtnText.textContent = "Publish";
   }
 }
 
