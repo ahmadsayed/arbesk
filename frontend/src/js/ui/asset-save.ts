@@ -26,6 +26,7 @@ import { verifyCanEdit } from "../services/asset-save/editor-publish.ts";
 import { publishCollectionForAsset } from "../services/asset-save/collection-publish.ts";
 import { downloadActiveAsset } from "../services/asset-download.ts";
 import { announceStatus } from "../services/api.ts";
+import { markDraftSaved, markPublished } from "../state/draft-status.ts";
 import {
   startTaskProgress,
   setTaskProgress,
@@ -156,6 +157,7 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
       return result;
     }
 
+    markDraftSaved();
     announceStatus("Draft saved.");
     finishTaskProgress("Draft saved.");
     return result;
@@ -247,6 +249,7 @@ async function onPublishAsset(): Promise<void> {
       return;
     }
     if (outcome.outcome === "aborted") return;
+    markPublished();
 
     announceStatus(
       outcome.isNew

@@ -255,3 +255,72 @@ test("library visitor with a pending edit: no unsaved marker and no leave-site p
   emit(EVENTS.LIBRARY_STATE_CHANGED, libraryState.get());
   expectNoUnsavedUi();
 });
+
+test("tokenized asset with an unpublished draft shows Draft", async () => {
+  const { markDraftSaved, resetDraftStatus } = await import(
+    "../../frontend/src/js/state/draft-status.js"
+  );
+  resetDraftStatus();
+  assetStore.set({
+    activeAssetManifestCid: "bafyV3",
+    activeAssetName: "Chair",
+    activeAssetTokenId: "7",
+  });
+  versionStore.entries = [{ cid: "a" }, { cid: "b" }, { cid: "c" }];
+  versionStore.active = 2;
+  notifyVersionSubs();
+  expect(meta()).toBe("v3 · Published");
+  markDraftSaved();
+  expect(meta()).toBe("v3 · Draft");
+  resetDraftStatus();
+});
+
+test("after publish meta shows Published", async () => {
+  const { markDraftSaved, markPublished } = await import(
+    "../../frontend/src/js/state/draft-status.js"
+  );
+  assetStore.set({
+    activeAssetManifestCid: "bafyV4",
+    activeAssetName: "Chair",
+    activeAssetTokenId: "7",
+  });
+  versionStore.entries = [{ cid: "a" }, { cid: "b" }, { cid: "c" }, { cid: "d" }];
+  versionStore.active = 3;
+  markDraftSaved();
+  expect(meta()).toBe("v4 · Draft");
+  markPublished();
+  expect(meta()).toBe("v4 · Published");
+});
+
+test("beforeunload prompts for a saved but unpublished draft", async () => {
+  const { markDraftSaved, resetDraftStatus } = await import(
+    "../../frontend/src/js/state/draft-status.js"
+  );
+  walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
+  assetStore.set({
+    activeAssetManifestCid: "bafyA",
+    activeAssetName: "Stand",
+    activeAssetTokenId: "7",
+  });
+  const fire = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+  expect(fire()).toBe(false);
+  markDraftSaved();
+  expect(fire()).toBe(true);
+  resetDraftStatus();
+});
+
+test("opening another asset clears the prompt", async () => {
+  const { markDraftSaved, hasUnpublishedDraft } = await import(
+    "../../frontend/src/js/state/draft-status.js"
+  );
+  markDraftSaved();
+  emit(EVENTS.SCENE_READY, { manifest: {}, manifestCid: "bafyOther" });
+  expect(hasUnpublishedDraft()).toBe(false);
+  markDraftSaved();
+  emit(EVENTS.SCENE_EMPTY);
+  expect(hasUnpublishedDraft()).toBe(false);
+});

@@ -16,6 +16,7 @@ import {
 import { walletState } from "../state/wallet-state.ts";
 import { isLibraryVisitor } from "../state/library-state.ts";
 import { canEdit, hasOpenAsset } from "../state/edit-mode.ts";
+import { hasUnpublishedDraft } from "../state/draft-status.ts";
 import { hasUnsavedChanges, onBeforeUnload } from "../state/unsaved-changes.ts";
 
 const titleEl = document.getElementById("assetStatusName");
@@ -30,7 +31,7 @@ const SAVE_LABEL = "Save Draft";
 
 /** Header meta: `v<N> · Draft|Published`, plus `· Unsaved changes` when dirty. */
 function _metaText(tokenId: string | null, dirty: boolean): string {
-  const status = tokenId ? "Published" : "Draft";
+  const status = tokenId && !hasUnpublishedDraft() ? "Published" : "Draft";
   const { entries } = getVersionState();
   const base = entries.length ? `v${activeIndex() + 1} · ${status}` : status;
   return dirty ? `${base} · Unsaved changes` : base;
