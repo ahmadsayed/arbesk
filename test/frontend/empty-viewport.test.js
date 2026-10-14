@@ -73,3 +73,19 @@ describe("empty viewport card", () => {
     }
   });
 });
+
+describe("empty viewport markup", () => {
+  test("Upload model is a secondary button: the accent is reserved for Publish", async () => {
+    const { createRequire } = await import("node:module");
+    const pug = createRequire(import.meta.url)("../../frontend/node_modules/pug");
+    const html = pug.renderFile(
+      new URL("../../frontend/src/pug/includes/studio-main.pug", import.meta.url).pathname,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const upload = host.querySelector("#emptyViewportUpload");
+    expect(upload).not.toBeNull();
+    expect(upload.classList.contains("btn-secondary")).toBe(true);
+    expect(host.querySelectorAll("#emptyViewport .btn-primary")).toHaveLength(0);
+  });
+});
