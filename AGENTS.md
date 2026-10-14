@@ -184,6 +184,8 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 
 **UI changes must sync E2E**: update `e2e/helpers/studio-selectors.mjs`, spec assertions, and `e2e/helpers/manifest.mjs` as the flow changes (`e2e/README.md`, edit-ui skill's E2E Sync guide).
 
+**UI design**: follow the `edit-ui` skill for Studio conventions; `frontend-design` may guide visual choices, treating the Arbesk design language (`docs/superpowers/specs/2026-10-04-ui-refresh-roadmap.md`: Graphite/Paper themes, WCAG 2.2 AA) as the fixed brief.
+
 ## 11. Infrastructure
 
 | Service | API | Gateway / RPC |
