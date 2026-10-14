@@ -438,6 +438,8 @@ describe("Gallery panel visitor mode (public profile in the studio sidebar)", ()
       await loadVisitorModule({ walletAddress: SUBJECT });
     _libraryStateRef = libraryState;
     initAssetLibrary();
+    // Owner cards are draggable once there is an asset to insert into.
+    assetStore.set({ activeAssetManifestCid: "bafyOpen", activeAssetId: "asset-open" });
 
     await refreshAssetLibrary();
 
@@ -647,5 +649,48 @@ describe("Insert panel cards", () => {
     expect(arg.actions.map((a) => a.label)).toEqual(["Undo"]);
     arg.actions[0].onClick();
     expect(removeChildSpy).toHaveBeenCalledWith(["n1"]);
+  });
+
+  test("a named empty draft accepts inserts: cards enabled, notice hidden", async () => {
+    assetStore.set({ activeAssetName: "Chair" });
+    await renderOwned();
+    const card = cardNamed("Asset A");
+    expect(card.querySelector(".asset-card-main").disabled).toBe(false);
+    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
+    card.querySelector(".asset-card-main").click();
+    expect(linkedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("New empty asset enables the cards once the draft is named", async () => {
+    await renderOwned();
+    document.getElementById("newAssetBtn").addEventListener("click", () => {
+      assetStore.set({ activeAssetName: "Untitled Asset" });
+    });
+    document.getElementById("insertNewAssetBtn").click();
+    expect(cardNamed("Asset A").querySelector(".asset-card-main").disabled).toBe(false);
+    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
+  });
+
+  test("disabled cards are not draggable and opt out of hover", async () => {
+    await renderOwned();
+    const card = cardNamed("Asset A");
+    expect(card.draggable).toBe(false);
+    expect(card.classList.contains("asset-card--disabled")).toBe(true);
+    const ev = new Event("dragstart", { cancelable: true });
+    ev.dataTransfer = { setData: jest.fn(), effectAllowed: "" };
+    card.dispatchEvent(ev);
+    expect(ev.dataTransfer.setData).not.toHaveBeenCalled();
+    assetStore.set(OPEN);
+    const enabled = cardNamed("Asset A");
+    expect(enabled.draggable).toBe(true);
+    expect(enabled.classList.contains("asset-card--disabled")).toBe(false);
+  });
+
+  test("the no-asset notice is right before the first render", async () => {
+    const { initAssetLibrary } = await loadModule();
+    initAssetLibrary();
+    expect(document.getElementById("insertNoAsset").hidden).toBe(false);
+    assetStore.set(OPEN);
+    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
   });
 });

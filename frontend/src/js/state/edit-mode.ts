@@ -23,6 +23,19 @@ export function hasOpenAsset(): boolean {
   );
 }
 
+/**
+ * "An asset is open" for the Studio's entry chrome.
+ * @remarks Wider than hasOpenAsset(): a named empty draft (New ▾ → Empty
+ *   asset, before anything is generated or inserted) counts too, so Insert
+ *   accepts cards, the Insert notice and the empty-viewport card step aside,
+ *   and the sidebar leaves the Create landing. Save/edit gating (canEdit(),
+ *   the header Save/Publish/Download chrome) keeps hasOpenAsset(): an empty
+ *   draft has nothing to save until content lands in it.
+ */
+export function isAssetOpen(): boolean {
+  return hasOpenAsset() || !!getAssetState().activeAssetName;
+}
+
 export function canEdit(): boolean {
   return hasOpenAsset() && !!walletState.get().walletAddress && !isLibraryVisitor();
 }

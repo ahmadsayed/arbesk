@@ -1,15 +1,16 @@
 /**
- * Empty-viewport card: guidance shown over the canvas while no asset is open.
+ * Empty-viewport card: guidance shown over the canvas while no asset is open
+ * (a named empty draft counts as open — see isAssetOpen()).
  * @remarks Plain DOM, not Babylon chrome. Without a wallet (or in visitor
  *   mode) New ▾ is hidden, so the action buttons are hidden with it.
  */
 import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
-import { hasOpenAsset } from "../state/edit-mode.ts";
+import { isAssetOpen } from "../state/edit-mode.ts";
 
 function render(): void {
   const card = document.getElementById("emptyViewport");
   if (!card) return;
-  card.hidden = hasOpenAsset();
+  card.hidden = isAssetOpen();
   const canCreate = !document.getElementById("newMenuBtn")?.hidden;
   const actions = card.querySelector<HTMLElement>(".empty-viewport-actions");
   if (actions) actions.hidden = !canCreate;

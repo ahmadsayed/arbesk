@@ -21,7 +21,7 @@ import {
 } from "../utils/thumbnail.ts";
 import { removeChildAssetNodes } from "../engine/child-remove.ts";
 import { showToast } from "./toasts.ts";
-import { hasOpenAsset } from "../state/edit-mode.ts";
+import { isAssetOpen } from "../state/edit-mode.ts";
 import { confirmDiscardChanges } from "./confirm-discard.ts";
 import { initMenuButton, type MenuButtonHandle } from "./menu-button.ts";
 
@@ -809,7 +809,7 @@ function updateInsertChrome(): void {
   const hint = document.getElementById("insertPanelHint");
   if (hint) hint.textContent = visitor ? BROWSE_HINT : INSERT_HINT;
   const notice = document.getElementById("insertNoAsset");
-  if (notice) notice.hidden = visitor || hasOpenAsset();
+  if (notice) notice.hidden = visitor || isAssetOpen();
 }
 
 function cachedAssetName(assetID: string | null): string {
@@ -901,6 +901,10 @@ function createSection(title: string, entries: any[], visitor: boolean = false):
 
 function wireCardDrag(item: HTMLDivElement, entry: any): void {
   item.addEventListener("dragstart", (event) => {
+    if (!item.draggable) {
+      event.preventDefault();
+      return;
+    }
     const payload = buildLinkedAssetPayload(entry, "live-ref");
     const dt = event.dataTransfer;
     if (!dt) return;
@@ -1037,10 +1041,15 @@ function buildCardMenu(entry: any, visitor: boolean = false): { anchor: HTMLDivE
   return { anchor, moreBtn };
 }
 
-/** Insert needs a scene to insert into: cards are inert until an asset is open. */
+/**
+ * Insert needs a scene to insert into: cards are inert until an asset is open.
+ * @remarks Inert cards can't be dragged and opt out of the hover highlight.
+ */
 function applyInsertAvailability(card: HTMLElement, enabled: boolean): void {
   const main = card.querySelector<HTMLButtonElement>(".asset-card-main");
   if (main) main.disabled = !enabled;
+  card.draggable = enabled;
+  card.classList.toggle("asset-card--disabled", !enabled);
   card
     .querySelector<HTMLElement>('[data-action="insert-copy"]')
     ?.setAttribute("aria-disabled", String(!enabled));
@@ -1086,7 +1095,7 @@ function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
   item.appendChild(reloadBtn);
 
   item.appendChild(buildCardMenu(entry, visitor).anchor);
-  if (!visitor) applyInsertAvailability(item, hasOpenAsset());
+  if (!visitor) applyInsertAvailability(item, isAssetOpen());
 
   wireCardThumbnailLoading(entry, thumbnailEl, reloadBtn);
   return item;
@@ -1278,6 +1287,7 @@ function initAssetLibrary(): void {
   document.getElementById("insertNewAssetBtn")?.addEventListener("click", () => {
     document.getElementById("newAssetBtn")?.click();
   });
+  updateInsertChrome();
 
   // Delegated: the gallery Connect affordance mirrors the headerbar button.
   assetLibraryBody?.addEventListener("click", (e) => {
@@ -1390,13 +1400,15 @@ on(EVENTS.PENDING_EDITS_CHANGED, syncInsertState);
  *   entries.
  */
 function syncInsertState(): void {
+  // The notice is independent of the cards: keep it right before the first
+  // render and after disconnect too.
+  updateInsertChrome();
   if (!assetLibraryBody || !_lastRender) return;
   if (ownCardKey() !== _lastOwnCardKey) {
     renderSections();
     return;
   }
-  updateInsertChrome();
-  const enabled = hasOpenAsset();
+  const enabled = isAssetOpen();
   assetLibraryBody
     .querySelectorAll<HTMLElement>(".asset-card")
     .forEach((card) => applyInsertAvailability(card, enabled));
@@ -1412,6 +1424,7 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
   if (assetLibraryBody) {
     assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }
+  updateInsertChrome();
 });
 
 export {

@@ -1,13 +1,14 @@
 // @test-env dom
 import { beforeEach, describe, expect, jest, test } from "bun:test";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
-import { setActiveManifestCid } from "@arbesk/asset-core/domain/asset.js";
+import { closeAsset, renameAsset, setActiveManifestCid } from "@arbesk/asset-core/domain/asset.js";
 import { _resetForTesting as resetAssets } from "@arbesk/asset-core/domain/asset-store.js";
 import { walletState } from "../../frontend/src/js/state/wallet-state.js";
 import { libraryState } from "../../frontend/src/js/state/library-state.js";
 import {
   canEdit,
   hasOpenAsset,
+  isAssetOpen,
   isEditing,
   setEditing,
   toggleEditing,
@@ -75,5 +76,27 @@ describe("edit-mode store", () => {
     setEditing(true);
     emit(EVENTS.SCENE_CLEARED);
     expect(isEditing()).toBe(false);
+  });
+});
+
+describe("isAssetOpen (an asset is open, including a named empty draft)", () => {
+  test("false with nothing open", () => {
+    expect(isAssetOpen()).toBe(false);
+  });
+
+  test("a named empty draft (New ▾ → Empty asset) counts as open", () => {
+    walletState.set({ walletAddress: WALLET });
+    renameAsset("Chair");
+    expect(isAssetOpen()).toBe(true);
+    // Save/edit semantics keep the content-based meaning.
+    expect(hasOpenAsset()).toBe(false);
+    expect(canEdit()).toBe(false);
+    closeAsset();
+    expect(isAssetOpen()).toBe(false);
+  });
+
+  test("a loaded manifest counts as open", () => {
+    setActiveManifestCid("bafyAsset");
+    expect(isAssetOpen()).toBe(true);
   });
 });

@@ -21,6 +21,7 @@ async function load({ open = false, newHidden = false } = {}) {
   const ctl = { open };
   await mock.module("../../frontend/src/js/state/edit-mode.js", () => ({
     hasOpenAsset: () => ctl.open,
+    isAssetOpen: () => ctl.open || !!ctl.draft,
   }));
   const bus = await import("@arbesk/asset-core/events/bus.js");
   const mod = await import("../../frontend/src/js/ui/empty-viewport.js");
@@ -40,6 +41,14 @@ describe("empty viewport card", () => {
     ctl.open = false;
     bus.emit(bus.EVENTS.SCENE_EMPTY);
     expect(card().hidden).toBe(false);
+  });
+
+  test("hidden for a named empty draft (New ▾ → Empty asset)", async () => {
+    const { ctl, bus } = await load();
+    expect(card().hidden).toBe(false);
+    ctl.draft = true;
+    bus.emit(bus.EVENTS.ASSET_STATE_CHANGED);
+    expect(card().hidden).toBe(true);
   });
 
   test("buttons forward to Upload and Empty asset", async () => {
