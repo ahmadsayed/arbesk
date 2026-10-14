@@ -343,8 +343,9 @@
 .provider-key-link {
   padding: 0;
   font: inherit;
-  color: var(--accent-bg);
+  color: var(--view-fg);
   text-decoration: underline;
+  text-underline-offset: var(--size-1);
 
   &:focus-visible {
     outline: none;
