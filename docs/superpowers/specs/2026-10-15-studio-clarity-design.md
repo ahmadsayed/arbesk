@@ -60,10 +60,15 @@ Behaviour:
 
 | Input | Result |
 |---|---|
-| Click / Enter / Space on card | Insert into the open asset at the origin, select the new node, toast "Lamp inserted into Chair" with **Undo** (uses the existing undo controller) |
-| Drag card into viewport | Insert at drop point (unchanged) |
-| ⋯ → **Open Lamp** | Open the asset, replacing the Studio contents; if there are unsaved or unpublished changes, confirm first (existing unsaved-changes guard) |
+| Click / Enter / Space on card | Insert a **live link** into the open asset at the origin with no dialog, select the new node, toast "Lamp inserted into Chair" with **Undo** (Undo unlinks the node through the existing child-remove path, which is itself undoable) |
+| Drag card into viewport | Insert a live link at the drop point, no dialog |
+| ⋯ → **Insert a copy** | Insert a frozen copy (today's "Fork (copy)"), no dialog |
+| ⋯ → **Open Lamp** | Open the asset, replacing the Studio contents; if there are unsaved or unpublished changes, confirm first |
 | ⋯ → **Show in Library** | Navigate to the asset in `/library` |
+
+The Fork / Live reference dialog is no longer shown for Insert-panel inserts: the
+card payload carries `mode: "live-ref" | "fork"`. Drops without a mode (e.g. from
+other sources) keep the dialog.
 
 - Card accessible name: "Insert Lamp". ⋯ is a separate `<button>` ("More actions
   for Lamp") using `initMenuButton()`.
