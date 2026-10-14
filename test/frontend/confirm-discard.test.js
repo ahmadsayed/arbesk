@@ -49,4 +49,24 @@ describe("confirmDiscardChanges", () => {
     expect(await confirmDiscardChanges()).toBe(true);
     expect(showConfirmDialog).toHaveBeenCalledTimes(1);
   });
+
+  test("unpublished draft only: the body says the draft stays unpublished", async () => {
+    const { confirmDiscardChanges, showConfirmDialog } = await load({
+      editable: true, dirty: false, unpublished: true,
+    });
+    await confirmDiscardChanges();
+    const [title, body] = showConfirmDialog.mock.calls[0];
+    expect(title).toBe("Open another asset?");
+    expect(body).toBe("Your draft isn't published yet. Opening another asset leaves it unpublished.");
+  });
+
+  test("unsaved edits keep the lost-changes body, even with an unpublished draft", async () => {
+    const { confirmDiscardChanges, showConfirmDialog } = await load({
+      editable: true, dirty: true, unpublished: true,
+    });
+    await confirmDiscardChanges();
+    const [title, body] = showConfirmDialog.mock.calls[0];
+    expect(title).toBe("Open another asset?");
+    expect(body).toBe("Unsaved changes to the open asset will be lost.");
+  });
 });
