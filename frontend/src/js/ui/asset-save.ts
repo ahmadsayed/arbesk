@@ -195,7 +195,7 @@ async function onSaveAssetDraft(): Promise<{ ok: boolean; cid?: string; reason?:
 }
 
 /** Success feedback; N is the version count after publish (refreshed or not). */
-function announcePublished(isNew: boolean, versionsBefore: number): void {
+function announcePublished(isNew: boolean | undefined, versionsBefore: number): void {
   const version = Math.max(getVersionState().entries.length, versionsBefore + 1);
   announceStatus("Published.");
   finishTaskProgress("Published.");
