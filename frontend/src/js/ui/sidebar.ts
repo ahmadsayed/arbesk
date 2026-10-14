@@ -38,10 +38,12 @@ function initSidebar(): void {
   // No asset in the URL: land on Create. Otherwise restore the last view;
   // retired views ("settings") and unknown values fall back to Outline.
   const params = new URLSearchParams(location.search);
-  const hasAsset = params.has("asset") || params.has("manifest");
+  const hasAsset = params.has("asset") || params.has("assetId") || params.has("manifest");
   const stored = localStorage.getItem(STORAGE_KEY);
   const restored = stored && VIEWS.includes(stored) ? stored : "outline";
-  switchView(hasAsset ? restored : "chat");
+  // Landing on Create must not clobber the last-used tab.
+  if (hasAsset) switchView(restored);
+  else switchView("chat", false);
 
   // On narrow screens the sidebar overlays the viewport, so it must start
   // closed or it hides the canvas on first visit.
@@ -110,7 +112,7 @@ function initSidebar(): void {
 
 // ─── View Switching ──────────────────────────────────────────────────
 
-function switchView(viewName: string): void {
+function switchView(viewName: string, persist = true): void {
   if (!viewPanes[viewName]) return;
 
   // Hide all panes
@@ -133,7 +135,7 @@ function switchView(viewName: string): void {
   });
 
   // Persist
-  localStorage.setItem(STORAGE_KEY, viewName);
+  if (persist) localStorage.setItem(STORAGE_KEY, viewName);
 
   // Auto-expand if collapsed
   if (collapsed) expandSidebar();

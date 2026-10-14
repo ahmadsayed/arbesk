@@ -6,8 +6,8 @@ const FRAGMENT = `
   <div class="menu-anchor">
     <button id="newMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="newMenu">New</button>
     <ul id="newMenu" role="menu" hidden>
-      <li id="newMenuUpload" role="menuitem" tabindex="-1">Upload model…</li>
       <li id="newMenuAi" role="menuitem" tabindex="-1">Generate with AI</li>
+      <li id="newMenuUpload" role="menuitem" tabindex="-1">Upload model…</li>
       <li id="newMenuCad" role="menuitem" tabindex="-1">Parametric CAD</li>
       <li class="menu-separator" role="separator"></li>
       <li id="newAssetBtn" role="menuitem" tabindex="-1">Empty asset</li>
@@ -50,15 +50,18 @@ const open = () => document.getElementById("newMenuBtn").click();
 const item = (id) => document.getElementById(id);
 
 describe("New ▾ menu", () => {
-  test("Generate with AI is the first item", () => {
-    const pug = require("node:fs").readFileSync(
-      new URL("../../frontend/src/pug/includes/header.pug", import.meta.url),
-      "utf8",
+  test("Generate with AI is the first item; order matches the spec", async () => {
+    const { createRequire } = await import("node:module");
+    const pug = createRequire(import.meta.url)("../../frontend/node_modules/pug");
+    const html = pug.renderFile(
+      new URL("../../frontend/src/pug/includes/header.pug", import.meta.url).pathname,
     );
-    const ids = [...pug.matchAll(/li#(\w+)\.menu-item/g)].map((m) => m[1]);
-    expect(ids).toEqual(["newMenuAi", "newMenuCad", "newMenuUpload", "newAssetBtn"]);
-    expect(pug.indexOf("menu-separator")).toBeLessThan(pug.indexOf("li#newAssetBtn"));
-    expect(pug.indexOf("menu-separator")).toBeGreaterThan(pug.indexOf("li#newMenuUpload"));
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const order = [...host.querySelectorAll("#newMenu > li")].map((li) =>
+      li.getAttribute("role") === "separator" ? "---" : li.id,
+    );
+    expect(order).toEqual(["newMenuAi", "newMenuUpload", "newMenuCad", "---", "newAssetBtn"]);
   });
 
   test("hides the CAD item when the create panel has no cad provider", async () => {

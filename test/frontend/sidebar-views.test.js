@@ -50,6 +50,26 @@ describe("sidebar views", () => {
     window.history.replaceState({}, "", "/studio");
   });
 
+  test("landing on Create does not overwrite the stored tab", async () => {
+    localStorage.setItem("arbesk-sidebar-view", "ledger");
+    window.history.replaceState({}, "", "/studio");
+    await load();
+    expect(visible()).toEqual(["chat"]);
+    expect(localStorage.getItem("arbesk-sidebar-view")).toBe("ledger");
+    window.history.replaceState({}, "", "/studio?asset=1");
+    await load();
+    expect(visible()).toEqual(["ledger"]);
+  });
+
+  test("an assetId or manifest param also counts as an asset in the URL", async () => {
+    window.history.replaceState({}, "", "/studio?assetId=x");
+    await load();
+    expect(visible()).toEqual(["outline"]);
+    window.history.replaceState({}, "", "/studio?manifest=bafy");
+    await load();
+    expect(visible()).toEqual(["outline"]);
+  });
+
   test("migrates a stored 'settings' view to Outline", async () => {
     localStorage.setItem("arbesk-sidebar-view", "settings");
     await load();
