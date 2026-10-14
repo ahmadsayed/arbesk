@@ -1,40 +1,27 @@
 /**
- * Tracks "a draft was saved but not published yet" for the open asset.
- * @remarks A saved draft is unsaved work as far as the leave-page guard is
- *   concerned, and it makes the header read "Draft" instead of "Published".
- *   Reset whenever an asset opens (SCENE_READY), closes, or a new draft
- *   starts (SCENE_EMPTY) — both events fire on every such path.
+ * "Does the open asset have a saved draft that is not published yet?"
+ * @remarks Derived, not tracked: true when the latest saved manifest CID
+ *   (the chain tip, which survives version-history navigation) differs from
+ *   the CID anchored on-chain. A never-published asset with a saved manifest
+ *   counts as unpublished. For a tokenized asset whose on-chain CID has not
+ *   been fetched yet the answer is false rather than a spurious "Draft".
+ *   Counts toward hasUnsavedChanges() via registerPendingSource; the chrome
+ *   re-renders on the asset and version-history store changes that move
+ *   either CID.
  */
-import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
-import { notifyPendingEditsChanged, registerPendingSource } from "./unsaved-changes.ts";
-
-let _unpublishedDraft = false;
+import { getState } from "@arbesk/asset-core/domain/version-history-store.js";
+import {
+  getActiveAssetTokenId,
+  getLatestAssetManifestCid,
+} from "@arbesk/asset-core/domain/asset.js";
+import { registerPendingSource } from "./unsaved-changes.ts";
 
 export function hasUnpublishedDraft(): boolean {
-  return _unpublishedDraft;
-}
-
-function _set(value: boolean): void {
-  if (_unpublishedDraft === value) return;
-  _unpublishedDraft = value;
-  notifyPendingEditsChanged();
-}
-
-/** A draft manifest was written without updating the token. */
-export function markDraftSaved(): void {
-  _set(true);
-}
-
-/** The token now points at the latest saved manifest. */
-export function markPublished(): void {
-  _set(false);
-}
-
-/** A different asset opened, the asset closed, or a new draft started. */
-export function resetDraftStatus(): void {
-  _set(false);
+  const latest = getLatestAssetManifestCid();
+  if (!latest) return false;
+  const published = getState().publishedCid;
+  if (getActiveAssetTokenId() && !published) return false;
+  return latest !== published;
 }
 
 registerPendingSource(hasUnpublishedDraft);
-on(EVENTS.SCENE_EMPTY, resetDraftStatus);
-on(EVENTS.SCENE_READY, resetDraftStatus);

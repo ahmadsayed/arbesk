@@ -14,6 +14,7 @@ let state;
 const versionStore = {
   entries: [],
   active: -1,
+  publishedCid: null,
   subs: new Set(),
 };
 
@@ -41,7 +42,7 @@ beforeAll(async () => {
       getState: () => ({
         entries: versionStore.entries,
         activeCid: null,
-        publishedCid: null,
+        publishedCid: versionStore.publishedCid,
         isLoading: false,
       }),
       activeIndex: () => versionStore.active,
@@ -84,6 +85,7 @@ beforeEach(() => {
   libraryState.set({ subjectAddress: null, subjectChainId: null });
   versionStore.entries = [];
   versionStore.active = -1;
+  versionStore.publishedCid = null;
   state.pendingTransformEdits = new Map();
   emit(EVENTS.WALLET_STATE_CHANGED, walletState.get());
 });
@@ -256,71 +258,59 @@ test("library visitor with a pending edit: no unsaved marker and no leave-site p
   expectNoUnsavedUi();
 });
 
-test("tokenized asset with an unpublished draft shows Draft", async () => {
-  const { markDraftSaved, resetDraftStatus } = await import(
-    "../../frontend/src/js/state/draft-status.js"
-  );
-  resetDraftStatus();
+
+function openTokenized(latest, published, n) {
   assetStore.set({
-    activeAssetManifestCid: "bafyV3",
+    activeAssetManifestCid: latest,
+    latestAssetManifestCid: latest,
     activeAssetName: "Chair",
     activeAssetTokenId: "7",
   });
-  versionStore.entries = [{ cid: "a" }, { cid: "b" }, { cid: "c" }];
-  versionStore.active = 2;
+  versionStore.entries = Array.from({ length: n }, (_, i) => ({ cid: `c${i}` }));
+  versionStore.active = n - 1;
+  versionStore.publishedCid = published;
   notifyVersionSubs();
-  expect(meta()).toBe("v3 · Published");
-  markDraftSaved();
+}
+
+test("tokenized asset with an unpublished draft shows Draft", () => {
+  openTokenized("bafyV3", "bafyV2", 3);
   expect(meta()).toBe("v3 · Draft");
-  resetDraftStatus();
 });
 
-test("after publish meta shows Published", async () => {
-  const { markDraftSaved, markPublished } = await import(
-    "../../frontend/src/js/state/draft-status.js"
-  );
-  assetStore.set({
-    activeAssetManifestCid: "bafyV4",
-    activeAssetName: "Chair",
-    activeAssetTokenId: "7",
-  });
-  versionStore.entries = [{ cid: "a" }, { cid: "b" }, { cid: "c" }, { cid: "d" }];
-  versionStore.active = 3;
-  markDraftSaved();
+test("opening an asset whose latest differs from published starts as Draft", () => {
+  openTokenized("bafyV3", "bafyV2", 3);
+  expect(meta()).toBe("v3 · Draft");
+  openTokenized("bafyZ", "bafyZ", 2);
+  expect(meta()).toBe("v2 · Published");
+});
+
+test("after publish (latest == published) meta shows Published", () => {
+  openTokenized("bafyV4", "bafyV3", 4);
   expect(meta()).toBe("v4 · Draft");
-  markPublished();
+  versionStore.publishedCid = "bafyV4";
+  notifyVersionSubs();
   expect(meta()).toBe("v4 · Published");
 });
 
-test("beforeunload prompts for a saved but unpublished draft", async () => {
-  const { markDraftSaved, resetDraftStatus } = await import(
-    "../../frontend/src/js/state/draft-status.js"
-  );
-  walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
-  assetStore.set({
-    activeAssetManifestCid: "bafyA",
-    activeAssetName: "Stand",
-    activeAssetTokenId: "7",
-  });
-  const fire = () => {
-    const e = new Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(e);
-    return e.defaultPrevented;
-  };
-  expect(fire()).toBe(false);
-  markDraftSaved();
-  expect(fire()).toBe(true);
-  resetDraftStatus();
+test("viewing an older version keeps the draft unpublished", () => {
+  openTokenized("bafyV3", "bafyV2", 3);
+  versionStore.active = 0;
+  notifyVersionSubs();
+  emit(EVENTS.SCENE_READY, { manifest: {}, manifestCid: "c0" });
+  emit(EVENTS.HISTORY_VERSION_SELECTED, { cid: "c0" });
+  expect(meta()).toBe("v1 · Draft");
 });
 
-test("opening another asset clears the prompt", async () => {
-  const { markDraftSaved, hasUnpublishedDraft } = await import(
-    "../../frontend/src/js/state/draft-status.js"
-  );
-  markDraftSaved();
-  emit(EVENTS.SCENE_READY, { manifest: {}, manifestCid: "bafyOther" });
-  expect(hasUnpublishedDraft()).toBe(false);
-  markDraftSaved();
-  emit(EVENTS.SCENE_EMPTY);
-  expect(hasUnpublishedDraft()).toBe(false);
+function beforeUnloadPrevented() {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+}
+
+test("beforeunload prompts for a saved but unpublished draft, not once published", () => {
+  walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
+  openTokenized("bafyV3", "bafyV3", 3);
+  expect(beforeUnloadPrevented()).toBe(false);
+  openTokenized("bafyV4", "bafyV3", 4);
+  expect(beforeUnloadPrevented()).toBe(true);
 });
