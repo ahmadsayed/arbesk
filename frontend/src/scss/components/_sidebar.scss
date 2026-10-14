@@ -311,3 +311,34 @@ body.sidebar-resizing {
     display: none;
   }
 }
+
+// Insert panel: search box and the "open an asset first" notice
+.insert-search {
+  width: 100%;
+  margin-bottom: var(--size-2);
+}
+
+.insert-no-asset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-2);
+  margin-bottom: var(--size-2);
+  padding: var(--size-3);
+  border: var(--border-size-1) solid var(--hairline);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-0);
+  color: var(--dim-fg);
+
+  &[hidden] {
+    display: none;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.asset-card[hidden] {
+  display: none;
+}

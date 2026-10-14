@@ -2,9 +2,9 @@
   button.sidebar-switcher-btn.active(data-view="outline" role="tab" aria-selected="true" tabindex="0" aria-label="Outline" title="Outline (Ctrl+1)")
     svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
       use(href="/icons.svg#crosshair")
-  button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Assets" title="Assets (Ctrl+2)")
+  button.sidebar-switcher-btn(data-view="library" role="tab" aria-selected="false" tabindex="-1" aria-label="Insert" title="Insert (Ctrl+2)")
     svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
-      use(href="/icons.svg#book")
+      use(href="/icons.svg#square-plus")
   button.sidebar-switcher-btn(data-view="chat" role="tab" aria-selected="false" tabindex="-1" aria-label="Create" title="Create (Ctrl+3)")
     svg(width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
       use(href="/icons.svg#sparkle")
@@ -166,10 +166,14 @@
   //- View: Library
   .sidebar-view(data-view="library" hidden)
     .sidebar-view-header
-      h3 Assets
+      h3#insertPanelTitle Insert
       span#galleryVisitorBadge.library-visitor-badge(hidden)
-    p.sidebar-view-hint Add to Scene or drag into the viewport to place an asset.
+    p#insertPanelHint.sidebar-view-hint Insert a live link to another asset. Changes to the original show up here.
     .sidebar-view-body
+      input#insertSearchInput.form-input.insert-search(type="search" placeholder="Search assets…" aria-label="Search assets" autocomplete="off")
+      #insertNoAsset.insert-no-asset(hidden)
+        p.insert-no-asset-text Open or create an asset to insert into it.
+        button#insertNewAssetBtn.btn.btn-secondary.btn-sm(type="button") New empty asset
       #assetLibraryBody.asset-library-body
         .empty-state
           .empty-state-icon

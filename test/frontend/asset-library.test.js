@@ -1,7 +1,7 @@
 // @test-env dom
 import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { assetStore, _resetForTesting as resetAssetState } from "@arbesk/asset-core/domain/asset-store.js";
-import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { on, emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { trimTokenId } from "../../frontend/src/js/utils/library-items.js";
 
 let _tokenURIs = {};
@@ -31,6 +31,9 @@ const adoptSpy = jest.fn();
 const linkedSpy = jest.fn();
 on(EVENTS.ASSET_ADD_LINKED_REQUESTED, (payload) => linkedSpy(payload));
 
+const toastSpy = jest.fn();
+const removeChildSpy = jest.fn();
+
 const closeAssetSpy = jest.fn(() => {
   assetStore.set({
     activeAssetManifestCid: null,
@@ -47,6 +50,8 @@ beforeEach(() => {
   closeAssetSpy.mockClear();
   adoptSpy.mockClear();
   linkedSpy.mockClear();
+  toastSpy.mockClear();
+  removeChildSpy.mockClear();
   _wallet = { walletAddress: "0xOwner", chainId: 31415822 };
   _ownedByChain = {};
   _sharedTokens = [];
@@ -73,10 +78,23 @@ beforeEach(() => {
   document.body.innerHTML = `
     <div id="assetLibraryBody"></div>
     <span id="galleryVisitorBadge" hidden></span>
+    <h3 id="insertPanelTitle">Insert</h3>
+    <p id="insertPanelHint">Insert hint</p>
+    <input id="insertSearchInput" type="search" />
+    <div id="insertNoAsset" hidden><button id="insertNewAssetBtn" type="button">New empty asset</button></div>
+    <button id="newAssetBtn" type="button"></button>
   `;
 });
 
 async function loadModule() {
+  await mock.module("../../frontend/src/js/ui/toasts.js", () => ({
+    showToast: toastSpy,
+    dismissToast: jest.fn(),
+    dismissAllToasts: jest.fn(),
+  }));
+  await mock.module("../../frontend/src/js/engine/child-remove.js", () => ({
+    removeChildAssetNodes: removeChildSpy,
+  }));
   await mock.module(
     "../../frontend/src/js/state/wallet-state.js",
     () => ({
@@ -377,8 +395,7 @@ describe("Gallery panel visitor mode (public profile in the studio sidebar)", ()
     const badge = document.getElementById("galleryVisitorBadge");
     expect(badge.hidden).toBe(false);
     expect(badge.textContent).toBe("Read-only · public profile");
-    // Read-only chrome: no menu, no drag, never disabled.
-    expect(document.querySelector(".asset-card-more")).toBeNull();
+    // Read-only chrome: no drag, never disabled.
     expect(document.querySelector(".asset-card").draggable).toBe(false);
     expect(document.querySelector(".asset-card-main").disabled).toBe(false);
     // Section is labeled for a profile, not "My Assets".
@@ -441,6 +458,9 @@ describe("Gallery panel visitor mode (public profile in the studio sidebar)", ()
 
 describe("Insert panel cards", () => {
   const OPEN = { activeAssetManifestCid: "bafyOpen", activeAssetTokenId: "9", activeAssetId: "asset-open" };
+  beforeEach(() => {
+    if (_libraryStateRef) _libraryStateRef.set({ subjectAddress: null, subjectChainId: null });
+  });
   const waitFor = async (fn) => {
     for (let i = 0; i < 50 && !fn(); i++) await new Promise((r) => setTimeout(r, 5));
   };
@@ -455,6 +475,16 @@ describe("Insert panel cards", () => {
     [...document.querySelectorAll(".asset-card")].find(
       (c) => c.querySelector(".asset-card-name").textContent === name
     );
+
+  async function loadVisitorModuleForChrome() {
+    _wallet = { walletAddress: null, chainId: null };
+    _ownedByChain = { 84532: ["1", "2"] };
+    const mod = await loadModule();
+    mod.libraryState.set({ subjectAddress: "0xccc626354a2ea985d4abdc1173597a46afc63595", subjectChainId: 84532 });
+    _libraryStateRef = mod.libraryState;
+    mod.initAssetLibrary();
+    return mod;
+  }
 
   test("card click emits ASSET_ADD_LINKED_REQUESTED with mode live-ref", async () => {
     assetStore.set(OPEN);
@@ -552,5 +582,70 @@ describe("Insert panel cards", () => {
     expect(main.disabled).toBe(true);
     assetStore.set(OPEN);
     expect(cardNamed("Asset A").querySelector(".asset-card-main").disabled).toBe(false);
+  });
+
+  test("visitor mode: title Browse, hint read-only, click opens, menu has only Show in Library", async () => {
+    const mod = await loadVisitorModuleForChrome();
+    await mod.refreshAssetLibrary();
+    expect(document.getElementById("insertPanelTitle").textContent).toBe("Browse");
+    expect(document.getElementById("insertPanelHint").textContent).toBe(
+      "Read-only public profile. Open an asset to view it."
+    );
+    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
+    const card = cardNamed("Asset A");
+    card.querySelector(".asset-card-more").click();
+    const items = [...card.querySelectorAll(".menu-popover [role=menuitem]")];
+    expect(items.map((i) => i.textContent)).toEqual(["Show in Library"]);
+    card.querySelector(".asset-card-main").click();
+    await waitFor(() => adoptSpy.mock.calls.length > 0);
+    expect(adoptSpy).toHaveBeenCalledTimes(1);
+    expect(linkedSpy).not.toHaveBeenCalled();
+  });
+
+  test("search filters cards by name, case-insensitive", async () => {
+    assetStore.set(OPEN);
+    await renderOwned();
+    const input = document.getElementById("insertSearchInput");
+    input.value = "asset b";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const visible = [...document.querySelectorAll(".asset-card")].filter((c) => !c.hidden);
+    expect(visible.map((c) => c.querySelector(".asset-card-name").textContent)).toEqual(["Asset B"]);
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect([...document.querySelectorAll(".asset-card")].filter((c) => !c.hidden).length).toBe(3);
+  });
+
+  test("no asset open shows the notice; New empty asset clicks #newAssetBtn", async () => {
+    await renderOwned();
+    const notice = document.getElementById("insertNoAsset");
+    expect(notice.hidden).toBe(false);
+    const clicked = jest.fn();
+    document.getElementById("newAssetBtn").addEventListener("click", clicked);
+    document.getElementById("insertNewAssetBtn").click();
+    expect(clicked).toHaveBeenCalledTimes(1);
+    assetStore.set(OPEN);
+    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
+  });
+
+  test("insert failure shows an error toast with the reason and no Undo", async () => {
+    await renderOwned();
+    emit(EVENTS.ASSET_LINKED_INSERT_FAILED, { assetID: "asset-a", reason: "Too deep" });
+    expect(toastSpy).toHaveBeenCalledTimes(1);
+    const arg = toastSpy.mock.calls[0][0];
+    expect(arg.type).toBe("error");
+    expect(arg.title).toBe("Couldn't insert Asset A");
+    expect(arg.message).toBe("Too deep");
+    expect(arg.actions).toBeUndefined();
+  });
+
+  test("insert toast names asset and target, Undo unlinks that node", async () => {
+    assetStore.set({ ...OPEN, activeAssetName: "Chair" });
+    await renderOwned();
+    emit(EVENTS.ASSET_LINKED_INSERTED, { nodeId: "n1", assetID: "asset-a", mode: "live-ref" });
+    const arg = toastSpy.mock.calls[0][0];
+    expect(arg.title).toBe("Asset A inserted into Chair");
+    expect(arg.actions.map((a) => a.label)).toEqual(["Undo"]);
+    arg.actions[0].onClick();
+    expect(removeChildSpy).toHaveBeenCalledWith(["n1"]);
   });
 });

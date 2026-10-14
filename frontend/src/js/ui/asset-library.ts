@@ -19,6 +19,8 @@ import {
   extractThumbnailCid,
   loadThumbnailInto,
 } from "../utils/thumbnail.ts";
+import { removeChildAssetNodes } from "../engine/child-remove.ts";
+import { showToast } from "./toasts.ts";
 import { hasOpenAsset } from "../state/edit-mode.ts";
 import { confirmDiscardChanges } from "./confirm-discard.ts";
 import { initMenuButton, type MenuButtonHandle } from "./menu-button.ts";
@@ -34,6 +36,7 @@ import {
   closeAsset,
   getCurrentManifest,
   getAssetState,
+  getActiveAssetName,
 } from "@arbesk/asset-core/domain/asset.js";
 import {
   adoptOpenedCollection,
@@ -779,7 +782,59 @@ function renderSections(): void {
     ownedLoadable.length +
     (sharedEntries.length - sharedLoadable.length);
   if (failed > 0) assetLibraryBody.appendChild(failedSummary(failed));
+  applySearchFilter();
+  updateInsertChrome();
 }
+
+let _searchTerm = "";
+
+/** Hides cards whose name doesn't contain the search term (client-side only). */
+function applySearchFilter(): void {
+  if (!assetLibraryBody) return;
+  const term = _searchTerm.trim().toLowerCase();
+  assetLibraryBody.querySelectorAll<HTMLElement>(".asset-card").forEach((card) => {
+    const name = card.querySelector(".asset-card-name")?.textContent ?? "";
+    card.hidden = term !== "" && !name.toLowerCase().includes(term);
+  });
+}
+
+const INSERT_HINT = "Insert a live link to another asset. Changes to the original show up here.";
+const BROWSE_HINT = "Read-only public profile. Open an asset to view it.";
+
+/** Panel title, hint and the "open an asset first" notice follow mode + open asset. */
+function updateInsertChrome(): void {
+  const visitor = isLibraryVisitor();
+  const title = document.getElementById("insertPanelTitle");
+  if (title) title.textContent = visitor ? "Browse" : "Insert";
+  const hint = document.getElementById("insertPanelHint");
+  if (hint) hint.textContent = visitor ? BROWSE_HINT : INSERT_HINT;
+  const notice = document.getElementById("insertNoAsset");
+  if (notice) notice.hidden = visitor || hasOpenAsset();
+}
+
+function cachedAssetName(assetID: string | null): string {
+  if (!assetID) return "asset";
+  const all = [...(_lastRender?.ownedEntries ?? []), ...(_lastRender?.sharedEntries ?? [])];
+  return all.find((e) => e.assetId === assetID)?.name || assetID;
+}
+
+on(EVENTS.ASSET_LINKED_INSERTED, ({ nodeId, assetID }) => {
+  const target = getActiveAssetName() || "Untitled Asset";
+  showToast({
+    type: "success",
+    title: `${cachedAssetName(assetID)} inserted into ${target}`,
+    duration: 6000,
+    actions: [{ label: "Undo", onClick: () => removeChildAssetNodes([nodeId]) }],
+  });
+});
+
+on(EVENTS.ASSET_LINKED_INSERT_FAILED, ({ assetID, reason }) => {
+  showToast({
+    type: "error",
+    title: `Couldn't insert ${cachedAssetName(assetID)}`,
+    message: reason,
+  });
+});
 
 function createEmptyState(title: string, sub: string): HTMLDivElement {
   const wrap = document.createElement("div");
@@ -919,9 +974,10 @@ let _menuSeq = 0;
 
 /**
  * The card's ⋯ button and its popover: Insert a copy / Open / Show in Library.
- * @remarks Owner chrome only; visitors get a read-only card with no menu.
+ * @remarks Visitors get only "Show in Library"; inserting and opening from
+ *   the menu are owner actions (a visitor's card body already opens).
  */
-function buildCardMenu(entry: any): { anchor: HTMLDivElement; moreBtn: HTMLButtonElement } {
+function buildCardMenu(entry: any, visitor: boolean = false): { anchor: HTMLDivElement; moreBtn: HTMLButtonElement } {
   const menuId = `assetCardMenu${++_menuSeq}`;
   const name = entry.name || `asset #${entry.tokenId}`;
 
@@ -949,7 +1005,7 @@ function buildCardMenu(entry: any): { anchor: HTMLDivElement; moreBtn: HTMLButto
     ["open", `Open ${name}`],
     ["library", "Show in Library"],
   ];
-  for (const [action, label] of labels) {
+  for (const [action, label] of visitor ? labels.slice(2) : labels) {
     const li = document.createElement("li");
     li.className = "menu-item";
     li.setAttribute("role", "menuitem");
@@ -1029,10 +1085,8 @@ function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
   // Sibling of the main button (nested buttons are invalid), overlaid by CSS.
   item.appendChild(reloadBtn);
 
-  if (!visitor) {
-    item.appendChild(buildCardMenu(entry).anchor);
-    applyInsertAvailability(item, hasOpenAsset());
-  }
+  item.appendChild(buildCardMenu(entry, visitor).anchor);
+  if (!visitor) applyInsertAvailability(item, hasOpenAsset());
 
   wireCardThumbnailLoading(entry, thumbnailEl, reloadBtn);
   return item;
@@ -1063,6 +1117,7 @@ function updateGalleryVisitorChrome(): void {
   const subject = libraryState.get().subjectAddress;
   const visitor = isLibraryVisitor();
   badge.hidden = !visitor;
+  updateInsertChrome();
   if (visitor && subject) {
     badge.textContent = "Read-only · public profile";
   }
@@ -1215,6 +1270,15 @@ const DISCONNECTED_GALLERY_HTML = `
 function initAssetLibrary(): void {
   assetLibraryBody = document.getElementById("assetLibraryBody");
 
+  const search = document.getElementById("insertSearchInput") as HTMLInputElement | null;
+  search?.addEventListener("input", () => {
+    _searchTerm = search.value;
+    applySearchFilter();
+  });
+  document.getElementById("insertNewAssetBtn")?.addEventListener("click", () => {
+    document.getElementById("newAssetBtn")?.click();
+  });
+
   // Delegated: the gallery Connect affordance mirrors the headerbar button.
   assetLibraryBody?.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("#galleryConnectBtn")) {
@@ -1331,6 +1395,7 @@ function syncInsertState(): void {
     renderSections();
     return;
   }
+  updateInsertChrome();
   const enabled = hasOpenAsset();
   assetLibraryBody
     .querySelectorAll<HTMLElement>(".asset-card")
