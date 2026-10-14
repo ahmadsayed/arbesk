@@ -61,15 +61,25 @@ export const SELECTORS = {
   dialogLiveRefBtn: '.dialog-action-btn[data-value="live-ref"]',
   dialogDeleteBtn: '.dialog-action-btn[data-value="delete"]',
   providerSelect: "#providerSelect",
+  composerAdvanced: "#composerAdvanced",
+  composerAdvancedSummary: "#composerAdvanced > summary",
   tierSelect: "#tierSelect",
   assetNameDisplay: "#assetNameDisplay",
-  // Studio "Assets" tab (formerly Gallery): placement picker
+  // Studio "Insert" tab (formerly Assets / Gallery): placement picker
   gallerySwitcherBtn: '[data-view="library"]',
   createSwitcherBtn: '[data-view="chat"]',
   assetLibraryBody: "#assetLibraryBody",
   galleryVisitorBadge: "#galleryVisitorBadge",
   assetCard: ".asset-card",
   assetCardName: ".asset-card-name",
+  assetCardMain: ".asset-card-main",
+  assetCardMore: ".asset-card-more",
+  /**
+   * Item in the card's ⋯ menu ("Insert a copy", "Open <name>", "Show in Library").
+   * @param {string} label
+   * @returns {string}
+   */
+  assetCardMenuItem: (label) => `[role="menuitem"]:visible:has-text("${label}")`,
   // Outliner (scene graph tree)
   outlinerSwitcherBtn: '[data-view="outline"]',
   outlinerNode: ".outliner-node",

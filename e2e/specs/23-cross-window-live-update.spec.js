@@ -9,6 +9,7 @@ import {
   saveDraft,
   editFirstNodeColor,
   assetCardLocator,
+  insertAssetCard,
   uniqueAssetName,
   connectLibrary,
   openLibraryCollection,
@@ -84,11 +85,7 @@ test.describe("cross-window live scene update", () => {
       await pageA.click(SELECTORS.gallerySwitcherBtn);
       const childCard = assetCardLocator(pageA, childTokenDec, childName);
       await expect(childCard).toHaveCount(1, { timeout: 30000 });
-      await childCard.getByRole("button", { name: "Add to Scene" }).click();
-      await expect(pageA.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-        timeout: 30000,
-      });
-      await pageA.click(SELECTORS.dialogLiveRefBtn);
+      await insertAssetCard(childCard);
       await saveDraft(pageA, parentGenCid);
       // The draft already carries its name from the creation dialog, so this
       // publish only shows a native confirm (accepted via the dialog handler).

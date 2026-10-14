@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { connectStudio, sendPendingGenerationToStudio } from "../helpers/flows.mjs";
+import { connectStudio, selectProvider, sendPendingGenerationToStudio } from "../helpers/flows.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 
 const PROMPT = "cowboy";
@@ -88,7 +88,7 @@ test.describe("resize regression", () => {
     await connectStudio(page);
 
     // The composer defaults to Auto; pin the mock provider (no Jev key here).
-    await page.locator(SELECTORS.providerSelect).selectOption("mock");
+    await selectProvider(page, "mock");
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);

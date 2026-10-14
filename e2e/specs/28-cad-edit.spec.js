@@ -1,7 +1,7 @@
 import { test, expect } from "../fixtures/coverage.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import { MANIFEST_URL_REGEX, fetchManifest, manifestCidFromUrl } from "../helpers/manifest.mjs";
-import { connectStudio } from "../helpers/flows.mjs";
+import { connectStudio, selectProvider } from "../helpers/flows.mjs";
 
 const PROMPT = "a 40 by 30 by 20 mm box";
 const MOCK_CODE = "return box(P.width, P.depth, P.height);";
@@ -34,7 +34,7 @@ async function showInStudio(page, bubbleIndex) {
 test.describe("CAD incremental edit", () => {
   test("a follow-up edits the active part; detaching starts fresh", async ({ page }) => {
     await connectStudio(page);
-    await page.locator(SELECTORS.providerSelect).selectOption("cad");
+    await selectProvider(page, "cad");
 
     // 1. Fresh part: no priorDesign. The part is the first bubble (index 0).
     await page.fill(SELECTORS.promptInput, PROMPT);
@@ -67,7 +67,7 @@ test.describe("CAD incremental edit", () => {
     // 4. Detach: the selector unlocks and the next prompt is fresh.
     await page.click(SELECTORS.refineIndicatorDetach);
     await expect(page.locator(SELECTORS.providerSelect)).toBeEnabled();
-    await page.locator(SELECTORS.providerSelect).selectOption("cad");
+    await selectProvider(page, "cad");
     await page.fill(SELECTORS.promptInput, "a 10 mm cube");
     const freshPost = nextCadPost(page);
     await page.click(SELECTORS.generateBtn);

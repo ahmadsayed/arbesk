@@ -11,11 +11,14 @@ import {
   saveDraft,
   generateSaveAndPublish,
   assetCardLocator,
+  insertAssetCard,
   startEmptyAsset,
+  uniqueAssetName,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
-const CHILD_NAME = "Fork Child";
+const CHILD_NAME = uniqueAssetName("Fork Child");
+const LIVE_CHILD_NAME = uniqueAssetName("Live Child");
 const PARENT_NAME_FORK = "Fork Parent";
 const PARENT_NAME_LIVE = "Live Parent";
 
@@ -45,17 +48,11 @@ test.describe("fork vs live-reference", () => {
     // 3. Generate the parent's own content.
     const parentGenCid = await generate(page, PROMPT);
 
-    // 4. Open gallery, find the child's card, click "Add to Scene".
+    // 4. Open gallery, find the child's card, click "Insert".
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
-    await childCard.getByRole("button", { name: "Add to Scene" }).click();
-
-    // 5. Fork/live-ref dialog appears - choose "Fork (copy)".
-    await expect(page.locator(SELECTORS.dialogForkBtn)).toBeVisible({
-      timeout: 30000,
-    });
-    await page.click(SELECTORS.dialogForkBtn);
+    await insertAssetCard(childCard, "fork");
 
     // 6. Save the draft. The forked child is baked into the manifest as a
     //    source node with a frozen CID (no child_ref).
@@ -85,7 +82,7 @@ test.describe("fork vs live-reference", () => {
     // 1. Publish the reference world.
     const childTokenHex = await generateSaveAndPublish(
       page,
-      "Live Child",
+      LIVE_CHILD_NAME,
       PROMPT,
     );
     const childTokenDec = BigInt(childTokenHex).toString();
@@ -105,17 +102,11 @@ test.describe("fork vs live-reference", () => {
     // 3. Generate the parent's own content.
     const parentGenCid = await generate(page, PROMPT);
 
-    // 4. Open gallery, find the child's card, click "Add to Scene".
+    // 4. Open gallery, find the child's card, click "Insert".
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const childCard = assetCardLocator(page, childTokenDec, "Live Child");
+    const childCard = assetCardLocator(page, childTokenDec, LIVE_CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
-    await childCard.getByRole("button", { name: "Add to Scene" }).click();
-
-    // 5. Fork/live-ref dialog appears - choose "Live reference".
-    await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-      timeout: 30000,
-    });
-    await page.click(SELECTORS.dialogLiveRefBtn);
+    await insertAssetCard(childCard);
 
     // 6. Save the draft. The live-ref child is baked into the manifest as a
     //    child_ref node (points at the collection, no frozen CID).

@@ -37,6 +37,32 @@ export async function openCreate(page) {
 }
 
 /**
+ * Open the Create panel's closed "Advanced" disclosure (`#composerAdvanced`),
+ * which holds the provider select. No-op when it is already open.
+ *
+ * @param {Page} page
+ */
+export async function openComposerAdvanced(page) {
+  await openCreate(page);
+  const advanced = page.locator(SELECTORS.composerAdvanced);
+  if (!(await advanced.evaluate((el) => /** @type {HTMLDetailsElement} */ (el).open))) {
+    await page.locator(SELECTORS.composerAdvancedSummary).click();
+  }
+  await expect(page.locator(SELECTORS.providerSelect)).toBeVisible();
+}
+
+/**
+ * Pick a provider in the composer (opens Advanced first).
+ *
+ * @param {Page} page
+ * @param {string} value `auto` | `tripo3d` | `cad` | `mock`
+ */
+export async function selectProvider(page, value) {
+  await openComposerAdvanced(page);
+  await page.locator(SELECTORS.providerSelect).selectOption(value);
+}
+
+/**
  * New ▾ → Empty asset (the #newAssetBtn item opens the naming dialog).
  *
  * @param {Page} page
@@ -229,7 +255,7 @@ export async function generateToChatBubble(page, prompt = DEFAULT_PROMPT) {
   await openCreate(page);
   // The composer defaults to "Auto (recommended)"; the mock stack has no Jev
   // key, so pin the mock provider explicitly for these mock-generation flows.
-  await page.locator(SELECTORS.providerSelect).selectOption("mock");
+  await selectProvider(page, "mock");
   // Pin the new bubble by index: a `.last()` locator re-resolves as later
   // generations append more bubbles.
   const sendButtons = page.locator(SELECTORS.assetBubbleSend);
@@ -756,4 +782,40 @@ export async function expectComment(page, text) {
   await expect(page.locator(SELECTORS.commentList)).toContainText(text, {
     timeout: 30000,
   });
+}
+
+/**
+ * Insert a gallery card into the open asset as a LIVE link (card click, no
+ * dialog), or as a fork copy via the card's ⋯ menu ("Insert a copy").
+ *
+ * @param {Locator} card
+ * @param {"live"|"fork"} [mode]
+ */
+export async function insertAssetCard(card, mode = "live") {
+  if (mode === "live") {
+    await card.locator(SELECTORS.assetCardMain).click();
+    return;
+  }
+  await card.locator(SELECTORS.assetCardMore).click();
+  await card.page().locator(SELECTORS.assetCardMenuItem("Insert a copy")).click();
+}
+
+/**
+ * Open a gallery card's asset in the Studio via its ⋯ menu ("Open <name>").
+ * When the confirm "Open another asset?" appears (unsaved/unpublished work),
+ * confirm with Open.
+ *
+ * @param {Locator} card
+ * @param {string} name
+ */
+export async function openAssetCard(card, name) {
+  const page = card.page();
+  await card.locator(SELECTORS.assetCardMore).click();
+  await page.locator(SELECTORS.assetCardMenuItem(`Open ${name}`)).click();
+  const confirm = page.locator('.dialog-action-btn[data-value="open"]');
+  try {
+    await confirm.click({ timeout: 1500 });
+  } catch {
+    // no confirm shown — nothing unsaved
+  }
 }

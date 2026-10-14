@@ -135,15 +135,15 @@ Validates free-tier mock generation end-to-end:
 Validates the full draft-save → publish → on-chain token lifecycle:
 
 1. Generates `cowboy` (same as Spec 2).
-2. Clicks **Save Draft** and waits for the URL to flip to a new manifest CID.
+2. Clicks **Save draft** and waits for the URL to flip to a new manifest CID.
 3. Extracts the new manifest CID from the URL and asserts it is different from the generation CID.
 4. Validates the saved manifest is version `2` and links back to the generation CID via `prev_asset_manifest_cid`.
-5. Clicks **Besk it** (publish), fills the **Name Your Asset** dialog with `Cowboy Test`, and confirms.
+5. Clicks **Publish**, fills the **Name Your Asset** dialog with `Cowboy Test`, and confirms.
 6. Waits for the URL to show `?asset=0x...`.
 7. Extracts the hex token ID from the URL.
 8. Resolves the on-chain `tokenURI` through the contract and walks the collection manifest to the first asset.
 9. Asserts the published asset manifest name is `Cowboy Test` and validates its structure.
-10. Opens the gallery and asserts an asset card appears for the decimal token id.
+10. Opens the Insert tab, asserts the open asset's own card is hidden, starts a scratch empty asset, then asserts the published card appears for the decimal token id and opens it via the card's ⋯ → **Open <name>**.
 
 **Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, collection manifests, and gallery rendering. UI changes to any of those controls or changes to the manifest schema/versioning logic can break it.
 
@@ -166,7 +166,7 @@ Validates the edit → **republish** branch (no new mint):
 
 1. Generates, saves, and publishes a token.
 2. Edits the published asset's colour.
-3. Clicks **Besk it** again — an already-named token skips the dialog and calls `updateAssetURI` instead of minting.
+3. Clicks **Publish** again — an already-named token skips the dialog and calls `updateAssetURI` instead of minting.
 4. Polls the on-chain collection manifest until the asset's manifest CID changes; asserts the same name, a newer version, and an unchanged `?asset=<tokenId>` anchor.
 
 **Why it matters:** Spec 3 only covers the first mint. The republish path (`updateAssetURI`) is a distinct on-chain flow; changes to `asset-save.ts` / `services/asset-save/` publish branch or collection manifest resolution can break it.
@@ -177,7 +177,7 @@ Validates the "dollhouse architecture" — linking a token as a child asset and 
 
 1. Publishes a world to use as the child reference.
 2. Starts a fresh parent (**New asset** → name), generates the parent's own content.
-3. Uses the gallery card's **Add to Scene** to link the child token into the parent.
+3. Clicks the Insert card (a live link, no dialog) to link the child token into the parent.
 4. **Save**s and asserts the parent manifest gains a `child_ref` node with a 16-element identity `transform_matrix` and **no** local `history`.
 5. Selects the child node and **dives** (`#inspectorDiveBtn`) — asserts the back button reveals and the `nesting:didDive` event fires at depth 1.
 6. **Ascends** via the back button — asserts it hides and `nesting:didAscend` fires at depth 0.
@@ -192,7 +192,7 @@ Validates that every ERC-721 token is a collection manifest containing one or mo
 
 1. Publishes a first asset and asserts the on-chain `tokenURI` resolves to a collection manifest with at least one entry.
 2. Publishes a second asset and asserts it lands in the **same** default collection token without disturbing the first asset.
-3. Opens the published token in the gallery, clicks an asset card, and asserts the Studio viewport loads the asset name.
+3. Opens the published token in the gallery, opens an asset card via its ⋯ → **Open <name>** menu, and asserts the Studio viewport loads the asset name.
 4. Uses **New Asset** to clear the scene while preserving the selected collection context, then publishes again into the same collection.
 5. Reloads `?asset=TOKENID` and asserts the viewport restores the first asset.
 6. Asserts the collection selector populates on wallet connect with the wallet-derived default collection ID.
@@ -214,9 +214,9 @@ Regression coverage for issue #25 lives in `test/frontend/material-editor.test.j
 Validates the two ways to reuse another collection's asset inside a parent scene:
 
 1. Publishes a child asset.
-2. Starts a fresh parent draft and uses the gallery card's **Add to Scene**.
-3. **Fork (copy)** — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
-4. **Live reference** — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
+2. Starts a fresh parent draft and uses the Insert card: a card click inserts a live link, ⋯ → **Insert a copy** inserts a fork (no dialog either way).
+3. **Fork (copy)** (⋯ → Insert a copy) — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
+4. **Live reference** (card click) — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
 
 **Why it matters:** Fork/live-ref is the core fractal-reuse mechanism. Changes to `nesting.ts`, the gallery card actions, the fork/live-ref dialog, or the `child_ref` schema can break it.
 
@@ -546,7 +546,7 @@ export const SELECTORS = {
 
 The current specs assume:
 
-- Save Draft does **not** prompt for a name; it uses the current name.
+- Save draft does **not** prompt for a name; it uses the current name.
 - First-time Publish **does** prompt for a name via the GNOME dialog.
 - The mock provider maps the prompt `cowboy` to a valid GLB asset.
 - Free-tier generation calls `recordGeneration()` and the backend validates the free-tier event.

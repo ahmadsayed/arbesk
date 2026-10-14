@@ -7,7 +7,7 @@ import {
   assertSavedManifest,
   manifestCidFromUrl,
 } from "../helpers/manifest.mjs";
-import { connectStudio } from "../helpers/flows.mjs";
+import { connectStudio, selectProvider } from "../helpers/flows.mjs";
 
 const PROMPT = "a 40 by 30 by 20 mm box";
 const DRAGON_PROMPT = "a dragon figurine";
@@ -23,7 +23,7 @@ test.describe("CAD generation (parametric, client-rendered)", () => {
     await connectStudio(page);
 
     // Mock cad is on in the e2e stack — pick Parametric CAD in the composer.
-    await page.locator(SELECTORS.providerSelect).selectOption("cad");
+    await selectProvider(page, "cad");
 
     // The CAD chain is slower than the mock adapter: POST → poll → worker
     // render (WASM) → 3MF export → two IPFS uploads. Wait explicitly.
@@ -89,7 +89,7 @@ test.describe("CAD generation (parametric, client-rendered)", () => {
 
   test("unsuitable request offers a Tripo 3D retry", async ({ page }) => {
     await connectStudio(page);
-    await page.locator(SELECTORS.providerSelect).selectOption("cad");
+    await selectProvider(page, "cad");
 
     await page.fill(SELECTORS.promptInput, DRAGON_PROMPT);
     await page.click(SELECTORS.generateBtn);

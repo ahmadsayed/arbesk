@@ -16,6 +16,7 @@ import {
   saveDraft,
   editFirstNodeColor,
   assetCardLocator,
+  insertAssetCard,
   uniqueAssetName,
   startEmptyAsset,
 } from "../helpers/flows.mjs";
@@ -95,11 +96,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       await pageA.click(SELECTORS.gallerySwitcherBtn);
       const gcCard = assetCardLocator(pageA, gcTokenDec, GC_ASSET_NAME);
       await expect(gcCard).toHaveCount(1, { timeout: 30000 });
-      await gcCard.getByRole("button", { name: "Add to Scene" }).click();
-      await expect(pageA.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-        timeout: 30000,
-      });
-      await pageA.click(SELECTORS.dialogLiveRefBtn);
+      await insertAssetCard(gcCard);
       await saveDraft(pageA, childGenCid);
       await pageA.click(SELECTORS.publishAssetBtn);
       await pageA.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
@@ -116,11 +113,7 @@ test.describe("cross-window live scene update — nested grandchild", () => {
       await pageA.click(SELECTORS.gallerySwitcherBtn);
       const childCard = assetCardLocator(pageA, defaultTokenDec, childName);
       await expect(childCard).toHaveCount(1, { timeout: 30000 });
-      await childCard.getByRole("button", { name: "Add to Scene" }).click();
-      await expect(pageA.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-        timeout: 30000,
-      });
-      await pageA.click(SELECTORS.dialogLiveRefBtn);
+      await insertAssetCard(childCard);
       await saveDraft(pageA, parentGenCid);
       await pageA.click(SELECTORS.publishAssetBtn);
       await pageA.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });

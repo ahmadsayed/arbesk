@@ -44,7 +44,7 @@ test.describe("republish existing token", () => {
     // ── Edit the published asset (a real change so the save isn't a no-op) ──
     await editFirstNodeColor(page, EDIT_COLOR);
 
-    // ── Republish: "Besk it" on an already-named token updates the tokenURI
+    // ── Republish: "Publish" on an already-named token updates the tokenURI
     //    (no name dialog, no new mint - the ?asset token id stays the same). ──
     await page.click(SELECTORS.publishAssetBtn);
 

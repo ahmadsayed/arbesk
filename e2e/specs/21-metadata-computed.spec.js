@@ -5,6 +5,7 @@ import {
   generateToChatBubble,
   openInspector,
   saveDraft,
+  selectProvider,
 } from "../helpers/flows.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 
@@ -104,7 +105,7 @@ test.describe("asset metadata", () => {
     await connectStudio(page);
 
     // Mock CAD is on in the e2e stack — the canned box needs no DeepSeek key.
-    await page.locator(SELECTORS.providerSelect).selectOption("cad");
+    await selectProvider(page, "cad");
     await page.fill(SELECTORS.promptInput, "a 40 by 30 by 20 mm box");
     await page.click(SELECTORS.generateBtn);
     const bubble = page.locator(SELECTORS.assetBubble).first();

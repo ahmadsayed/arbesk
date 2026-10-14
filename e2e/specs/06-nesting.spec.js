@@ -11,6 +11,7 @@ import {
   saveDraft,
   generateSaveAndPublish,
   assetCardLocator,
+  insertAssetCard,
   uniqueAssetName,
   startEmptyAsset,
 } from "../helpers/flows.mjs";
@@ -30,7 +31,7 @@ test.describe("nesting / linked child assets", () => {
 
     // ── 1. Generate and publish the child ────────────────────────────
     // Publishes into the default collection; the gallery card caches
-    // firstAssetId for drag-drop / "Add to Scene" routing.
+    // firstAssetId for drag-drop / "Insert" routing.
     const childTokenHex = await generateSaveAndPublish(
       page,
       CHILD_NAME,
@@ -60,13 +61,7 @@ test.describe("nesting / linked child assets", () => {
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
-    await childCard.getByRole("button", { name: "Add to Scene" }).click();
-
-    // Choose "Live reference" for the new {collection, assetID} format.
-    await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-      timeout: 30000,
-    });
-    await page.click(SELECTORS.dialogLiveRefBtn);
+    await insertAssetCard(childCard);
 
     // ── 5. Save the parent draft ─────────────────────────────────────
     // The save bakes pending child_ref(s) into the scene manifest.
@@ -160,11 +155,7 @@ test.describe("nesting / linked child assets", () => {
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, childName);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
-    await childCard.getByRole("button", { name: "Add to Scene" }).click();
-    await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({
-      timeout: 30000,
-    });
-    await page.click(SELECTORS.dialogLiveRefBtn);
+    await insertAssetCard(childCard);
 
     // ── 5. Save the parent draft (bakes the child_ref) ───────────────
     const parentCid = await saveDraft(page, parentGenCid);

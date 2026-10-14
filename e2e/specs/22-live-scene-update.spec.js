@@ -7,6 +7,7 @@ import {
   generateSaveAndPublish,
   editFirstNodeColor,
   assetCardLocator,
+  insertAssetCard,
   uniqueAssetName,
   startEmptyAsset,
 } from "../helpers/flows.mjs";
@@ -34,9 +35,7 @@ test.describe("live scene updates", () => {
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, childName);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
-    await childCard.getByRole("button", { name: "Add to Scene" }).click();
-    await expect(page.locator(SELECTORS.dialogLiveRefBtn)).toBeVisible({ timeout: 30000 });
-    await page.click(SELECTORS.dialogLiveRefBtn);
+    await insertAssetCard(childCard);
     await saveDraft(page, parentGenCid);
 
     // 3. Subscribe to the live-update bus events before republishing.

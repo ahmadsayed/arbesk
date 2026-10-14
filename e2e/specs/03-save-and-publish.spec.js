@@ -9,7 +9,14 @@ import {
   assertPublishedManifest,
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
-import { assetCardLocator, connectStudio, sendPendingGenerationToStudio } from "../helpers/flows.mjs";
+import {
+  assetCardLocator,
+  connectStudio,
+  openAssetCard,
+  selectProvider,
+  sendPendingGenerationToStudio,
+  startEmptyAsset,
+} from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
 const ASSET_NAME = "Cowboy Test";
@@ -20,6 +27,9 @@ function manifestCidFromUrl(url) {
 
 test.describe("save and publish", () => {
   test("saves a draft and publishes an ERC-721 token", async ({ page }) => {
+    // startNewAsset() uses a native confirm() when work is unpublished;
+    // auto-accept so the scratch-asset step below can proceed.
+    page.on("dialog", (d) => d.accept());
     await connectStudio(page);
 
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
@@ -29,7 +39,7 @@ test.describe("save and publish", () => {
 
     // 1. Generate → Show in Studio (auto-saves the draft). The composer
     // defaults to Auto; pin the mock provider (the e2e stack has no Jev key).
-    await page.locator(SELECTORS.providerSelect).selectOption("mock");
+    await selectProvider(page, "mock");
     await page.fill(SELECTORS.promptInput, PROMPT);
     await page.click(SELECTORS.generateBtn);
     await sendPendingGenerationToStudio(page);
@@ -84,16 +94,23 @@ test.describe("save and publish", () => {
     // 4. Open the Gallery and verify the published asset card appears.
     // The card is scoped to THIS token's on-chain (decimal) id and shows
     // the published asset name.
+    // The Insert list hides the open asset's own card, so it is absent now;
+    // starting a fresh empty asset frees the slot and the card appears.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const assetCard = assetCardLocator(page, tokenIdDec, ASSET_NAME);
+    await expect(assetCard).toHaveCount(0);
+    await startEmptyAsset(page);
+    await page.fill(SELECTORS.dialogInput, "Scratch Asset");
+    await page.click(SELECTORS.dialogConfirmBtn);
+    await page.click(SELECTORS.gallerySwitcherBtn);
     await expect(assetCard).toHaveCount(1);
     await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
       ASSET_NAME,
     );
 
-    // Clicking the card body (not the buttons) should open the asset. The
-    // gallery opens by decimal id, so assert the ?asset value numerically.
-    await assetCard.click({ position: { x: 10, y: 10 } });
+    // The card's ⋯ menu "Open <name>" opens the asset (a card click inserts).
+    // The gallery opens by decimal id, so assert the ?asset value numerically.
+    await openAssetCard(assetCard, ASSET_NAME);
     await page.waitForURL((url) => {
       const a = new URL(url.toString()).searchParams.get("asset");
       return a != null && BigInt(a) === BigInt(tokenIdHex);
@@ -102,14 +119,8 @@ test.describe("save and publish", () => {
       ASSET_NAME,
     );
 
-    // 5. Re-enter the Gallery and confirm the published card persists.
-    // (Burn was removed from the UI - see the asset-library card. This step
-    // now verifies the published token survives a view switch and remains
-    // listed by its decimal on-chain id, instead of tearing it down.)
+    // 5. The now-open asset's own card is hidden from the Insert list again.
     await page.click(SELECTORS.gallerySwitcherBtn);
-    await expect(assetCard).toHaveCount(1);
-    await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
-      ASSET_NAME,
-    );
+    await expect(assetCard).toHaveCount(0);
   });
 });
