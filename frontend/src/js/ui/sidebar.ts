@@ -1,5 +1,5 @@
 /**
- * Sidebar with a 4-view switcher (outline, library = "Assets", chat = "Create", ledger = "Activity").
+ * Sidebar with a 4-view switcher (outline, library = "Insert", chat = "Create", ledger = "Activity").
  * @remarks Width is user-resizable and persisted, but only on wide layouts.
  */
 
@@ -35,10 +35,13 @@ function initSidebar(): void {
     ) as HTMLElement | null;
   });
 
-  // Restore last view or default to Outline. Retired views ("settings",
-  // pre-Phase-2) and unknown values fall back to Outline.
+  // No asset in the URL: land on Create. Otherwise restore the last view;
+  // retired views ("settings") and unknown values fall back to Outline.
+  const params = new URLSearchParams(location.search);
+  const hasAsset = params.has("asset") || params.has("manifest");
   const stored = localStorage.getItem(STORAGE_KEY);
-  switchView(stored && VIEWS.includes(stored) ? stored : "outline");
+  const restored = stored && VIEWS.includes(stored) ? stored : "outline";
+  switchView(hasAsset ? restored : "chat");
 
   // On narrow screens the sidebar overlays the viewport, so it must start
   // closed or it hides the canvas on first visit.

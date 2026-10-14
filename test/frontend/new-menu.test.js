@@ -50,6 +50,17 @@ const open = () => document.getElementById("newMenuBtn").click();
 const item = (id) => document.getElementById(id);
 
 describe("New ▾ menu", () => {
+  test("Generate with AI is the first item", () => {
+    const pug = require("node:fs").readFileSync(
+      new URL("../../frontend/src/pug/includes/header.pug", import.meta.url),
+      "utf8",
+    );
+    const ids = [...pug.matchAll(/li#(\w+)\.menu-item/g)].map((m) => m[1]);
+    expect(ids).toEqual(["newMenuAi", "newMenuCad", "newMenuUpload", "newAssetBtn"]);
+    expect(pug.indexOf("menu-separator")).toBeLessThan(pug.indexOf("li#newAssetBtn"));
+    expect(pug.indexOf("menu-separator")).toBeGreaterThan(pug.indexOf("li#newMenuUpload"));
+  });
+
   test("hides the CAD item when the create panel has no cad provider", async () => {
     await load();
     document.querySelector('#providerSelect option[value="cad"]').remove();

@@ -1,0 +1,60 @@
+// ═══════════════════════════════════════════════════════════════════
+// Empty viewport — guidance card over the canvas while no asset is open.
+// The overlay ignores pointer events so drops still reach the viewport;
+// only the card is interactive.
+// ═══════════════════════════════════════════════════════════════════
+
+.empty-viewport {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-4);
+  pointer-events: none;
+  z-index: 20;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.empty-viewport-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-2);
+  max-width: 360px;
+  padding: var(--size-5) var(--size-4);
+  text-align: center;
+  pointer-events: auto;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-fg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-3);
+  box-shadow: var(--shadow-3);
+}
+
+.empty-viewport-title {
+  margin: 0;
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-6);
+}
+
+.empty-viewport-body,
+.empty-viewport-hint {
+  margin: 0;
+  font-size: var(--font-size-1);
+  line-height: var(--font-lineheight-3);
+  color: var(--dim-fg);
+}
+
+.empty-viewport-actions {
+  display: flex;
+  gap: var(--size-2);
+  margin-top: var(--size-2);
+
+  &[hidden] {
+    display: none;
+  }
+}

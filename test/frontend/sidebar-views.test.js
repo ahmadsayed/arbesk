@@ -28,12 +28,26 @@ const visible = () =>
 const ctrl = (key) =>
   document.dispatchEvent(new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true }));
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  window.history.replaceState({}, "", "/studio?asset=1");
+});
 
 describe("sidebar views", () => {
-  test("defaults to Outline", async () => {
+  test("no asset in the URL opens Create", async () => {
+    window.history.replaceState({}, "", "/studio");
+    await load();
+    expect(visible()).toEqual(["chat"]);
+  });
+
+  test("an asset in the URL restores the stored view, else Outline", async () => {
+    window.history.replaceState({}, "", "/studio?asset=1");
     await load();
     expect(visible()).toEqual(["outline"]);
+    localStorage.setItem("arbesk-sidebar-view", "ledger");
+    await load();
+    expect(visible()).toEqual(["ledger"]);
+    window.history.replaceState({}, "", "/studio");
   });
 
   test("migrates a stored 'settings' view to Outline", async () => {
