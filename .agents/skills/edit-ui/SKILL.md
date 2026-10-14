@@ -20,12 +20,15 @@ GNOME HIG layout heuristics (header bar, 4px spacing) are non-binding references
 ## Layout (library-first, Phase 2)
 
 App entry links land in the Library. Studio header, left to right: page
-switcher, New ▾ (Upload Ctrl+O / Generate with AI / Parametric CAD / Empty
-asset Ctrl+N), asset name + `v<N> · Draft|Published`, Save, Besk it (the only
-filled accent), network status dot + label, theme menu, account avatar (the
-network select lives inside the avatar's wallet popover). Studio rail:
-Outline (Ctrl+1) · Assets — placement picker (Ctrl+2) · Create (Ctrl+3) ·
-Activity (Ctrl+4). Asset name/collection/tier/team live in Properties →
+switcher, New ▾ (Generate with AI / Upload model… Ctrl+O / Parametric CAD /
+separator / Empty asset Ctrl+N), asset name + `v<N> · Draft|Published`,
+Save draft, Publish (the only filled accent), network status dot + label,
+theme menu, account avatar (the network select lives inside the avatar's
+wallet popover). Studio rail: Outline (Ctrl+1) · Insert — placement picker
+(Ctrl+2) · Create (Ctrl+3) · Activity (Ctrl+4). Studio lands on Create when
+no asset is open (no `asset`/`assetId`/`manifest` in the URL), without
+overwriting the stored tab; the provider select lives in Create's closed
+"Advanced" disclosure. Asset name/collection/tier/team live in Properties →
 Asset.
 
 - Header element ids are load-bearing for E2E: `#newAssetBtn` is the New ▾
@@ -70,7 +73,7 @@ Asset.
 | `frontend/src/js/engine/parametric-preview.ts` | inspector live editing |
 | `frontend/src/js/ui/asset-library.ts` | gallery of saved assets |
 | `frontend/src/js/ui/asset-drop-zone.ts` | drop target for dragged cards |
-| `frontend/src/js/ui/asset-save.ts` | Save Draft / Publish wiring |
+| `frontend/src/js/ui/asset-save.ts` | Save draft / Publish wiring |
 | `frontend/src/js/ui/outliner.ts` | scene graph tree |
 | `frontend/src/js/ui/keyboard-help.ts` | `Ctrl+/` shortcuts reference — the discoverability gatekeeper: every new shortcut lands here |
 | `frontend/src/js/engine/undo-controller.ts` | `Ctrl+Z`/`Ctrl+Y` undo/redo dispatcher |

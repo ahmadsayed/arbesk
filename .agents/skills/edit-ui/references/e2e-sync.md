@@ -16,12 +16,12 @@ Update + run the suite before merging any change that touches:
 
 - **Headerbar / shell**: wallet buttons, asset name/status, version slider, New/Save/Publish buttons.
 - **Wallet + session**: connect/disconnect, SIWE, the discovery flow.
-- **Generation**: prompt input, Generate button, chat status text (`Model carved via mock`), provider/tier selects.
-- **Save / publish / republish**: Save Draft, Besk it, the Name dialog, version semantics, thumbnail capture.
-- **Gallery cards**: card markup, `data-token-id`, Add to Scene / Burn buttons, the burn confirm dialog.
+- **Generation**: prompt input, Generate button, chat status text (`Model carved via mock`), provider/tier selects (the provider select sits inside the closed `#composerAdvanced` details: open it first, e.g. `selectProvider()` in `flows.mjs`).
+- **Save / publish / republish**: Save draft, Publish, the Name dialog, version semantics, thumbnail capture.
+- **Gallery cards**: card markup, `data-token-id`, `.asset-card-main` (card click inserts a live link, no dialog), `.asset-card-more` ⋯ menu (Insert a copy / Open <name> / Show in Library).
 - **Outliner**: node rows, child-node labels, selection behavior.
 - **Parametric editor**: component color editor, the node-selection → editor path.
-- **Nesting**: Add to Scene, dive (`#inspectorDiveBtn`), back button, breadcrumb, the `nesting:*` events.
+- **Nesting**: Insert (card click = live link, ⋯ → Insert a copy = fork), dive (`#inspectorDiveBtn`), back button, breadcrumb, the `nesting:*` events.
 - **Manifest schema**: `scene.nodes`, `source_asset`, `child_ref`, `transform_matrix`, `prev_asset_manifest_cid`, `thumbnail`, `comments_archive_cid`, version numbering.
 - **Comments panel**: `commentsSection`, `commentComposerInput`, `postCommentBtn`, `commentsCount`.
 - **Library view**: inside the unified SPA (`app.html`), wallet gate, collection grid, toolbar buttons, context menu, breadcrumb. Navigation is handled by `app/router.ts`; Studio and Library share one document.
@@ -35,7 +35,7 @@ Update + run the suite before merging any change that touches:
 | Wallet connect/disconnect buttons, SIWE | `01-connect-wallet` | `connectWalletBtn`, `disconnectWalletBtn` |
 | Prompt input, Generate, chat status | `02`, `03`, `04`, `05`, `06` | `promptInput`, `generateBtn`, `chatHistoryList`, text `Model carved via mock` |
 | Save / Publish / Name dialog | `03`, `05`, `06` | `saveAssetBtn`, `publishAssetBtn`, `dialogInput`, `dialogConfirmBtn`; URL `?manifest=`, `?asset=` |
-| Gallery cards, Add to Scene | `03`, `06` | `assetCard` + `[data-token-id]`, `assetCardName`, button `Add to Scene` |
+| Insert cards (card click, ⋯ menu) | `03`, `06` | `assetCard` + `[data-token-id]`, `assetCardName`, `assetCardMain`, `assetCardMore`, `assetCardMenuItem()`; helpers `insertAssetCard`, `openAssetCard` |
 | Outliner tree / node rows | `04`, `06` | `outlinerSwitcherBtn`, `outlinerNode` |
 | Parametric component color editor | `04`, `05`, `06` | `componentEditor`, `componentColorInput` |
 | Version timeline / time-travel | `04` | `versionTimeline`, `vtTicks`, `vtActiveTick`, `vtTooltip`, `modelClockBadge`, `timeModeButton` |
@@ -58,6 +58,10 @@ bunx playwright test --config=e2e/playwright.config.js --project=chromium --ui
 ```
 
 ## Behaviors that bite when writing/maintaining these specs
+
+- **The open asset's own Insert card is hidden**, and cards are disabled until an asset is open. To open a published asset from the panel, start a different asset first, then use ⋯ → `Open <name>` (`openAssetCard`; it confirms "Open another asset?" when there are unsaved/unpublished changes).
+- **Studio lands on Create** with no `asset`/`assetId`/`manifest` URL param; switch to Outline explicitly (`outlinerSwitcherBtn`) in specs that need it.
+- **An empty-viewport card (`#emptyViewport`)** overlays the viewport centre when no asset is open and may intercept canvas-centre clicks.
 
 - **Wait on durable state, not transient text.** Read query params via `page.waitForURL(...)`, not a synchronous `page.url()` after a text assertion. The `#srStatus` live region is cleared/overwritten between steps — don't assert on it as a flow gate.
 - **Token ids have two representations.** Publish writes the id to the URL in **hex** (`?asset=0x…`); the gallery lists the same token by its **decimal** on-chain id and tags cards `data-token-id="<decimal>"`. Compare numerically (`BigInt(a) === BigInt(b)`); scope gallery cards by `[data-token-id="<decimal>"]`.

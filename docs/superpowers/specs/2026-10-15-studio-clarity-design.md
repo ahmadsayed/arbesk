@@ -132,10 +132,10 @@ Key on demand:
 | `#saveAssetBtn` label | Save | **Save draft** |
 | `#saveAssetBtn` tooltip | Save Draft (Ctrl+S) | Kept in this tab only. Publish to share with your team and keep it. (Ctrl+S) |
 | `#publishAssetBtn` label | Besk it | **Publish** (accent, only filled accent button) |
-| `#publishAssetBtn` tooltip | Publish (Besk it) this asset | Share this version with your team (creates v<N+1>) |
+| `#publishAssetBtn` tooltip | Publish (Besk it) this asset | Share this version with your team (v<K>), where K is the version actually published |
 | Status meta | `v3 · Draft` | `v3 · Draft` (unpublished changes) / `v4 · Published` |
 | Draft toast | Draft saved. | Draft saved — kept in this tab only |
-| Publish toast | Published — collection minted on-chain. / Republished. | Published v4 — your team can see it now (first publish adds: "Asset created on-chain") |
+| Publish toast | Published — collection minted on-chain. / Republished. | Published v<K> — your team can see it now (K = the version actually published) (first publish adds: "Asset created on-chain") |
 
 - The `besk-star` icon on the publish button is removed; the label carries the
   meaning.
