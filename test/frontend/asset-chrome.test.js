@@ -314,3 +314,17 @@ test("beforeunload prompts for a saved but unpublished draft, not once published
   openTokenized("bafyV4", "bafyV3", 4);
   expect(beforeUnloadPrevented()).toBe(true);
 });
+
+test("an unpublished draft with no pending edits shows plain Draft, no unsaved marker", () => {
+  walletState.set({ walletAddress: "0x00000000000000000000000000000000000000a1" });
+  openTokenized("bafyV3", "bafyV2", 3);
+  expect(meta()).toBe("v3 · Draft");
+  const save = document.getElementById("saveAssetBtn");
+  expect(save.classList.contains("has-unsaved")).toBe(false);
+  expect(save.getAttribute("aria-label")).toBe("Save Draft");
+  expect(beforeUnloadPrevented()).toBe(true);
+  state.pendingTransformEdits.set("n1", [1]);
+  emit(EVENTS.PENDING_EDITS_CHANGED);
+  expect(meta()).toBe("v3 · Draft · Unsaved changes");
+  expect(save.classList.contains("has-unsaved")).toBe(true);
+});

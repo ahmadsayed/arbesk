@@ -87,7 +87,8 @@ on(EVENTS.SCENE_EMPTY, renderChrome);
 // Visitor mode flips with the profile subject, not the wallet.
 on(EVENTS.LIBRARY_STATE_CHANGED, renderChrome);
 on(EVENTS.PENDING_EDITS_CHANGED, renderChrome);
-// Native "Leave site?" prompt while savable edits are unsaved.
+// Native "Leave site?" prompt while edits are unsaved or a saved draft is
+// not yet published.
 window.addEventListener("beforeunload", (e) => {
-  if (canEdit()) onBeforeUnload(e);
+  if (canEdit()) onBeforeUnload(e, hasUnpublishedDraft());
 });

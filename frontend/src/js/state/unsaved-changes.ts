@@ -45,12 +45,13 @@ export function notifyPendingEditsChanged(): void {
 /**
  * `beforeunload` handler: asks the browser to confirm leaving while edits
  * are unsaved (including mid-save — pending state clears only on success).
+ * @param alsoPrompt - extra reason to prompt (e.g. an unpublished draft).
  */
-export function onBeforeUnload(e: {
-  preventDefault(): void;
-  returnValue?: unknown;
-}): void {
-  if (!hasUnsavedChanges()) return;
+export function onBeforeUnload(
+  e: { preventDefault(): void; returnValue?: unknown },
+  alsoPrompt = false,
+): void {
+  if (!alsoPrompt && !hasUnsavedChanges()) return;
   e.preventDefault();
   // Legacy browsers only show the prompt when returnValue is set.
   e.returnValue = "";

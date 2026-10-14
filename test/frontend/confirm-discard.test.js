@@ -2,7 +2,7 @@
 import { describe, expect, jest, mock, test } from "bun:test";
 import { resetModules } from "../helpers/module-registry.js";
 
-async function load({ editable, dirty, choice = "open" }) {
+async function load({ editable, dirty, unpublished = false, choice = "open" }) {
   resetModules();
   const showConfirmDialog = jest.fn(async () => choice);
   await mock.module("../../frontend/src/js/ui/dialog.js", () => ({ showConfirmDialog }));
@@ -10,6 +10,9 @@ async function load({ editable, dirty, choice = "open" }) {
   await mock.module("../../frontend/src/js/state/unsaved-changes.js", () => ({
     hasUnsavedChanges: () => dirty,
   }));
+  const { assetStore, _resetForTesting } = await import("@arbesk/asset-core/domain/asset-store.js");
+  _resetForTesting();
+  if (unpublished) assetStore.set({ latestAssetManifestCid: "bafyDraft" });
   const { confirmDiscardChanges } = await import("../../frontend/src/js/ui/confirm-discard.js");
   return { confirmDiscardChanges, showConfirmDialog };
 }
@@ -37,5 +40,13 @@ describe("confirmDiscardChanges", () => {
   test("Cancel keeps the open asset", async () => {
     const { confirmDiscardChanges } = await load({ editable: true, dirty: true, choice: "cancel" });
     expect(await confirmDiscardChanges()).toBe(false);
+  });
+
+  test("asks for a saved but unpublished draft even with no staged edits", async () => {
+    const { confirmDiscardChanges, showConfirmDialog } = await load({
+      editable: true, dirty: false, unpublished: true,
+    });
+    expect(await confirmDiscardChanges()).toBe(true);
+    expect(showConfirmDialog).toHaveBeenCalledTimes(1);
   });
 });
