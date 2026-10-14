@@ -231,6 +231,9 @@ const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
  */
 let attachedImages: AttachedImage[] = [];
 
+/** Images of the most recent send (the composer resets before the key gate). */
+let lastSentImages: AttachedImage[] = [];
+
 /**
  * Drop all attached images and hide the chips.
  */
@@ -466,83 +469,101 @@ if (composerAdvanced) {
   });
 }
 
-/** Body variants of the Tripo key dialog. */
-interface ProviderKeyBodyOptions {
-  /**
-   * On-demand variant shown when a generation needs a key: explanatory copy,
-   * a key link, optional "Use Parametric CAD" and "Save key and generate"
-   * buttons that close the dialog with "cad" / "save". Absent → the Advanced
-   * settings variant, which saves on input.
-   */
-  gate?: { allowCad: boolean };
+/** Gate (on-demand) variant options of the Tripo key dialog. */
+interface ProviderKeyGateOptions {
+  allowCad: boolean;
+  /** provider message shown under the key field (a rejected key) */
+  error?: string;
 }
 
-/**
- * Builds the key dialog body (password input, show/hide toggle, Clear Key).
- * @remarks All markup is static — no user content is injected. In gate mode
- *   the key is stored only by "Save key and generate", so closing the dialog
- *   leaves storage untouched.
- */
-function buildProviderKeyBody(options: ProviderKeyBodyOptions = {}): HTMLElement {
-  const gate = options.gate;
-  const wrap = document.createElement("div");
-  wrap.innerHTML = `
-    <p style="margin:0 0 var(--size-2)">${
-      gate
-        ? "Organic shapes like this are made with Tripo 3D, which uses your own API key. You can also try Parametric CAD, which is free but best for geometric parts."
-        : "Bring your own Tripo 3D key to generate without the free-tier on-chain quota. The key is stored only in this browser and sent with each generation request."
-    }</p>
+const KEY_FIELD_HTML = `
     <div class="form-group">
       <label class="form-label" for="providerKeyInput">Tripo 3D API key</label>
       <div class="byok-field">
         <input id="providerKeyInput" class="form-control" type="password" placeholder="sk-…" autocomplete="off">
         <button id="providerKeyToggle" class="byok-toggle" type="button" aria-label="Show API key">Show</button>
       </div>
-    </div>
-    <p style="margin:var(--size-2) 0 0"><a href="https://platform.tripo3d.ai" target="_blank" rel="noopener noreferrer">Get a key from Tripo 3D</a></p>
-    ${
-      gate
-        ? `<div class="dialog-actions" style="display:flex;gap:var(--size-2);justify-content:flex-end;margin-top:var(--size-3)">
-      ${gate.allowCad ? '<button id="providerKeyUseCad" class="btn btn-secondary" type="button">Use Parametric CAD</button>' : ""}
-      <button id="providerKeySave" class="btn btn-primary" type="button" disabled>Save key and generate</button>
-    </div>`
-        : `<button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear key</button>
-    <p id="providerKeyBalance" class="provider-balance" style="margin-top:var(--size-2)"></p>`
-    }`;
+    </div>`;
+const KEY_LINK_HTML =
+  '<p style="margin:var(--size-2) 0 0"><a href="https://platform.tripo3d.ai" target="_blank" rel="noopener noreferrer">Get a key from Tripo 3D</a></p>';
 
-  const input = wrap.querySelector("#providerKeyInput") as HTMLInputElement;
+/** Wires the show/hide toggle of a key dialog body. */
+function wireKeyToggle(wrap: HTMLElement, input: HTMLInputElement) {
   const toggle = wrap.querySelector("#providerKeyToggle") as HTMLButtonElement;
-
   toggle.addEventListener("click", () => {
     const hidden = input.type === "password";
     input.type = hidden ? "text" : "password";
     toggle.setAttribute("aria-label", hidden ? "Hide API key" : "Show API key");
     toggle.textContent = hidden ? "Hide" : "Show";
   });
+}
 
-  if (gate) {
-    const save = wrap.querySelector("#providerKeySave") as HTMLButtonElement;
-    const useCad = wrap.querySelector("#providerKeyUseCad") as HTMLButtonElement | null;
-    // showCustomDialog attaches wrap.closeDialog; resolve at click time.
-    const closeWith = (value: string) => {
-      const w = wrap as any;
-      if (typeof w.closeDialog === "function") w.closeDialog(value);
-    };
-    input.addEventListener("input", () => {
-      save.disabled = input.value.trim().length === 0;
-    });
-    save.addEventListener("click", () => {
-      const key = input.value.trim();
-      if (!key) return;
-      localStorage.setItem(BYOK_KEY_STORAGE, key);
-      syncProviderUI();
-      closeWith("save");
-    });
-    useCad?.addEventListener("click", () => closeWith("cad"));
-    return wrap;
-  }
+/**
+ * Builds the on-demand key dialog body shown when a generation needs a key.
+ * @remarks All markup is static; the error text is set via textContent. The
+ *   key is stored only by "Save key and generate", so closing leaves storage
+ *   untouched. Buttons close the dialog with "cad" / "save".
+ */
+function buildProviderKeyGateBody(gate: ProviderKeyGateOptions): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `
+    <p style="margin:0 0 var(--size-2)">Organic shapes like this are made with Tripo 3D, which uses your own API key. You can also try Parametric CAD, which is free but best for geometric parts.</p>
+    ${KEY_FIELD_HTML}
+    ${gate.error ? '<p id="providerKeyError" class="form-error" role="alert" style="margin:var(--size-2) 0 0"></p>' : ""}
+    ${KEY_LINK_HTML}
+    <div class="dialog-actions" style="display:flex;gap:var(--size-2);justify-content:flex-end;margin-top:var(--size-3)">
+      ${gate.allowCad ? '<button id="providerKeyUseCad" class="btn btn-secondary" type="button">Use Parametric CAD</button>' : ""}
+      <button id="providerKeySave" class="btn btn-primary" type="button" disabled>Save key and generate</button>
+    </div>`;
 
+  const input = wrap.querySelector("#providerKeyInput") as HTMLInputElement;
+  const save = wrap.querySelector("#providerKeySave") as HTMLButtonElement;
+  const errorEl = wrap.querySelector("#providerKeyError");
+  if (errorEl && gate.error) errorEl.textContent = gate.error;
+  wireKeyToggle(wrap, input);
+
+  // showCustomDialog attaches wrap.closeDialog; resolve at click time.
+  const closeWith = (value: string) => {
+    const w = wrap as any;
+    if (typeof w.closeDialog === "function") w.closeDialog(value);
+  };
+  input.addEventListener("input", () => {
+    save.disabled = input.value.trim().length === 0;
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !save.disabled) {
+      e.preventDefault();
+      save.click();
+    }
+  });
+  save.addEventListener("click", () => {
+    const key = input.value.trim();
+    if (!key) return;
+    localStorage.setItem(BYOK_KEY_STORAGE, key);
+    syncProviderUI();
+    closeWith("save");
+  });
+  wrap.querySelector("#providerKeyUseCad")?.addEventListener("click", () => closeWith("cad"));
+  return wrap;
+}
+
+/**
+ * Builds the Advanced settings key dialog body (field, show/hide, Clear key,
+ * balance line); the key is saved on every input.
+ * @remarks All markup is static — no user content is injected.
+ */
+function buildProviderKeyBody(): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `
+    <p style="margin:0 0 var(--size-2)">Bring your own Tripo 3D key to generate without the free-tier on-chain quota. The key is stored only in this browser and sent with each generation request.</p>
+    ${KEY_FIELD_HTML}
+    ${KEY_LINK_HTML}
+    <button id="providerKeyClear" class="btn btn-secondary" type="button" style="margin-top:var(--size-2)">Clear key</button>
+    <p id="providerKeyBalance" class="provider-balance" style="margin-top:var(--size-2)"></p>`;
+
+  const input = wrap.querySelector("#providerKeyInput") as HTMLInputElement;
   const clear = wrap.querySelector("#providerKeyClear") as HTMLButtonElement;
+  wireKeyToggle(wrap, input);
 
   // Prefill the balance line from the provider-row caption (when a fresh
   // fetch is already cached there).
@@ -2232,6 +2253,8 @@ function echoPromptInChat({
 
 /** Empties the composer for the next input. */
 function resetComposer() {
+  // Remember what was just sent so the key gate can restore or replay it.
+  lastSentImages = attachedImages;
   promptInput.value = "";
   promptInput.style.height = "auto";
   clearAttachedImage();
@@ -2401,29 +2424,34 @@ function postAdvisorAsk(plan: Extract<GenerationPlan, { kind: "ask" }>, prompt: 
 
 /**
  * The BYOK gate for Tripo-bound dispatches: a dialog explains why a key is
- * needed and offers "Save key and generate" (retries the pending dispatch) or
- * "Use Parametric CAD" (re-runs the prompt with cad; hidden when photos are
- * attached or CAD is unavailable). Closing it cancels: the prompt stays in the
- * composer and the pending dispatch is dropped.
+ * needed and offers "Save key and generate" (replays the original request,
+ * photos included) or "Use Parametric CAD" (re-runs the prompt with cad;
+ * hidden when photos were sent or CAD is unavailable). Closing it cancels:
+ * the prompt and photos return to the composer and the pending dispatch is
+ * dropped.
+ * @param error - provider message shown under the key field (a rejected key).
  */
-function requestProviderKey(dispatch: AdvisorDispatch, hasPhotos: boolean) {
+function requestProviderKey(dispatch: AdvisorDispatch, error?: string) {
   pendingAdvisorDispatch = dispatch;
-  // The composer already reset on send, so photos are known from the payload.
-  const allowCad = !hasPhotos && cadAvailable();
+  // The composer already reset on send, so keep its photos for replay.
+  const images = lastSentImages;
+  const allowCad = images.length === 0 && cadAvailable();
   void showCustomDialog(
     "This model needs an AI generator",
-    buildProviderKeyBody({ gate: { allowCad } }),
+    buildProviderKeyGateBody({ allowCad, error }),
   ).then((outcome) => {
-    if (outcome === "cad") {
-      pendingAdvisorDispatch = null;
-      selectProviderProgrammatically("cad");
-    } else if (outcome !== "save" || getByokKey().length === 0) {
-      // Cancelled: no generation, and the sent prompt returns to the composer.
-      pendingAdvisorDispatch = null;
-      promptInput.value = dispatch.prompt;
+    const useCad = outcome === "cad";
+    promptInput.value = dispatch.prompt;
+    attachedImages = [...images];
+    renderAttachChips();
+    if (!useCad && !(outcome === "save" && getByokKey().length > 0)) {
+      pendingAdvisorDispatch = null; // cancelled: nothing generates
       return;
     }
-    promptInput.value = dispatch.prompt;
+    if (useCad) {
+      pendingAdvisorDispatch = null;
+      selectProviderProgrammatically("cad");
+    }
     void onGenerate({ resubmit: true });
   });
 }
@@ -2744,7 +2772,7 @@ async function onGenerate(options: { resubmit?: boolean } = {}) {
   }
   if (advisorDispatch.announce) addChatMessage("system", advisorDispatch.announce);
 
-  if (!ensureProviderKey(advisorDispatch, !!payload.imagePayload)) {
+  if (!ensureProviderKey(advisorDispatch)) {
     setGenerating(false);
     return;
   }
@@ -2788,9 +2816,9 @@ async function ensureGenerateReady(): Promise<boolean> {
  * the on-demand key dialog instead of a dead end.
  * @returns true when the key is present (or unneeded) and generation proceeds.
  */
-function ensureProviderKey(dispatch: AdvisorDispatch, hasPhotos: boolean): boolean {
+function ensureProviderKey(dispatch: AdvisorDispatch): boolean {
   if (!isRealProvider(dispatch.provider) || getByokKey().length > 0) return true;
-  requestProviderKey(dispatch, hasPhotos);
+  requestProviderKey(dispatch);
   return false;
 }
 
@@ -2809,6 +2837,30 @@ function beginGenerationWorking(provider: string) {
 }
 
 /** Everything a dispatched generation needs beyond the advisor dispatch. */
+/**
+ * The provider rejected the key (401): reopen the key dialog for this same
+ * request with the provider's message under the field.
+ * @returns true when the dialog was reopened.
+ */
+function reopenKeyDialogOnRejectedKey(err: unknown, dispatch: AdvisorDispatch): boolean {
+  if (!(err instanceof ApiError) || err.status !== 401 || !isRealProvider(dispatch.provider)) {
+    return false;
+  }
+  requestProviderKey(dispatch, generationErrorMessage(err));
+  return true;
+}
+
+/**
+ * Reports a failed generation: a known outcome (stopped, CAD retry offer), a
+ * rejected key (reopens the key dialog), or the mapped error in chat.
+ */
+function handleGenerationFailure(err: unknown, dispatch: AdvisorDispatch) {
+  if (reportGenerationFailure(err, dispatch.prompt)) return;
+  if (reopenKeyDialogOnRejectedKey(err, dispatch)) return;
+  console.error("Generation failed:", err);
+  addChatMessage("system", generationErrorMessage(err));
+}
+
 interface GenerationRun {
   payload: PromptAndImagePayload;
   provider: string;
@@ -2875,9 +2927,7 @@ async function runGeneration({
     // A completed generation consumed credits — refresh the caption.
     refreshProviderBalance({ force: true });
   } catch (err) {
-    if (reportGenerationFailure(err, effectivePrompt)) return;
-    console.error("Generation failed:", err);
-    addChatMessage("system", generationErrorMessage(err));
+    handleGenerationFailure(err, { provider, fields: advisorFields, announce: null, prompt: effectivePrompt });
   } finally {
     working?.remove();
     setGenerating(false);

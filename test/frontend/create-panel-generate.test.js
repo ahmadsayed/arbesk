@@ -523,6 +523,80 @@ test("Escape closes the dialog, nothing generates, prompt kept", async () => {
   expect(mockGenerateAsset).not.toHaveBeenCalled();
 });
 
+test("Save key and generate with photos replays the image payload", async () => {
+  connectWallet();
+  providerSelect.value = "tripo3d";
+  await attachImages([new File(["px"], "front.png", { type: "image/png" })]);
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  const field = dlg.wrap.querySelector("#providerKeyInput");
+  field.value = "sk-late-key";
+  field.dispatchEvent(new Event("input"));
+  field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await flush();
+  await flush();
+  await flush();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const args = mockGenerateAsset.mock.calls[0][0];
+  expect(args.imageMime).toBe("image/png");
+  expect(args.imageName).toBe("front.png");
+  expect(args.imageData.length).toBeGreaterThan(0);
+});
+
+test("cancelling the key dialog with photos restores prompt and photo chips", async () => {
+  connectWallet();
+  providerSelect.value = "tripo3d";
+  promptInput.value = "a rock";
+  await attachImages([new File(["px"], "front.png", { type: "image/png" })]);
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+  expect(document.querySelectorAll(".image-attach-chip").length).toBe(0);
+
+  dlg.close(null);
+  await flush();
+  await flush();
+
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  expect(promptInput.value).toBe("a rock");
+  expect(document.querySelectorAll(".image-attach-chip").length).toBe(1);
+});
+
+test("an invalid-key failure reopens the key dialog with the message; a new key retries", async () => {
+  connectWallet();
+  localStorage.setItem("arbesk-byok-key", "sk-bad");
+  providerSelect.value = "tripo3d";
+  promptInput.value = "a rock";
+  mockGenerateAsset.mockRejectedValueOnce(new api.ApiError("unauthorized", 401, null));
+  const dlg = openKeyDialogHandle();
+  await clickGenerate();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  expect(dlg.wrap).not.toBeNull();
+  const alertEl = dlg.wrap.querySelector('[role="alert"]');
+  expect(alertEl.textContent).toBe(
+    "Invalid Tripo3D API key. Check your key in the provider settings.",
+  );
+  expect(mockAddChatMessage).not.toHaveBeenCalledWith(
+    "system",
+    expect.stringContaining("Invalid Tripo3D"),
+  );
+
+  const field = dlg.wrap.querySelector("#providerKeyInput");
+  field.value = "sk-good";
+  field.dispatchEvent(new Event("input"));
+  dlg.wrap.querySelector("#providerKeySave").click();
+  await flush();
+  await flush();
+  await flush();
+
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(2);
+  const retried = mockGenerateAsset.mock.calls[1][0];
+  expect(retried.providerKey).toBe("sk-good");
+  expect(retried.prompt).toBe("a rock");
+});
+
 test("tripo3d with a key sends providerKey, standard quality, and stoppable wiring", async () => {
   connectWallet();
   localStorage.setItem("arbesk-byok-key", "sk-test-key");
