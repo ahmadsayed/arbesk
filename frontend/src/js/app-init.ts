@@ -37,6 +37,7 @@ import {
 import { initAssetLibrary } from "./ui/asset-library.ts";
 import { initLedgerPanel } from "./ui/ledger-panel.ts";
 import { initSidebar } from "./ui/sidebar.ts";
+import { isAssetOpen } from "./state/edit-mode.ts";
 import { initEmptyViewport } from "./ui/empty-viewport.ts";
 import { initOutliner } from "./ui/outliner.ts";
 import { initNesting } from "./ui/nesting.ts";
@@ -82,7 +83,7 @@ if (localStorage.getItem("arbesk-last-wallet") === "cdp") {
 
 initAssetLibrary();
 initLedgerPanel();
-initSidebar();
+initSidebar({ isAssetOpen });
 initEmptyViewport();
 initOutliner();
 initNesting();

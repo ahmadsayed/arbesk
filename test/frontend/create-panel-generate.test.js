@@ -73,6 +73,13 @@ mock.module("../../frontend/src/js/engine/scene-graph.js", () => ({
 mock.module("../../frontend/src/js/ui/toasts.js", () => ({
   showToast: mockShowToast,
 }));
+const mockKeepCreateView = jest.fn();
+mock.module("../../frontend/src/js/ui/sidebar.js", () => ({
+  keepCreateView: mockKeepCreateView,
+  switchView: jest.fn(),
+  getActiveView: jest.fn(() => "chat"),
+  initSidebar: jest.fn(),
+}));
 mock.module("../../frontend/src/js/ui/dialog.js", () => ({
   showCustomDialog: mockShowCustomDialog,
   showCheckboxDialog: mockShowCheckboxDialog,
@@ -1087,4 +1094,29 @@ test("auto without a BYOK key opens the dialog and retries with the same bundle"
     textureQuality: "standard",
     faceLimit: 5000,
   });
+});
+
+test("Show in Studio keeps the sidebar on Create (the panel opened it itself)", async () => {
+  connectWallet();
+  const handle = {
+    canvas: null,
+    markFallback: jest.fn(),
+    collapsePreview: jest.fn(),
+    setSendDisabled: jest.fn(),
+    markSent: jest.fn(),
+  };
+  mockAddAssetMessage.mockReturnValue(handle);
+  mockDisposeChatPreview.mockResolvedValue(null);
+  mockLoadAssetManifest.mockResolvedValue({});
+  promptInput.value = "a chair";
+  await clickGenerate();
+  const [generationId, send] = mockRegisterAssetSendHandler.mock.calls.at(-1);
+  send(generationId);
+  await flush();
+  await flush();
+  expect(mockKeepCreateView).toHaveBeenCalled();
+  expect(mockLoadAssetManifest).toHaveBeenCalled();
+  expect(mockKeepCreateView.mock.invocationCallOrder[0]).toBeLessThan(
+    mockLoadAssetManifest.mock.invocationCallOrder[0],
+  );
 });

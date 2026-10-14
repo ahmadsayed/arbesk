@@ -12,13 +12,13 @@ function fragment() {
   return `<aside class="sidebar"><div class="sidebar-switcher">${btns}</div>${panes}</aside>`;
 }
 
-async function load() {
+async function load(options) {
   resetModules();
   window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   globalThis.matchMedia = window.matchMedia;
   document.body.innerHTML = fragment();
   const mod = await import("../../frontend/src/js/ui/sidebar.js");
-  mod.initSidebar();
+  mod.initSidebar(options);
   return mod;
 }
 
@@ -104,5 +104,68 @@ describe("sidebar views", () => {
   test("Create does not pulse on load (not AI-first)", async () => {
     await load();
     expect(document.querySelector('[data-view="chat"]').classList.contains("pulse")).toBe(false);
+  });
+});
+
+describe("leaving the Create landing when an asset opens", () => {
+  async function landing() {
+    window.history.replaceState({}, "", "/studio");
+    // The real "an asset is open" predicate, as app-init injects it
+    // (resolved lazily: load() resets the module graph first).
+    let editMode;
+    const mod = await load({ isAssetOpen: () => editMode.isAssetOpen() });
+    editMode = await import("../../frontend/src/js/state/edit-mode.js");
+    const bus = await import("@arbesk/asset-core/events/bus.js");
+    const asset = await import("@arbesk/asset-core/domain/asset.js");
+    const store = await import("@arbesk/asset-core/domain/asset-store.js");
+    store._resetForTesting();
+    const openAsset = () => {
+      asset.setActiveManifestCid("bafyOpened");
+      bus.emit(bus.EVENTS.SCENE_READY, { manifest: {}, manifestCid: "bafyOpened" });
+    };
+    return { mod, bus, asset, openAsset };
+  }
+
+  test("Library → open asset switches to the stored tab (default Outline)", async () => {
+    const { openAsset } = await landing();
+    expect(visible()).toEqual(["chat"]);
+    openAsset();
+    expect(visible()).toEqual(["outline"]);
+  });
+
+  test("restores the stored tab rather than Outline when one is stored", async () => {
+    localStorage.setItem("arbesk-sidebar-view", "ledger");
+    const { openAsset } = await landing();
+    openAsset();
+    expect(visible()).toEqual(["ledger"]);
+    expect(localStorage.getItem("arbesk-sidebar-view")).toBe("ledger");
+  });
+
+  test("a tab the user chose since landing is kept", async () => {
+    const { openAsset } = await landing();
+    document.querySelector('.sidebar-switcher-btn[data-view="library"]').click();
+    openAsset();
+    expect(visible()).toEqual(["library"]);
+  });
+
+  test("an open triggered by the Create panel's own generation stays on Create", async () => {
+    const { mod, openAsset } = await landing();
+    mod.keepCreateView();
+    openAsset();
+    expect(visible()).toEqual(["chat"]);
+  });
+
+  test("only the first open leaves the landing", async () => {
+    const { openAsset } = await landing();
+    openAsset();
+    ctrl("3");
+    openAsset();
+    expect(visible()).toEqual(["chat"]);
+  });
+
+  test("a SCENE_READY with no asset open keeps the landing", async () => {
+    const { bus } = await landing();
+    bus.emit(bus.EVENTS.SCENE_READY, { manifest: {}, manifestCid: null });
+    expect(visible()).toEqual(["chat"]);
   });
 });

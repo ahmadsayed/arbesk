@@ -3,7 +3,7 @@
  * @remarks Width is user-resizable and persisted, but only on wide layouts.
  */
 
-import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
+import { emit, on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 
 const VIEWS = ["outline", "library", "chat", "ledger"];
 const STORAGE_KEY = "arbesk-sidebar-view";
@@ -16,10 +16,27 @@ let switcherBtns: HTMLElement[] = [];
 let viewPanes: Record<string, HTMLElement | null> = {};
 let activeView: string | null = null;
 let collapsed = false;
+// True while the Studio shows the unpersisted Create landing (no asset open
+// at load). Cleared by any persisted tab choice.
+let onCreateLanding = false;
+// "Is an asset open?" (state/edit-mode.ts isAssetOpen), injected by
+// initSidebar so this leaf module stays free of the engine/state graph.
+let assetIsOpen: () => boolean = () => true;
+
+/** The last-used tab; retired views ("settings") and unknown values → Outline. */
+function storedView(): string {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored && VIEWS.includes(stored) ? stored : "outline";
+}
 
 // ─── Initialization ──────────────────────────────────────────────────
 
-function initSidebar(): void {
+/**
+ * @param options.isAssetOpen - the Studio's "an asset is open" predicate;
+ *   decides when the Create landing gives way to the last-used tab.
+ */
+function initSidebar(options: { isAssetOpen?: () => boolean } = {}): void {
+  if (options.isAssetOpen) assetIsOpen = options.isAssetOpen;
   sidebar = document.querySelector(".sidebar") as HTMLElement | null;
   if (!sidebar) return;
   const sidebarEl = sidebar;
@@ -35,15 +52,16 @@ function initSidebar(): void {
     ) as HTMLElement | null;
   });
 
-  // No asset in the URL: land on Create. Otherwise restore the last view;
-  // retired views ("settings") and unknown values fall back to Outline.
+  // No asset in the URL: land on Create. Otherwise restore the last view.
   const params = new URLSearchParams(location.search);
   const hasAsset = params.has("asset") || params.has("assetId") || params.has("manifest");
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const restored = stored && VIEWS.includes(stored) ? stored : "outline";
   // Landing on Create must not clobber the last-used tab.
-  if (hasAsset) switchView(restored);
-  else switchView("chat", false);
+  if (hasAsset) {
+    switchView(storedView());
+  } else {
+    switchView("chat", false);
+    onCreateLanding = true;
+  }
 
   // On narrow screens the sidebar overlays the viewport, so it must start
   // closed or it hides the canvas on first visit.
@@ -112,7 +130,7 @@ function initSidebar(): void {
 
 // ─── View Switching ──────────────────────────────────────────────────
 
-function switchView(viewName: string, persist = true): void {
+function switchView(viewName: string, persist = true, expand = true): void {
   if (!viewPanes[viewName]) return;
 
   // Hide all panes
@@ -134,16 +152,43 @@ function switchView(viewName: string, persist = true): void {
     btn.setAttribute("tabindex", selected ? "0" : "-1");
   });
 
-  // Persist
-  if (persist) localStorage.setItem(STORAGE_KEY, viewName);
+  // Persist. A persisted choice (a tab click, Ctrl+1..4, New ▾) ends the
+  // Create landing.
+  if (persist) {
+    localStorage.setItem(STORAGE_KEY, viewName);
+    onCreateLanding = false;
+  }
 
   // Auto-expand if collapsed
-  if (collapsed) expandSidebar();
+  if (expand && collapsed) expandSidebar();
 }
 
 function getActiveView(): string | null {
   return activeView;
 }
+
+/**
+ * The Create panel opens its own generation: stay on Create.
+ * @remarks Call before the open (it ends the landing without switching), so
+ *   the SCENE_READY that follows keeps the user in the panel they are using.
+ */
+function keepCreateView(): void {
+  onCreateLanding = false;
+}
+
+/**
+ * First asset open after landing on Create: go to the last-used tab.
+ * @remarks Spec 3.2 — the Create landing is for "no asset open"; once an
+ *   asset is open the last-used tab is kept. Not persisted and does not
+ *   expand a collapsed sidebar.
+ */
+function leaveCreateLanding(): void {
+  if (!onCreateLanding || !assetIsOpen()) return;
+  onCreateLanding = false;
+  switchView(storedView(), false, false);
+}
+
+on(EVENTS.SCENE_READY, leaveCreateLanding);
 
 // ─── Collapse / Expand ───────────────────────────────────────────────
 
@@ -306,6 +351,7 @@ export {
   initSidebar,
   switchView,
   getActiveView,
+  keepCreateView,
   toggleSidebar,
   collapseSidebar,
   expandSidebar,

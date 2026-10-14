@@ -53,6 +53,7 @@ import {
 } from "../state/pending-generations.ts";
 import { deriveDefaultCollectionId, identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 import { onSaveAssetDraft } from "./asset-save.ts";
+import { keepCreateView } from "./sidebar.ts";
 import {
   adoptManifestName,
   adoptOpenedAsset,
@@ -837,6 +838,9 @@ async function sendGenerationToStudio(
 
   updatePendingGeneration(generationId, { status: "sent" });
   assetMessage.setSendDisabled(true);
+  // The open comes from this panel: the sidebar must not leave the Create
+  // landing for the last-used tab.
+  keepCreateView();
 
   // Capture the chain tip before the state set re-roots it at the record's
   // manifest — restoring an older bubble must not fork the chain.
@@ -3058,6 +3062,7 @@ on(EVENTS.HISTORY_VERSION_SELECTED, async ({ cid, sourceCid, name }: { cid: stri
   // every newer prompt and breaking repeated restores. Capture the chain
   // root up front and put both back once the load lands.
   const previousLatestCid = getLatestAssetManifestCid() || cid;
+  keepCreateView();
   try {
     setActiveManifestCid(cid);
     await loadAssetManifest(cid);
