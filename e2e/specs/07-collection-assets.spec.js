@@ -172,9 +172,8 @@ test.describe.serial("Collection/asset model", () => {
     const tokenIdHex = tokenIdHexFromUrl(page.url());
     const tokenIdDec = BigInt(tokenIdHex).toString();
 
-    // The open asset's own card is hidden from the Insert list; start a
-    // fresh empty asset so the published one is listed, then open it from the
-    // card's ⋯ menu.
+    // The open asset's own card can't be reopened; start a fresh empty asset
+    // so the published one is an ordinary card, then click it to open.
     await startEmptyAsset(page);
     await page.fill(SELECTORS.dialogInput, uniqueAssetName("Scratch"));
     await page.click(SELECTORS.dialogConfirmBtn);
@@ -182,7 +181,7 @@ test.describe.serial("Collection/asset model", () => {
     const assetCard = assetCardLocator(page, tokenIdDec, viewportName);
     await expect(assetCard).toHaveCount(1);
 
-    await openAssetCard(assetCard, viewportName);
+    await openAssetCard(assetCard);
     await page.waitForURL((url) => {
       const a = new URL(url.toString()).searchParams.get("asset");
       return a != null && BigInt(a) === BigInt(tokenIdHex);

@@ -94,6 +94,19 @@ function frameSelected() {
 }
 
 /**
+ * Frames one node by its anchor hierarchy.
+ * @remarks Goes through the anchor, not state.nodeMeshes: a live-ref's meshes
+ *   are keyed by the child manifest's inner node ids.
+ */
+function frameNode(nodeId: string) {
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!anchor) return;
+  const renderable = getRenderableMeshes(anchor.getChildMeshes(false));
+  if (renderable.length === 0) return;
+  frameCameraToBounds(getWorldBounds(renderable));
+}
+
+/**
  * Resizes the camera zoom range and viewport chrome (grid/axes) to match the
  * loaded scene.
  * @remarks Large models need a much larger max zoom than the default 500, and
@@ -122,7 +135,9 @@ function updateCameraRangeForScene() {
   // pre-adaptive fixed cap): a 500 floor lets a ~1-unit model (Tripo output)
   // shrink to a couple of pixels at max zoom-out — indistinguishable from
   // being clipped.
-  const minLimit = 0.1;
+  // The near limit drops below 0.1 for sub-decimetre models (a 20mm CAD
+  // part is 0.02 units) so the camera can still frame them.
+  const minLimit = Math.min(0.1, maxDim * 0.5);
   const maxLimit = Math.max(50, maxDim * 10);
 
   cam.lowerRadiusLimit = minLimit;
@@ -207,6 +222,7 @@ function updateGridCoverage() {
 
 export {
   frameAll,
+  frameNode,
   frameSelected,
   updateCameraRangeForScene,
   updateGridCoverage,

@@ -78,10 +78,9 @@ beforeEach(() => {
   document.body.innerHTML = `
     <div id="assetLibraryBody"></div>
     <span id="galleryVisitorBadge" hidden></span>
-    <h3 id="insertPanelTitle">Insert</h3>
-    <p id="insertPanelHint">Insert hint</p>
+    <h3 id="assetsPanelTitle">Assets</h3>
+    <p id="assetsPanelHint">Assets hint</p>
     <input id="insertSearchInput" type="search" />
-    <div id="insertNoAsset" hidden><button id="insertNewAssetBtn" type="button">New empty asset</button></div>
     <button id="newAssetBtn" type="button"></button>
   `;
 });
@@ -265,14 +264,6 @@ describe("updateActiveAssetCard", () => {
     const updated = await updateActiveAssetCard();
 
     expect(updated).toBe(true);
-    // The open asset's own card is hidden; it returns, updated, once closed.
-    expect(document.querySelector('.asset-card[data-asset-id="asset-a"]')).toBeNull();
-    assetStore.set({
-      activeAssetTokenId: null,
-      activeAssetId: null,
-      activeAssetManifestCid: null,
-      currentManifest: null,
-    });
     const card = document.querySelector(
       '.asset-card[data-token-id="1"][data-asset-id="asset-a"]'
     );
@@ -458,7 +449,7 @@ describe("Gallery panel visitor mode (public profile in the studio sidebar)", ()
   });
 });
 
-describe("Insert panel cards", () => {
+describe("Assets panel cards", () => {
   const OPEN = { activeAssetManifestCid: "bafyOpen", activeAssetTokenId: "9", activeAssetId: "asset-open" };
   beforeEach(() => {
     if (_libraryStateRef) _libraryStateRef.set({ subjectAddress: null, subjectChainId: null });
@@ -488,20 +479,28 @@ describe("Insert panel cards", () => {
     return mod;
   }
 
-  test("card click emits ASSET_ADD_LINKED_REQUESTED with mode live-ref", async () => {
+  test("card click opens the asset and inserts nothing", async () => {
     assetStore.set(OPEN);
     await renderOwned();
     const main = cardNamed("Asset A").querySelector(".asset-card-main");
-    expect(main.getAttribute("aria-label")).toBe("Insert Asset A");
+    expect(main.getAttribute("aria-label")).toBe("Open Asset A");
     main.click();
-    expect(linkedSpy).toHaveBeenCalledTimes(1);
-    const payload = linkedSpy.mock.calls[0][0];
-    expect(payload.mode).toBe("live-ref");
-    expect(payload.token_id).toBe("1");
-    expect(payload.assetID).toBe("asset-a");
+    await waitFor(() => adoptSpy.mock.calls.length > 0);
+    expect(adoptSpy).toHaveBeenCalledTimes(1);
+    expect(adoptSpy.mock.calls[0][0]).toBe("bafyA");
+    expect(linkedSpy).not.toHaveBeenCalled();
   });
 
-  test("Insert a copy emits mode fork", async () => {
+  test("card click opens even with no asset open", async () => {
+    await renderOwned();
+    const main = cardNamed("Asset A").querySelector(".asset-card-main");
+    expect(main.disabled).toBe(false);
+    main.click();
+    await waitFor(() => adoptSpy.mock.calls.length > 0);
+    expect(adoptSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("⋯ menu: Insert as live link (live-ref) and Insert a copy (fork)", async () => {
     assetStore.set(OPEN);
     await renderOwned();
     const card = cardNamed("Asset A");
@@ -510,25 +509,20 @@ describe("Insert panel cards", () => {
     more.click();
     const items = [...card.querySelectorAll(".menu-popover [role=menuitem]")];
     expect(items.map((i) => i.textContent)).toEqual([
+      "Insert as live link",
       "Insert a copy",
-      "Open Asset A",
       "Show in Library",
     ]);
-    card.querySelector('[data-action="insert-copy"]').click();
+    card.querySelector('[data-action="insert-live"]').click();
     expect(linkedSpy).toHaveBeenCalledTimes(1);
-    expect(linkedSpy.mock.calls[0][0].mode).toBe("fork");
-  });
-
-  test("Open item opens the asset", async () => {
-    assetStore.set(OPEN);
-    await renderOwned();
-    const card = cardNamed("Asset A");
-    card.querySelector(".asset-card-more").click();
-    card.querySelector('[data-action="open"]').click();
-    await waitFor(() => adoptSpy.mock.calls.length > 0);
-    expect(adoptSpy).toHaveBeenCalledTimes(1);
-    expect(adoptSpy.mock.calls[0][0]).toBe("bafyA");
-    expect(linkedSpy).not.toHaveBeenCalled();
+    const payload = linkedSpy.mock.calls[0][0];
+    expect(payload.mode).toBe("live-ref");
+    expect(payload.token_id).toBe("1");
+    expect(payload.assetID).toBe("asset-a");
+    more.click();
+    card.querySelector('[data-action="insert-copy"]').click();
+    expect(linkedSpy).toHaveBeenCalledTimes(2);
+    expect(linkedSpy.mock.calls[1][0].mode).toBe("fork");
   });
 
   test("cards have no Download, Delete, Burn or role badge", async () => {
@@ -562,38 +556,46 @@ describe("Insert panel cards", () => {
     );
   });
 
-  test("the open asset's own card is hidden", async () => {
-    assetStore.set({ activeAssetId: "asset-b", activeCollectionTokenId: null });
+  test("the open asset's own card is shown as current: no reopen, no insert", async () => {
+    assetStore.set({ activeAssetId: "asset-b", activeAssetManifestCid: "bafyB", activeCollectionTokenId: null });
     await renderOwned(["2"]);
-    expect(cardNamed("Asset B")).toBeUndefined();
-    expect(cardNamed("Asset C")).toBeDefined();
+    const own = cardNamed("Asset B");
+    expect(own).toBeDefined();
+    const main = own.querySelector(".asset-card-main");
+    expect(main.disabled).toBe(true);
+    expect(main.getAttribute("aria-current")).toBe("true");
+    expect(own.draggable).toBe(false);
+    expect(own.querySelector('[data-action="insert-live"]').getAttribute("aria-disabled")).toBe("true");
+    expect(own.querySelector('[data-action="insert-copy"]').getAttribute("aria-disabled")).toBe("true");
+    const other = cardNamed("Asset C");
+    expect(other.querySelector(".asset-card-main").disabled).toBe(false);
+    expect(other.querySelector('[data-action="insert-live"]').getAttribute("aria-disabled")).toBe("false");
   });
 
-  test("with no asset open cards are disabled and emit nothing", async () => {
+  test("with no asset open the insert items are disabled and drag is off", async () => {
     await renderOwned();
-    const main = cardNamed("Asset A").querySelector(".asset-card-main");
-    expect(main.disabled).toBe(true);
-    main.click();
-    expect(linkedSpy).not.toHaveBeenCalled();
-    expect(adoptSpy).not.toHaveBeenCalled();
+    const card = cardNamed("Asset A");
+    expect(card.draggable).toBe(false);
+    for (const action of ["insert-live", "insert-copy"]) {
+      expect(card.querySelector(`[data-action="${action}"]`).getAttribute("aria-disabled")).toBe("true");
+    }
   });
 
-  test("cards enable when an asset opens, without refetching", async () => {
+  test("insert items and drag enable when an asset opens, without refetching", async () => {
     await renderOwned();
-    const main = cardNamed("Asset A").querySelector(".asset-card-main");
-    expect(main.disabled).toBe(true);
     assetStore.set(OPEN);
-    expect(cardNamed("Asset A").querySelector(".asset-card-main").disabled).toBe(false);
+    const card = cardNamed("Asset A");
+    expect(card.draggable).toBe(true);
+    expect(card.querySelector('[data-action="insert-live"]').getAttribute("aria-disabled")).toBe("false");
   });
 
   test("visitor mode: title Browse, hint read-only, click opens, menu has only Show in Library", async () => {
     const mod = await loadVisitorModuleForChrome();
     await mod.refreshAssetLibrary();
-    expect(document.getElementById("insertPanelTitle").textContent).toBe("Browse");
-    expect(document.getElementById("insertPanelHint").textContent).toBe(
+    expect(document.getElementById("assetsPanelTitle").textContent).toBe("Browse");
+    expect(document.getElementById("assetsPanelHint").textContent).toBe(
       "Read-only public profile. Open an asset to view it."
     );
-    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
     const card = cardNamed("Asset A");
     card.querySelector(".asset-card-more").click();
     const items = [...card.querySelectorAll(".menu-popover [role=menuitem]")];
@@ -615,18 +617,6 @@ describe("Insert panel cards", () => {
     input.value = "";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect([...document.querySelectorAll(".asset-card")].filter((c) => !c.hidden).length).toBe(3);
-  });
-
-  test("no asset open shows the notice; New empty asset clicks #newAssetBtn", async () => {
-    await renderOwned();
-    const notice = document.getElementById("insertNoAsset");
-    expect(notice.hidden).toBe(false);
-    const clicked = jest.fn();
-    document.getElementById("newAssetBtn").addEventListener("click", clicked);
-    document.getElementById("insertNewAssetBtn").click();
-    expect(clicked).toHaveBeenCalledTimes(1);
-    assetStore.set(OPEN);
-    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
   });
 
   test("insert failure shows an error toast with the reason and no Undo", async () => {
@@ -651,56 +641,29 @@ describe("Insert panel cards", () => {
     expect(removeChildSpy).toHaveBeenCalledWith(["n1"]);
   });
 
-  test("a named empty draft accepts inserts: cards enabled, notice hidden", async () => {
+  test("a named empty draft accepts inserts from the ⋯ menu", async () => {
     assetStore.set({ activeAssetName: "Chair" });
     await renderOwned();
     const card = cardNamed("Asset A");
-    expect(card.querySelector(".asset-card-main").disabled).toBe(false);
-    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
-    card.querySelector(".asset-card-main").click();
+    expect(card.querySelector('[data-action="insert-live"]').getAttribute("aria-disabled")).toBe("false");
+    card.querySelector(".asset-card-more").click();
+    card.querySelector('[data-action="insert-live"]').click();
     expect(linkedSpy).toHaveBeenCalledTimes(1);
   });
 
-  test("New empty asset enables the cards once the draft is named", async () => {
-    await renderOwned();
-    document.getElementById("newAssetBtn").addEventListener("click", () => {
-      assetStore.set({ activeAssetName: "Untitled Asset" });
-    });
-    document.getElementById("insertNewAssetBtn").click();
-    expect(cardNamed("Asset A").querySelector(".asset-card-main").disabled).toBe(false);
-    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
-  });
-
-  test("disabled cards are not draggable and opt out of hover", async () => {
+  test("drag carries a live-ref payload only when inserting is possible", async () => {
     await renderOwned();
     const card = cardNamed("Asset A");
-    expect(card.draggable).toBe(false);
-    expect(card.classList.contains("asset-card--disabled")).toBe(true);
     const ev = new Event("dragstart", { cancelable: true });
     ev.dataTransfer = { setData: jest.fn(), effectAllowed: "" };
     card.dispatchEvent(ev);
     expect(ev.dataTransfer.setData).not.toHaveBeenCalled();
     assetStore.set(OPEN);
     const enabled = cardNamed("Asset A");
-    expect(enabled.draggable).toBe(true);
-    expect(enabled.classList.contains("asset-card--disabled")).toBe(false);
-  });
-
-  test("the no-asset notice is right before the first render", async () => {
-    const { initAssetLibrary } = await loadModule();
-    initAssetLibrary();
-    expect(document.getElementById("insertNoAsset").hidden).toBe(false);
-    assetStore.set(OPEN);
-    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
-  });
-
-  test("signed out, the no-asset notice stays hidden (New empty asset needs a wallet)", async () => {
-    _wallet = { walletAddress: null, chainId: 31415822 };
-    const { initAssetLibrary } = await loadModule();
-    initAssetLibrary();
-    expect(document.getElementById("insertNoAsset").hidden).toBe(true);
-    _wallet = { walletAddress: "0xOwner", chainId: 31415822 };
-    emit(EVENTS.WALLET_CONNECTED);
-    expect(document.getElementById("insertNoAsset").hidden).toBe(false);
+    const ev2 = new Event("dragstart", { cancelable: true });
+    ev2.dataTransfer = { setData: jest.fn(), effectAllowed: "" };
+    enabled.dispatchEvent(ev2);
+    const [, json] = ev2.dataTransfer.setData.mock.calls[0];
+    expect(JSON.parse(json).mode).toBe("live-ref");
   });
 });

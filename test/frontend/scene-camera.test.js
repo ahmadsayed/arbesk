@@ -62,21 +62,30 @@ function fakeChrome() {
   return { scaling: new V3(1, 1, 1) };
 }
 
-let state, updateCameraRangeForScene, updateGridCoverage;
+let state, updateCameraRangeForScene, updateGridCoverage, frameNode;
+let animations = [];
 
 beforeAll(async () => {
   globalThis.BABYLON = {
     Vector3: V3,
     Camera: { ORTHOGRAPHIC_CAMERA: 1, PERSPECTIVE_CAMERA: 0 },
+    Animation: {
+      ANIMATIONLOOPMODE_CONSTANT: 2,
+      CreateAndStartAnimation: (_name, _target, prop, _fps, _frames, _from, to) =>
+        animations.push({ prop, to }),
+    },
   };
   ({ state } = await import("../../frontend/src/js/engine/state.js"));
   ({
     updateCameraRangeForScene,
     updateGridCoverage,
+    frameNode,
   } = await import("../../frontend/src/js/engine/scene-camera.js"));
 });
 
 beforeEach(() => {
+  animations = [];
+  state.nodeAnchors = new Map();
   state._nonChromeMeshCache = null;
   const chrome = { groundGrid: fakeChrome(), axisX: fakeChrome(), axisZ: fakeChrome() };
   state.scene = {
@@ -125,6 +134,35 @@ test("normal model: tight zoom range, default far plane and chrome", () => {
   expect(state.camera.minZ).toBe(0.002); // maxZ / 1e5 — small models keep close zoom
   expect(state.scene._chrome.groundGrid.scaling.x).toBe(1);
   expect(state.scene._chrome.axisZ.scaling.x).toBe(1);
+});
+
+test("tiny model (20mm CAD part in metres): zoom-in limit drops so it can be framed", () => {
+  state.scene.meshes = [fakeMesh([-0.01, 0, -0.005], [0.01, 0.02, 0.005])];
+
+  updateCameraRangeForScene();
+
+  expect(state.camera.lowerRadiusLimit).toBeCloseTo(0.01, 10); // maxDim * 0.5
+  expect(state.camera.minZ).toBe(0.002); // still well inside the zoom-in limit
+});
+
+test("frameNode frames every mesh under the node's anchor (live-ref children included)", () => {
+  // A live-ref's meshes are keyed by the child's inner node id, so framing
+  // goes through the anchor hierarchy rather than state.nodeMeshes.
+  const anchor = {
+    getChildMeshes: () => [fakeMesh([4, 0, 4], [6, 2, 6])],
+  };
+  state.nodeAnchors.set("linked_1", anchor);
+
+  frameNode("linked_1");
+
+  const target = animations.find((a) => a.prop === "target").to;
+  expect([target.x, target.y, target.z]).toEqual([5, 1, 5]);
+  expect(animations.find((a) => a.prop === "radius")).toBeTruthy();
+});
+
+test("frameNode is a no-op for an unknown node", () => {
+  frameNode("missing");
+  expect(animations).toEqual([]);
 });
 
 test("viewport chrome meshes are excluded from the size computation", () => {

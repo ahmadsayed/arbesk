@@ -296,6 +296,20 @@ describe("insert mode", () => {
     ]);
   });
 
+  test("insert into an empty draft (no root anchor) parents under a fresh root anchor, not the scene", async () => {
+    const { sceneLoader, state } = await loadModule();
+    const scene = { isScene: true };
+    state.scene = scene;
+    state.rootSceneAnchor = null;
+    await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));
+    const anchor = state.nodeAnchors.get(state.pendingChildRefs[0].node_id);
+    expect(state.rootSceneAnchor).toBeTruthy();
+    expect(anchor.parent).toBe(state.rootSceneAnchor);
+    expect(anchor.parent).not.toBe(scene);
+    state.rootSceneAnchor = null;
+    state.scene = null;
+  });
+
   test("fork freezes the model file CID from the child manifest, not the manifest CID", async () => {
     const { sceneLoader, state } = await loadModule();
     await sceneLoader.handleLinkedAssetDropped(makeDrop({ mode: "fork" }));

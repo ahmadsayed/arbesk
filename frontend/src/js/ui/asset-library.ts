@@ -711,17 +711,8 @@ async function renderAssetLibrary(
 let _lastRender: { ownedEntries: any[]; sharedEntries: any[]; visitor: boolean } | null =
   null;
 let _menuHandles: MenuButtonHandle[] = [];
-let _lastOwnCardKey = "";
 
-/** Identity of the open asset; its own card is hidden from the Insert list. */
-function ownCardKey(): string {
-  const { activeAssetTokenId, activeAssetId, activeAssetManifestCid } = getAssetState();
-  return `${normalizeTokenId(activeAssetTokenId)}|${activeAssetId ?? ""}|${
-    activeAssetManifestCid ? "open" : ""
-  }`;
-}
-
-/** The open asset can't be inserted into itself, so its card is not listed. */
+/** The open asset can't be inserted into itself or re-opened from its card. */
 function isOwnCard(entry: any): boolean {
   const { activeAssetTokenId, activeAssetId, activeAssetManifestCid } = getAssetState();
   const tokenId = normalizeTokenId(activeAssetTokenId);
@@ -756,25 +747,17 @@ function renderSections(): void {
   for (const h of _menuHandles) h.destroy();
   _menuHandles = [];
   assetLibraryBody.innerHTML = "";
-  _lastOwnCardKey = ownCardKey();
 
   const loadable = (list: any[]) => list.filter((e) => e.type !== "inaccessible");
-  const visible = (list: any[]) =>
-    loadable(list).filter((e) => visitor || !isOwnCard(e));
   const ownedLoadable = loadable(ownedEntries);
-  const ownedVisible = visible(ownedEntries);
   const sharedLoadable = loadable(sharedEntries);
-  const sharedVisible = visible(sharedEntries);
 
-  // Only the open asset left in a section: nothing to list, nothing to explain.
-  if (ownedVisible.length > 0 || ownedLoadable.length === 0) {
+  assetLibraryBody.appendChild(
+    createSection(visitor ? "Public Assets" : "Your assets", ownedLoadable, visitor)
+  );
+  if (sharedLoadable.length > 0) {
     assetLibraryBody.appendChild(
-      createSection(visitor ? "Public Assets" : "Your assets", ownedVisible, visitor)
-    );
-  }
-  if (sharedVisible.length > 0) {
-    assetLibraryBody.appendChild(
-      createSection("Shared with you", sharedVisible, visitor)
+      createSection("Shared with you", sharedLoadable, visitor)
     );
   }
   const failed =
@@ -783,7 +766,7 @@ function renderSections(): void {
     (sharedEntries.length - sharedLoadable.length);
   if (failed > 0) assetLibraryBody.appendChild(failedSummary(failed));
   applySearchFilter();
-  updateInsertChrome();
+  updatePanelChrome();
 }
 
 let _searchTerm = "";
@@ -798,20 +781,16 @@ function applySearchFilter(): void {
   });
 }
 
-const INSERT_HINT = "Insert a live link to another asset. Changes to the original show up here.";
+const ASSETS_HINT = "Click to open. Use ⋯ to insert into the open asset as a live link or a copy.";
 const BROWSE_HINT = "Read-only public profile. Open an asset to view it.";
 
-/** Panel title, hint and the "open an asset first" notice follow mode + open asset. */
-function updateInsertChrome(): void {
+/** Panel title and hint follow owner vs visitor mode. */
+function updatePanelChrome(): void {
   const visitor = isLibraryVisitor();
-  const title = document.getElementById("insertPanelTitle");
-  if (title) title.textContent = visitor ? "Browse" : "Insert";
-  const hint = document.getElementById("insertPanelHint");
-  if (hint) hint.textContent = visitor ? BROWSE_HINT : INSERT_HINT;
-  const notice = document.getElementById("insertNoAsset");
-  // Signed out, "New empty asset" can't start a draft — the sign-in empty
-  // state below says what to do instead.
-  if (notice) notice.hidden = visitor || isAssetOpen() || !walletState.get().walletAddress;
+  const title = document.getElementById("assetsPanelTitle");
+  if (title) title.textContent = visitor ? "Browse" : "Assets";
+  const hint = document.getElementById("assetsPanelHint");
+  if (hint) hint.textContent = visitor ? BROWSE_HINT : ASSETS_HINT;
 }
 
 function cachedAssetName(assetID: string | null): string {
@@ -979,9 +958,10 @@ function goToLibrary(): void {
 let _menuSeq = 0;
 
 /**
- * The card's ⋯ button and its popover: Insert a copy / Open / Show in Library.
- * @remarks Visitors get only "Show in Library"; inserting and opening from
- *   the menu are owner actions (a visitor's card body already opens).
+ * The card's ⋯ button and its popover: Insert as live link / Insert a copy /
+ * Show in Library.
+ * @remarks Visitors get only "Show in Library"; inserting is an owner action.
+ *   The card body itself opens the asset.
  */
 function buildCardMenu(entry: any, visitor: boolean = false): { anchor: HTMLDivElement; moreBtn: HTMLButtonElement } {
   const menuId = `assetCardMenu${++_menuSeq}`;
@@ -1007,8 +987,8 @@ function buildCardMenu(entry: any, visitor: boolean = false): { anchor: HTMLDivE
   menu.setAttribute("aria-label", `Actions for ${name}`);
   menu.hidden = true;
   const labels: Array<[string, string]> = [
+    ["insert-live", "Insert as live link"],
     ["insert-copy", "Insert a copy"],
-    ["open", `Open ${name}`],
     ["library", "Show in Library"],
   ];
   for (const [action, label] of visitor ? labels.slice(2) : labels) {
@@ -1027,11 +1007,11 @@ function buildCardMenu(entry: any, visitor: boolean = false): { anchor: HTMLDivE
       align: "end",
       onSelect(item) {
         switch (item.dataset.action) {
+          case "insert-live":
+            emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry, "live-ref"));
+            break;
           case "insert-copy":
             emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry, "fork"));
-            break;
-          case "open":
-            void openEntryConfirmed(entry);
             break;
           case "library":
             goToLibrary();
@@ -1044,17 +1024,23 @@ function buildCardMenu(entry: any, visitor: boolean = false): { anchor: HTMLDivE
 }
 
 /**
- * Insert needs a scene to insert into: cards are inert until an asset is open.
- * @remarks Inert cards can't be dragged and opt out of the hover highlight.
+ * Inserting needs a scene to insert into, and never the open asset itself:
+ * the ⋯ insert items and drag follow that; opening (the card body) always
+ * works except on the open asset's own card.
  */
-function applyInsertAvailability(card: HTMLElement, enabled: boolean): void {
+function applyInsertAvailability(card: HTMLElement, assetOpen: boolean): void {
+  const own = isOwnCard({ assetId: card.dataset.assetId, tokenId: card.dataset.tokenId });
+  const canInsert = assetOpen && !own;
   const main = card.querySelector<HTMLButtonElement>(".asset-card-main");
-  if (main) main.disabled = !enabled;
-  card.draggable = enabled;
-  card.classList.toggle("asset-card--disabled", !enabled);
+  if (main) {
+    main.disabled = own;
+    if (own) main.setAttribute("aria-current", "true");
+    else main.removeAttribute("aria-current");
+  }
+  card.draggable = canInsert;
   card
-    .querySelector<HTMLElement>('[data-action="insert-copy"]')
-    ?.setAttribute("aria-disabled", String(!enabled));
+    .querySelectorAll<HTMLElement>('[data-action^="insert-"]')
+    .forEach((item) => item.setAttribute("aria-disabled", String(!canInsert)));
 }
 
 function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
@@ -1076,21 +1062,14 @@ function createAssetCard(entry: any, visitor: boolean = false): HTMLDivElement {
   nameEl.className = "asset-card-name";
   nameEl.textContent = entry.name || `Loading… #${entry.tokenId}`;
 
-  // The card body is the primary action: Insert (visitors can only open).
+  // The card body is the primary action: open the asset in the Studio.
   const main = document.createElement("button");
   main.type = "button";
   main.className = "asset-card-main";
-  main.setAttribute(
-    "aria-label",
-    `${visitor ? "Open" : "Insert"} ${entry.name || `asset #${entry.tokenId}`}`
-  );
+  main.setAttribute("aria-label", `Open ${entry.name || `asset #${entry.tokenId}`}`);
   main.append(thumbnailEl, nameEl);
   main.addEventListener("click", () => {
-    if (visitor) {
-      void openEntryConfirmed(entry);
-      return;
-    }
-    emit(EVENTS.ASSET_ADD_LINKED_REQUESTED, buildLinkedAssetPayload(entry, "live-ref"));
+    void openEntryConfirmed(entry);
   });
   item.appendChild(main);
   // Sibling of the main button (nested buttons are invalid), overlaid by CSS.
@@ -1128,7 +1107,7 @@ function updateGalleryVisitorChrome(): void {
   const subject = libraryState.get().subjectAddress;
   const visitor = isLibraryVisitor();
   badge.hidden = !visitor;
-  updateInsertChrome();
+  updatePanelChrome();
   if (visitor && subject) {
     badge.textContent = "Read-only · public profile";
   }
@@ -1286,10 +1265,7 @@ function initAssetLibrary(): void {
     _searchTerm = search.value;
     applySearchFilter();
   });
-  document.getElementById("insertNewAssetBtn")?.addEventListener("click", () => {
-    document.getElementById("newAssetBtn")?.click();
-  });
-  updateInsertChrome();
+  updatePanelChrome();
 
   // Delegated: the gallery Connect affordance mirrors the headerbar button.
   assetLibraryBody?.addEventListener("click", (e) => {
@@ -1360,7 +1336,7 @@ on(EVENTS.ASSET_OPEN_BY_TOKEN_ID, (e) => {
 });
 
 on(EVENTS.WALLET_CONNECTED, async () => {
-  updateInsertChrome();
+  updatePanelChrome();
   const params = new URLSearchParams(window.location.search);
   const assetTokenId = params.get("asset");
   const assetId = params.get("assetId");
@@ -1397,24 +1373,15 @@ on(EVENTS.ASSET_STATE_CHANGED, (state) => {
 on(EVENTS.PENDING_EDITS_CHANGED, syncInsertState);
 
 /**
- * Reflects the open asset on the rendered cards without refetching.
- * @remarks Opening/closing flips the disabled state; a different open asset
- *   also changes which card is hidden, which re-renders from the cached
- *   entries.
+ * Reflects the open asset on the rendered cards without refetching: which
+ * card is current, and whether the insert actions are available.
  */
 function syncInsertState(): void {
-  // The notice is independent of the cards: keep it right before the first
-  // render and after disconnect too.
-  updateInsertChrome();
   if (!assetLibraryBody || !_lastRender) return;
-  if (ownCardKey() !== _lastOwnCardKey) {
-    renderSections();
-    return;
-  }
-  const enabled = isAssetOpen();
+  const assetOpen = isAssetOpen();
   assetLibraryBody
     .querySelectorAll<HTMLElement>(".asset-card")
-    .forEach((card) => applyInsertAvailability(card, enabled));
+    .forEach((card) => applyInsertAvailability(card, assetOpen));
 }
 
 on(EVENTS.WALLET_DISCONNECTED, () => {
@@ -1427,7 +1394,7 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
   if (assetLibraryBody) {
     assetLibraryBody.innerHTML = DISCONNECTED_GALLERY_HTML;
   }
-  updateInsertChrome();
+  updatePanelChrome();
 });
 
 export {

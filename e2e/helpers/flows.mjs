@@ -785,33 +785,28 @@ export async function expectComment(page, text) {
 }
 
 /**
- * Insert a gallery card into the open asset as a LIVE link (card click, no
- * dialog), or as a fork copy via the card's ⋯ menu ("Insert a copy").
+ * Insert a gallery card's asset into the open asset via the card's ⋯ menu:
+ * "Insert as live link" (live reference) or "Insert a copy" (fork).
  *
  * @param {Locator} card
  * @param {"live"|"fork"} [mode]
  */
 export async function insertAssetCard(card, mode = "live") {
-  if (mode === "live") {
-    await card.locator(SELECTORS.assetCardMain).click();
-    return;
-  }
   await card.locator(SELECTORS.assetCardMore).click();
-  await card.page().locator(SELECTORS.assetCardMenuItem("Insert a copy")).click();
+  const label = mode === "live" ? "Insert as live link" : "Insert a copy";
+  await card.page().locator(SELECTORS.assetCardMenuItem(label)).click();
 }
 
 /**
- * Open a gallery card's asset in the Studio via its ⋯ menu ("Open <name>").
+ * Open a gallery card's asset in the Studio by clicking the card.
  * When the confirm "Open another asset?" appears (unsaved/unpublished work),
  * confirm with Open.
  *
  * @param {Locator} card
- * @param {string} name
  */
-export async function openAssetCard(card, name) {
+export async function openAssetCard(card) {
   const page = card.page();
-  await card.locator(SELECTORS.assetCardMore).click();
-  await page.locator(SELECTORS.assetCardMenuItem(`Open ${name}`)).click();
+  await card.locator(SELECTORS.assetCardMain).click();
   const confirm = page.locator('.dialog-action-btn[data-value="open"]');
   try {
     await confirm.click({ timeout: 1500 });

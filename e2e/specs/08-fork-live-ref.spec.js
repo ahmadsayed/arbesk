@@ -49,7 +49,7 @@ test.describe("fork vs live-reference", () => {
     // 3. Generate the parent's own content.
     const parentGenCid = await generate(page, PROMPT);
 
-    // 4. Open gallery, find the child's card, click "Insert".
+    // 4. Open gallery, find the child's card, insert it from the ⋯ menu.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
@@ -116,7 +116,7 @@ test.describe("fork vs live-reference", () => {
     // 3. Generate the parent's own content.
     const parentGenCid = await generate(page, PROMPT);
 
-    // 4. Open gallery, find the child's card, click "Insert".
+    // 4. Open gallery, find the child's card, insert it from the ⋯ menu.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, LIVE_CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });

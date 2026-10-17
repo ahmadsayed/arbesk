@@ -824,7 +824,7 @@ describe("AI Generation sidebar", () => {
       resolve(ROOT_DIR, "frontend/src/js/ui/keyboard-help.ts"),
       "utf-8",
     );
-    for (const [n, label] of [[1, "Outline"], [2, "Insert"], [3, "Create"], [4, "Activity"]]) {
+    for (const [n, label] of [[1, "Outline"], [2, "Assets"], [3, "Create"], [4, "Activity"]]) {
       expect(src).toMatch(new RegExp("\\$\\{MOD\\}\\+" + n + "`, \"" + label));
     }
     expect(src).not.toContain("1 – 5");

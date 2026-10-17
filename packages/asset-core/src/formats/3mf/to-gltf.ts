@@ -3,7 +3,9 @@
  * @remarks The output is a self-contained glTF used only as an in-memory
  *   render representation and is never persisted. 3MF is Z-up and glTF is
  *   Y-up, so build items are parented to a root node rotated −90° about X
- *   (a proper rotation, preserving triangle winding).
+ *   (a proper rotation, preserving triangle winding). The same root node
+ *   scales the model's declared unit to glTF metres, so a CAD part (mm) and a
+ *   glTF model share one scale in a scene.
  */
 
 import type { Parsed3mf } from "./parser.ts";
@@ -16,6 +18,21 @@ const Z_UP_TO_Y_UP_QUATERNION = [
   0,
   Math.cos(Math.PI / 4),
 ];
+
+/** 3MF `unit` attribute values (3MF Core spec §3.4) → metres. */
+const UNIT_TO_METRES: Record<string, number> = {
+  micron: 1e-6,
+  millimeter: 0.001,
+  centimeter: 0.01,
+  inch: 0.0254,
+  foot: 0.3048,
+  meter: 1,
+};
+
+/** Unknown units fall back to the 3MF default, millimeter. */
+function unitScale(unit: string | undefined): number {
+  return UNIT_TO_METRES[unit ?? ""] ?? UNIT_TO_METRES.millimeter;
+}
 
 function u8ToBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== "undefined") {
@@ -197,10 +214,12 @@ function buildNodes(parsed: Parsed3mf): any[] {
     parsed.objects.map((o, index) => [o.id, index])
   );
   const itemNodes = buildItemNodes(parsed, meshIndexByObjectId);
+  const s = unitScale(parsed.unit);
   return [
     {
       name: "3mf_root",
       rotation: Z_UP_TO_Y_UP_QUATERNION,
+      ...(s !== 1 ? { scale: [s, s, s] } : {}),
       children: itemNodes.map((_, i) => i + 1),
     },
     ...itemNodes,

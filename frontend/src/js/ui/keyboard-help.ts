@@ -28,7 +28,7 @@ const SECTIONS = [
     rows: [
       [`${MOD}+B`, "Toggle sidebar"],
       [`${MOD}+1`, "Outline"],
-      [`${MOD}+2`, "Insert (link another asset)"],
+      [`${MOD}+2`, "Assets (open, or insert via ⋯)"],
       [`${MOD}+3`, "Create"],
       [`${MOD}+4`, "Activity"],
       ["Alt+←", "Go up to parent asset"],

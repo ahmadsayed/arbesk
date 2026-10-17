@@ -49,7 +49,8 @@
               background-color var(--duration-quick) var(--ease-out-3),
               box-shadow var(--duration-quick) var(--ease-out-3);
 
-  &:hover:not(.asset-card--disabled) {
+  // The open asset's own card is inert (its main button is disabled).
+  &:hover:not(:has(.asset-card-main:disabled)) {
     border-color: var(--dim-fg);
     background-color: var(--surface-overlay-hover);
   }
@@ -172,6 +173,12 @@
   &:disabled {
     cursor: not-allowed;
     opacity: 0.55;
+  }
+
+  // The open asset's own card: already open, shown as current, not faded.
+  &[aria-current="true"] {
+    cursor: default;
+    opacity: 1;
   }
 
   .asset-card-name {

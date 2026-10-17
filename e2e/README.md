@@ -143,7 +143,7 @@ Validates the full draft-save → publish → on-chain token lifecycle:
 7. Extracts the hex token ID from the URL.
 8. Resolves the on-chain `tokenURI` through the contract and walks the collection manifest to the first asset.
 9. Asserts the published asset manifest name is `Cowboy Test` and validates its structure.
-10. Opens the Insert tab, asserts the open asset's own card is hidden, starts a scratch empty asset, then asserts the published card appears for the decimal token id and opens it via the card's ⋯ → **Open <name>**.
+10. Opens the Assets tab, asserts the open asset's own card is listed as current (disabled), starts a scratch empty asset, then opens the published card (decimal token id) by clicking it.
 
 **Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, collection manifests, and gallery rendering. UI changes to any of those controls or changes to the manifest schema/versioning logic can break it.
 
@@ -214,7 +214,7 @@ Regression coverage for issue #25 lives in `test/frontend/material-editor.test.j
 Validates the two ways to reuse another collection's asset inside a parent scene:
 
 1. Publishes a child asset.
-2. Starts a fresh parent draft and uses the Insert card: a card click inserts a live link, ⋯ → **Insert a copy** inserts a fork (no dialog either way).
+2. Starts a fresh parent draft and uses the Assets card's ⋯ menu: **Insert as live link** inserts a live reference, **Insert a copy** inserts a fork (no dialog either way).
 3. **Fork (copy)** (⋯ → Insert a copy) — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
 4. **Live reference** (card click) — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
 

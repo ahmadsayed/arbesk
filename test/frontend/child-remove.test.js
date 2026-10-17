@@ -24,6 +24,7 @@ const _disposeNodeSubtree = jest.fn();
 const _deselectNodes = jest.fn();
 const _loadNode = jest.fn().mockResolvedValue({ anchor: {}, meshes: [] });
 const _getCurrentManifest = jest.fn();
+let _state = null;
 
 function setManifestNodes(nodes) {
   _getCurrentManifest.mockImplementation(() => ({ scene: { nodes } }));
@@ -54,6 +55,7 @@ async function loadModule() {
     "../../frontend/src/js/engine/scene-loader.js",
     () => ({
       loadNode: _loadNode,
+      ensureRootSceneAnchor: () => _state.rootSceneAnchor,
     })
   );
   await mock.module(
@@ -77,6 +79,7 @@ async function loadModule() {
 
   const mod = await import("../../frontend/src/js/engine/child-remove.js");
   const { state } = await import("../../frontend/src/js/engine/state.js");
+  _state = state;
   return { mod, state };
 }
 

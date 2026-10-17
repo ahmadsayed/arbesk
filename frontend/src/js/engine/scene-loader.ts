@@ -648,6 +648,17 @@ async function readSingleModelNode(
 }
 
 /**
+ * Returns the scene's root anchor, creating it when the scene has none yet
+ * (an empty draft). The Babylon scene itself is not a valid `parent`.
+ */
+function ensureRootSceneAnchor(): BABYLON.TransformNode {
+  if (!state.rootSceneAnchor) {
+    state.rootSceneAnchor = createAnchorNode("root_anchor", state.scene);
+  }
+  return state.rootSceneAnchor;
+}
+
+/**
  * Loads a freshly pushed insert node; on failure undoes the push.
  * @returns a failure reason, or null on success. Throws after rollback if the
  *   load itself throws (the caller's wrapper reports it).
@@ -710,7 +721,7 @@ async function _handleLinkedAssetDropped(event: any) {
     };
     const isSelfDrop = isSelfLinkedAssetDrop(collectionRef, detail.assetID);
 
-    // An explicit mode (Insert panel) skips the dialog; a self-drop can never
+    // An explicit mode (Assets panel ⋯ / drag) skips the dialog; a self-drop can never
     // be a live-ref, so it is downgraded to a fork instead of refused.
     let choice: "live-ref" | "fork" | null | undefined;
     if (detail.mode) {
@@ -783,7 +794,7 @@ async function _handleLinkedAssetDropped(event: any) {
     const failure = await loadInsertedNode(
       nodeEntry,
       choice,
-      state.rootSceneAnchor || state.scene
+      ensureRootSceneAnchor()
     );
     if (failure) {
       emit(EVENTS.ASSET_LINKED_INSERT_FAILED, {
@@ -870,11 +881,8 @@ async function replaceRootModelSource(
  * Creates a fresh single-node draft scene from a dropped file.
  */
 async function createRootDraftSource(nodeId: string, source: AssetSourceRef) {
-  if (!state.rootSceneAnchor) {
-    state.rootSceneAnchor = createAnchorNode("root_anchor", state.scene);
-  }
   const anchor = createAnchorNode(`anchor_${nodeId}`, state.scene);
-  anchor.parent = state.rootSceneAnchor;
+  anchor.parent = ensureRootSceneAnchor();
   state.nodeAnchors.set(nodeId, anchor);
   await loadAsset(source, anchor, nodeId);
 }
@@ -890,6 +898,7 @@ export {
   waitForPendingLinkedDrops,
   replaceRootModelSource,
   createRootDraftSource,
+  ensureRootSceneAnchor,
 };
 
 /** Tears down and re-resolves a single child_ref node in place. */

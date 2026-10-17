@@ -34,7 +34,7 @@ Full UI architecture: stack, directory map, studio shell, interaction principles
 | `frontend/src/js/engine/time-travel.ts` | Version history / manifest chain |
 | `frontend/src/js/engine/placeholders.ts` | Loading/error placeholders for token children |
 | `frontend/src/js/ui/viewport-gizmo.ts` | 2D X/Y/Z orientation overlay (top-right) |
-| `frontend/src/js/ui/asset-library.ts` | Insert panel: asset cards to insert/open (left sidebar) |
+| `frontend/src/js/ui/asset-library.ts` | Assets panel: asset cards to open (click) or insert (⋯ / drag) (left sidebar) |
 | `frontend/src/js/ui/asset-drop-zone.ts` | Drop target for dragged gallery cards |
 | `frontend/src/js/ui/chat-messages.ts` | Chat / studio editor surfaces |
 | `frontend/src/js/ui/chat-history.ts` | Chat provenance / history rendering |

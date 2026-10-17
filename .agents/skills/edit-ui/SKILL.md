@@ -24,7 +24,8 @@ switcher, New ▾ (Generate with AI / Upload model… Ctrl+O / Parametric CAD /
 separator / Empty asset Ctrl+N), asset name + `v<N> · Draft|Published`,
 Save draft, Publish (the only filled accent), network status dot + label,
 theme menu, account avatar (the network select lives inside the avatar's
-wallet popover). Studio rail: Outline (Ctrl+1) · Insert — placement picker
+wallet popover). Studio rail: Outline (Ctrl+1) · Assets — click a card to
+open it, ⋯ to insert as live link or copy, drag to insert a live link
 (Ctrl+2) · Create (Ctrl+3) · Activity (Ctrl+4). Studio lands on Create when
 no asset is open (no `asset`/`assetId`/`manifest` in the URL), without
 overwriting the stored tab; the provider select lives in Create's closed

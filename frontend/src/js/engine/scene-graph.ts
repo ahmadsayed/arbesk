@@ -29,6 +29,7 @@ import {
 } from "./scene-selection.ts";
 import {
   frameAll,
+  frameNode,
   frameSelected,
   updateCameraRangeForScene,
   updateGridCoverage,
@@ -675,6 +676,13 @@ on(EVENTS.SCENE_READY, (e: { manifestCid?: string }) => {
   } else {
     frameAll();
   }
+});
+
+// An inserted asset lands at the origin, where it can sit inside a larger
+// model: refit the zoom range to the grown scene and frame the new node.
+on(EVENTS.ASSET_LINKED_INSERTED, (e: { nodeId?: string }) => {
+  updateCameraRangeForScene();
+  if (e?.nodeId) frameNode(e.nodeId);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -27,7 +27,7 @@ Users report three areas of the Studio as confusing:
 
 - A first-time user can generate a model and insert one asset into another without
   explanation.
-- Every card click in the Insert panel does the same thing.
+- Every card click in the Assets panel does the same thing: it opens the asset.
 - No provider, key or balance UI appears before the user asks for it or a generation
   needs it.
 - The words on buttons, status text and toasts tell the user whether their work is
@@ -40,15 +40,17 @@ autosave.
 
 ## 3. Design
 
-### 3.1 Insert panel (was "Assets")
+### 3.1 Assets panel
 
-Rail tab, tooltip and panel title become **Insert** (Ctrl+2) with a "square plus"
-icon from the sprite. `data-view="library"` stays for selector stability.
+Revised 2026-10-15 after review in the running app: clicking a card **opens**
+it; inserting moves to the ⋯ menu. The rail tab, tooltip and panel title stay
+**Assets** (Ctrl+2), with a "square plus" icon from the sprite.
+`data-view="library"` stays for selector stability.
 
 Panel content, top to bottom:
 
-- Title "Insert" and one line: "Insert a live link to another asset. Changes to the
-  original show up here." (replaces "Add to Scene or drag into the viewport…").
+- Title "Assets" and one line: "Click to open. Use ⋯ to insert into the open
+  asset as a live link or a copy."
 - Search field ("Search assets…"), filtering cards by name client-side.
 - Sections **Your assets** and **Shared with you** (renamed from "My Assets" /
   "Shared"). The Owner/Editor badge is removed; the section says it.
@@ -60,25 +62,24 @@ Behaviour:
 
 | Input | Result |
 |---|---|
-| Click / Enter / Space on card | Insert a **live link** into the open asset at the origin with no dialog, select the new node, toast "Lamp inserted into Chair" with **Undo** (Undo unlinks the node through the existing child-remove path, which is itself undoable) |
-| Drag card into viewport | Insert a live link at the drop point, no dialog |
-| ⋯ → **Insert a copy** | Insert a frozen copy (today's "Fork (copy)"), no dialog |
-| ⋯ → **Open Lamp** | Open the asset, replacing the Studio contents; if there are unsaved or unpublished changes, confirm first |
-| ⋯ → **Show in Library** | Navigate to the asset in `/library` |
+| Click / Enter / Space on card | Open the asset, replacing the Studio contents; if there are unsaved or unpublished changes, confirm first. Works with or without an asset open |
+| ⋯ → **Insert as live link** | Insert a live link into the open asset at the origin with no dialog, select the new node, toast "Lamp inserted into Chair" with **Undo** |
+| ⋯ → **Insert a copy** | Insert a frozen copy (today's "Fork (copy)"), no dialog, same toast and Undo |
+| ⋯ → **Show in Library** | Navigate to `/library` |
+| Drag card into viewport | Insert a live link, no dialog |
 
-The Fork / Live reference dialog is no longer shown for Insert-panel inserts: the
-card payload carries `mode: "live-ref" | "fork"`. Drops without a mode (e.g. from
+The Fork / Live reference dialog is no longer shown for Assets-panel inserts: the
+payload carries `mode: "live-ref" | "fork"`. Drops without a mode (e.g. from
 other sources) keep the dialog.
 
-- Card accessible name: "Insert Lamp". ⋯ is a separate `<button>` ("More actions
+- Card accessible name: "Open Lamp". ⋯ is a separate `<button>` ("More actions
   for Lamp") using `initMenuButton()`.
 - Download, Delete and Burn Token are removed from cards; they remain in the
   Library details pane.
-- **No asset open:** cards are disabled and dimmed; a status block reads "Open or
-  create an asset to insert into it." with a **New empty asset** button (same action
-  as New ▾ → Empty asset).
-- **Inserting an asset into itself** (or an ancestor) stays blocked by the existing
-  cycle check; the card for the open asset is not shown.
+- **No asset open** (and no named empty draft): the two insert items are disabled
+  and dragging is off; opening still works.
+- **The open asset's own card** is listed and marked current (`aria-current`):
+  it can't be reopened, inserted into itself, or dragged.
 - **Visitor (read-only profile):** title "Browse", the line reads "Read-only public
   profile. Open an asset to view it.", card click opens, ⋯ shows only Show in Library.
 
@@ -151,7 +152,7 @@ Key on demand:
 
 | Area | Files |
 |---|---|
-| Insert panel | `frontend/src/js/ui/asset-library.ts` (card builder, footer, activation, sections, search, no-asset and visitor states), `frontend/src/pug/includes/studio-sidebar.pug`, `frontend/public/icons.svg` (square-plus symbol), panel SCSS under `frontend/src/scss/components/` |
+| Assets panel | `frontend/src/js/ui/asset-library.ts` (card builder, footer, activation, sections, search, insert availability and visitor states), `frontend/src/pug/includes/studio-sidebar.pug`, `frontend/public/icons.svg` (square-plus symbol), panel SCSS under `frontend/src/scss/components/` |
 | Create | `frontend/src/js/ui/create-panel.ts` (Advanced, key-on-demand, mock gating), `frontend/src/js/ui/new-menu.ts` (order), `frontend/src/pug/includes/studio-sidebar.pug`, `frontend/src/pug/includes/studio-main.pug` (empty-viewport card), default-tab selection in the sidebar module |
 | Save draft / Publish | `frontend/src/pug/includes/header.pug`, `frontend/src/js/ui/asset-save.ts` (toasts), `frontend/src/js/ui/asset-chrome.ts` (status meta), `frontend/src/js/state/unsaved-changes.ts` (draft-vs-published source), `frontend/src/js/ui/keyboard-help.ts` |
 | E2E | `e2e/helpers/studio-selectors.mjs`, `e2e/helpers/manifest.mjs`, affected specs |

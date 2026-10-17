@@ -65,7 +65,7 @@ export const SELECTORS = {
   composerAdvancedSummary: "#composerAdvanced > summary",
   tierSelect: "#tierSelect",
   assetNameDisplay: "#assetNameDisplay",
-  // Studio "Insert" tab (formerly Assets / Gallery): placement picker
+  // Studio "Assets" tab: click opens; ⋯ inserts as live link or copy
   gallerySwitcherBtn: '[data-view="library"]',
   createSwitcherBtn: '[data-view="chat"]',
   assetLibraryBody: "#assetLibraryBody",
@@ -75,7 +75,7 @@ export const SELECTORS = {
   assetCardMain: ".asset-card-main",
   assetCardMore: ".asset-card-more",
   /**
-   * Item in the card's ⋯ menu ("Insert a copy", "Open <name>", "Show in Library").
+   * Item in the card's ⋯ menu ("Insert as live link", "Insert a copy", "Show in Library").
    * @param {string} label
    * @returns {string}
    */

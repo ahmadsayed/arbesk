@@ -94,23 +94,26 @@ test.describe("save and publish", () => {
     // 4. Open the Gallery and verify the published asset card appears.
     // The card is scoped to THIS token's on-chain (decimal) id and shows
     // the published asset name.
-    // The Insert list hides the open asset's own card, so it is absent now;
-    // starting a fresh empty asset frees the slot and the card appears.
+    // The open asset's own card is listed but marked current (it can't be
+    // reopened or inserted into itself); starting a fresh empty asset makes it
+    // an ordinary card again.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const assetCard = assetCardLocator(page, tokenIdDec, ASSET_NAME);
-    await expect(assetCard).toHaveCount(0);
+    await expect(assetCard).toHaveCount(1);
+    await expect(assetCard.locator(SELECTORS.assetCardMain)).toHaveAttribute("aria-current", "true");
+    await expect(assetCard.locator(SELECTORS.assetCardMain)).toBeDisabled();
     await startEmptyAsset(page);
     await page.fill(SELECTORS.dialogInput, "Scratch Asset");
     await page.click(SELECTORS.dialogConfirmBtn);
     await page.click(SELECTORS.gallerySwitcherBtn);
-    await expect(assetCard).toHaveCount(1);
+    await expect(assetCard.locator(SELECTORS.assetCardMain)).toBeEnabled();
     await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
       ASSET_NAME,
     );
 
-    // The card's ⋯ menu "Open <name>" opens the asset (a card click inserts).
-    // The gallery opens by decimal id, so assert the ?asset value numerically.
-    await openAssetCard(assetCard, ASSET_NAME);
+    // Clicking the card opens the asset. The gallery opens by decimal id, so
+    // assert the ?asset value numerically.
+    await openAssetCard(assetCard);
     await page.waitForURL((url) => {
       const a = new URL(url.toString()).searchParams.get("asset");
       return a != null && BigInt(a) === BigInt(tokenIdHex);
@@ -119,8 +122,9 @@ test.describe("save and publish", () => {
       ASSET_NAME,
     );
 
-    // 5. The now-open asset's own card is hidden from the Insert list again.
+    // 5. The now-open asset's card is listed again, marked current.
     await page.click(SELECTORS.gallerySwitcherBtn);
-    await expect(assetCard).toHaveCount(0);
+    await expect(assetCard).toHaveCount(1);
+    await expect(assetCard.locator(SELECTORS.assetCardMain)).toHaveAttribute("aria-current", "true");
   });
 });

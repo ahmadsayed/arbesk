@@ -31,7 +31,7 @@ test.describe("nesting / linked child assets", () => {
 
     // ── 1. Generate and publish the child ────────────────────────────
     // Publishes into the default collection; the gallery card caches
-    // firstAssetId for drag-drop / "Insert" routing.
+    // firstAssetId for drag-drop / ⋯ insert routing.
     const childTokenHex = await generateSaveAndPublish(
       page,
       CHILD_NAME,

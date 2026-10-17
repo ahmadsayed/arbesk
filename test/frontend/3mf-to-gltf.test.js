@@ -54,6 +54,28 @@ describe("parsed3mfToGltf", () => {
     expect(gltf.nodes[1].matrix).toBeUndefined();
   });
 
+  it("scales the root node from the 3MF unit to glTF metres", async () => {
+    const gltf = await loadBoxGltf(); // box.3mf declares unit="millimeter"
+    const root = gltf.nodes[gltf.scenes[0].nodes[0]];
+    expect(root.scale).toEqual([0.001, 0.001, 0.001]);
+  });
+
+  it("maps every 3MF unit to its metre factor", async () => {
+    const { parsed3mfToGltf } = await import(
+      "@arbesk/asset-core/formats/3mf/to-gltf.js"
+    );
+    const rootScale = (unit) =>
+      parsed3mfToGltf({ unit, objects: [], basematerials: [], items: [] })
+        .nodes[0].scale;
+    expect(rootScale("micron")).toEqual([1e-6, 1e-6, 1e-6]);
+    expect(rootScale("centimeter")).toEqual([0.01, 0.01, 0.01]);
+    expect(rootScale("inch")).toEqual([0.0254, 0.0254, 0.0254]);
+    expect(rootScale("foot")).toEqual([0.3048, 0.3048, 0.3048]);
+    expect(rootScale("meter")).toBeUndefined();
+    // Unknown units fall back to the 3MF default (millimeter).
+    expect(rootScale("furlong")).toEqual([0.001, 0.001, 0.001]);
+  });
+
   it("decodes back to the original vertex and index data", async () => {
     const gltf = await loadBoxGltf();
     const base64 = gltf.buffers[0].uri.split(",")[1];

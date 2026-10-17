@@ -18,7 +18,7 @@ Update + run the suite before merging any change that touches:
 - **Wallet + session**: connect/disconnect, SIWE, the discovery flow.
 - **Generation**: prompt input, Generate button, chat status text (`Model carved via mock`), provider/tier selects (the provider select sits inside the closed `#composerAdvanced` details: open it first, e.g. `selectProvider()` in `flows.mjs`).
 - **Save / publish / republish**: Save draft, Publish, the Name dialog, version semantics, thumbnail capture.
-- **Gallery cards**: card markup, `data-token-id`, `.asset-card-main` (card click inserts a live link, no dialog), `.asset-card-more` ⋯ menu (Insert a copy / Open <name> / Show in Library).
+- **Gallery cards**: card markup, `data-token-id`, `.asset-card-main` (card click opens the asset; the open asset's own card is `aria-current` and disabled), `.asset-card-more` ⋯ menu (Insert as live link / Insert a copy / Show in Library; no dialog).
 - **Outliner**: node rows, child-node labels, selection behavior.
 - **Parametric editor**: component color editor, the node-selection → editor path.
 - **Nesting**: Insert (card click = live link, ⋯ → Insert a copy = fork), dive (`#inspectorDiveBtn`), back button, breadcrumb, the `nesting:*` events.

@@ -11,7 +11,7 @@ import { getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
 import { state } from "./state.ts";
 import { getManifestNodes } from "./transforms.ts";
 import { disposeNodeSubtree } from "./cleanup.ts";
-import { loadNode } from "./scene-loader.ts";
+import { ensureRootSceneAnchor, loadNode } from "./scene-loader.ts";
 import { deselectNodes } from "./scene-selection.ts";
 import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
@@ -53,9 +53,8 @@ const _inFlightReloads = new Map<string, Promise<void>>();
 
 function reloadChildAssetNode(node: any): void {
   if (!node?.child_ref && !node?.source) return;
-  const parent = state.rootSceneAnchor || state.scene;
-  if (!parent) return;
-  const p = loadNode(node, parent, 0, new Set())
+  if (!state.rootSceneAnchor && !state.scene) return;
+  const p = loadNode(node, ensureRootSceneAnchor(), 0, new Set())
     .then(() => {
       _inFlightReloads.delete(node.node_id);
     })
