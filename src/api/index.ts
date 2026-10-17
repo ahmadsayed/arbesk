@@ -21,6 +21,7 @@ import commentsRoutes from "./routes/comments.ts";
 import ipfsRoutes from "./routes/ipfs.ts";
 import contractsRoutes from "./routes/contracts.ts";
 import indexerRoutes from "./routes/indexer.ts";
+import featuredRoutes from "./routes/featured.ts";
 import openapiRoutes from "./routes/openapi.ts";
 import testUtilsRoutes from "./routes/test-utils.ts";
 import paymasterRoutes from "./routes/paymaster.ts";
@@ -99,6 +100,7 @@ export default (deps: ApiDeps) => {
   // ─── Token Ownership Indexer ───────────────────────────────────────────────
 
   v1.route("/indexer", indexerRoutes(storage));
+  v1.route("/featured", featuredRoutes(storage));
 
   // ─── CDP Paymaster Proxy ───────────────────────────────────────────────────
 

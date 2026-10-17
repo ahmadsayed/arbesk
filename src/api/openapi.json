@@ -823,6 +823,42 @@
         }
       }
     },
+    "/featured": {
+      "get": {
+        "tags": ["Indexer"],
+        "summary": "List featured assets",
+        "description": "Curated landing-page assets (src/api/featured-assets.json), resolved live from the chain and IPFS and cached for 5 minutes. Entries that can't be read are omitted.",
+        "operationId": "getFeaturedAssets",
+        "responses": {
+          "200": {
+            "description": "Featured assets in curated order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "chainId": { "type": "integer" },
+                          "tokenId": { "type": "string" },
+                          "assetId": { "type": "string" },
+                          "name": { "type": "string" },
+                          "creator": { "type": "string", "pattern": "^0x[a-f0-9]{40}$" },
+                          "thumbnailUrl": { "type": ["string", "null"] }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/indexer/owned": {
       "get": {
         "tags": ["Indexer"],

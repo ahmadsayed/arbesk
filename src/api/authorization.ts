@@ -109,3 +109,11 @@ const authz = createAuthz({
 });
 
 export const { checkAssetAccess, authorizeAssetAccess, getTokenUri } = authz;
+
+/** Current owner of a collection token (e.g. the creator shown on a featured card). */
+export async function getTokenOwner(
+  tokenId: string | number,
+  chainId: number | null,
+): Promise<string> {
+  return resolveContract(chainId).chain.ownerOf(String(tokenId));
+}

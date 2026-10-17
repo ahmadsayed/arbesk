@@ -5,6 +5,7 @@
  */
 import { initPromptForm } from "./prompt-form.ts";
 import { initVersionDemo } from "./version-demo.ts";
+import { initFeatured } from "./featured.ts";
 
 // Mirrors ui/testnet-banner.ts (Base Sepolia).
 const BASE_SEPOLIA = 84532;
@@ -34,3 +35,6 @@ if (form instanceof HTMLFormElement) {
 
 const demo = document.getElementById("versionDemo");
 if (demo) initVersionDemo(demo);
+
+const featured = document.getElementById("featured");
+if (featured) void initFeatured(featured);

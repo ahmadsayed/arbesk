@@ -493,6 +493,60 @@ html:has(.landing-page),
   }
 
   // ─── 4D demo ───
+  // "Made in Arbesk": live featured assets (js/landing/featured.ts)
+  .landing-featured[hidden] { display: none; }
+  .landing-hero + .landing-featured { padding-top: 48px; }
+
+  .landing-featured-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 24px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .landing-featured-card {
+    display: grid;
+    gap: 6px;
+    color: inherit;
+    text-decoration: none;
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
+      border-radius: 12px;
+    }
+
+    &:hover .landing-featured-thumb { border-color: var(--dim-fg); }
+  }
+
+  .landing-featured-thumb {
+    display: block;
+    aspect-ratio: 16 / 9;
+    margin-bottom: 6px;
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    background: var(--raised-bg);
+    transition: border-color 160ms ease;
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  .landing-featured-name { font-weight: 600; }
+
+  .landing-featured-creator {
+    color: var(--dim-fg);
+    font-size: 12px;
+  }
+
+  .landing-featured,
   .landing-demo {
     display: grid;
     gap: 40px;
@@ -501,6 +555,7 @@ html:has(.landing-page),
     padding: 120px 16px 0;
   }
 
+  .landing-featured-head,
   .landing-demo-head {
     display: flex;
     flex-wrap: wrap;
@@ -727,6 +782,7 @@ html:has(.landing-page),
   // ─── Narrow screens ───
   @media (max-width: 720px) {
     .landing-header { padding: 0 16px; }
+    .landing-featured,
     .landing-demo { padding-top: 96px; }
     .landing-demo-stage { aspect-ratio: 1 / 1; }
 

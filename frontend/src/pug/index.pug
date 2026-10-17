@@ -63,6 +63,14 @@ html(lang="en")
               i
               span v3
 
+        //- Filled from /api/v1/featured by js/landing/featured.ts; stays hidden
+        //- until at least one card renders.
+        section#featured.landing-featured(aria-labelledby="featuredTitle" hidden)
+          .landing-featured-head
+            h2#featuredTitle Made in Arbesk.
+            p Real assets, published by the people who made them. Open one to look around.
+          ul.landing-featured-grid
+
         section#cad.landing-track.landing-track-cad(aria-labelledby="cadTitle", data-cad-only)
           .landing-track-copy
             span.landing-track-kicker For makers
