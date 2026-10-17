@@ -15,6 +15,7 @@ import {
   getActiveAssetId,
 } from "@arbesk/asset-core/domain/asset.js";
 import { walletState } from "../state/wallet-state.ts";
+import { getRenderableMeshes, getWorldBounds } from "./transforms.ts";
 
 const STORAGE_PREFIX = "arbesk:cameraPose:";
 const SAVE_DEBOUNCE_MS = 1000;
@@ -189,13 +190,65 @@ export function initCameraPersistence(camera: BABYLON.ArcRotateCamera) {
   });
 }
 
+/** The loaded model's centre and size, as the camera range sees it. */
+interface ModelExtent {
+  center: { x: number; y: number; z: number };
+  size: { x: number; y: number; z: number };
+}
+
 /**
- * True when a stored pose exists for the currently-open asset.
- * @remarks Read-only — does not apply, flush, or settle.
+ * True when a stored pose no longer fits the loaded model.
+ * @remarks Poses outlive the geometry they were saved for: 3MF parts once
+ *   rendered 1000× larger (millimetres as scene units) and older ones were
+ *   placed ~20 m up, so their saved views now point at empty space. A pose is
+ *   stale when its radius is beyond the zoom range updateCameraRangeForScene
+ *   allows for this model, or when its target is so far from the model that
+ *   the model is out of view (further than the camera distance, with a
+ *   10×-size margin).
+ */
+function isStaleCameraPose(pose: StoredCameraPose, extent: ModelExtent): boolean {
+  const maxDim = Math.max(extent.size.x, extent.size.y, extent.size.z);
+  const maxRadius = Math.max(50, maxDim * 10); // mirrors updateCameraRangeForScene
+  if (pose.radius > maxRadius * 1.01) return true;
+  const [tx, ty, tz] = pose.target;
+  const offset = Math.hypot(
+    tx - extent.center.x,
+    ty - extent.center.y,
+    tz - extent.center.z
+  );
+  return offset > Math.max(maxDim * 10, pose.radius);
+}
+
+/** World extent of the scene's renderable, non-chrome meshes, if any. */
+function _sceneExtent(): ModelExtent | null {
+  const meshes = (state.scene?.meshes ?? []).filter(
+    (m: BABYLON.AbstractMesh) => m && !m.isDisposed() && !m.metadata?.isViewportChrome
+  );
+  const renderable = getRenderableMeshes(meshes);
+  return renderable.length > 0 ? getWorldBounds(renderable) : null;
+}
+
+/**
+ * True when a usable stored pose exists for the currently-open asset.
+ * @remarks Does not apply, flush, or settle. A stale pose (see
+ *   isStaleCameraPose) is forgotten here, so the caller frames the asset
+ *   instead of restoring a view of empty space.
  */
 export function hasStoredCameraPose(fallbackCid?: string): boolean {
   const key = _poseStorageKey(fallbackCid ?? null);
-  return key ? _readPose(key) !== null : false;
+  const pose = key ? _readPose(key) : null;
+  if (!key || !pose) return false;
+  const extent = _sceneExtent();
+  if (extent && isStaleCameraPose(pose, extent)) {
+    console.log(`[CAMERA] discarding stale stored pose | key=${key} radius=${pose.radius}`);
+    try {
+      localStorage.removeItem(STORAGE_PREFIX + key);
+    } catch {
+      // Best-effort, same as writes — storage may be unavailable.
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
