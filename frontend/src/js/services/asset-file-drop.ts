@@ -136,7 +136,7 @@ async function _handleAssetFileDropped(detail: any): Promise<void> {
  * Event-bus entry point for ASSET_FILE_DROPPED.
  * @remarks Tracks the async work so a save can wait for it.
  */
-export function handleAssetFileDropped(event: any): Promise<void> {
+function handleAssetFileDropped(event: any): Promise<void> {
   const p = _handleAssetFileDropped(event)
     .catch((err) => {
       warn("[DROP] file drop failed:", err?.message || err);

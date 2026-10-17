@@ -247,7 +247,7 @@ interface LedgerPanelComponent {
 /**
  * Alpine data factory for the ledger panel.
  */
-export function ledgerPanel(): LedgerPanelComponent {
+function ledgerPanel(): LedgerPanelComponent {
   return {
     /** View-model rows for the x-for template, honoring the opType filter. */
     get rows() {

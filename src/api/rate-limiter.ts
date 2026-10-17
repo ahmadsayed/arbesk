@@ -10,14 +10,14 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context, MiddlewareHandler } from "hono";
 
 /** Window applied when a spec does not name one. */
-export const DEFAULT_WINDOW_MS = 60 * 1000;
+const DEFAULT_WINDOW_MS = 60 * 1000;
 
 const MINUTE_MS = 60 * 1000;
 const QUARTER_HOUR_MS = 15 * MINUTE_MS;
 const HOUR_MS = 60 * MINUTE_MS;
 
 /** One limiter's policy. */
-export interface LimiterSpec {
+interface LimiterSpec {
   /** Read per request, so an operator override applies without a restart. */
   max: () => number;
   windowMs?: number;
@@ -30,7 +30,7 @@ export interface LimiterSpec {
  * @remarks `max` is always a function, never a bare number: a number would be
  *   captured at module load, which is before a test can set its env var.
  */
-export const LIMITER_SPECS: Record<string, LimiterSpec> = {
+const LIMITER_SPECS: Record<string, LimiterSpec> = {
   uploadUrl: {
     max: () => Number(process.env.UPLOAD_URL_RATE_LIMIT_MAX || 20),
     message: "Upload credential rate limit exceeded.",
@@ -116,7 +116,7 @@ export const LIMITER_SPECS: Record<string, LimiterSpec> = {
  * @param body The parsed request body, or anything else.
  * @returns True when a non-mock provider key was supplied.
  */
-export function isByokBody(body: unknown): boolean {
+function isByokBody(body: unknown): boolean {
   const { provider, providerKey } = (body ?? {}) as {
     provider?: unknown;
     providerKey?: unknown;

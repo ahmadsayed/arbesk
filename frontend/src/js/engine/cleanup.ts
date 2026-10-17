@@ -71,11 +71,6 @@ export function stagePendingSourceOverride(
   notifyPendingEditsChanged();
 }
 
-export function clearPendingSourceOverride(nodeId: string) {
-  state.pendingSourceOverrides.delete(nodeId);
-  notifyPendingEditsChanged();
-}
-
 /**
  * Disposes a node's meshes and animation groups while keeping its anchor.
  * @remarks The anchor carries the node's transform and parent linkage.

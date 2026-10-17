@@ -51,57 +51,31 @@ import { createRenderScheduler } from "./render-scheduler.ts";
 // Re-exports — backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-export { state, DEFAULT_WOOD_COLOR, MAX_CHILD_ASSET_DEPTH } from "./state.ts";
+export { state } from "./state.ts";
 
 export {
-  extractCid,
-  detectAssetFormat,
-  getManifestNodes,
-  applyTransformMatrix,
-  applyDefaultMaterial,
-  getRenderableMeshes,
-  getWorldBounds,
-  centerImportedAsset,
-} from "./transforms.ts";
-
-export { createPlaceholder, disposePlaceholder } from "./placeholders.ts";
-
-export {
-  disposeNode,
-  disposeNodeContent,
-  disposeNodeSubtree,
   clearScene,
   getPendingChildRefs,
   getPendingChildRefRemovals,
   clearPendingChildRefRemovals,
   getPendingPostProcessorEdits,
   clearPendingPostProcessorEdits,
-  clearPendingPostProcessorEdit,
   getPendingTransformEdits,
   clearPendingTransformEdits,
-  clearPendingTransformEdit,
   getPendingSourceOverrides,
   clearPendingSourceOverrides,
-  stagePendingSourceOverride,
-  clearPendingSourceOverride,
 } from "./cleanup.ts";
 
 export {
   loadAssetManifest,
   loadCollectionManifest,
-  loadNode,
-  loadAsset,
   waitForPendingLinkedDrops,
-  replaceRootModelSource,
-  createRootDraftSource,
 } from "./scene-loader.ts";
 export {
   deselectAll,
   selectNodeById,
   selectSubMesh,
 } from "./scene-selection.ts";
-
-// Exported for scene-loader.js
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Theme listener
@@ -497,10 +471,6 @@ export function initEngine() {
 // Node accessors
 // ═══════════════════════════════════════════════════════════════════════════
 
-function getNodeAnchor(nodeId: string) {
-  return state.nodeAnchors.get(nodeId) || null;
-}
-
 function getNodeMeshes(nodeId: string) {
   return state.nodeMeshes.get(nodeId) || [];
 }
@@ -690,7 +660,6 @@ on(EVENTS.ASSET_LINKED_INSERTED, (e: { nodeId?: string }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export {
-  getNodeAnchor,
   getNodeMeshes,
   getNodeSubMeshes,
   getNodeChildRef,

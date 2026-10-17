@@ -44,7 +44,7 @@ const TOOLBAR_ID = "transformToolbar";
 /**
  * Toggles the viewport ground grid and in-scene axis lines.
  */
-export function toggleGrid(): boolean {
+function toggleGrid(): boolean {
   const grid = state.scene?.getMeshByName("groundGrid");
   if (!grid) return false;
   const visible = !grid.isEnabled();

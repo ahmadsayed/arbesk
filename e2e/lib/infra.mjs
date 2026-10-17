@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { execSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -43,10 +43,10 @@ function deriveBackendPort(root, worktreeId) {
   return 30000 + (parseInt(hash.slice(0, 8), 16) % 10000);
 }
 
-export const WORKTREE_ID = deriveWorktreeId(ROOT);
+const WORKTREE_ID = deriveWorktreeId(ROOT);
 
 // Docker Compose project names are restricted to [a-z0-9_-].
-export const COMPOSE_PROJECT = `arbesk-${WORKTREE_ID.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
+const COMPOSE_PROJECT = `arbesk-${WORKTREE_ID.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
 
 const BACKEND_PORT_BASE = deriveBackendPort(ROOT, WORKTREE_ID);
 
@@ -93,7 +93,6 @@ export function portsForWorker(i) {
 }
 
 const CURRENT_WORKER_INDEX = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
-export const BACKEND_PORT = portsForWorker(CURRENT_WORKER_INDEX).backendPort;
 export const BACKEND_URL = portsForWorker(CURRENT_WORKER_INDEX).backendUrl;
 export const HARDHAT_RPC = portsForWorker(CURRENT_WORKER_INDEX).hardhatRpc;
 export const IPFS_GATEWAY = portsForWorker(CURRENT_WORKER_INDEX).ipfsGatewayUrl;
@@ -104,7 +103,7 @@ export const NOSTR_URL = portsForWorker(CURRENT_WORKER_INDEX).nostrUrl;
 // spawned backend pid, whether we started Docker) cannot be shared via module
 // scope - it must round-trip through a file. Keep the file per-worktree so
 // concurrent runs from different worktrees do not clobber each other.
-export const STATE_FILE = path.join(
+const STATE_FILE = path.join(
   os.tmpdir(),
   `arbesk-e2e-state-${WORKTREE_ID}.json`,
 );
@@ -140,27 +139,6 @@ export function run(cmd, { env = process.env, timeout = 120000 } = {}) {
       else reject(new Error(`Exit code ${code}: ${cmd}`));
     });
   });
-}
-
-/**
- * Check whether a Docker Compose service is running for the given project.
- * Defaults to this worktree's project. Using the project name isolates
- * worktrees and parallel workers from each other.
- */
-export function isServiceRunning(service, composeProject = COMPOSE_PROJECT) {
-  try {
-    const out = execSync(
-      `docker compose -p "${composeProject}" ps --services --filter "status=running"`,
-      { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
-    );
-    return out
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .includes(service);
-  } catch {
-    return false;
-  }
 }
 
 export function writeState(state) {

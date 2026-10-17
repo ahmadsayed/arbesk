@@ -286,7 +286,7 @@ export async function resolveChildRef(
 }
 
 /** Result of looking up an assetID inside a collection's `assets` map. */
-export type AssetIdLookup =
+type AssetIdLookup =
   | { kind: "missing"; value: null }
   | { kind: "cid"; value: string }
   | { kind: "collection"; value: Record<string, any> };
@@ -295,7 +295,7 @@ export type AssetIdLookup =
  * Looks up an assetID inside a collection's `assets` map.
  * @param assetsMap - the collection manifest's `assets` field.
  */
-export function resolveAssetIdFromCollection(
+function resolveAssetIdFromCollection(
   assetsMap: Record<string, any> | null,
   assetID: string
 ): AssetIdLookup {

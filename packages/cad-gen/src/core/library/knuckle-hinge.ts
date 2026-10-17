@@ -202,7 +202,7 @@ function inPlacePin(
  * The most segments (2..limit) whose shortest knuckle still holds a captive pin.
  * @returns 2 when even two segments are too short - the caller then refuses.
  */
-export function maxSegsForPins(
+function maxSegsForPins(
   length: number, gap: number, segRatio: number, pinDiam: number, limit: number,
 ): number {
   let most = 2;

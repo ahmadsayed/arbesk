@@ -149,25 +149,6 @@ export function assertPublishedManifest(manifest) {
 }
 
 /**
- * Validates an optional comments archive CID stored in the manifest.
- * The archive is created on republish only when the asset has comments,
- * so its absence is valid; when present it must be a non-empty string.
- */
-export function assertCommentsArchive(manifest) {
-  if (
-    manifest.comments_archive_cid === undefined ||
-    manifest.comments_archive_cid === null
-  )
-    return;
-  if (
-    typeof manifest.comments_archive_cid !== "string" ||
-    !manifest.comments_archive_cid
-  ) {
-    throw new Error("Invalid comments_archive_cid in manifest");
-  }
-}
-
-/**
  * Validate a collection manifest's shape: type, assets map, version chain.
  * Does not assert on individual asset manifest contents - use
  * assertGenerationManifest/assertSavedManifest on the resolved asset CID

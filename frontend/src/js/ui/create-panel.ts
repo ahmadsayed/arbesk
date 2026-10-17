@@ -639,7 +639,7 @@ function syncCollectionSelect() {
 // ─── Chat Messages ───
 
 // addChatMessage / addAssetMessage live in ./chat-messages.ts and are
-// imported above; addChatMessage is re-exported at the bottom of this file.
+// imported above.
 
 /** Live asset-message handles keyed by pending-generation id. */
 const assetMessages = new Map<string, AssetMessageHandle>();
@@ -3279,4 +3279,4 @@ if (walletState.get().walletAddress) {
 }
 
 // ─── Exports ───
-export { addChatMessage, generationErrorMessage };
+export { generationErrorMessage };

@@ -299,7 +299,7 @@ interface DialogComponent {
 /**
  * Alpine data factory for the shared dialog host.
  */
-export function dialog(): DialogComponent {
+function dialog(): DialogComponent {
   return {
     get open() {
       return state().open;

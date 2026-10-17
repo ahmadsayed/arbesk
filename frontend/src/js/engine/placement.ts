@@ -17,7 +17,7 @@ export interface Bounds {
 }
 
 /** Below this, a selection counts as already on the floor. */
-export const GROUND_EPS = 1e-6;
+const GROUND_EPS = 1e-6;
 
 /** Rotation gizmo snap: 15°. */
 export const ROTATE_SNAP = Math.PI / 12;

@@ -175,7 +175,7 @@ export const CAD_DEFAULT_REQUEST_LIMITS: CadRequestLimits = {
  * Head-room over the worst case: prompt assembly, response serialization and the
  * skew between admission and the first provider call.
  */
-export const CAD_LOCK_TTL_MARGIN_MS = 30000;
+const CAD_LOCK_TTL_MARGIN_MS = 30000;
 
 /**
  * Derives the in-flight lock TTL from the limits that bound the request.
@@ -205,7 +205,7 @@ const DEFAULT_LOCK_TTL_MS = lockTtlFor(CAD_DEFAULT_REQUEST_LIMITS);
  * @param ttlMs Raw TTL from the caller, usually parsed from the environment.
  * @returns The TTL to enforce: the input when usable, otherwise the derived one.
  */
-export function lockTtlOf(ttlMs: number): number {
+function lockTtlOf(ttlMs: number): number {
   if (isUsableBound(ttlMs)) return ttlMs;
   reportBadValue("lock TTL", ttlMs, "using the derived worst-case TTL");
   return DEFAULT_LOCK_TTL_MS;

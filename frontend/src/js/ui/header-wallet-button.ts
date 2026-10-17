@@ -56,7 +56,7 @@ interface HeaderWalletComponent {
 /**
  * Alpine data factory for the header wallet controls (`x-data="headerWallet"`).
  */
-export function headerWallet(): HeaderWalletComponent {
+function headerWallet(): HeaderWalletComponent {
   return {
     get connected() {
       return !!hwState().address;

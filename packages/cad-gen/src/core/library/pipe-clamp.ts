@@ -24,7 +24,7 @@
  */
 import type { ManifoldModule } from "../../types.ts";
 
-export const PIPE_CLAMP_DEFAULTS = {
+const PIPE_CLAMP_DEFAULTS = {
   /** Pipe OUTSIDE diameter. */
   pipeDiameter: 25,
   /** Clamp length along the pipe; the halves stand this tall. */

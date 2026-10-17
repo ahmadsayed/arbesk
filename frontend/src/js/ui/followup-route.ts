@@ -39,14 +39,14 @@ export type FollowupPlan =
   | { kind: "ask"; options: FollowupOption[]; animations: string[]; inPlace: boolean };
 
 /** Confidence to open a confirming dialog (retopo, split, rig, animate) or offer a new model. */
-export const DIALOG_CONFIDENCE = 0.6;
+const DIALOG_CONFIDENCE = 0.6;
 /**
  * Confidence to retexture straight away.
  * @remarks Measured: clear texture requests land at 1.00, "make it look
  *   scary" at 0.36 - between them, asking costs one click, a wrong retexture
  *   costs credits.
  */
-export const RETEXTURE_CONFIDENCE = 0.8;
+const RETEXTURE_CONFIDENCE = 0.8;
 /** How many options an "ask" offers. */
 const ASK_OPTIONS = 2;
 

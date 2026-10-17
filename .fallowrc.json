@@ -19,7 +19,8 @@
     // the import graph cannot see.
     "frontend/src/js/workers/cad-worker.ts",
     "frontend/scripts/*.js",
-    "frontend/src/scss/**/*.scss",
+    // render-scss.js compiles styles.scss by path; partials resolve via @use.
+    "frontend/src/scss/styles.scss",
     "blockchain/hardhat.config.js",
     "blockchain/scripts/*.js",
     "scripts/*.mjs",
@@ -29,23 +30,14 @@
     // Neither is imported, so the graph cannot see them.
     "test/bun.setup.js",
     "test/helpers/dom.js",
-    // test/frontend/helpers/* are imported by specific test files (edit-mode.js
-    // helper by gizmo tests and similar); the runner skips helpers/*.
-    "test/frontend/helpers/*.js"
+    // Fixture generator run by hand (node e2e/fixtures/make-animated-glb.mjs).
+    "e2e/fixtures/make-animated-glb.mjs"
   ],
   "ignorePatterns": [
     "frontend/src/js/vendor/**",
-    "e2e/**",
     "docs/diagrams/**"
   ],
-  "ignoreExportsUsedInFile": true,
-  "publicPackages": [
-    "@arbesk/asset-core",
-    "@arbesk/wallet",
-    "@arbesk/authz",
-    "@arbesk/ai-asset-gen",
-    "@arbesk/cad-gen"
-  ],
+  "ignoreExportsUsedInFile": false,
   "boundaries": {
     "zones": [
       {
@@ -81,7 +73,6 @@
     // blockchain/ is a standalone npm package (undeclared workspace) with
     // dotenv in its own package.json - fallow cannot see that manifest.
     "dotenv",
-    "esbuild",
     "ethers",
     "hardhat",
     "istanbul-lib-coverage",
@@ -91,16 +82,13 @@
     "prettier",
     "pug",
     "sass",
-    "shelljs",
-    "upath",
-    "v8-to-istanbul",
     "viem",
     "workerpool"
   ],
   "ignoreExports": [
     {
       "file": "packages/asset-core/src/domain/editors.ts",
-      "exports": ["EditorEntry", "MAX_EDITORS_PER_TOKEN", "computeRoot", "getProof", "makeLeaf"]
+      "exports": ["EditorEntry", "MAX_EDITORS_PER_TOKEN", "computeRoot", "getProof", "makeLeaf", "clearEditorCache"]
     },
     {
       "file": "packages/wallet/src/merkle.ts",
@@ -113,10 +101,6 @@
     {
       "file": "frontend/src/js/state/wallet-state.ts",
       "exports": ["_resetForTesting"]
-    },
-    {
-      "file": "frontend/src/js/state/edit-mode.ts",
-      "exports": ["_resetEditModeForTesting"]
     },
     {
       "file": "packages/asset-core/src/domain/asset-store.ts",
@@ -139,44 +123,6 @@
       "exports": ["getCollectionAssets", "listCollections", "resolveAssetByName", "resolveCollectionByName"]
     },
 
-    // Backward-compat re-export barrels / modules (scene-graph re-export block,
-    // wallet.ts barrel, token-resolver + create-panel re-exports): the names are
-    // consumed via their canonical modules, so the re-exports read as unused.
-    {
-      "file": "frontend/src/js/blockchain/wallet.ts",
-      "exports": ["autoConnectWallet", "authenticateUser", "getActiveConnectionSource", "NETWORKS", "web3Provider", "payForGenerationWithUSDC", "recordGeneration", "isFreeTierContract", "walletContract"]
-    },
-    {
-      "file": "frontend/src/js/engine/scene-graph.ts",
-      "exports": ["DEFAULT_WOOD_COLOR", "MAX_CHILD_ASSET_DEPTH", "extractCid", "detectAssetFormat", "getManifestNodes", "applyTransformMatrix", "applyDefaultMaterial", "getRenderableMeshes", "getWorldBounds", "centerImportedAsset", "createPlaceholder", "disposePlaceholder", "disposeNode", "disposeNodeContent", "disposeNodeSubtree", "clearPendingPostProcessorEdit", "clearPendingTransformEdit", "stagePendingSourceOverride", "clearPendingSourceOverride", "loadNode", "loadAsset", "replaceRootModelSource", "createRootDraftSource", "getNodeAnchor"]
-    },
-    {
-      "file": "frontend/src/js/engine/transforms.ts",
-      "exports": ["detectAssetFormat"]
-    },
-    {
-      "file": "frontend/src/js/engine/cleanup.ts",
-      "exports": ["clearPendingSourceOverride"]
-    },
-    {
-      "file": "frontend/src/js/blockchain/token-resolver.ts",
-      "exports": ["normalizeTokenURI"]
-    },
-    {
-      "file": "frontend/src/js/ui/create-panel.ts",
-      "exports": ["addChatMessage"]
-    },
-
-    // The Hono port's middleware surface. Nothing imports these yet because
-    // src/index.ts is still Express end to end - the port is deliberately
-    // unwired. They are the API the route-wiring step consumes, and
-    // generationRateLimit is exercised by test/api/hono-rate-limit.test.js
-    // today.
-    {
-      "file": "src/hono/rate-limit.ts",
-      "exports": ["uploadUrlRateLimit", "unpinRateLimit", "gcRateLimit", "paymasterRateLimit", "userResolveRateLimit", "emailOtpRequestRateLimit", "emailOtpVerifyRateLimit", "walletRelayRateLimit", "cadRateLimit"]
-    },
-
     // Test-only public surface: consumed via dynamic import() in test specs
     // (fallow's syntactic graph cannot resolve dynamic imports).
     {
@@ -192,14 +138,71 @@
       "exports": ["createAuthzInstance"]
     },
     {
-      "file": "frontend/src/js/services/cad-render.ts",
-      "exports": ["CadRenderError"]
+      "file": "frontend/src/js/blockchain/wallet-core.ts",
+      "exports": ["autoConnectWallet"]
+    },
+    {
+      "file": "frontend/src/js/blockchain/wallet-gas.ts",
+      "exports": ["SMART_ACCOUNT_GAS_LIMIT"]
+    },
+    {
+      "file": "frontend/src/js/engine/babylon-loader.ts",
+      "exports": ["registerGltfLoaderDefaults"]
+    },
+    {
+      "file": "frontend/src/js/engine/cleanup.ts",
+      "exports": ["disposeNode"]
+    },
+    {
+      "file": "frontend/src/js/engine/parametric-preview.ts",
+      "exports": ["openInspector"]
+    },
+    {
+      "file": "frontend/src/js/engine/version-history-deps.ts",
+      "exports": ["assetCidFromTokenUriManifest"]
+    },
+    {
+      "file": "frontend/src/js/services/asset-download.ts",
+      "exports": ["downloadAssetByManifestCid"]
+    },
+    {
+      "file": "frontend/src/js/ui/create-panel.ts",
+      "exports": ["isRealProvider", "shouldUseStoppable", "generationErrorMessage"]
+    },
+    {
+      "file": "frontend/src/js/ui/chat-messages.ts",
+      "exports": ["chatFeed"]
+    },
+    {
+      "file": "frontend/src/js/services/nostr-config.ts",
+      "exports": ["NOSTR_RELAY_URL"]
+    },
+    {
+      "file": "frontend/src/js/ui/nesting.ts",
+      "exports": ["ascendOneLevel"]
+    },
+    {
+      "file": "frontend/src/js/ui/outline-parts.ts",
+      "exports": ["partLabel"]
+    },
+    {
+      "file": "frontend/src/js/ui/testnet-banner.ts",
+      "exports": ["initTestnetBanner", "initNetworkStatus"]
+    },
+    {
+      "file": "packages/asset-core/src/formats/gltf/merkle-editors.ts",
+      "exports": ["verifyProof"]
     },
 
-    // Re-exported types from the API client barrel (type-only consumers).
+    // Alternative Playwright fixtures (plain vs coverage-tracking); each spec
+    // imports one, so the shared `test` name is intentional.
     {
-      "file": "frontend/src/js/services/api.ts",
-      "exports": ["CachedSession", "UploadCredential", "UnpinTokenContext"]
+      "file": "e2e/fixtures/coverage.mjs",
+      "exports": ["test"]
+    },
+    {
+      "file": "e2e/fixtures/test.mjs",
+      "exports": ["test"]
     },
 
     // Two distinct functions share this name: network-config (sync, per-chain

@@ -42,7 +42,7 @@ export interface RunnerOptions {
  * @remarks The prelude must be told segments: 0 for this to bite - an explicit
  *   count overrides the adaptive controls entirely.
  */
-export const VALIDATION_FIDELITY = { segments: 0, minAngle: 20, minEdgeLength: 2 } as const;
+const VALIDATION_FIDELITY = { segments: 0, minAngle: 20, minEdgeLength: 2 } as const;
 
 export type RunnerResult =
   | { ok: true; stats: CadStats }

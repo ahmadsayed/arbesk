@@ -137,5 +137,3 @@ function initVersionTimeline(): void {
 }
 
 initVersionTimeline();
-
-export { initVersionTimeline };

@@ -44,7 +44,7 @@
 import type { ManifoldModule } from "../../types.ts";
 
 /** The customizer of gridfinity_basic_cup.scad, camelCased, with its defaults. */
-export const GRIDFINITY_CUP_DEFAULTS = {
+const GRIDFINITY_CUP_DEFAULTS = {
   width: 2,
   depth: 1,
   height: 3,

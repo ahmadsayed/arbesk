@@ -40,11 +40,6 @@ export {
   unpinAssetCids,
   resolveUserEmail,
 } from "./backend-client.ts";
-export type {
-  CachedSession,
-  UploadCredential,
-  UnpinTokenContext,
-} from "./backend-client.ts";
 
 export function announceStatus(message: string): void {
   const el = document.getElementById("srStatus");

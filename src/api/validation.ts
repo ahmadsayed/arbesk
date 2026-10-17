@@ -9,7 +9,7 @@ import type { Context } from "hono";
 import type { ZodError, ZodSchema } from "zod";
 
 /** One invalid field, as returned under `details.issues`. */
-export interface ValidationIssue {
+interface ValidationIssue {
   path: (string | number)[];
   message: string;
 }

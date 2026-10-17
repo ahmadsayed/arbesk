@@ -11,7 +11,7 @@ import { MANIFEST_URL_REGEX, manifestCidFromUrl } from "./manifest.mjs";
  *
  * @param {Page} page
  */
-export async function startInCreate(page) {
+async function startInCreate(page) {
   await page.addInitScript(() => {
     try {
       if (!localStorage.getItem("arbesk-sidebar-view")) {
@@ -29,7 +29,7 @@ export async function startInCreate(page) {
  *
  * @param {Page} page
  */
-export async function openCreate(page) {
+async function openCreate(page) {
   const prompt = page.locator(SELECTORS.promptInput);
   if (await prompt.isVisible()) return;
   await page.click(SELECTORS.createSwitcherBtn);
@@ -42,7 +42,7 @@ export async function openCreate(page) {
  *
  * @param {Page} page
  */
-export async function openComposerAdvanced(page) {
+async function openComposerAdvanced(page) {
   await openCreate(page);
   const advanced = page.locator(SELECTORS.composerAdvanced);
   if (!(await advanced.evaluate((el) => /** @type {HTMLDetailsElement} */ (el).open))) {

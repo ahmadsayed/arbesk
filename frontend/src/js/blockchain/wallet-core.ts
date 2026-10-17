@@ -617,7 +617,6 @@ export {
   connectWallet,
   disconnectWallet,
   autoConnectWallet,
-  authenticateUser,
   getActiveConnectionSource,
   getActiveContract,
   getSigner,

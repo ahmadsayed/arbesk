@@ -77,13 +77,11 @@ describe("wallet.js export block", () => {
   const REQUIRED_EXPORTS = [
     "connectWallet",
     "disconnectWallet",
-    "payForGenerationWithUSDC",
     "publishAsset",
     "updateAssetURI",
     "updateEditors",
     "switchNetwork",
     "initWallet",
-    "autoConnectWallet",
   ];
 
   test.each(REQUIRED_EXPORTS)("%s is re-exported by barrel", (name) => {
@@ -109,7 +107,6 @@ describe("wallet.js export block", () => {
     expect(exported).toContain("getReadClient");
     expect(exported).toContain("getActiveContract");
     expect(exported).toContain("getSigner");
-    expect(exported).toContain("web3Provider");
   });
 
   test("contract is exported", () => {
@@ -123,10 +120,6 @@ describe("wallet.js export block", () => {
 
   describe("consumer import compatibility", () => {
     const exported = extractExportNames(WALLET);
-
-    test("create-panel.js: payForGenerationWithUSDC", () => {
-      expect(exported).toContain("payForGenerationWithUSDC");
-    });
 
     test("asset-save.js: publishAsset, updateAssetURI", () => {
       expect(exported).toContain("publishAsset");

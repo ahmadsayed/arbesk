@@ -41,7 +41,7 @@
 import type { ManifoldModule } from "../../types.ts";
 
 /** The SCAD customizer parameters, in camelCase, with the SCAD defaults. */
-export const SPOOL_HOLDER_DEFAULTS = {
+const SPOOL_HOLDER_DEFAULTS = {
   part: "side_frame" as "side_frame" | "crossbar" | "axle" | "axle_cap",
   spoolMaxDiameter: 220,
   spoolMaxBoreDiameter: 60,

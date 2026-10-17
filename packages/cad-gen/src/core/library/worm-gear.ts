@@ -99,7 +99,7 @@ function assertPressureAngle(caller: string, pa: number): void {
   if (!(pa >= 0 && pa < 90)) throw new Error(caller + " needs a pressureAngle between 0 and 90 degrees");
 }
 
-export interface WormSpec {
+interface WormSpec {
   module: number;
   diameter: number;
   length: number;
@@ -123,7 +123,7 @@ const WORM_RULES: [(o: any) => boolean, string][] = [
 ];
 
 /** Validates worm options and fills BOSL2's defaults. */
-export function resolveWormSpec(o: any): WormSpec {
+function resolveWormSpec(o: any): WormSpec {
   const broken = WORM_RULES.find(([ok]) => !ok(o));
   if (broken) throw new Error(broken[1]);
   const pressureAngle = o.pressureAngle ?? 20;
@@ -205,7 +205,7 @@ function closedRings(verts: Vec3[], ringSize: number, alt = false): { verts: Vec
  *   angle 360 x (1 - u) + 90 with u = i / steps - 0.5, radius
  *   diameter / 2 + the thread height at z + pitch x starts x u.
  */
-export function wormMesh(s: WormSpec): { verts: Vec3[]; faces: number[][] } {
+function wormMesh(s: WormSpec): { verts: Vec3[]; faces: number[][] } {
   const { height, pitch } = threadProfile(s);
   const zsteps = Math.ceil((s.length / pitch / s.starts) * s.steps);
   const zstep = s.length / zsteps;
@@ -223,7 +223,7 @@ export function wormMesh(s: WormSpec): { verts: Vec3[]; faces: number[][] } {
   return closedRings(verts, s.steps, true);
 }
 
-export interface WormGearSpec {
+interface WormGearSpec {
   module: number;
   teeth: number;
   wormDiameter: number;
@@ -254,7 +254,7 @@ const WORM_GEAR_RULES: [(o: any) => boolean, string][] = [
 ];
 
 /** Validates worm gear options and fills BOSL2's defaults. */
-export function resolveWormGearSpec(o: any): WormGearSpec {
+function resolveWormGearSpec(o: any): WormGearSpec {
   const broken = WORM_GEAR_RULES.find(([ok]) => !ok(o));
   if (broken) throw new Error(broken[1]);
   const pressureAngle = o.pressureAngle ?? 20;
@@ -351,7 +351,7 @@ function toothRows(s: WormGearSpec, tooth: number[][]): Vec3[][] {
  *   back(pitchRadius) x zrot(-90) x left(wormDiameter / 2), then joins the
  *   rows across all teeth into rings.
  */
-export function wormGearMesh(s: WormGearSpec, tooth: number[][]): { verts: Vec3[]; faces: number[][] } {
+function wormGearMesh(s: WormGearSpec, tooth: number[][]): { verts: Vec3[]; faces: number[][] } {
   const rows = toothRows(s, tooth);
   const across = rows[0].length;
   const wr = s.wormDiameter / 2;

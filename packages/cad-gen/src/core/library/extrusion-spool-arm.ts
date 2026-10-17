@@ -18,7 +18,7 @@
  */
 import type { ManifoldModule } from "../../types.ts";
 
-export const SPOOL_ARM_DEFAULTS = {
+const SPOOL_ARM_DEFAULTS = {
   /** Spool centre-hole diameter; the rod is sized from it. */
   spoolBore: 52,
   /** Spool width across its flanges; the rod is this plus clearance long. */

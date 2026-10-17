@@ -17,8 +17,6 @@ export function extractCid(src: string | { cid: string }): string {
   return src as string;
 }
 
-export { detectAssetFormat } from "../formats/registry.ts";
-
 /**
  * Safely access manifest scene nodes.
  */

@@ -25,7 +25,7 @@ import { askJev, JevError } from "@arbesk/cad-gen/backend/index.js";
 import { ANIMATION_PRESETS } from "./animation-presets.ts";
 
 /** Operations a mesh bubble can offer; mirrors asset-core's FollowupAction. */
-export const MESH_ACTIONS = ["retexture", "retopo", "split", "auto-rig", "animate"] as const;
+const MESH_ACTIONS = ["retexture", "retopo", "split", "auto-rig", "animate"] as const;
 export type MeshAction = (typeof MESH_ACTIONS)[number];
 
 /** Non-operation outcomes, always on offer. */
@@ -41,18 +41,18 @@ export const RETOPO_TIER_QUESTION = "retopo_tier";
 export const MOTION_PREFIX = "motion:";
 
 /** A motion noul at or above this counts as asked for. */
-export const MOTION_THRESHOLD = 0.5;
+const MOTION_THRESHOLD = 0.5;
 /** Tripo animates at most five presets per request. */
-export const MAX_MOTIONS = 5;
+const MAX_MOTIONS = 5;
 /**
  * A travel noul at or above this turns root motion on.
  * @remarks "make it walk" measured 0.49 and "run across the room" 0.96, so a
  *   bare motion stays in place - the Animate dialog's own default.
  */
-export const TRAVEL_THRESHOLD = 0.5;
+const TRAVEL_THRESHOLD = 0.5;
 
 /** Texture tiers a regeneration step can target; mirrors the create panel. */
-export const TEXTURE_QUALITIES = ["fast", "standard", "detailed", "extreme"] as const;
+const TEXTURE_QUALITIES = ["fast", "standard", "detailed", "extreme"] as const;
 export type TextureQuality = (typeof TEXTURE_QUALITIES)[number];
 
 /**
@@ -60,7 +60,7 @@ export type TextureQuality = (typeof TEXTURE_QUALITIES)[number];
  * @remarks "light" keeps fine detail, "medium" is the balanced default and
  *   "heavy" is stylized/game-ready; all inside the adapter's 500-20000 range.
  */
-export const RETOPO_TIERS: Record<string, number> = { light: 20000, medium: 8000, heavy: 2000 };
+const RETOPO_TIERS: Record<string, number> = { light: 20000, medium: 8000, heavy: 2000 };
 
 const ACTION_CRITERIA: Record<IntentOutcome, string> = {
   retexture: "Change only its surface: colour, material, texture, paint or finish, keeping the shape",

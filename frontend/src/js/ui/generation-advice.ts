@@ -10,7 +10,7 @@
 import { fetchJsonOrThrow } from "../services/backend-client.ts";
 
 /** Confidence at or above which Jev's pick is acted on without asking. */
-export const AUTO_CONFIDENCE = 0.8;
+const AUTO_CONFIDENCE = 0.8;
 /** How many options an "ask" offers (balanced always rides along). */
 const ASK_OPTIONS = 3;
 

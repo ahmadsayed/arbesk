@@ -66,7 +66,7 @@ const DEDENDUM = 1.25;
 /** BOSL2's default slice count along the face for spiral teeth. */
 const SPIRAL_SLICES = 5;
 
-export interface BevelSpec {
+interface BevelSpec {
   module: number;
   teeth: number;
   mateTeeth: number;
@@ -132,7 +132,7 @@ function faceWidthOf(o: any, coneDistance: number): number {
 }
 
 /** Validates the options and fills BOSL2's defaults. */
-export function resolveBevelSpec(o: any): BevelSpec {
+function resolveBevelSpec(o: any): BevelSpec {
   assertBevelBasics(o);
   const shaftAngle = o.shaftAngle ?? 90;
   const pitchAngle = checkedPitchAngle(o, shaftAngle);
@@ -258,7 +258,7 @@ function backingFaces(s: BevelSpec, verts: Vec3[], perTooth: number, backing: nu
  * The gear's vertices and triangles, positioned as BOSL2's "pitchbase"
  * anchor: the base of the pitch cone on z = 0, axis on Z, teeth toward +Z.
  */
-export function bevelGearMesh(s: BevelSpec, tooth: number[][]): { verts: Vec3[]; faces: number[][] } {
+function bevelGearMesh(s: BevelSpec, tooth: number[][]): { verts: Vec3[]; faces: number[][] } {
   const perTooth = tooth.length;
   const ringSize = perTooth * s.teeth;
   const places = slicePlaces(s);

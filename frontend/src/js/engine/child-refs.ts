@@ -1,7 +1,7 @@
 import { state } from "./state.ts";
 
 /** BigInt-safe token id comparison so hex payloads match decimal refs. */
-export function sameTokenId(a: any, b: any): boolean {
+function sameTokenId(a: any, b: any): boolean {
   try {
     return BigInt(a) === BigInt(b);
   } catch {
