@@ -190,10 +190,10 @@ async function startStack(i) {
 
   const env = {
     ...process.env,
-    HARDHAT_HOST_PORT: String(8545 + i),
-    IPFS_API_PORT: String(5001 + i),
-    IPFS_GW_PORT: String(8080 + i),
-    NOSTR_HOST_PORT: String(7777 + i),
+    HARDHAT_HOST_PORT: String(ports.hardhatPort),
+    IPFS_API_PORT: String(ports.ipfsApiPort),
+    IPFS_GW_PORT: String(ports.ipfsGatewayPort),
+    NOSTR_HOST_PORT: String(ports.nostrPort),
   };
 
   await run(`docker compose -p "${ports.composeProject}" up -d`, { env });

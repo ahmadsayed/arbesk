@@ -6,17 +6,17 @@
 - Copies modified tracked files + untracked (non-ignored) files
 - Copies root `.env` and `blockchain/.env`
 - Sets `IPFS_BACKEND=kubo` in the worktree `.env`
-- Symlinks `node_modules`, `frontend/node_modules`, `blockchain/node_modules`
+- Symlinks `node_modules` (root, `frontend/`, `blockchain/`, every `packages/*/`) to the main checkout
 - Builds the frontend
 - Compiles Solidity contracts via Docker
-- Prints the worktree's `COMPOSE_PROJECT_NAME` and backend port
+- Prints the worktree's `COMPOSE_PROJECT_NAME`, backend port and E2E service ports
 
 ## File Map
 
 | File | Role |
 |------|------|
 | `scripts/create-worktree.sh` | Worktree creation helper |
-| `e2e/lib/infra.mjs` | Derives per-worktree Compose project + backend port |
+| `e2e/lib/infra.mjs` | Derives per-worktree Compose project, backend port and service-port block (`portsForWorker`) |
 | `e2e/global-setup.mjs` | Starts E2E infrastructure on the worktree port |
 | `e2e/global-teardown.mjs` | Stops the worktree backend |
 | `scripts/start-dev.sh` | Unified launcher: local (default) or testnet (`--testnet`) |

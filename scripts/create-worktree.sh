@@ -94,7 +94,9 @@ fi
 
 # ─── 4. Symlink node_modules to avoid re-installing ───────────────────────────
 echo "🔗 Symlinking node_modules..."
-for modules_dir in node_modules frontend/node_modules blockchain/node_modules; do
+# Workspace packages keep their own node_modules (e.g. asset-core's
+# fast-xml-parser), which the package builds below need.
+for modules_dir in node_modules frontend/node_modules blockchain/node_modules packages/*/node_modules; do
   if [ -d "${modules_dir}" ] && [ ! -e "${WORKTREE_PATH}/${modules_dir}" ]; then
     ln -s "${PROJECT_ROOT}/${modules_dir}" "${WORKTREE_PATH}/${modules_dir}"
     echo "   ${modules_dir} → main checkout"
@@ -112,7 +114,8 @@ echo "🔨 Compiling Solidity contracts..."
 docker compose -p "${COMPOSE_PROJECT}" run --rm hardhat npx hardhat compile
 
 # ─── 6. Report worktree identity ──────────────────────────────────────────────
-BACKEND_PORT="$(cd "${WORKTREE_PATH}" && bun -e "import('./e2e/lib/infra.mjs').then(m => console.log(m.BACKEND_PORT))")"
+PORTS="$(cd "${WORKTREE_PATH}" && bun -e "import('./e2e/lib/infra.mjs').then(m => { const p = m.portsForWorker(0); console.log(p.backendPort, p.hardhatPort, p.ipfsApiPort, p.ipfsGatewayPort, p.nostrPort); })")"
+read -r BACKEND_PORT HARDHAT_PORT IPFS_API_PORT IPFS_GW_PORT NOSTR_PORT <<< "${PORTS}"
 
 echo ""
 echo "═══════════════════════════════════════════"
@@ -122,6 +125,7 @@ echo ""
 echo "   Path:        ${WORKTREE_PATH}"
 echo "   Compose:     ${COMPOSE_PROJECT}"
 echo "   Backend:     http://127.0.0.1:${BACKEND_PORT}"
+echo "   E2E stack:   hardhat ${HARDHAT_PORT} · ipfs ${IPFS_API_PORT}/${IPFS_GW_PORT} · nostr ${NOSTR_PORT} (worker 0; +1 per worker)"
 echo ""
 echo "Next steps:"
 echo "   cd ${WORKTREE_DIR}"

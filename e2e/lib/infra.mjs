@@ -50,6 +50,34 @@ const COMPOSE_PROJECT = `arbesk-${WORKTREE_ID.toLowerCase().replace(/[^a-z0-9_-]
 
 const BACKEND_PORT_BASE = deriveBackendPort(ROOT, WORKTREE_ID);
 
+/** Ports reserved per service in a linked worktree's block (max parallel workers). */
+const WORKTREE_MAX_WORKERS = 8;
+
+/**
+ * Host-port bases for the Docker services (Hardhat, IPFS API/gateway, Nostr).
+ * @remarks The main checkout keeps the stock ports, matching the docs and
+ *   start-dev.sh. A linked worktree gets a deterministic block in 40000-55999
+ *   (clear of the 30000-39999 worktree backend range) so its stacks never
+ *   collide with the main checkout's E2E stacks or a running dev server's
+ *   containers; each service reserves WORKTREE_MAX_WORKERS ports.
+ */
+function deriveServicePortBases(root, worktreeId) {
+  if (isMainCheckout(root)) {
+    return { hardhat: 8545, ipfsApi: 5001, ipfsGateway: 8080, nostr: 7777 };
+  }
+  const hash = crypto.createHash("sha256").update(`${worktreeId}:services`).digest("hex");
+  const blockSize = 4 * WORKTREE_MAX_WORKERS;
+  const base = 40000 + (parseInt(hash.slice(0, 8), 16) % 500) * blockSize;
+  return {
+    hardhat: base,
+    ipfsApi: base + WORKTREE_MAX_WORKERS,
+    ipfsGateway: base + 2 * WORKTREE_MAX_WORKERS,
+    nostr: base + 3 * WORKTREE_MAX_WORKERS,
+  };
+}
+
+const SERVICE_PORT_BASES = deriveServicePortBases(ROOT, WORKTREE_ID);
+
 /**
  * Whether Chromium renders WebGL on the host GPU instead of SwiftShader.
  * @remarks Default: on when a DRM render node exists (Linux). SwiftShader
@@ -79,15 +107,28 @@ export const E2E_WORKERS = Number(process.env.E2E_WORKERS) || (E2E_GPU ? 4 : 1);
  * with the existing one-stack E2E flow); worker i > 0 offsets from there.
  */
 export function portsForWorker(i) {
+  if (!isMainCheckout(ROOT) && i >= WORKTREE_MAX_WORKERS) {
+    throw new Error(
+      `Worker ${i}: a linked worktree reserves ports for ${WORKTREE_MAX_WORKERS} workers; lower E2E_WORKERS`,
+    );
+  }
   const backendPort = BACKEND_PORT_BASE + i;
+  const hardhatPort = SERVICE_PORT_BASES.hardhat + i;
+  const ipfsApiPort = SERVICE_PORT_BASES.ipfsApi + i;
+  const ipfsGatewayPort = SERVICE_PORT_BASES.ipfsGateway + i;
+  const nostrPort = SERVICE_PORT_BASES.nostr + i;
   const suffix = i === 0 ? "" : `-w${i}`;
   return {
     backendPort,
     backendUrl: `http://127.0.0.1:${backendPort}`,
-    hardhatRpc: `http://127.0.0.1:${8545 + i}`,
-    ipfsApiUrl: `http://127.0.0.1:${5001 + i}`,
-    ipfsGatewayUrl: `http://127.0.0.1:${8080 + i}`,
-    nostrUrl: `ws://127.0.0.1:${7777 + i}`,
+    hardhatPort,
+    hardhatRpc: `http://127.0.0.1:${hardhatPort}`,
+    ipfsApiPort,
+    ipfsApiUrl: `http://127.0.0.1:${ipfsApiPort}`,
+    ipfsGatewayPort,
+    ipfsGatewayUrl: `http://127.0.0.1:${ipfsGatewayPort}`,
+    nostrPort,
+    nostrUrl: `ws://127.0.0.1:${nostrPort}`,
     composeProject: `${COMPOSE_PROJECT}${suffix}`,
   };
 }

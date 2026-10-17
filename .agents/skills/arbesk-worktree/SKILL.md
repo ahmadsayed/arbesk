@@ -14,7 +14,7 @@ Create a git worktree and run the full test stack without colliding with the mai
 | Question | Action |
 |----------|--------|
 | Clean env to test current changes? | `scripts/create-worktree.sh <name>` |
-| Port/container clashes with main checkout? | Worktree gets its own Compose project + backend port |
+| Port/container clashes with main checkout? | Worktree gets its own Compose project, backend port and service ports (Hardhat/IPFS/Nostr) — E2E can run while the main checkout's dev server is up |
 | E2E but main `.env` uses Pinata? | Script forces `IPFS_BACKEND=kubo` in worktree `.env` |
 | Done with worktree? | `docker compose -p <project> down` → `git worktree remove .worktrees/<name>` |
 
@@ -30,7 +30,7 @@ Create a git worktree and run the full test stack without colliding with the mai
 ## Workflow
 
 ```bash
-bun run worktree:create -- feature-xyz   # prints COMPOSE_PROJECT_NAME + backend port
+bun run worktree:create -- feature-xyz   # prints COMPOSE_PROJECT_NAME + backend/service ports
 cd .worktrees/feature-xyz
 bun run test:frontend && bun run test:api
 COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) bun run test:contracts

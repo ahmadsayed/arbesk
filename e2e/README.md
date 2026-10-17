@@ -72,10 +72,11 @@ Requirements and caveats:
 
 ## Git worktrees
 
-E2E is worktree-aware. Each checkout gets its own Docker Compose project, its own backend port, and its own handoff state file, so tests from one worktree do not silently reuse containers, contracts, or a running backend from another worktree.
+E2E is worktree-aware. Each checkout gets its own Docker Compose project, its own backend and service ports, and its own handoff state file, so tests from one worktree do not silently reuse containers, contracts, or a running backend from another worktree.
 
 - The main checkout keeps the familiar `http://127.0.0.1:9090` backend port.
 - Linked worktrees automatically receive a deterministic backend port in the `30000–40000` range.
+- The main checkout keeps the stock service ports (Hardhat `8545`, IPFS `5001`/`8080`, Nostr `7777`, +1 per worker); linked worktrees get their own deterministic block in `40000–56000`, so a worktree's E2E run never collides with the main checkout's stacks or a running dev server (up to 8 workers per worktree).
 - Docker containers are named by the Compose project (`arbesk-<worktree-id>_*`) instead of the old global `arbesk-hardhat`, `arbesk-private-ipfs`, and `arbesk-nostr-relay` names.
 
 To create a worktree already seeded with the current working-tree state, environment files, built frontend, and compiled contracts, use the helper script:
