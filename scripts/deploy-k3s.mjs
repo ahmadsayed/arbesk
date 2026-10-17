@@ -47,14 +47,29 @@ execSync(
 // server binary when only the frontend changed) keeps its digest and the Pi
 // skips re-pulling it. Fresh checkout/build mtimes otherwise change every
 // layer's digest on every deploy.
-run("docker", [
-  "buildx", "build", "--builder", "multiplatform-builder",
-  "--platform", "linux/arm64",
-  "-f", "docker/app.Dockerfile",
-  "--build-arg", "SOURCE_DATE_EPOCH=0",
-  "--output", `type=registry,name=${IMAGE}:${TAG},rewrite-timestamp=true`,
-  ".",
-]);
+// Podman (or the podman-docker shim) builds natively: the builder stage runs
+// on $BUILDPLATFORM and the arm64 stage has no RUN, so no qemu is needed.
+const usePodman = /podman/i.test(execSync("docker --version 2>&1 || podman --version", { encoding: "utf8" }));
+if (usePodman) {
+  run("podman", [
+    "build",
+    "--platform", "linux/arm64",
+    "-f", "docker/app.Dockerfile",
+    "--source-date-epoch", "0", "--rewrite-timestamp",
+    "-t", `docker.io/${IMAGE}:${TAG}`,
+    ".",
+  ]);
+  run("podman", ["push", `docker.io/${IMAGE}:${TAG}`]);
+} else {
+  run("docker", [
+    "buildx", "build", "--builder", "multiplatform-builder",
+    "--platform", "linux/arm64",
+    "-f", "docker/app.Dockerfile",
+    "--build-arg", "SOURCE_DATE_EPOCH=0",
+    "--output", `type=registry,name=${IMAGE}:${TAG},rewrite-timestamp=true`,
+    ".",
+  ]);
+}
 
 // 4. Stamp the tag into the deployment manifest
 const deployFile = path.join(root, "deploy/k8s/deployment.yaml");

@@ -17,7 +17,7 @@
 # except the server binary, which Bun cross-compiles for TARGETARCH. Only the
 # small runtime stage is the target architecture.
 
-FROM --platform=$BUILDPLATFORM oven/bun:1-debian AS builder
+FROM --platform=$BUILDPLATFORM docker.io/oven/bun:1-debian AS builder
 ARG TARGETARCH
 WORKDIR /app
 COPY . .
@@ -34,7 +34,7 @@ RUN case "$TARGETARCH" in \
   && bun scripts/build-server.mjs --target="$target"
 
 # The compiled server binary embeds the Bun runtime — no toolchain needed.
-FROM debian:bookworm-slim
+FROM docker.io/library/debian:bookworm-slim
 WORKDIR /app
 COPY --from=builder /app/dist/arbesk-server ./arbesk-server
 COPY --from=builder /app/frontend/dist ./frontend/dist
@@ -55,7 +55,9 @@ COPY --from=builder /app/mock-gltf-assets/ATTRIBUTION.md \
      /app/mock-gltf-assets/howdy.glb \
      /app/mock-gltf-assets/box.3mf \
      ./mock-gltf-assets/
-RUN mkdir -p /app/.data
+# WORKDIR creates the dir without a RUN, so the arm64 stage needs no emulation.
+WORKDIR /app/.data
+WORKDIR /app
 ENV ARBESK_ROOT=/app \
     PORT=9090 \
     NODE_ENV=production
