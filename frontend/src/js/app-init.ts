@@ -66,7 +66,7 @@ import {
 } from "./ui/library-controller.ts";
 
 // ── Router ──
-import { initRouter, scopeUrlToSubject } from "./app/router.ts";
+import { goToMyLibrary, initRouter, scopeUrlToSubject } from "./app/router.ts";
 
 // ─── Asset-core composition root ───
 // Install the process-wide runtime before any domain/gltf module is used.
@@ -117,6 +117,9 @@ for (const id of ["connectWalletBtn", "libraryConnectBtn", "galleryConnectBtn"])
   document.getElementById(id)?.addEventListener("click", connectWallet);
 }
 initWalletPopover();
+document
+  .getElementById("libraryMyLibraryBtn")
+  ?.addEventListener("click", goToMyLibrary);
 
 // Deep links from the landing page. "Sign in" (/library?login=1; any view
 // works) opens the connect modal immediately, same as before — it's an

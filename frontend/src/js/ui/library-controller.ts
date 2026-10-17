@@ -133,6 +133,11 @@ export function applyWalletGate(connected: boolean): void {
   if (createBtn) createBtn.hidden = !connected || visitor;
   if (uploadBtn) uploadBtn.hidden = !connected || visitor;
 
+  // A signed-in visitor's way back to their own library (and its New
+  // Collection button) — the header Library tab keeps the viewed profile.
+  const myLibraryBtn = document.getElementById("libraryMyLibraryBtn");
+  if (myLibraryBtn) myLibraryBtn.hidden = !(visitor && connected);
+
   const badge = document.getElementById("libraryVisitorBadge");
   if (badge) {
     badge.hidden = !visitor;

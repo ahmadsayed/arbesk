@@ -27,6 +27,7 @@ const FRAGMENT = `
     </div>
     <a id="walletPopoverExplorer" class="wallet-popover-explorer hidden" href="#" target="_blank" rel="noopener noreferrer" :href="explorerUrl || '#'" :class="{ hidden: !explorerUrl }">View on Explorer</a>
     <div class="wallet-popover-actions">
+      <button id="walletPopoverMyLibrary" class="wallet-popover-my-library btn btn-secondary btn-sm" type="button" @click="myLibrary()">My library</button>
       <button id="walletPopoverSignIn" class="wallet-popover-signin btn btn-primary btn-sm hidden" type="button" @click="signIn()" :class="{ hidden: !showSignIn }">Sign In</button>
       <button id="walletPopoverDisconnect" class="wallet-popover-disconnect btn btn-danger btn-sm" type="button" @click="disconnect()">Log Out</button>
     </div>
@@ -43,6 +44,10 @@ const mockGetCachedSession = jest.fn(() => null);
 mock.module("../../frontend/src/js/blockchain/wallet.js", () => ({
   disconnectWallet: mockDisconnectWallet,
   switchNetwork: jest.fn(),
+}));
+const mockGoToMyLibrary = jest.fn();
+mock.module("../../frontend/src/js/app/router.js", () => ({
+  goToMyLibrary: mockGoToMyLibrary,
 }));
 mock.module("../../frontend/src/js/services/api.js", () => ({
   getCachedSession: mockGetCachedSession,
@@ -143,6 +148,16 @@ test("log out disconnects the wallet and closes the popover", async () => {
   /** @type {HTMLElement} */ (document.getElementById("walletPopoverDisconnect")).click();
   await flush();
   expect(mockDisconnectWallet).toHaveBeenCalledTimes(1);
+  expect(popoverEl().classList.contains("hidden")).toBe(true);
+});
+
+test("My library closes the popover and goes to the wallet's own library", async () => {
+  await setup({ walletAddress: ADDRESS_A, chainId: BASE_SEPOLIA });
+  /** @type {HTMLElement} */ (document.getElementById("disconnectWalletBtn")).click();
+  await flush();
+  /** @type {HTMLElement} */ (document.getElementById("walletPopoverMyLibrary")).click();
+  await flush();
+  expect(mockGoToMyLibrary).toHaveBeenCalledTimes(1);
   expect(popoverEl().classList.contains("hidden")).toBe(true);
 });
 

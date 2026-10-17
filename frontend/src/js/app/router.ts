@@ -202,6 +202,17 @@ export function navigate(path: string): void {
 }
 
 /**
+ * Navigate to the signed-in wallet's own Library (/library/<base58>), e.g.
+ * from someone else's public library, where the header Library tab keeps the
+ * viewed profile. No-op when signed out.
+ */
+export function goToMyLibrary(): void {
+  const wallet = walletState.get().walletAddress;
+  if (!wallet) return;
+  navigate(withSubject("/library", wallet));
+}
+
+/**
  * Wire link interception + back/forward and activate the initial view. Called
  * once from app-init.ts. Module scripts are deferred, so the DOM is fully
  * parsed by the time this runs.

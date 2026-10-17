@@ -19,6 +19,7 @@ function buildDom() {
     <button id="libraryCreateCollectionBtn"></button>
     <button id="libraryUploadBtn"></button>
     <span id="libraryVisitorBadge" hidden></span>
+    <button id="libraryMyLibraryBtn" hidden></button>
     <select id="headerbarNetworkSelect">
       <option value="hardhat">Hardhat</option>
       <option value="baseSepolia">Base Sepolia</option>
@@ -193,6 +194,8 @@ describe("applyWalletGate with a profile subject", () => {
     const badge = document.getElementById("libraryVisitorBadge");
     expect(badge.hidden).toBe(false);
     expect(badge.textContent).toBe("Read-only · public library");
+    // Signed out: there is no "own library" to go to.
+    expect(document.getElementById("libraryMyLibraryBtn").hidden).toBe(true);
   });
 
   test("connected wallet different from the subject stays visitor mode", async () => {
@@ -208,6 +211,7 @@ describe("applyWalletGate with a profile subject", () => {
     );
     expect(document.getElementById("libraryUploadBtn").hidden).toBe(true);
     expect(document.getElementById("libraryVisitorBadge").hidden).toBe(false);
+    expect(document.getElementById("libraryMyLibraryBtn").hidden).toBe(false);
   });
 
   test("connected wallet equal to the subject resumes owner mode", async () => {
@@ -223,6 +227,7 @@ describe("applyWalletGate with a profile subject", () => {
     );
     expect(document.getElementById("libraryUploadBtn").hidden).toBe(false);
     expect(document.getElementById("libraryVisitorBadge").hidden).toBe(true);
+    expect(document.getElementById("libraryMyLibraryBtn").hidden).toBe(true);
   });
 });
 

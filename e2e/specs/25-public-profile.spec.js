@@ -63,6 +63,8 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
     await expect(page.locator(SELECTORS.libraryVisitorBadge)).toContainText(
       "public library",
     );
+    // Signed out: no own library to go back to.
+    await expect(page.locator(SELECTORS.libraryMyLibraryBtn)).toBeHidden();
   });
 
   test("bare /library without a wallet still shows the sign-in gate", async ({
@@ -84,6 +86,29 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
 
     // Subject == connected wallet: owner mode, no visitor chrome.
     await expect(page.locator(SELECTORS.libraryVisitorBadge)).toBeHidden();
+    await expect(
+      page.locator(SELECTORS.libraryCreateCollectionBtn),
+    ).toBeVisible();
+    await expect(libraryCollectionLocator(page, "Default")).toBeVisible();
+  });
+
+  test("a signed-in visitor can go back to their own library", async ({
+    page,
+  }) => {
+    await connectLibrary(page);
+    // Browse someone else's (empty) public library while signed in.
+    const otherBase58 = addressToBase58(HARDHAT_ACCOUNTS[1].address);
+    await page.goto(`/library/${otherBase58}`);
+    await expect(page.locator(SELECTORS.libraryVisitorBadge)).toBeVisible();
+    await expect(
+      page.locator(SELECTORS.libraryCreateCollectionBtn),
+    ).toBeHidden();
+
+    await page.click(SELECTORS.libraryMyLibraryBtn);
+
+    await expect(page).toHaveURL(new RegExp(`/library/${OWNER_BASE58}$`));
+    await expect(page.locator(SELECTORS.libraryVisitorBadge)).toBeHidden();
+    await expect(page.locator(SELECTORS.libraryMyLibraryBtn)).toBeHidden();
     await expect(
       page.locator(SELECTORS.libraryCreateCollectionBtn),
     ).toBeVisible();

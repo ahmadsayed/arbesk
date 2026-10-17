@@ -251,3 +251,24 @@ describe("navigate withSubject scoping", () => {
     spy.mockRestore();
   });
 });
+
+describe("goToMyLibrary", () => {
+  const ADDRESS = "0xccC626354A2Ea985d4aBDC1173597a46aFC63595";
+  const BASE58 = "3rTyYaQADATmQkvr5vkTteihpSHz";
+  const OTHER = "0x407edfcfd16a5623012bbb778bd47a2bf861ed40";
+
+  test("leaves another profile for the signed-in wallet's own library", async () => {
+    const { goToMyLibrary, libraryState } = await loadRouter({ walletAddress: ADDRESS });
+    window.history.replaceState({}, "", "/library/u7fQSuPAgViatZT1ELwp4vZVHnF");
+    libraryState.set({ subjectAddress: OTHER });
+    goToMyLibrary();
+    expect(location.pathname).toBe(`/library/${BASE58}`);
+    expect(document.getElementById("libraryView").classList.contains("hidden")).toBe(false);
+  });
+
+  test("does nothing when signed out", async () => {
+    const { goToMyLibrary } = await loadRouter();
+    goToMyLibrary();
+    expect(location.pathname).toBe("/studio");
+  });
+});

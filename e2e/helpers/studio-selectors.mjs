@@ -186,6 +186,8 @@ export const SELECTORS = {
   libraryDetailsMetadata: "#libraryDetailsMetadata",
   libraryDetailsEditMetadataBtn: "#libraryDetailsEditMetadataBtn",
   libraryVisitorBadge: "#libraryVisitorBadge",
+  libraryMyLibraryBtn: "#libraryMyLibraryBtn",
+  walletPopoverMyLibrary: "#walletPopoverMyLibrary",
   contextMenu: ".context-menu",
   contextMenuItem: ".context-menu-item",
 };

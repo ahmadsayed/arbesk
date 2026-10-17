@@ -18,7 +18,7 @@ import { on, EVENTS } from "@arbesk/asset-core/events/bus.js";
 import { walletState } from "../state/wallet-state.ts";
 import { Alpine, registerAlpineComponent } from "./alpine.ts";
 
-export interface WalletPopoverState {
+interface WalletPopoverState {
   isOpen: boolean;
   /** full wallet address, "" when disconnected */
   address: string;
@@ -94,13 +94,14 @@ interface WalletPopoverComponent {
   close(): void;
   copy(): Promise<void>;
   signIn(): Promise<void>;
+  myLibrary(): Promise<void>;
   disconnect(): void;
 }
 
 /**
  * Alpine data factory for the wallet popover.
  */
-export function walletPopover(): WalletPopoverComponent {
+function walletPopover(): WalletPopoverComponent {
   return {
     get displayAddress() {
       return truncateAddress(state().address) || "-";
@@ -170,6 +171,13 @@ export function walletPopover(): WalletPopoverComponent {
       } catch {
         // User rejected - state remains auth-required
       }
+    },
+
+    async myLibrary() {
+      closeState();
+      // Lazy: the router pulls in the engine and library modules.
+      const { goToMyLibrary } = await import("../app/router.ts");
+      goToMyLibrary();
     },
 
     disconnect() {
