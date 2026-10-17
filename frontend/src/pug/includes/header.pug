@@ -71,6 +71,9 @@ button#backBtn.headerbar-back.hidden(aria-label="Go back to parent asset", title
         span Paper
   button#connectWalletBtn.btn.btn-secondary.headerbar-signin.disconnected(:class="{ hidden: connected, disconnected: !connected }" type="button" aria-label="Sign in")
     span Sign in
+  //- Shown instead of Sign in while a returning visitor's session restores
+  //- (<html data-wallet-restoring>, see app/initial-view.ts).
+  span.headerbar-avatar-pending(role="status" aria-label="Restoring sign-in")
   button#disconnectWalletBtn.headerbar-avatar.hidden(:class="{ hidden: !connected, 'auth-required': showAuthRequired }" type="button" aria-label="Account menu" :title="label")
     span.headerbar-avatar-img(x-html="identicon" aria-hidden="true")
     span#disconnectWalletBtnText.sr-only(x-text="label") Disconnect

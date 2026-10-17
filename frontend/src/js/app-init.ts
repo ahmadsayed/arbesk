@@ -100,9 +100,18 @@ initThemeMenu();
 initNewMenu();
 
 // ─── Wallet ───
+const WALLET_RESTORE_UI_TIMEOUT_MS = 10_000;
 // Start EIP-6963 discovery and silently restore the previous connection (owned
 // by initWallet). Login / Signup buttons across both views trigger a connect.
 const walletRestored = initWallet();
+// initial-view.ts set data-wallet-restoring for returning visitors so the
+// signed-out UI stays hidden during the restore; drop it once the restore
+// settles, or after a cap so a hung restore never hides Sign in for good.
+const clearWalletRestoring = () => {
+  delete document.documentElement.dataset.walletRestoring;
+};
+walletRestored.finally(clearWalletRestoring);
+setTimeout(clearWalletRestoring, WALLET_RESTORE_UI_TIMEOUT_MS);
 for (const id of ["connectWalletBtn", "libraryConnectBtn", "galleryConnectBtn"]) {
   document.getElementById(id)?.addEventListener("click", connectWallet);
 }

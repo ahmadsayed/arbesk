@@ -194,6 +194,39 @@ html[data-initial-view='studio'] .page-switcher-tab[href='/studio'] {
   }
 }
 
+// Placeholder for the account control while a stored session restores
+// (<html data-wallet-restoring>): Sign in is withheld until the restore
+// settles, so returning users don't see a signed-out header flash.
+.headerbar-avatar-pending {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border: var(--border-size-1) solid var(--hairline);
+  border-radius: var(--radius-round);
+  background: var(--raised-bg);
+  animation: headerbar-avatar-pending-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes headerbar-avatar-pending-pulse {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
+}
+
+[data-wallet-restoring] {
+  .headerbar-signin {
+    display: none;
+  }
+
+  .headerbar-signin:not(.hidden) + .headerbar-avatar-pending {
+    display: inline-block;
+  }
+}
+
 .headerbar-avatar {
   position: relative;
   display: inline-grid;

@@ -59,3 +59,14 @@
     justify-content: center;
   }
 }
+
+// Signed-out prompts stay invisible while a returning visitor's session
+// restores (<html data-wallet-restoring>, see app/initial-view.ts), so the
+// "Sign in" gate doesn't flash before the account comes back.
+[data-wallet-restoring] {
+  #libraryGate .empty-state,
+  .empty-state:has(#galleryConnectBtn),
+  #generateHint {
+    visibility: hidden;
+  }
+}
