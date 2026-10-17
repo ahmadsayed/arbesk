@@ -513,6 +513,8 @@ export const SELECTORS = {
   libraryItemName: ".library-item-name",
   libraryBreadcrumb: "#libraryBreadcrumb",
   libraryUpBtn: "#libraryUpBtn",
+  libraryBackBtn: "#libraryBackBtn",
+  libraryForwardBtn: "#libraryForwardBtn",
   librarySearchInput: "#librarySearchInput",
   librarySortSelect: "#librarySortSelect",
   libraryGridViewBtn: "#libraryGridViewBtn",

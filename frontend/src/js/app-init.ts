@@ -56,6 +56,7 @@ import { initChildReload } from "./engine/child-reload.ts";
 // ── Library ──
 import { initLibraryGrid } from "./ui/library-grid.ts";
 import { initLibraryToolbar } from "./ui/library-toolbar.ts";
+import { initLibraryHistory, resetLibraryHistory } from "./ui/library-history.ts";
 import { initLibraryContextMenu } from "./ui/library-context-menu.ts";
 import { initLibraryDetails } from "./ui/library-details.ts";
 import {
@@ -166,6 +167,7 @@ document
 // ─── Library controls ───
 initLibraryGrid();
 initLibraryToolbar();
+initLibraryHistory();
 initLibraryContextMenu();
 initLibraryDetails();
 applyWalletGate(Boolean(walletState.get().walletAddress));
@@ -215,6 +217,7 @@ on(EVENTS.WALLET_DISCONNECTED, () => {
     currentCollectionTokenId: null,
     selectedIds: [],
   });
+  resetLibraryHistory();
 });
 
 on(EVENTS.USER_AUTHENTICATED, (e) => {

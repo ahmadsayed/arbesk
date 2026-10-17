@@ -5,6 +5,7 @@ import { escapeHtml } from "../utils/html.ts";
 import { showToast } from "./toasts.ts";
 import { uploadFileToCollection } from "../services/library-ops.ts";
 import { createCollectionFlow } from "./library-create.ts";
+import { goUp } from "./library-history.ts";
 
 async function refreshLibraryData(): Promise<void> {
   const { refreshLibraryData: doRefresh } = await import("./library-controller.ts");
@@ -226,10 +227,7 @@ function initLibraryDropZone(): void {
 }
 
 export function initLibraryToolbar(): void {
-  document.getElementById("libraryUpBtn")?.addEventListener("click", () => {
-    libraryState.set({ currentCollectionTokenId: null, selectedIds: [] });
-    announce("Returned to collections");
-  });
+  document.getElementById("libraryUpBtn")?.addEventListener("click", goUp);
 
   document.getElementById("libraryBreadcrumb")?.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest(

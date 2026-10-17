@@ -9,11 +9,12 @@ import {
   filterItems,
   formatBytes,
 } from "../utils/library-items.ts";
+import { announce } from "./library-announce.ts";
+import { goBack, goForward, goUp } from "./library-history.ts";
 
-export function announce(text: string): void {
-  const region = document.getElementById("libraryLiveRegion");
-  if (region) region.textContent = text;
-}
+// Lives in a leaf so library-history can announce without an import cycle;
+// re-exported for existing consumers.
+export { announce } from "./library-announce.ts";
 
 function renderStatus(item: any, viewMode: string = "grid"): string {
   const isGrid = viewMode === "grid";
@@ -185,10 +186,30 @@ function applySelection(
   });
 }
 
+/** Inputs the rendered cards were built from (store arrays are replaced, never mutated). */
+let renderedFrom: unknown[] | null = null;
+
 function render(): void {
   const container = document.getElementById("libraryItems");
   if (!container) return;
   const state = libraryState.get();
+
+  // A selection-only change (click, arrow keys) must not rebuild the cards —
+  // that would refetch every thumbnail and flash the grid.
+  const inputs = [
+    state.isLoading,
+    state.collections,
+    state.assets,
+    state.currentCollectionTokenId,
+    state.searchQuery,
+    state.sortBy,
+    state.viewMode,
+  ];
+  if (renderedFrom && inputs.every((v, i) => v === renderedFrom![i])) {
+    applySelection(container, state.selectedIds);
+    return;
+  }
+  renderedFrom = inputs;
 
   const countEl = document.getElementById("libraryItemCount");
   if (state.isLoading) {
@@ -284,12 +305,176 @@ function isEditingText(): boolean {
   const el = document.activeElement as HTMLElement | null;
   if (!el) return false;
   return (
-    el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable
+    el.tagName === "INPUT" ||
+    el.tagName === "TEXTAREA" ||
+    el.tagName === "SELECT" ||
+    el.isContentEditable
   );
 }
 
+/** The Library keymap only applies while the Library view is the one shown. */
+function libraryViewActive(): boolean {
+  if (document.documentElement.dataset.initialView === "studio") return false;
+  const view = document.getElementById("libraryView");
+  return !view?.classList.contains("hidden");
+}
+
+/** Open menus and dialogs own the arrow keys. */
+function overlayOwnsKeys(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  return !!el?.closest?.('[role="menu"], [role="dialog"], dialog');
+}
+
+/** Cards per row in the rendered grid (1 in list view). */
+function gridColumns(container: HTMLElement | null, viewMode: string): number {
+  if (viewMode !== "grid" || !container) return 1;
+  const cards = container.querySelectorAll<HTMLElement>("[data-id]");
+  if (!cards.length) return 1;
+  const firstTop = cards[0].offsetTop;
+  let cols = 0;
+  for (const card of cards) {
+    if (card.offsetTop !== firstTop) break;
+    cols++;
+  }
+  return Math.max(cols, 1);
+}
+
+const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
+
+/** Moving end of a Shift+arrow range; the anchor is lastClickedId. */
+let keyboardCursorId: string | number | null = null;
+
+/** Index offset an arrow key moves by; Left/Right only apply in grid view. */
+function arrowStep(key: string, cols: number, isGrid: boolean): number | null {
+  const steps: Record<string, number> = {
+    ArrowUp: -cols,
+    ArrowDown: cols,
+    ...(isGrid ? { ArrowLeft: -1, ArrowRight: 1 } : {}),
+  };
+  return steps[key] ?? null;
+}
+
+/** Card index a movement key lands on (clamped), or null when it doesn't apply. */
+function arrowTarget(
+  key: string,
+  from: number,
+  count: number,
+  cols: number,
+  isGrid: boolean
+): number | null {
+  if (from === -1) return key === "End" ? count - 1 : 0;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  const step = arrowStep(key, cols, isGrid);
+  if (step === null) return null;
+  return Math.min(Math.max(from + step, 0), count - 1);
+}
+
+/**
+ * Arrow keys move the selection across cards, Home/End jump to the ends,
+ * Shift extends a range from the anchor — as in a desktop file browser.
+ */
+function moveSelection(e: KeyboardEvent): void {
+  const items = currentItems();
+  if (!items.length) return;
+  const state = libraryState.get();
+  const container = document.getElementById("libraryItems");
+  const cols = gridColumns(container, state.viewMode);
+  const isGrid = state.viewMode === "grid";
+  const fromId = e.shiftKey
+    ? keyboardCursorId ?? lastClickedId
+    : state.selectedIds[state.selectedIds.length - 1];
+  const from = items.findIndex((i) => i.id === fromId);
+
+  const target = arrowTarget(e.key, from, items.length, cols, isGrid);
+  if (target === null) return;
+  e.preventDefault();
+  selectByKeyboard(items, target, e.shiftKey, container);
+}
+
+/** Select the card at `to` (or the range to it with `extend`), scroll it in, announce. */
+function selectByKeyboard(
+  items: any[],
+  to: number,
+  extend: boolean,
+  container: HTMLElement | null
+): void {
+  const id = items[to].id;
+  let selectedIds: Array<string | number>;
+  if (extend && lastClickedId !== null) {
+    selectedIds = computeRangeSelection(items, lastClickedId, id);
+    keyboardCursorId = id;
+  } else {
+    selectedIds = [id];
+    lastClickedId = id;
+    keyboardCursorId = null;
+  }
+  libraryState.set({ selectedIds });
+  container
+    ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(String(id))}"]`)
+    ?.scrollIntoView({ block: "nearest" });
+  announce(
+    selectedIds.length === 1
+      ? `${items[to].name || "Item"} selected`
+      : `${selectedIds.length} items selected`
+  );
+}
+
+function openSingleSelection(): boolean {
+  const { selectedIds } = libraryState.get();
+  if (selectedIds.length !== 1) return false;
+  openItem(selectedIds[0]);
+  return true;
+}
+
+/** Alt+←/→ history, Alt+↑ / Backspace up, Alt+↓ open; each returns whether it moved. */
+const ALT_NAV_ACTIONS: Record<string, () => boolean> = {
+  ArrowLeft: goBack,
+  ArrowRight: goForward,
+  ArrowUp: goUp,
+  ArrowDown: openSingleSelection,
+};
+
+function handleNavigationKey(e: KeyboardEvent): void {
+  const action = e.key === "Backspace" ? goUp : ALT_NAV_ACTIONS[e.key];
+  const handled = action?.() ?? false;
+  // Alt+arrows are the browser's own history keys — keep them in the Library
+  // even at the ends of the trail so they never leave the app.
+  if (handled || (e.altKey && ARROW_KEYS.has(e.key))) e.preventDefault();
+}
+
+function isNavigationKey(e: KeyboardEvent): boolean {
+  return (
+    (e.altKey && ARROW_KEYS.has(e.key)) ||
+    (e.key === "Backspace" && !e.ctrlKey && !e.metaKey)
+  );
+}
+
+function isSelectionMoveKey(e: KeyboardEvent): boolean {
+  return (
+    (ARROW_KEYS.has(e.key) || e.key === "Home" || e.key === "End") &&
+    !e.ctrlKey &&
+    !e.metaKey &&
+    !overlayOwnsKeys()
+  );
+}
+
+/** Navigation and selection-movement keys; returns true when the key was one of them. */
+function handleMovementKey(e: KeyboardEvent): boolean {
+  if (isNavigationKey(e)) {
+    handleNavigationKey(e);
+    return true;
+  }
+  if (isSelectionMoveKey(e)) {
+    moveSelection(e);
+    return true;
+  }
+  return false;
+}
+
 function handleKeydown(e: KeyboardEvent): void {
-  if (isEditingText()) return;
+  if (isEditingText() || !libraryViewActive()) return;
+  if (handleMovementKey(e)) return;
   const state = libraryState.get();
 
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
@@ -302,19 +487,6 @@ function handleKeydown(e: KeyboardEvent): void {
 
   if (e.key === "Escape") {
     libraryState.set({ selectedIds: [] });
-    return;
-  }
-
-  if (
-    (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) &&
-    state.currentCollectionTokenId !== null
-  ) {
-    e.preventDefault();
-    libraryState.set({
-      currentCollectionTokenId: null,
-      selectedIds: [],
-    });
-    announce("Returned to collections");
     return;
   }
 

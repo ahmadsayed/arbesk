@@ -12,7 +12,14 @@
 
   #libraryMain.hidden
     .library-toolbar
-      button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to collections" title="Up to collections" hidden)
+      .library-nav(role="group" aria-label="History")
+        button#libraryBackBtn.btn.btn-secondary.btn-icon.btn-sm(type="button" aria-label="Back" title="Back (Alt+←)" disabled)
+          svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+            use(href="/icons.svg#chevron-left")
+        button#libraryForwardBtn.btn.btn-secondary.btn-icon.btn-sm(type="button" aria-label="Forward" title="Forward (Alt+→)" disabled)
+          svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+            use(href="/icons.svg#chevron-right")
+      button#libraryUpBtn.library-up-btn.btn.btn-secondary.btn-sm(type="button" aria-label="Up to collections" title="Up to collections (Alt+↑)" hidden)
         svg(width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
           use(href="/icons.svg#chevron-up")
         span Up

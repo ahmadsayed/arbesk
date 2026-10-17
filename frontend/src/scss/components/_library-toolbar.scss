@@ -71,6 +71,13 @@
   flex: 0 0 auto;
 }
 
+// Back / Forward pair, as in a desktop file browser's header bar
+.library-nav {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--size-1);
+}
+
 .library-toolbar-actions {
   display: flex;
   align-items: center;

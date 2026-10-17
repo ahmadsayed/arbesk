@@ -167,6 +167,8 @@ export const SELECTORS = {
   libraryBreadcrumb: "#libraryBreadcrumb",
   libraryBreadcrumbHome: '#libraryBreadcrumb [data-collection-token-id=""]',
   libraryUpBtn: "#libraryUpBtn",
+  libraryBackBtn: "#libraryBackBtn",
+  libraryForwardBtn: "#libraryForwardBtn",
   librarySearchInput: "#librarySearchInput",
   librarySortSelect: "#librarySortSelect",
   libraryGridViewBtn: "#libraryGridViewBtn",

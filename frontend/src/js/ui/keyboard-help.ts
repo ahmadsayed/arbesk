@@ -35,6 +35,15 @@ const SECTIONS = [
     ],
   },
   {
+    heading: "Library",
+    rows: [
+      ["← → ↑ ↓", "Move the selection (Shift extends it)"],
+      ["Enter / Alt+↓", "Open the selected collection or asset"],
+      ["Alt+← / Alt+→", "Back / Forward"],
+      ["Alt+↑ / Backspace", "Up to collections"],
+    ],
+  },
+  {
     heading: "Asset",
     rows: [
       [`${MOD}+N`, "New asset"],
