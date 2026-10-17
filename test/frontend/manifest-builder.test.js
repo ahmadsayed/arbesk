@@ -284,6 +284,30 @@ describe("prepareManifestForWrite", () => {
     expect(ctx.remote.getFromRemoteIPFS).toHaveBeenCalledWith("bafyManifest");
   });
 
+  // A manifest saved before 3MF renders moved to metres (2026-10-17) holds
+  // millimetre-era placements. The save stamps a new timestamp, so a fetched
+  // base must be converted first or the stale lift would be baked in for good.
+  it("converts legacy 3MF placements when the save base is fetched from IPFS", async () => {
+    const legacy = {
+      ...makeManifest([
+        {
+          ...makeNode({ cid: "bafy3mf", path: "composite.3mf.json", format: "3mf" }),
+          transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 22.875, 0, 1],
+        },
+      ]),
+      timestamp: 1791298270184,
+    };
+    ctx.remote.getFromRemoteIPFS.mockImplementation(async (cid) =>
+      cid === "bafyManifest" ? structuredClone(legacy) : null,
+    );
+    assetStore.set({ activeAssetManifestCid: "bafyManifest" });
+
+    const result = await ctx.mod.prepareManifestForWrite("gridfinity");
+
+    expect(result.manifest.scene.nodes[0].transform_matrix[13]).toBeCloseTo(0.022875, 9);
+    expect(result.manifest.timestamp).toBeGreaterThan(1791298270184);
+  });
+
   // Regression: the first save of a fresh draft (latestCid === activeCid) with a
   // GLB source node that decompose converts to composite.gltf must NOT be seen
   // as "no changes". prevManifest is the no-op-detection baseline; it has to be

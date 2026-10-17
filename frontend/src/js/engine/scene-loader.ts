@@ -5,6 +5,7 @@
 
 import { resolveFormatHandler } from "../formats/index.ts";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
+import { normalizeLegacy3mfPlacements } from "./legacy-3mf-placement.ts";
 import {
   resolveChildRef,
   resolveCollectionChildRef,
@@ -395,7 +396,9 @@ async function loadAssetManifest(
     clearResolutionCache();
   }
 
-  const manifest = await getFromRemoteIPFS(manifestCid);
+  const manifest = normalizeLegacy3mfPlacements(
+    await getFromRemoteIPFS(manifestCid)
+  );
 
   // Collection manifests don't have scene.nodes - delegate to
   // loadCollectionManifest and auto-load the first asset.
@@ -641,7 +644,9 @@ const _inFlightLinkedDrops = new Set<Promise<void>>();
 async function readSingleModelNode(
   manifestCid: string
 ): Promise<ForkTemplate | undefined> {
-  const nodes = getManifestNodes(await getFromRemoteIPFS(manifestCid));
+  const nodes = getManifestNodes(
+    normalizeLegacy3mfPlacements(await getFromRemoteIPFS(manifestCid))
+  );
   if (nodes.length !== 1 || nodes[0].child_ref || !nodes[0].source) return undefined;
   const { source, post_processor, transform_matrix } = nodes[0];
   return { source, post_processor, transform_matrix };

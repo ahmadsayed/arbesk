@@ -3,6 +3,7 @@
  */
 
 import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
+import { normalizeLegacy3mfPlacements } from "../../engine/legacy-3mf-placement.ts";
 import { computeAssetStats } from "./metadata-extract.ts";
 import { getPendingAnnotations, clearPendingAnnotations } from "./annotations.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
@@ -756,7 +757,9 @@ async function loadOrBuildBaseManifest(assetName: string) {
   if (activeCid) {
     manifest = _useCachedManifest(activeCid);
     if (!manifest) {
-      manifest = await getFromRemoteIPFS(activeCid);
+      // Same legacy-3MF conversion as the loader, so a save never bakes
+      // millimetre-era placements in under a new timestamp.
+      manifest = normalizeLegacy3mfPlacements(await getFromRemoteIPFS(activeCid));
     }
     manifest.type = "asset";
   } else if (
