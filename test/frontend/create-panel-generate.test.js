@@ -16,6 +16,8 @@
 
 
 import { afterEach, beforeAll, beforeEach, expect, jest, mock, test } from "bun:test";
+// The Animate dialog's preset catalog, as GET /config serves it.
+import { ANIMATION_PRESETS } from "../../src/api/animation-presets.ts";
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 
 // ─── Mock handles ───
@@ -158,7 +160,7 @@ mock.module("../../frontend/src/js/ui/generation-advice.js", () => ({
   fetchGenerationAdvice: mockFetchGenerationAdvice,
 }));
 mock.module("../../frontend/src/js/services/app-config.js", () => ({
-  getConfig: jest.fn(async () => ({ cadGeneration: true })),
+  getConfig: jest.fn(async () => ({ cadGeneration: true, animationPresets: ANIMATION_PRESETS })),
 }));
 mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
   createChatPreview: mockCreateChatPreview,
@@ -706,7 +708,7 @@ test("typed follow-up after a tripo3d generation retextures the active version",
   expect(mockJudgeFollowupIntent).toHaveBeenCalledWith({
     prompt: "make it metallic",
     modelName: "a robot",
-    actions: ["retexture", "retopo", "auto-rig", "animate"],
+    actions: ["retexture", "retopo", "split", "auto-rig", "animate"],
   });
 });
 
@@ -742,6 +744,35 @@ test("typed animate follow-up opens the Animate dialog with Jev's motions checke
   expect(box("preset:run")).toBe(true);
   expect(box("preset:walk")).toBe(false); // a row default, overridden
   expect(box("option:in-place")).toBe(false);
+});
+
+test("typed part removal confirms, then splits the model", async () => {
+  await generateRobot();
+  mockJudgeFollowupIntent.mockResolvedValue(reading("split", 0.9));
+
+  promptInput.value = "remove the horn";
+  await clickGenerate();
+
+  // Nothing generated yet - the split costs credits, so it asks first.
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
+  const [message, choices, onPick] = mockAddChoiceMessage.mock.calls[0];
+  expect(message).toContain("separate parts");
+  expect(choices.map((c) => c.value)).toEqual(["split", "cancel"]);
+
+  onPick("split");
+  await flush(); await flush(); await flush();
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(2);
+  expect(mockGenerateAsset.mock.calls[1][0]).toMatchObject({ split: true, sourceAssetCid: GENERATION_RESULT.sourceAssetCid });
+});
+
+test("typed part removal does nothing when the split is cancelled", async () => {
+  await generateRobot();
+  mockJudgeFollowupIntent.mockResolvedValue(reading("split", 0.9));
+  promptInput.value = "remove the horn";
+  await clickGenerate();
+  mockAddChoiceMessage.mock.calls[0][2]("cancel");
+  await flush(); await flush();
+  expect(mockGenerateAsset).toHaveBeenCalledTimes(1);
 });
 
 test("typed shape change offers a new model, which starts fresh", async () => {

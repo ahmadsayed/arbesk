@@ -6,6 +6,7 @@ export type GenerationCapability =
   | "multiview-to-3d"
   | "retexture"
   | "retopo"
+  | "split"
   | "rig-check"
   | "rig"
   | "animate"

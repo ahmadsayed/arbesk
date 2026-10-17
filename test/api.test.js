@@ -1194,6 +1194,186 @@ describe("Arbesk API", () => {
         expect(poll.body.error.code).toBe("MODEL_NOT_RIGGABLE");
       });
 
+      /** Mocks upload → rig-check created → rig-check success with `output`. */
+      function mockRigCheck(output) {
+        const calls = [];
+        const replies = [
+          { code: 0, data: { file_token: "file_1" } },
+          { code: 0, data: { task_id: "task_rc_x" } },
+          { code: 0, data: { task_id: "task_rc_x", status: "success", output } },
+        ];
+        jest.spyOn(global, "fetch").mockImplementation(async (url) => {
+          calls.push(url);
+          const reply = replies.shift() ?? { code: 0, data: { task_id: "task_unexpected" } };
+          return { ok: true, json: async () => reply };
+        });
+        return calls;
+      }
+
+      it("POST rigCheck runs only the free rig-check and reports the skeleton type", async () => {
+        const session = await makeSessionHeader();
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        const calls = mockRigCheck({ riggable: true, rig_type: "quadruped" });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({ nodeId: "n_rc", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", rigCheck: true });
+        expect(post.status).toBe(202);
+        expect(post.body.rigChecking).toBe(true);
+
+        const poll = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.status).toBe("success");
+        expect(poll.body.rigCheck).toEqual({ riggable: true, rigType: "quadruped" });
+        // upload + rig-check + poll — never the paid rig endpoint.
+        expect(calls).toHaveLength(3);
+        expect(calls.some((u) => u.endsWith("/animations/rig"))).toBe(false);
+      });
+
+      it("POST rigCheck reports an unriggable model as a successful check", async () => {
+        const session = await makeSessionHeader();
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        mockRigCheck({ riggable: false });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({ nodeId: "n_rc2", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", rigCheck: true });
+        const poll = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.status).toBe("success");
+        expect(poll.body.rigCheck).toEqual({ riggable: false, rigType: null });
+      });
+
+      it("GET fails before the paid rig when biped presets meet a quadruped skeleton", async () => {
+        const session = await makeSessionHeader();
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        const calls = mockRigCheck({ riggable: true, rig_type: "quadruped" });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            nodeId: "n_mm", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource",
+            animate: true, animations: ["preset:walk", "preset:biped:dance_01"],
+          });
+        const poll = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.status).toBe("failed");
+        expect(poll.body.error.code).toBe("ANIMATION_RIG_MISMATCH");
+        expect(poll.body.error.message).toContain("quadruped");
+        // Points the user at the one preset a quadruped takes.
+        expect(poll.body.error.message).toContain("preset:quadruped:walk");
+        expect(calls).toHaveLength(3);
+        expect(calls.some((u) => u.endsWith("/animations/rig"))).toBe(false);
+      });
+
+      it("GET rigs a quadruped when only quadruped presets are requested", async () => {
+        const session = await makeSessionHeader();
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        const calls = mockRigCheck({ riggable: true, rig_type: "quadruped" });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            nodeId: "n_ok", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource",
+            animate: true, animations: ["preset:quadruped:walk"],
+          });
+        const poll = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.status).toBe("running");
+        expect(calls[3]).toBe("https://openapi.tripo3d.ai/v3/animations/rig");
+      });
+
+      it("POST rejects biped-only presets with an explicit v2.5 rig model", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "n_v25", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource",
+            animate: true, rigModel: "v2.5-20260210", animations: ["preset:biped:wave_goodbye_01"],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("GET fails before the paid rig when a creature preset meets a biped skeleton", async () => {
+        const session = await makeSessionHeader();
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        const calls = mockRigCheck({ riggable: true, rig_type: "biped" });
+
+        const post = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", session)
+          .send({
+            nodeId: "n_mm2", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource",
+            animate: true, animations: ["preset:quadruped:walk"],
+          });
+        const poll = await request(app)
+          .get(`/api/v1/generations/${post.body.taskId}`)
+          .set("Authorization", session);
+        expect(poll.body.error.code).toBe("ANIMATION_RIG_MISMATCH");
+        expect(calls).toHaveLength(3);
+      });
+
+      it("POST rejects creature presets with an explicit v1.0 humanoid rig", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "n_v10", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource",
+            animate: true, rigModel: "v1.0-20240301", animations: ["preset:quadruped:walk"],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("POST split uploads the GLB and starts a v2 mesh/segment task", async () => {
+        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
+        const calls = [];
+        const bodies = [];
+        jest.spyOn(global, "fetch").mockImplementation(async (url, opts) => {
+          calls.push(url);
+          if (opts?.body && !(opts.body instanceof FormData)) bodies.push(JSON.parse(opts.body));
+          return { ok: true, json: async () => ({ code: 0, data: { file_token: "file_1", task_id: "task_seg" } }) };
+        });
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n_split", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", split: true });
+        expect(res.status).toBe(202);
+        expect(res.body.split).toBe(true);
+        expect(calls[1]).toBe("https://openapi.tripo3d.ai/v3/mesh/segment");
+        expect(bodies[0]).toMatchObject({ input: "file_1", model: "v2.0-20260430" });
+      });
+
+      it("POST rejects split combined with another action flag", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({ nodeId: "n_split2", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", split: true, retopo: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("POST rejects rigCheck combined with another action flag", async () => {
+        const res = await request(app)
+          .post("/api/v1/generations")
+          .set("Authorization", await makeSessionHeader())
+          .send({
+            nodeId: "n_both", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource",
+            rigCheck: true, animate: true, animations: ["preset:idle"],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      });
+
       it("POST with textureQuality=detailed passes texture_quality=detailed to Tripo", async () => {
         const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
           ok: true,

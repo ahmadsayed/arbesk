@@ -6,8 +6,8 @@ import { getFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
 import {
   composeAsync,
   decomposeAsync,
-  editSourceColorsAsync,
 } from "@arbesk/asset-core/formats/gltf/async-gltf.js";
+import { sourceEditHooks } from "./source-edits.ts";
 import { isComposite } from "@arbesk/asset-core/formats/gltf/decomposer.js";
 import { editCompositeColors } from "@arbesk/asset-core/formats/gltf/material-editor.js";
 import type {
@@ -84,17 +84,7 @@ export const gltfHandler: FormatHandler = {
     );
   },
 
-  async editSourceColors(
-    node: any,
-    colorMap: Record<string, string>,
-    ctx: FormatSaveContext
-  ) {
-    return editSourceColorsAsync(node.source.cid, colorMap, {
-      assetName: ctx.assetName,
-      assetId: ctx.assetId,
-      dedupMap: ctx.dedupMap,
-    });
-  },
+  ...sourceEditHooks,
 
   async editCompositeColors(
     node: any,

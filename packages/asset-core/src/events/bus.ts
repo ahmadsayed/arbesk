@@ -42,6 +42,7 @@ export const EVENTS = {
   NODE_LIST_CHANGED:          "node:listChanged",
   NODE_SELECTED:              "node:selected",
   OUTLINER_NODE_SELECTED:     "outliner:nodeSelected",
+  OUTLINER_PART_SELECTED:     "outliner:partSelected",
   OUTLINER_REMOVE_REQUESTED:  "outliner:removeRequested",
   PENDING_EDITS_CHANGED:      "pending:editsChanged",
   SCENE_CLEARED:              "scene:cleared",

@@ -1050,6 +1050,23 @@
             "type": "boolean",
             "description": "Parametric CAD generation provider availability (CAD_MOCK_GENERATION or DEEPSEEK_API_KEY configured)"
           },
+          "animationPresets": {
+            "type": "array",
+            "description": "Tripo retarget presets the Animate dialog offers, in dialog order (src/api/animation-presets.ts). Tripo has no preset-listing API, so this catalog mirrors its retarget docs.",
+            "items": {
+              "type": "object",
+              "required": ["id", "label", "category", "skeleton", "motion"],
+              "properties": {
+                "id": { "type": "string", "example": "preset:quadruped:walk" },
+                "label": { "type": "string", "example": "Walk (four-legged)" },
+                "category": { "type": "string", "example": "Creatures" },
+                "skeleton": { "type": "string", "description": "rig-check rig_type this preset retargets onto", "example": "quadruped" },
+                "rigModel": { "type": "string", "description": "The only rig model that takes this preset; absent = either", "example": "v2.5-20260210" },
+                "default": { "type": "boolean", "description": "Ticked when the dialog opens" },
+                "motion": { "type": "string", "description": "Motion description used for follow-up intent reading" }
+              }
+            }
+          },
           "defaultChainId": {
             "type": "integer",
             "description": "Deployment default chain ID (DEFAULT_CHAIN_ID env, falls back to Hardhat local). Anonymous chain reads use this chain.",
@@ -1096,6 +1113,14 @@
           "retopo": {
             "type": "boolean",
             "description": "Optional (tripo3d only, with sourceAssetCid): smart retopology via mesh/decimate v2.0 — clean triangulated topology with baked textures, GLB output. The 202 response includes \"retopo\": true."
+          },
+          "split": {
+            "type": "boolean",
+            "description": "Optional (tripo3d only, with sourceAssetCid): split the source model into separate part meshes via mesh/segment v2.0 — one GLB with a node per part (tripo_part_N), textures kept. The 202 response includes \"split\": true."
+          },
+          "rigCheck": {
+            "type": "boolean",
+            "description": "Optional (tripo3d only, with sourceAssetCid): free rig-check probe only. The poll result carries rigCheck: { riggable, rigType } and no asset. The 202 response includes \"rigChecking\": true."
           },
           "animate": {
             "type": "boolean",
@@ -1220,6 +1245,14 @@
           "animating": {
             "type": "boolean",
             "description": "Present and true when the request started a rig/animate chain via sourceAssetCid + animate"
+          },
+          "split": {
+            "type": "boolean",
+            "description": "Present and true when the request started a split-into-parts task via sourceAssetCid + split"
+          },
+          "rigChecking": {
+            "type": "boolean",
+            "description": "Present and true when the request started a free rig-check probe via sourceAssetCid + rigCheck"
           }
         }
       },

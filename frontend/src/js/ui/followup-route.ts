@@ -3,8 +3,8 @@
  * @remarks The reading comes from POST /api/v1/followup-intent; this module is
  *   the policy, kept apart so thresholds are tested without the panel.
  *   Retexture is the only action that runs without a dialog, so it needs the
- *   higher bar; retopo, rig and animate open their own dialogs (prefilled), so
- *   the user confirms before any credits are spent. No reading at all - no Jev
+ *   higher bar; retopo, rig and animate open their own dialogs (prefilled),
+ *   and split asks first, so the user confirms before any credits are spent. No reading at all - no Jev
  *   key, an outage, a timeout - keeps the old behaviour: retexture.
  */
 import type { FollowupAction } from "@arbesk/asset-core/domain/generation-actions.js";
@@ -28,6 +28,7 @@ export type FollowupOption = FollowupAction | "new-model";
 export type FollowupPlan =
   | { kind: "retexture" }
   | { kind: "retopo" }
+  | { kind: "split" }
   | { kind: "auto-rig" }
   | { kind: "animate"; animations: string[]; inPlace: boolean }
   | { kind: "new-model" }
@@ -37,7 +38,7 @@ export type FollowupPlan =
    */
   | { kind: "ask"; options: FollowupOption[]; animations: string[]; inPlace: boolean };
 
-/** Confidence to open a confirming dialog (retopo, rig, animate) or offer a new model. */
+/** Confidence to open a confirming dialog (retopo, split, rig, animate) or offer a new model. */
 export const DIALOG_CONFIDENCE = 0.6;
 /**
  * Confidence to retexture straight away.
@@ -58,7 +59,7 @@ export function decideFollowup(intent: FollowupIntent | null, available: Followu
   if (action !== "retexture" && available.includes(action as FollowupAction) && confidence >= DIALOG_CONFIDENCE) {
     return action === "animate"
       ? { kind: "animate", animations: intent.animations, inPlace: intent.inPlace }
-      : { kind: action as "retopo" | "auto-rig" };
+      : { kind: action as "retopo" | "split" | "auto-rig" };
   }
   return { kind: "ask", options: likeliestOptions(intent, available), animations: intent.animations, inPlace: intent.inPlace };
 }

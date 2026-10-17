@@ -29,6 +29,7 @@ import emailAuthRoutes from "./routes/email-auth.ts";
 import walletRelayRoutes from "./routes/wallet-relay.ts";
 import cliAuthRoutes from "./routes/cli-auth.ts";
 import devConsoleRoutes from "./routes/dev-console.ts";
+import { ANIMATION_PRESETS } from "./animation-presets.ts";
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 interface ApiDeps {
@@ -59,6 +60,7 @@ export default (deps: ApiDeps) => {
         (process.env.DEEPSEEK_API_KEY ?? "").trim().length > 0,
       cdpProjectId: process.env.CDP_PROJECT_ID || null,
       nostrPublicUrl: process.env.PUBLIC_NOSTR_URL || null,
+      animationPresets: ANIMATION_PRESETS,
     }),
   );
 

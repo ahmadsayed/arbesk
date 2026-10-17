@@ -390,6 +390,10 @@ describe("CAD_MOCK_GENERATION", () => {
       const res = await request(buildConfigApp()).get("/api/v1/config");
       expect(res.status).toBe(200);
       expect(res.body.cadGeneration).toBe(true);
+      // The Animate dialog's preset catalog ships with the config.
+      expect(res.body.animationPresets).toContainEqual(
+        expect.objectContaining({ id: "preset:quadruped:walk", skeleton: "quadruped" }),
+      );
     } finally {
       if (prevMock === undefined) delete process.env.CAD_MOCK_GENERATION; else process.env.CAD_MOCK_GENERATION = prevMock;
     }

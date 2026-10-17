@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ANIMATION_PRESET_IDS, findAnimationPreset } from "./animation-presets.ts";
 
 // ─── Primitives ─────────────────────────────────────────────────────────────
 
@@ -52,38 +53,6 @@ export const createSessionSchema = z.object({
 const MAX_IMAGE_BASE64_LENGTH = 14 * 1024 * 1024;
 
 // Biped retarget presets accepted by Tripo POST /animations/retarget.
-const ANIMATION_PRESETS = [
-  "preset:idle",
-  "preset:walk",
-  "preset:run",
-  "preset:dive",
-  "preset:climb",
-  "preset:jump",
-  "preset:slash",
-  "preset:shoot",
-  "preset:hurt",
-  "preset:fall",
-  "preset:turn",
-  // Curated v1.0 biped-rig presets (Tripo's 90+ library). The adapter maps
-  // short-form IDs to this namespace for v1.0 rigs; these pass through as-is.
-  "preset:biped:front_kick_01",
-  "preset:biped:box_01",
-  "preset:biped:cast_a_spell",
-  "preset:biped:defeat_02",
-  "preset:biped:scared_01",
-  "preset:biped:dance_01",
-  "preset:biped:dance_02",
-  "preset:biped:cheer",
-  "preset:biped:victory_celebration",
-  "preset:biped:wave_goodbye_01",
-  "preset:biped:clap",
-  "preset:biped:bow",
-  "preset:biped:sit",
-  "preset:biped:look_around",
-  "preset:biped:standing_relax",
-  "preset:biped:swim",
-] as [string, ...string[]];
-
 export const generateAssetSchema = z
   .object({
     prompt: z.string().min(1, "prompt is required").optional(),
@@ -99,6 +68,13 @@ export const generateAssetSchema = z
     retexture: z.boolean().optional(),
     retopo: z.boolean().optional(),
     animate: z.boolean().optional(),
+    // Free compatibility probe (tripo3d only): runs Tripo's rig-check alone
+    // and reports { riggable, rigType } so the client can offer only the
+    // animations the skeleton supports.
+    rigCheck: z.boolean().optional(),
+    // Split into parts (tripo3d only): Tripo mesh/segment → one GLB with a
+    // node per part, listed in the Studio Outline.
+    split: z.boolean().optional(),
     // Retarget-only shortcut: backend registry id of a completed rig-only
     // task. Optional — the GLB chain is the canonical path.
     sourceTaskId: z.string().max(64).optional(),
@@ -111,7 +87,7 @@ export const generateAssetSchema = z
     // Retarget option (tripo3d only): play the animation in place, without
     // root displacement.
     animateInPlace: z.boolean().optional(),
-    animations: z.array(z.enum(ANIMATION_PRESETS)).min(1).max(5).optional(),
+    animations: z.array(z.enum(ANIMATION_PRESET_IDS)).min(1).max(5).optional(),
     // Texture quality (tripo3d only): generation + retexture. "fast" needs
     // the v3.5 texture model — the adapter auto-selects it when no explicit
     // textureVersion is given (Tripo rejects "fast" otherwise, code 1004).
@@ -198,10 +174,10 @@ export const generateAssetSchema = z
   .refine(
     (v) =>
       !v.sourceAssetCid ||
-      [v.retexture, v.retopo, v.animate].filter(Boolean).length === 1,
+      [v.retexture, v.retopo, v.animate, v.rigCheck, v.split].filter(Boolean).length === 1,
     {
       message:
-        "sourceAssetCid requires exactly one of retexture, retopo, or animate",
+        "sourceAssetCid requires exactly one of retexture, retopo, animate, rigCheck, or split",
       path: ["sourceAssetCid"],
     },
   )
@@ -224,6 +200,18 @@ export const generateAssetSchema = z
     message: "rigModel is only valid with animate",
     path: ["rigModel"],
   })
+  .refine(
+    (v) =>
+      !v.rigModel ||
+      !v.animations?.some((id) => {
+        const preset = findAnimationPreset(id);
+        return preset?.rigModel && preset.rigModel !== v.rigModel;
+      }),
+    {
+      message: "an animation needs a different rig model than the one chosen",
+      path: ["animations"],
+    },
+  )
   .refine((v) => !v.animateInPlace || (v.animate && !v.rigOnly), {
     message: "animateInPlace is only valid with animate (not rigOnly)",
     path: ["animateInPlace"],
@@ -442,7 +430,7 @@ export const cadRepairSchema = z.object({
 export const followupIntentSchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   modelName: z.string().max(200).optional(),
-  actions: z.array(z.enum(["retexture", "retopo", "auto-rig", "animate"])).min(1).max(4),
+  actions: z.array(z.enum(["retexture", "retopo", "split", "auto-rig", "animate"])).min(1).max(5),
 });
 
 /** Body of POST /api/v1/generation-advice. */

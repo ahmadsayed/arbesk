@@ -6,7 +6,7 @@
 
 export interface UndoItem {
   nodeId: string;
-  /** color entries only */
+  /** color and part entries only */
   meshName?: string;
   /** transform: number[16] column-major matrix; color: hex string */
   before: any;
@@ -14,7 +14,7 @@ export interface UndoItem {
 }
 
 export interface UndoEntry {
-  type: "transform" | "color" | "child_ref";
+  type: "transform" | "color" | "child_ref" | "part";
   /** human label for tooltips/logs ("Move", "Rotate", "Scale", "Color") */
   label: string;
   items: UndoItem[];

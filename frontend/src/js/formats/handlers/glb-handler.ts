@@ -6,10 +6,8 @@ import {
   getBlobFromRemoteIPFS,
   getArrayBufferFromRemoteIPFS,
 } from "../../ipfs/remote-ipfs.ts";
-import {
-  decomposeAsync,
-  editSourceColorsAsync,
-} from "@arbesk/asset-core/formats/gltf/async-gltf.js";
+import { decomposeAsync } from "@arbesk/asset-core/formats/gltf/async-gltf.js";
+import { sourceEditHooks } from "./source-edits.ts";
 import type {
   FormatHandler,
   FormatLoadContext,
@@ -72,15 +70,5 @@ export const glbHandler: FormatHandler = {
     return false;
   },
 
-  async editSourceColors(
-    node: any,
-    colorMap: Record<string, string>,
-    ctx: FormatSaveContext
-  ) {
-    return editSourceColorsAsync(node.source.cid, colorMap, {
-      assetName: ctx.assetName,
-      assetId: ctx.assetId,
-      dedupMap: ctx.dedupMap,
-    });
-  },
+  ...sourceEditHooks,
 };

@@ -46,6 +46,12 @@ export interface EngineState {
    */
   pendingChildRefRemovals: Set<string>;
   /**
+   * Parts (sub-mesh names) removed from a model but not yet saved, keyed by
+   * node_id. Hidden in the viewport; Save rewrites the node's source glTF
+   * without them (engine/part-remove.ts).
+   */
+  pendingPartRemovals: Map<string, Set<string>>;
+  /**
    * Post-processor edits (color/scale/meshOverrides) accumulated in the
    * inspector but not yet persisted. Keyed by node_id. Picked up by
    * `asset-save.js → prepareManifestForWrite` and cleared on save.
@@ -122,6 +128,7 @@ export const state: EngineState = {
   rootSceneAnchor: null,
   pendingChildRefs: [],
   pendingChildRefRemovals: new Set(),
+  pendingPartRemovals: new Map(),
   pendingPostProcessorEdits: new Map(),
   defaultWoodMaterial: null,
   resizeEngineHandler: null,

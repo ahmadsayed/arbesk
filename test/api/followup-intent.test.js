@@ -16,7 +16,7 @@ const intent = await import("../../src/api/followup-intent.ts");
 const { default: followupIntentRoutes } = await import("../../src/api/routes/followup-intent.ts");
 
 const WALLET = "0x1234567890123456789012345678901234567890";
-const ALL = ["retexture", "retopo", "auto-rig", "animate"];
+const ALL = ["retexture", "retopo", "split", "auto-rig", "animate"];
 
 /** A Jev reply body with the given action distribution and motion nouls. */
 function reply({ choice = "animate", confidence = 0.95, motions = {}, travel = 0.1, texture, retopo } = {}) {
@@ -40,6 +40,13 @@ describe("followupQuestions", () => {
   test("offers only the bubble's actions, plus new_model and unclear", () => {
     const q = intent.followupQuestions(["animate"]);
     expect(Object.keys(q[intent.ACTION_QUESTION].criteria)).toEqual(["animate", "new_model", "unclear"]);
+  });
+
+  test("offers split, worded for removing one part, when the bubble can split", () => {
+    const criteria = intent.followupQuestions(ALL)[intent.ACTION_QUESTION].criteria;
+    expect(criteria.split).toContain("remove");
+    // Removing a part is split's job now, not a new model's.
+    expect(criteria.new_model).not.toContain("remove");
   });
 
   test("asks motion and travel questions only when animate is available", () => {

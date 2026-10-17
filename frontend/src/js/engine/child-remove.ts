@@ -16,6 +16,7 @@ import { deselectNodes } from "./scene-selection.ts";
 import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
 import { notifyPendingEditsChanged } from "../state/unsaved-changes.ts";
+import { removeSelectedPart } from "./part-remove.ts";
 
 /**
  * Keeps only the selected ids that are child assets.
@@ -171,11 +172,16 @@ registerUndoApplier("child_ref", (item, direction) => {
 
 // ── Trigger wiring ───────────────────────────────────────────────────────────
 
-on(EVENTS.OUTLINER_REMOVE_REQUESTED, () => {
+/** A selected part is removed first; otherwise selected child assets unlink. */
+function removeSelection(): void {
+  if (removeSelectedPart()) return;
   removeChildAssetNodes();
-});
+}
 
-// Delete / Backspace unlinks the selected child asset(s), Blender-style.
+on(EVENTS.OUTLINER_REMOVE_REQUESTED, removeSelection);
+
+// Delete / Backspace removes the selected part, or unlinks the selected
+// child asset(s), Blender-style.
 // Guarded against form-field focus so typing never removes geometry.
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Delete" && e.key !== "Backspace") return;
@@ -185,5 +191,5 @@ document.addEventListener("keydown", (e) => {
     el?.isContentEditable || tag === "input" || tag === "textarea" || tag === "select";
   if (editing) return;
   e.preventDefault();
-  removeChildAssetNodes();
+  removeSelection();
 });

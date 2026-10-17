@@ -6,9 +6,11 @@
  *   format gets nothing (Tripo's follow-up endpoints accept only glTF/GLB);
  *   unknown/absent formats stay actionable and the backend validates.
  *   "upload" records get the same row as Tripo3D results — the follow-ups run
- *   off sourceAssetCid, which any staged upload has.
+ *   off sourceAssetCid, which any staged upload has. Split results drop
+ *   Split (already in parts) and Retopo (it rebuilds one mesh, undoing the
+ *   split).
  */
-export type FollowupAction = "retexture" | "retopo" | "auto-rig" | "animate";
+export type FollowupAction = "retexture" | "retopo" | "split" | "auto-rig" | "animate";
 
 export interface FollowupRecord {
   provider: string;
@@ -25,5 +27,6 @@ export function followupActionsFor({
   if (task === "animate") return [];
   if (task === "rig") return ["animate"];
   if (format && format !== "glb" && format !== "gltf") return [];
-  return ["retexture", "retopo", "auto-rig", "animate"];
+  if (task === "split") return ["retexture", "auto-rig", "animate"];
+  return ["retexture", "retopo", "split", "auto-rig", "animate"];
 }

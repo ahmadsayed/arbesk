@@ -16,6 +16,8 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 | Retopo'd model has melted eyes/face | Adaptive decimate is extremely aggressive (~1% of source polys). Pass explicit `face_limit` near the v2.0 max (20,000 tris) |
 | Code 1004 on rig | Rig has its own model line; the retired default is rejected. Use `v1.0-20240301` (biped) or `v2.5-20260210` (creatures) → rule 4 |
 | Code 1004 on retarget, "不支持mixamo骨骼的retarget" (mixamo-skeleton retarget not supported) | The rig was created with `spec: "mixamo"` — retarget only supports Tripo-native skeletons, on BOTH rig lines (v1.0 accepts mixamo at rig time, then retarget rejects it; observed live 2026-08-06). Rig with `spec: "tripo"` (the default); already-rigged mixamo tasks must be re-rigged |
+| Code 1004 on retarget with `preset:idle`/`walk`/`run` on a dog/creature | Short-form presets are **biped-only**. Each creature skeleton takes only its own: `preset:quadruped:walk`, `preset:hexapod:walk`, `preset:octopod:walk`, `preset:serpentine:march`, `preset:aquatic:march` (avian: none). Match presets to rig-check's `rig_type` BEFORE the paid rig (observed live 2026-10-17) |
+| Need to remove/recolour one part ("remove the horn") | No text-instructed geometry edit exists. `POST /mesh/segment` (`model: v2.0-20260430`, 40 credits, ~40 s) splits a GLB into one node per part — names are `tripo_part_N` (no semantic labels even on v2), connectivity split adds ~30 tiny slivers. Live 2026-10-17: a goat's two horns came out as their own parts. Removing a part leaves its attachment hole open; `POST /mesh/complete` (`input` = segment task_id, `quick_cap` or `ai_completion`) seals it |
 | Code 2006 on refine | `refine_model` endpoint is dead. Use `POST /models/texture` (texture-only refine) |
 | Code 1002 / 2010 | Auth failed (401) / insufficient credits (402) |
 | "Not riggable" | Source isn't a clear full-body humanoid/creature. T-pose full-body rigs best; retopo first if mesh is chaotic |
@@ -81,7 +83,7 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 
 - `src/api/adapters/tripo3d-adapter.ts` — the reference adapter (create/image/refine/decimate/rig/retarget/poll/download, `TripoApiError`)
 - `src/api/assets/generate-node.ts` — routes: BYOK gating, task registry, animate chain (rig-check → rig → retarget + retarget-only path), retopo route
-- `src/api/schemas.ts` — request validation (`ANIMATION_PRESETS` = the 11 generic v2.5 presets + 16 curated `preset:biped:*` ones; the adapter rejects biped-only presets with a clear 400 when the rig is a known generic/v2.5 task)
+- `src/api/animation-presets.ts` — the ONE preset catalog (Tripo has no preset-listing API; mirrors the retarget docs): id/label/category/skeleton/rigModel/motion for 11 short-form biped + 16 curated `preset:biped:*` + 5 creature presets; served to Studio via `/api/v1/config` `animationPresets`, read by `schemas.ts` validation and Jev; `presetMisfit()` maps a preset to its rig_type and the animate chain fails `ANIMATION_RIG_MISMATCH` after rig-check, before the paid rig; `rigCheck: true` runs the free probe alone — the Animate dialog lists only the skeleton's presets, `ui/animate-compat.ts`)
 - Frontend: `services/api.ts` (`generateAsset`), `ui/create-panel.ts` (HQ checkbox, retopo/animate chips)
 
 ## References

@@ -263,6 +263,44 @@ async function pollGeneration(taskId: string, signal?: AbortSignal, onProgress?:
   throw new ApiError("Generation timed out", 504, "GENERATION_TIMEOUT");
 }
 
+export interface RigCheckResult {
+  riggable: boolean;
+  /** skeleton Tripo would build ("biped", "quadruped", …); null when not riggable */
+  rigType: string | null;
+}
+
+/**
+ * Runs Tripo's free rig-check on a model and reports its skeleton type.
+ * @remarks No credits are spent — the rig and retarget steps never start.
+ *   The Animate dialog uses the result to offer only compatible presets.
+ */
+export async function checkRigCompatibility({
+  sourceAssetCid,
+  providerKey,
+  signal,
+}: {
+  sourceAssetCid: string;
+  providerKey?: string;
+  signal?: AbortSignal;
+}): Promise<RigCheckResult> {
+  const data = await fetchJsonOrThrow(
+    "/generations",
+    {
+      body: {
+        nodeId: `rig_check_${Date.now()}`,
+        provider: "tripo3d",
+        providerKey,
+        sourceAssetCid,
+        rigCheck: true,
+      },
+      signal,
+    },
+    "Rig check failed"
+  );
+  const final = await pollGeneration(data.taskId, signal);
+  return final.rigCheck as RigCheckResult;
+}
+
 /**
  * DELETE /api/v1/generations/:taskId
  * Stop tracking an in-flight generation task.
@@ -370,6 +408,8 @@ export interface GenerateAssetParams {
   retexture?: boolean;
   /** rebuild sourceAssetCid with clean triangulated topology (quad output forces FBX, unusable in-app) (tripo3d) */
   retopo?: boolean;
+  /** split sourceAssetCid into separate part meshes (tripo3d mesh/segment) */
+  split?: boolean;
   /** rig & animate sourceAssetCid (tripo3d) */
   animate?: boolean;
   /** retarget presets (e.g. ["preset:idle"]), max 5; required with animate unless rigOnly */
@@ -446,6 +486,7 @@ function buildGenerationBody(args: any, chainId: number | null): Record<string, 
     sourceTaskId,
     retexture,
     retopo,
+    split,
     animate,
     rigOnly,
     rigModel,
@@ -472,6 +513,7 @@ function buildGenerationBody(args: any, chainId: number | null): Record<string, 
       ...(sourceTaskId && { sourceTaskId }),
       ...(retexture && { retexture: true }),
       ...(retopo && { retopo: true, ...(faceLimit && { faceLimit }) }),
+      ...(split && { split: true }),
       ...(animate && { animate: true, ...(rigOnly ? { rigOnly: true } : { animations, ...(animateInPlace && { animateInPlace: true }) }), ...(rigModel && { rigModel }) }),
     }),
     ...(textureQuality && { textureQuality }),
@@ -664,6 +706,7 @@ export async function generateAsset({
   sourceTaskId,
   retexture,
   retopo,
+  split,
   animate,
   rigOnly,
   rigModel,
@@ -697,6 +740,7 @@ export async function generateAsset({
       sourceTaskId,
       retexture,
       retopo,
+      split,
       animate,
       rigOnly,
       rigModel,

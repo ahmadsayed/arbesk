@@ -7,7 +7,7 @@
  */
 
 import { getRuntime } from "../../runtime.ts";
-import { isGLB, decompose } from "./glb-parser.ts";
+import { loadSourceGltf } from "./source-gltf.ts";
 import { applyNodeColors } from "./apply-node-colors.ts";
 
 export { applyNodeColors };
@@ -41,21 +41,7 @@ export async function editSourceColors(
   let decomposedFromGlb = false;
 
   try {
-    const { ipfsRead } = getRuntime();
-    const buffer = await ipfsRead.getBytes(sourceCid);
-    if (isGLB(buffer)) {
-      // Decompose GLB into composite glTF before editing. Colors live in JSON,
-      // so we never need to re-serialize back to GLB for storage. Skip storing
-      // the intermediate composite - we write the edited version below.
-      const { composite } = await decompose(buffer, undefined, {
-        storeComposite: false,
-        dedupMap,
-      });
-      gltf = composite;
-      decomposedFromGlb = true;
-    } else {
-      gltf = await ipfsRead.getJSON(sourceCid);
-    }
+    ({ gltf, decomposedFromGlb } = await loadSourceGltf(sourceCid, dedupMap));
   } catch (err) {
     console.warn(`[SRC-COLOR] failed to fetch ${sourceCid}: ${(err as Error).message}`);
     throw err;

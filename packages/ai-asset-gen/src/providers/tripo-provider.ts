@@ -13,6 +13,7 @@ import {
   uploadModel,
   getBalance,
   decimateTask,
+  segmentTask,
   rigCheckTask,
   rigModelTask,
   retargetTask,
@@ -82,6 +83,10 @@ export function createTripoProvider(config: GenerationConfig): GenerationProvide
     retopo: async ({ source, faceLimit, quad }) => {
       requireCapability(id, capabilities, "retopo");
       return decimateTask(await sourceToken(source), apiKey, { faceLimit, quad });
+    },
+    split: async ({ source }) => {
+      requireCapability(id, capabilities, "split");
+      return segmentTask(await sourceToken(source), apiKey);
     },
     rigCheck: async ({ source }) => {
       requireCapability(id, capabilities, "rig-check");

@@ -16,6 +16,8 @@
 
 
 import { afterEach, beforeAll, beforeEach, expect, jest, mock, test } from "bun:test";
+// The Animate dialog's preset catalog, as GET /config serves it.
+import { ANIMATION_PRESETS } from "../../src/api/animation-presets.ts";
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 
 // ─── Mock handles ───
@@ -41,6 +43,7 @@ const mockRenderChatProvenance = jest.fn();
 const mockClearHistoryBubbles = jest.fn();
 
 const mockGenerateAsset = jest.fn();
+const mockCheckRigCompatibility = jest.fn();
 const mockCancelGenerationTask = jest.fn();
 const mockGetOrCreateSession = jest.fn();
 const mockGetProviderBalance = jest.fn();
@@ -93,9 +96,14 @@ mock.module("../../frontend/src/js/services/api.js", () => ({
     }
   },
   generateAsset: mockGenerateAsset,
+  checkRigCompatibility: mockCheckRigCompatibility,
   cancelGenerationTask: mockCancelGenerationTask,
   getOrCreateSession: mockGetOrCreateSession,
   getProviderBalance: mockGetProviderBalance,
+}));
+const mockGetConfig = jest.fn(async () => ({ animationPresets: ANIMATION_PRESETS }));
+mock.module("../../frontend/src/js/services/app-config.js", () => ({
+  getConfig: mockGetConfig,
 }));
 mock.module("../../frontend/src/js/services/chat-preview.js", () => ({
   createChatPreview: mockCreateChatPreview,
@@ -203,6 +211,8 @@ beforeEach(() => {
 
   mockGetOrCreateSession.mockResolvedValue("session-token");
   mockGenerateAsset.mockResolvedValue({ ...SEED_RESULT });
+  mockCheckRigCompatibility.mockResolvedValue({ riggable: true, rigType: "biped" });
+  mockGetConfig.mockResolvedValue({ animationPresets: ANIMATION_PRESETS });
   mockGetProviderBalance.mockResolvedValue({ balance: 5 });
   // Minimal dialog shell: wire closeDialog so the module's own buttons drive
   // the resolution; tests find the dialog in openDialogs and click through.
@@ -305,6 +315,42 @@ test("retopo: adaptive (empty budget) sends retopo:true without faceLimit", asyn
   const records = pendingGens.listPendingGenerations();
   expect(records[records.length - 1]).toMatchObject({ task: "retopo", provider: "tripo3d" });
   expect(mockDismissCreatePulse).toHaveBeenCalled();
+});
+
+// ─── onSplit ───
+
+test("split: sends split:true and lands a split bubble without Split/Retopo", async () => {
+  const { actions } = await seedBubble();
+  pickAction(actions, "Split");
+  await settle();
+
+  expect(lastGenerateArgs()).toMatchObject({
+    prompt: "Split into parts",
+    provider: "tripo3d",
+    sourceAssetCid: SEED_RESULT.sourceAssetCid,
+    split: true,
+  });
+  expect(lastGenerateArgs().nodeId).toMatch(/_split_\d+$/);
+  const records = pendingGens.listPendingGenerations();
+  expect(records[records.length - 1]).toMatchObject({ task: "split", provider: "tripo3d" });
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", expect.stringContaining("Outline"));
+  // The split bubble's own action row: already in parts, and retopo would merge them.
+  const rowCalls = mockAddAssetActionRow.mock.calls;
+  const labels = rowCalls[rowCalls.length - 1][1].map((a) => a.label);
+  expect(labels).toEqual(["Retexture", "Auto-rig", "Animate…"]);
+});
+
+test("split: failures and stops are reported", async () => {
+  const { actions } = await seedBubble();
+  mockGenerateAsset.mockRejectedValueOnce(new api.ApiError("cancelled", 0, "GENERATION_CANCELLED"));
+  pickAction(actions, "Split");
+  await settle();
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", "Split stopped.");
+
+  mockGenerateAsset.mockRejectedValueOnce(new Error("segment broke"));
+  pickAction(actions, "Split");
+  await settle();
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", "segment broke");
 });
 
 test("retopo: explicit budget is passed as faceLimit", async () => {
@@ -516,6 +562,119 @@ test("animate: maps not-riggable, timeout, and cancel errors", async () => {
   }
 });
 
+/** Seed a bubble whose model has its own CID (the rig-check cache is per CID). */
+async function seedBubbleWithCid(sourceAssetCid) {
+  mockGenerateAsset.mockResolvedValueOnce({ ...SEED_RESULT, sourceAssetCid });
+  return seedBubble();
+}
+
+test("animate: rig-check runs first and a quadruped is offered only its own walk", async () => {
+  mockCheckRigCompatibility.mockResolvedValue({ riggable: true, rigType: "quadruped" });
+  const { actions } = await seedBubbleWithCid("bafyDogCid");
+  pickAction(actions, "Animate…");
+  await settle();
+
+  expect(mockCheckRigCompatibility).toHaveBeenCalledWith(
+    expect.objectContaining({ sourceAssetCid: "bafyDogCid", providerKey: "sk-test-key" })
+  );
+  const { wrap } = lastDialog();
+  const offered = [...wrap.querySelectorAll('input[type="checkbox"]')].map((b) => b.value);
+  // Biped presets (Tripo 1004s preset:walk on a quadruped) are not listed.
+  expect(offered).toEqual(["preset:quadruped:walk", "option:in-place"]);
+  // No humanoid rig for a quadruped — the rig model selector is hidden.
+  expect(wrap.querySelector(".rig-model-selector")).toBeNull();
+  expect(wrap.querySelector(".rig-check-summary").textContent).toContain("quadruped");
+
+  // The only fitting preset starts checked, so Animate goes straight through.
+  wrap.querySelector("button.btn-primary").click();
+  await settle();
+  expect(lastGenerateArgs()).toMatchObject({ animations: ["preset:quadruped:walk"] });
+  expect(mockAddChatMessage).toHaveBeenCalledWith("user", "Animate: quadruped walk");
+});
+
+test("animate: dialog rows come from the served catalog", async () => {
+  mockGetConfig.mockResolvedValue({
+    animationPresets: [
+      { id: "preset:idle", label: "Idle", category: "Basics", skeleton: "biped", default: true },
+      { id: "preset:biped:bow", label: "Take a bow", category: "Emotes", skeleton: "biped", rigModel: "v1.0-20240301" },
+    ],
+  });
+  const { actions } = await seedBubbleWithCid("bafyCatalogCid");
+  pickAction(actions, "Animate…");
+  await settle();
+  const { wrap } = lastDialog();
+  const offered = [...wrap.querySelectorAll('input[type="checkbox"]')].map((b) => b.value);
+  expect(offered).toEqual(["preset:idle", "preset:biped:bow", "option:in-place"]);
+  expect(wrap.textContent).toContain("Take a bow");
+  expect(wrap.querySelector('input[value="preset:idle"]').checked).toBe(true);
+});
+
+test("animate: an unreachable catalog stops before the dialog", async () => {
+  mockGetConfig.mockResolvedValue(null);
+  const { actions } = await seedBubbleWithCid("bafyNoConfigCid");
+  pickAction(actions, "Animate…");
+  await settle();
+  expect(openDialogs).toHaveLength(0);
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", expect.stringContaining("Couldn't load the animation list"));
+});
+
+test("animate: a skeleton with no Tripo animations disables Animate", async () => {
+  mockCheckRigCompatibility.mockResolvedValue({ riggable: true, rigType: "avian" });
+  const { actions } = await seedBubbleWithCid("bafyBirdCid");
+  pickAction(actions, "Animate…");
+  await settle();
+  const { wrap } = lastDialog();
+  expect(wrap.querySelector("button.btn-primary").disabled).toBe(true);
+  expect(wrap.textContent).toContain("no animations for avian");
+});
+
+test("animate: an unriggable model stops before the dialog, spending nothing", async () => {
+  mockCheckRigCompatibility.mockResolvedValue({ riggable: false, rigType: null });
+  const { actions } = await seedBubbleWithCid("bafyRockCid");
+  pickAction(actions, "Animate…");
+  await settle();
+
+  expect(openDialogs).toHaveLength(0);
+  expect(mockGenerateAsset).not.toHaveBeenCalled();
+  expect(mockAddChatMessage).toHaveBeenCalledWith("system", expect.stringContaining("isn't riggable"));
+});
+
+test("animate: the rig-check result is cached per model", async () => {
+  const { actions } = await seedBubbleWithCid("bafyCachedCid");
+  pickAction(actions, "Animate…");
+  await settle();
+  lastDialog().wrap.closeDialog(undefined);
+  await settle();
+  pickAction(actions, "Animate…");
+  await settle();
+  expect(mockCheckRigCompatibility).toHaveBeenCalledTimes(1);
+});
+
+test("animate: a failed rig-check still opens the full picker", async () => {
+  mockCheckRigCompatibility.mockRejectedValue(new Error("network down"));
+  jest.spyOn(console, "warn").mockImplementation(() => {});
+  const { actions } = await seedBubbleWithCid("bafyFlakyCid");
+  pickAction(actions, "Animate…");
+  await settle();
+  const { wrap } = lastDialog();
+  expect(wrap.querySelector(`input[value="preset:biped:dance_01"]`).disabled).toBe(false);
+});
+
+test("animate: picking the v2.5 rig disables humanoid-only presets for a biped", async () => {
+  const { actions } = await seedBubbleWithCid("bafyBipedCid");
+  pickAction(actions, "Animate…");
+  await settle();
+  const { wrap } = lastDialog();
+  const dance = wrap.querySelector(`input[value="preset:biped:dance_01"]`);
+  expect(dance.disabled).toBe(false);
+  // A biped isn't offered creature presets.
+  expect(wrap.querySelector(`input[value="preset:quadruped:walk"]`)).toBeNull();
+  const v25 = wrap.querySelector(`input[name="rigModel"][value="v2.5-20260210"]`);
+  v25.checked = true;
+  v25.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(dance.disabled).toBe(true);
+});
+
 // ─── retryRig / retryAnimate (via the rig retry chips) ───
 
 /** Seed, run auto-rig with Auto model, and capture the retry-chip callback. */
@@ -590,6 +749,10 @@ test("retryAnimate: chip prompts for presets, then animates with the forced skel
     rigModel: "v2.5-20260210",
   });
   expect(mockAddChatMessage).toHaveBeenCalledWith("user", "Animate: run (v2.5)");
+  // The v2.5 retry offers no humanoid-only presets.
+  const offered = mockShowCheckboxDialog.mock.calls[0][2].map((o) => o.value);
+  expect(offered.some((v) => v.startsWith("preset:biped:"))).toBe(false);
+  expect(offered).toContain("preset:walk");
 });
 
 test("retryAnimate: cancelled preset picker aborts", async () => {

@@ -62,6 +62,8 @@ export interface GenerationProvider {
   uploadSource(source: SourceRef): Promise<string>;
   retexture(input: { prompt: string; source: SourceRef } & RetextureTaskOptions): Promise<string>;
   retopo(input: { source: SourceRef; faceLimit?: number; quad?: boolean }): Promise<string>;
+  /** Splits a model into separate part meshes (one GLB node per part). */
+  split(input: { source: SourceRef }): Promise<string>;
   rigCheck(input: { source: SourceRef }): Promise<string>;
   rig(input: { source: SourceRef; rigType?: string; model?: string }): Promise<{ taskId: string; model: string }>;
   animate(input: { rigTaskId: string; animations: string[]; animateInPlace?: boolean; rigModel?: string }): Promise<string>;

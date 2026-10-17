@@ -43,6 +43,7 @@ import type { AuthEnv } from "../authentication.ts";
 import { generationRateLimit } from "../rate-limiter.ts";
 import { validateBody } from "../validation.ts";
 import { generateAssetSchema, providerBalanceSchema } from "../schemas.ts";
+import { ANIMATION_PRESETS, presetMisfit } from "../animation-presets.ts";
 import { verifyOnChainGeneration } from "../generation-verify.ts";
 import { CHAIN_IDS } from "../../../constants/chains.js";
 
@@ -56,6 +57,7 @@ const TRIPO_CAPABILITIES: GenerationCapability[] = [
   "multiview-to-3d",
   "retexture",
   "retopo",
+  "split",
   "rig-check",
   "rig",
   "animate",
@@ -73,7 +75,7 @@ const GLB_MAGIC = 0x46546C67;
 
 /** 400 message for sources Tripo follow-ups cannot consume (→ SOURCE_ASSET_UNSUPPORTED_FORMAT). */
 const MSG_SOURCE_UNSUPPORTED =
-  "Source asset is not glTF/GLB — Tripo follow-ups (retexture, retopo, auto-rig, animate) require a glTF or GLB model";
+  "Source asset is not glTF/GLB — Tripo follow-ups (retexture, retopo, split, auto-rig, animate) require a glTF or GLB model";
 
 /** 400 message prefix for glTF JSON with references we cannot inline (→ SOURCE_ASSET_UNSUPPORTED_FORMAT). */
 const MSG_SOURCE_UNRESOLVABLE_PREFIX = "Source glTF has external references that cannot be resolved";
@@ -382,6 +384,8 @@ interface TripoGenerationInput {
   retexture?: boolean;
   retopo?: boolean;
   animate?: boolean;
+  rigCheck?: boolean;
+  split?: boolean;
   rigOnly?: boolean;
   rigModel?: string;
   animateInPlace?: boolean;
@@ -460,7 +464,7 @@ async function tryRetargetOnly(
 }
 
 /**
- * Starts a follow-up task (animate chain, retopo, or retexture) on a source
+ * Starts a follow-up task (animate chain, retopo, split, or retexture) on a source
  * asset: uploads the source GLB to Tripo, then dispatches on the action flag.
  * @returns the 202 response when an action flag matched, undefined otherwise
  */
@@ -472,9 +476,19 @@ async function startSourceFollowUp(
   sourceAssetCid: string,
   body: TripoGenerationInput,
 ): Promise<Response | undefined> {
-  const { prompt, retexture, retopo, animate, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, textureVersion, delight } = body;
+  const { prompt, retexture, retopo, split, animate, rigCheck, rigOnly, rigModel, animateInPlace, animations, faceLimit, textureQuality, textureVersion, delight } = body;
   const fileToken = await provider.uploadSource({ kind: "cid", cid: sourceAssetCid });
   const source: SourceRef = { kind: "fileToken", fileToken };
+
+  if (rigCheck) {
+    console.log(`[GEN] starting rig-check probe source=${sourceAssetCid}`);
+    const rigCheckId = await provider.rigCheck({ source });
+    const taskId = registerTask({
+      tripoTaskId: rigCheckId, providerKey: key, userAddress,
+      kind: "animate", phase: "rig-check", checkOnly: true,
+    });
+    return c.json({ taskId, provider: "tripo3d", status: "running", rigChecking: true }, 202);
+  }
 
   if (animate) {
     console.log(`[GEN] starting animate chain source=${sourceAssetCid} animations=${(animations || []).join(",")} rigOnly=${Boolean(rigOnly)} inPlace=${Boolean(animateInPlace)}`);
@@ -491,6 +505,13 @@ async function startSourceFollowUp(
     const decimateId = await provider.retopo({ source, faceLimit });
     const taskId = registerTask({ tripoTaskId: decimateId, providerKey: key, userAddress });
     return c.json({ taskId, provider: "tripo3d", status: "running", retopo: true }, 202);
+  }
+
+  if (split) {
+    console.log(`[GEN] starting split source=${sourceAssetCid}`);
+    const segmentId = await provider.split({ source });
+    const taskId = registerTask({ tripoTaskId: segmentId, providerKey: key, userAddress });
+    return c.json({ taskId, provider: "tripo3d", status: "running", split: true }, 202);
   }
 
   // retexture (schema guarantees exactly one action flag)
@@ -697,6 +718,115 @@ async function completeCadTask(
 }
 
 /**
+ * Checks the requested presets against the skeleton rig-check reported,
+ * before the paid rig step runs.
+ * @remarks Each skeleton takes only its own presets (animation-presets.ts);
+ *   a mismatch would fail at retarget (code 1004), after the rig credits
+ *   were spent.
+ * @returns a user-facing message when incompatible, undefined otherwise
+ */
+function rigAnimationMismatch(entry: TaskEntry, rigType: string): string | undefined {
+  if (entry.rigOnly) return undefined;
+  const misfits = (entry.animations || []).filter((id) => presetMisfit(id, rigType, entry.rigModel));
+  if (misfits.length === 0) return undefined;
+  const fitting = ANIMATION_PRESETS
+    .filter((p) => p.skeleton === rigType && !presetMisfit(p.id, rigType, entry.rigModel))
+    .map((p) => p.id);
+  const offer = fitting.length
+    ? `Animations for this skeleton: ${fitting.join(", ")}.`
+    : "Tripo has no animations for this skeleton yet — use Auto-rig for a rigged model.";
+  return `This model has a ${rigType} skeleton, so ${misfits.join(", ")} can't be applied. ${offer} No rig credits were spent.`;
+}
+
+/** A check-only rig-check probe's result: { riggable, rigType }, no asset. */
+function reportRigCheckProbe(
+  c: Context,
+  taskId: string,
+  rigOutput: { riggable?: boolean; rig_type?: string } | undefined,
+): Response {
+  evictTask(taskId);
+  const rigCheck = {
+    riggable: Boolean(rigOutput?.riggable),
+    rigType: rigOutput?.riggable ? rigOutput.rig_type || "biped" : null,
+  };
+  console.log(`[GEN] rig-check probe done taskId=${taskId} riggable=${rigCheck.riggable} rig_type=${rigCheck.rigType}`);
+  return c.json({ status: "success", rigCheck });
+}
+
+/**
+ * The rig-check outcomes that end the animate chain: a check-only probe's
+ * report, an unriggable model, or presets the skeleton can't take.
+ * @returns the terminal response, or null to go on to the rig step
+ */
+function rigCheckStop(
+  c: Context,
+  entry: TaskEntry,
+  taskId: string,
+  rigOutput: { riggable?: boolean; rig_type?: string } | undefined,
+): Response | null {
+  if (entry.checkOnly) return reportRigCheckProbe(c, taskId, rigOutput);
+  if (!rigOutput?.riggable) {
+    evictTask(taskId);
+    console.log(`[GEN] animate chain: model not riggable taskId=${taskId}`);
+    return c.json({
+      status: "failed",
+      error: {
+        code: "MODEL_NOT_RIGGABLE",
+        message:
+          "Tripo reports this model is not riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.",
+      },
+    });
+  }
+  const mismatch = rigAnimationMismatch(entry, rigOutput.rig_type || "biped");
+  if (mismatch) {
+    evictTask(taskId);
+    console.log(`[GEN] animate chain: presets incompatible with skeleton taskId=${taskId} rig_type=${rigOutput.rig_type}`);
+    return c.json({ status: "failed", error: { code: "ANIMATION_RIG_MISMATCH", message: mismatch } });
+  }
+  return null;
+}
+
+/**
+ * Animate chain, rig-check done: report a check-only probe, stop on an
+ * unriggable model or presets that don't fit the skeleton, else start the
+ * paid rig step.
+ */
+async function advanceFromRigCheck(
+  c: Context,
+  provider: GenerationProvider,
+  entry: TaskEntry,
+  taskId: string,
+  userAddress: string,
+  poll: GenerationStatus,
+): Promise<Response> {
+  const rigOutput = (
+    poll.output
+  ) as { riggable?: boolean; rig_type?: string } | undefined;
+  const stop = rigCheckStop(c, entry, taskId, rigOutput);
+  if (stop) return stop;
+  // rigCheckStop passed, so the model is riggable and rigOutput is set.
+  const rigType = rigOutput?.rig_type;
+  const rig = await provider.rig({
+    source: { kind: "fileToken", fileToken: entry.sourceFileToken || "" },
+    rigType: rigType || "biped",
+    model: entry.rigModel,
+  });
+  updateTaskEntry(taskId, userAddress, {
+    tripoTaskId: rig.taskId,
+    phase: "rig",
+    rigModel: rig.model,
+  });
+  console.log(
+    `[GEN] animate chain: rig started taskId=${taskId} tripo=${rig.taskId} rig_type=${rigType} model=${rig.model}`,
+  );
+  return c.json({
+    status: "running",
+    progress: 40,
+    stage: "Rigging skeleton",
+  });
+}
+
+/**
  * Animate chain: a succeeded rig-check or rig task starts the next phase
  * instead of finishing.
  * @remarks rig-check → rig (failing fast when Tripo reports the model is not
@@ -711,39 +841,7 @@ async function advanceAnimateChain(
   poll: GenerationStatus,
 ): Promise<Response> {
   if (entry.phase === "rig-check") {
-    const rigOutput = (
-      poll.output
-    ) as { riggable?: boolean; rig_type?: string } | undefined;
-    if (!rigOutput?.riggable) {
-      evictTask(taskId);
-      console.log(`[GEN] animate chain: model not riggable taskId=${taskId}`);
-      return c.json({
-        status: "failed",
-        error: {
-          code: "MODEL_NOT_RIGGABLE",
-          message:
-            "Tripo reports this model is not riggable. Generate a full-body humanoid or creature (T-pose works best) and try again.",
-        },
-      });
-    }
-    const rig = await provider.rig({
-      source: { kind: "fileToken", fileToken: entry.sourceFileToken || "" },
-      rigType: rigOutput.rig_type || "biped",
-      model: entry.rigModel,
-    });
-    updateTaskEntry(taskId, userAddress, {
-      tripoTaskId: rig.taskId,
-      phase: "rig",
-      rigModel: rig.model,
-    });
-    console.log(
-      `[GEN] animate chain: rig started taskId=${taskId} tripo=${rig.taskId} rig_type=${rigOutput.rig_type} model=${rig.model}`,
-    );
-    return c.json({
-      status: "running",
-      progress: 40,
-      stage: "Rigging skeleton",
-    });
+    return await advanceFromRigCheck(c, provider, entry, taskId, userAddress, poll);
   }
   // phase === "rig" → start retarget with the requested presets
   const retargetId = await provider.animate({

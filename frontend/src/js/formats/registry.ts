@@ -60,6 +60,12 @@ export interface FormatHandler {
     colorMap: Record<string, string>,
     ctx: FormatSaveContext
   ) => Promise<any>;
+  /** Rewrites the source without the named parts (Studio "Remove part"). */
+  removeSourceParts?: (
+    node: any,
+    partNames: string[],
+    ctx: FormatSaveContext
+  ) => Promise<any>;
   editCompositeColors?: (
     node: any,
     meshOverrides: any,

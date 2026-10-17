@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 const { decideFollowup } = await import("../../frontend/src/js/ui/followup-route.js");
 
-const ALL = ["retexture", "retopo", "auto-rig", "animate"];
+const ALL = ["retexture", "retopo", "split", "auto-rig", "animate"];
 
 function reading(action, confidence, extra = {}) {
   return { action, confidence, probabilities: { [action]: confidence }, animations: [], inPlace: true, ...extra };
@@ -20,6 +20,8 @@ describe("decideFollowup", () => {
 
   test("dialog actions open at the lower bar", () => {
     expect(decideFollowup(reading("retopo", 0.65), ALL)).toEqual({ kind: "retopo" });
+    // "remove the horn" reads as split: separate the parts, then remove one.
+    expect(decideFollowup(reading("split", 0.8), ALL)).toEqual({ kind: "split" });
     expect(decideFollowup(reading("auto-rig", 0.9), ALL)).toEqual({ kind: "auto-rig" });
     expect(decideFollowup(reading("retopo", 0.55), ALL).kind).toBe("ask");
   });

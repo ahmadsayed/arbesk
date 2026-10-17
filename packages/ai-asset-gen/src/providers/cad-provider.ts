@@ -15,7 +15,7 @@ import { CadRequestUnsuitable } from "@arbesk/cad-gen";
 import type { CadDesign } from "@arbesk/cad-gen";
 import type { GenerationConfig, GenerationProvider } from "../facade.ts";
 import type { GenerationCapability } from "../types.ts";
-import { requireCapability } from "../errors.ts";
+import { requireCapability, unsupportedFollowups } from "../errors.ts";
 
 export interface CadSettleError {
   message: string;
@@ -141,11 +141,7 @@ export function createCadProvider({
     uploadSource: () => {
       throw new Error("cad provider has no source upload");
     },
-    retexture: () => unsupported("retexture"),
-    retopo: () => unsupported("retopo"),
-    rigCheck: () => unsupported("rig-check"),
-    rig: () => unsupported("rig"),
-    animate: () => unsupported("animate"),
+    ...unsupportedFollowups(id, capabilities),
 
     poll: async (taskId) => {
       const state = liveTask(taskId);

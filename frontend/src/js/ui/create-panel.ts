@@ -75,6 +75,8 @@ import {
 } from "./refine-target.ts";
 import type { ActiveVersion, RefineKind } from "./refine-target.ts";
 import { decideFollowup } from "./followup-route.ts";
+import { groupPresets, loadAnimationPresets, presetUnavailableReason, supportsHumanoidRig } from "./animate-compat.ts";
+import type { AnimationPreset } from "./animate-compat.ts";
 import type { FollowupIntent, FollowupOption, FollowupPlan } from "./followup-route.ts";
 import {
   CONFIG_BUNDLES,
@@ -1148,74 +1150,18 @@ const IN_PLACE_PRESET = {
   countsTowardMax: false,
 };
 
-// Curated animate presets, categorized for the dialog. Short-form IDs exist
-// on both rig lines; preset:biped:* IDs are v1.0 biped rig only (Tripo's 90+
-// library) and get a clear error on the generic v2.5 rig (adapter guard).
-const ANIMATE_PRESET_GROUPS = [
-  {
-    category: "Basics",
-    presets: [
-      { value: "preset:idle", label: "Idle", checked: true },
-      { value: "preset:walk", label: "Walk", checked: true },
-      { value: "preset:run", label: "Run" },
-      { value: "preset:jump", label: "Jump" },
-      { value: "preset:climb", label: "Climb" },
-      { value: "preset:turn", label: "Turn" },
-    ],
-  },
-  {
-    category: "Combat",
-    presets: [
-      { value: "preset:slash", label: "Slash" },
-      { value: "preset:shoot", label: "Shoot" },
-      { value: "preset:biped:front_kick_01", label: "Front Kick" },
-      { value: "preset:biped:box_01", label: "Box" },
-      { value: "preset:biped:cast_a_spell", label: "Cast a Spell" },
-    ],
-  },
-  {
-    category: "Reactions",
-    presets: [
-      { value: "preset:hurt", label: "Hurt" },
-      { value: "preset:fall", label: "Fall" },
-      { value: "preset:dive", label: "Dive" },
-      { value: "preset:biped:defeat_02", label: "Defeat" },
-      { value: "preset:biped:scared_01", label: "Scared" },
-    ],
-  },
-  {
-    category: "Emotes",
-    presets: [
-      { value: "preset:biped:dance_01", label: "Dance 1" },
-      { value: "preset:biped:dance_02", label: "Dance 2" },
-      { value: "preset:biped:cheer", label: "Cheer" },
-      { value: "preset:biped:victory_celebration", label: "Victory" },
-      { value: "preset:biped:wave_goodbye_01", label: "Wave Goodbye" },
-      { value: "preset:biped:clap", label: "Clap" },
-      { value: "preset:biped:bow", label: "Bow" },
-    ],
-  },
-  {
-    category: "Daily Life",
-    presets: [
-      { value: "preset:biped:sit", label: "Sit" },
-      { value: "preset:biped:look_around", label: "Look Around" },
-      { value: "preset:biped:standing_relax", label: "Relax" },
-      { value: "preset:biped:swim", label: "Swim" },
-    ],
-  },
-];
+/** Checkbox row for a catalog preset (catalog served via GET /config). */
+function presetRow(preset: AnimationPreset) {
+  return { value: preset.id, label: preset.label, checked: Boolean(preset.default), preset };
+}
 
-// Flat view (groups in order + the in-place toggle) for the retry picker's
-// flat checkbox dialog.
-const ANIMATE_PRESETS = [
-  ...ANIMATE_PRESET_GROUPS.flatMap((g) => g.presets),
-  IN_PLACE_PRESET,
-];
+/** Shown when the preset catalog can't be loaded (config unreachable). */
+const PRESETS_UNAVAILABLE =
+  "Couldn't load the animation list. Check your connection and try again.";
 
 /** Chat-prompt label for a preset ID: "preset:biped:dance_01" → "dance 01". */
 function animatePresetLabel(preset: string): string {
-  return preset.replace(/^preset:(biped:)?/, "").replace(/_/g, " ");
+  return preset.replace(/^preset:(biped:)?/, "").replace(/[:_]/g, " ");
 }
 
 /**
@@ -1317,6 +1263,7 @@ function addFollowupActions(generationId: string, _bubbleEl: HTMLElement | null 
   const ACTION_DEFS: Record<FollowupAction, { label: string; run: () => void }> = {
     retexture: { label: "Retexture", run: () => void onRetexture(generationId) },
     retopo: { label: "Retopo", run: () => void onRetopo(generationId) },
+    split: { label: "Split", run: () => void onSplit(generationId) },
     "auto-rig": { label: "Auto-rig", run: () => void onAutoRig(generationId) },
     animate: { label: "Animate…", run: () => void onAnimate(generationId) },
   };
@@ -1609,11 +1556,22 @@ async function retryAnimate(generationId: string, rigModel: string) {
   // pick presets via the dialog — we pass rigModel to force it.
   // For simplicity, re-trigger onAnimate with rigModel forced.
   if (!(await ensureFollowupGates("animate"))) return;
+  const catalog = await loadAnimationPresets();
+  if (!catalog) {
+    addChatMessage("system", PRESETS_UNAVAILABLE);
+    return;
+  }
+  const rigType = rigCheckCache.get(record.sourceAssetCid)?.rigType;
   // Show just the preset picker (no rig model selector — we already know it)
   const picked = await showCheckboxDialog(
     "Retry Animate",
     `Using ${rigModel === "v1.0-20240301" ? "v1.0 Humanoid" : "v2.5 Generic"} rig. Pick up to 5 animations:`,
-    ANIMATE_PRESETS,
+    [
+      ...catalog
+        .filter((p) => !presetUnavailableReason(p, { rigType, rigModel }))
+        .map(({ id, label, default: checked }) => ({ value: id, label, checked: Boolean(checked) })),
+      IN_PLACE_PRESET,
+    ],
     { max: 5 },
   );
   if (!picked) return;
@@ -1811,6 +1769,67 @@ async function onRetopo(generationId: string, faceLimitHint?: number) {
 }
 
 /**
+ * Splits a generation bubble's model into separate part meshes (Tripo
+ * mesh/segment) and presents the result as a new version bubble.
+ * @remarks Show in Studio loads it like a multi-part mock model: the Outline
+ *   lists its parts, and clicking one selects it in the viewport/Inspector.
+ */
+async function onSplit(generationId: string) {
+  const record = getPendingGeneration(generationId);
+  if (!record?.sourceAssetCid) return;
+  if (!(await ensureFollowupGates("split"))) return;
+
+  const prompt = "Split into parts";
+  const { working, signal, onTaskId, onProgress, nodeId, prevAssetManifestCid, transformMatrix } =
+    beginFollowup(prompt, "Splitting into parts — this takes about a minute…", "split");
+
+  try {
+    const result = await generateAsset({
+      prompt,
+      nodeId,
+      provider: "tripo3d",
+      providerKey: getByokKey(),
+      sourceAssetCid: record.sourceAssetCid,
+      split: true,
+      prevAssetManifestCid,
+      transformMatrix,
+      tier: getTier(),
+      signal,
+      onTaskId,
+      onProgress,
+    });
+
+    presentGenerationResult(result, {
+      prompt,
+      provider: "tripo3d",
+      task: "split",
+      prevAssetManifestCid,
+      transformMatrix,
+    });
+    addChatMessage(
+      "system",
+      "Split done. Show in Studio to see the parts listed under the model in the Outline — click one to select it.",
+    );
+    dismissCreatePulse();
+    // Segmentation consumed credits — refresh the caption.
+    refreshProviderBalance({ force: true });
+  } catch (err) {
+    if (isGenerationCancelled(err)) {
+      addChatMessage("system", "Split stopped.");
+      return;
+    }
+    console.error("Split failed:", err);
+    addChatMessage("system", followupErrorMessage(err, "Split failed. Please try again.", {
+      timeout: "Split timed out. Try again later.",
+      auth: true,
+      passThroughMessage: true,
+    }));
+  } finally {
+    working?.remove();
+  }
+}
+
+/**
  * Auto-rigs a generation bubble (no animation) into a rigged GLB bubble.
  * @remarks The rigged result keeps the Animate action, which then takes the
  *   retarget-only path.
@@ -1876,6 +1895,84 @@ function presetStartsChecked(
   return suggestion.presets.includes(opt.value);
 }
 
+// Rig-check results per source GLB CID — the skeleton type never changes for
+// a given model, so each model is probed at most once per session.
+const rigCheckCache = new Map<string, api.RigCheckResult>();
+
+/**
+ * Runs the free rig-check for a model (cached per CID) behind a stoppable
+ * working bubble.
+ * @returns the result; "cancelled" when the user stopped it; null when the
+ *   check itself failed (the dialog then offers every preset and the backend
+ *   guard still blocks a mismatch before the paid rig step)
+ */
+async function probeRigCompatibility(
+  sourceAssetCid: string,
+): Promise<api.RigCheckResult | "cancelled" | null> {
+  const cached = rigCheckCache.get(sourceAssetCid);
+  if (cached) return cached;
+  const controller = new AbortController();
+  const working = addWorkingMessage("Checking which animations fit this model (free)…", {
+    onCancel: () => controller.abort(),
+  });
+  try {
+    const result = await api.checkRigCompatibility({
+      sourceAssetCid,
+      providerKey: getByokKey(),
+      signal: controller.signal,
+    });
+    rigCheckCache.set(sourceAssetCid, result);
+    return result;
+  } catch (err) {
+    if (isGenerationCancelled(err)) return "cancelled";
+    console.warn("Rig check failed — showing every animation:", err);
+    return null;
+  } finally {
+    working?.remove();
+  }
+}
+
+/**
+ * The row defaults (Idle, Walk) don't exist for creatures — pre-check the
+ * first preset that fits so the Animate dialog never opens empty.
+ * @returns how many presets can be picked
+ */
+function precheckFirstUsable(
+  boxes: Array<{ input: HTMLInputElement; counts: boolean }>,
+  suggestion: AnimateSuggestion | undefined,
+): number {
+  const usable = boxes.filter((b) => b.counts && !b.input.disabled);
+  if (!suggestion && !usable.some((b) => b.input.checked) && usable[0]) usable[0].input.checked = true;
+  return usable.length;
+}
+
+/**
+ * The Animate dialog's head: the rig model selector (humanoids only — any
+ * other skeleton always gets the v2.5 generic rig) and the detected skeleton.
+ */
+function appendRigHeader(wrap: HTMLElement, selector: HTMLElement, rigType: string | null) {
+  if (supportsHumanoidRig(rigType)) {
+    wrap.appendChild(selector);
+
+    // Separator
+    const sep = document.createElement("hr");
+    sep.style.margin = "var(--size-2) 0";
+    sep.style.border = "none";
+    sep.style.borderTop = "1px solid var(--color-border, #444)";
+    wrap.appendChild(sep);
+  }
+
+  if (rigType) {
+    const detected = document.createElement("p");
+    detected.className = "rig-check-summary";
+    detected.style.margin = "0 0 var(--size-2)";
+    detected.textContent = supportsHumanoidRig(rigType)
+      ? `Detected skeleton: ${rigType}.`
+      : `Detected skeleton: ${rigType}. Showing only the animations Tripo offers for it.`;
+    wrap.appendChild(detected);
+  }
+}
+
 /**
  * Rigs and animates a generation bubble into an animated GLB bubble.
  * @param suggestion Pre-checks these presets (a typed "make it walk");
@@ -1884,6 +1981,25 @@ function presetStartsChecked(
 async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
   const record = getPendingGeneration(generationId);
   if (!record?.sourceAssetCid) return;
+  if (!(await ensureFollowupGates("animate"))) return;
+
+  // Free rig-check first: an unriggable model stops here, and the picker
+  // offers only the presets this skeleton can take.
+  const rigCheck = await probeRigCompatibility(record.sourceAssetCid);
+  if (rigCheck === "cancelled") {
+    addChatMessage("system", "Animation stopped.");
+    return;
+  }
+  if (rigCheck && !rigCheck.riggable) {
+    addChatMessage("system", NOT_RIGGABLE_GUIDANCE);
+    return;
+  }
+  const rigType = rigCheck?.rigType ?? null;
+  const catalog = await loadAnimationPresets();
+  if (!catalog) {
+    addChatMessage("system", PRESETS_UNAVAILABLE);
+    return;
+  }
 
   // Combined dialog: rig model selector + preset checkboxes + in-place toggle
   const dialogResult = await new Promise<
@@ -1898,16 +2014,8 @@ async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
     wrap.style.maxHeight = "calc(100vh - var(--size-10) * 2 - 190px)";
     wrap.style.overflowY = "auto";
 
-    // Rig model selector
     const selector = buildRigModelSelector("");
-    wrap.appendChild(selector);
-
-    // Separator
-    const sep = document.createElement("hr");
-    sep.style.margin = "var(--size-2) 0";
-    sep.style.border = "none";
-    sep.style.borderTop = "1px solid var(--color-border, #444)";
-    wrap.appendChild(sep);
+    appendRigHeader(wrap, selector, rigType);
 
     // Preset checkboxes, grouped by category. The wrap above is the single
     // scroll region — the list itself renders fully.
@@ -1919,9 +2027,20 @@ async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
     const groupsWrap = document.createElement("div");
     wrap.appendChild(groupsWrap);
 
-    const boxes: Array<{ input: HTMLInputElement; value: string; counts: boolean }> = [];
+    const boxes: Array<{ input: HTMLInputElement; value: string; counts: boolean; note: HTMLElement; preset?: AnimationPreset }> = [];
+    // Disable presets the skeleton (or the picked rig model) can't take.
+    const applyCompatibility = () => {
+      const ctx = { rigType, rigModel: selector.dataset.value || null };
+      for (const box of boxes) {
+        if (!box.preset) continue;
+        const reason = presetUnavailableReason(box.preset, ctx);
+        box.input.disabled = Boolean(reason);
+        if (reason) box.input.checked = false;
+        box.note.textContent = reason ? ` (${reason})` : "";
+      }
+    };
     const addPresetRow = (
-      opt: { value: string; label: string; checked?: boolean; countsTowardMax?: boolean },
+      opt: { value: string; label: string; checked?: boolean; countsTowardMax?: boolean; preset?: AnimationPreset },
       container: HTMLElement
     ) => {
       const label = document.createElement("label");
@@ -1940,13 +2059,19 @@ async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
       });
       const text = document.createElement("span");
       text.textContent = opt.label;
+      const note = document.createElement("span");
+      note.style.color = "var(--dim-fg)";
+      text.appendChild(note);
       label.appendChild(input);
       label.appendChild(text);
       container.appendChild(label);
-      boxes.push({ input, value: opt.value, counts });
+      boxes.push({ input, value: opt.value, counts, note, preset: opt.preset });
     };
 
-    for (const group of ANIMATE_PRESET_GROUPS) {
+    // A known skeleton lists only its own presets; unknown (rig-check
+    // failed) lists everything and the backend guard catches a mismatch.
+    const fitting = catalog.filter((p) => !rigType || p.skeleton === rigType);
+    for (const group of groupPresets(fitting)) {
       const header = document.createElement("div");
       header.textContent = group.category;
       header.style.fontSize = "var(--font-size-1)";
@@ -1954,7 +2079,14 @@ async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
       header.style.color = "var(--dim-fg)";
       header.style.marginTop = "var(--size-2)";
       groupsWrap.appendChild(header);
-      for (const opt of group.presets) addPresetRow(opt, groupsWrap);
+      for (const preset of group.presets) addPresetRow(presetRow(preset), groupsWrap);
+    }
+
+    if (!boxes.some((b) => b.counts)) {
+      const none = document.createElement("p");
+      none.style.margin = "0";
+      none.textContent = `Tripo has no animations for ${rigType} skeletons yet. Use Auto-rig for a rigged model you can animate elsewhere.`;
+      groupsWrap.appendChild(none);
     }
 
     // The in-place toggle lives below the scrollable list — always visible.
@@ -1966,6 +2098,10 @@ async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
     goBtn.style.marginTop = "var(--size-2)";
     goBtn.textContent = "Animate";
     wrap.appendChild(goBtn);
+
+    applyCompatibility();
+    goBtn.disabled = precheckFirstUsable(boxes, suggestion) === 0;
+    selector.addEventListener("change", applyCompatibility);
 
     // showCustomDialog overwrites wrap.closeDialog — wire the button
     // after the dialog is built so we call the real closeDialog.
@@ -1992,8 +2128,6 @@ async function onAnimate(generationId: string, suggestion?: AnimateSuggestion) {
   const animateInPlace = presets.includes(IN_PLACE_OPTION);
   const animations = presets.filter((p) => p !== IN_PLACE_OPTION);
   if (animations.length === 0) return;
-
-  if (!(await ensureFollowupGates("animate"))) return;
 
   const labels = animations.map((p) => animatePresetLabel(p)).join(", ");
   const prompt = `Animate: ${labels}`;
@@ -2627,6 +2761,7 @@ async function planGeneration(selectedProvider: string, hasImage: boolean) {
 const FOLLOWUP_OPTION_LABELS: Record<FollowupOption, string> = {
   retexture: "Retexture",
   retopo: "Retopo",
+  split: "Split",
   "auto-rig": "Auto-rig",
   animate: "Animate…",
   "new-model": "New model",
@@ -2683,22 +2818,48 @@ function takeFollowupTextureHint(): ConfigBundleFields | null {
  *   readings.
  * @returns false for a retexture, which the normal generate path runs.
  */
+/**
+ * A typed request to split ("remove the horn") confirms before spending
+ * credits; the action-row button is already an explicit choice.
+ */
+function confirmSplit(generationId: string) {
+  addChoiceMessage(
+    "Split this model into separate parts? You can then pick the part to change or remove in the Outline.",
+    [
+      { label: "Split", value: "split" },
+      { label: "Cancel", value: "cancel" },
+    ],
+    (value) => {
+      if (value === "split") void onSplit(generationId);
+    },
+  );
+}
+
+/** Plans that hand straight off to the action's own dialog or confirmation. */
+const DIALOG_PLANS = {
+  retopo: (generationId: string, intent?: FollowupIntent | null) => void onRetopo(generationId, intent?.retopoFaceLimit),
+  split: (generationId: string) => confirmSplit(generationId),
+  "auto-rig": (generationId: string) => void onAutoRig(generationId),
+};
+
+function isDialogPlan(plan: FollowupPlan): plan is Extract<FollowupPlan, { kind: keyof typeof DIALOG_PLANS }> {
+  return plan.kind in DIALOG_PLANS;
+}
+
 function runFollowupPlan(
   plan: FollowupPlan,
   prompt: string,
   generationId: string,
   intent?: FollowupIntent | null,
 ): boolean {
+  if (isDialogPlan(plan)) {
+    DIALOG_PLANS[plan.kind](generationId, intent);
+    return true;
+  }
   switch (plan.kind) {
     case "retexture":
       followupTextureHint = textureHintFromIntent(intent);
       return false;
-    case "retopo":
-      void onRetopo(generationId, intent?.retopoFaceLimit);
-      return true;
-    case "auto-rig":
-      void onAutoRig(generationId);
-      return true;
     case "animate":
       void onAnimate(
         generationId,

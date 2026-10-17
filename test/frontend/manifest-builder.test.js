@@ -48,6 +48,7 @@ async function load() {
         isStoredForm: jest.fn(),
         isDedupSource: jest.fn(),
         editSourceColors: jest.fn(),
+        removeSourceParts: jest.fn(),
         editCompositeColors: jest.fn(),
       },
     })
@@ -782,6 +783,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
     pendingColors = new Map(),
     pendingOverrides = new Map(),
     pendingRemovals = new Set(),
+    pendingParts = new Map(),
   } = {}) {
     mock.module(
       "../../frontend/src/js/engine/scene-graph.js",
@@ -812,6 +814,15 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
         getPendingSourceColorEdits: jest.fn().mockReturnValue(pendingColors),
         clearPendingSourceColorEdits: jest.fn(),
         clearPendingSourceColorEdit: jest.fn(),
+      })
+    );
+    mock.module(
+      "../../frontend/src/js/engine/part-remove.js",
+      () => ({
+        getPendingPartRemovals: jest.fn().mockReturnValue(pendingParts),
+        clearPendingPartRemovals: jest.fn(),
+        canRemoveSelectedPart: jest.fn().mockReturnValue(false),
+        removeSelectedPart: jest.fn().mockReturnValue(false),
       })
     );
     mock.module(
@@ -874,6 +885,79 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
     expect(ctx.gltfHandler.editSourceColors.mock.calls[0][1]).toEqual({
       Body: "#ff0000",
     });
+  });
+
+  it("rewrites a node's source without its removed parts", async () => {
+    mockEngineModules({
+      pendingParts: new Map([["n1", new Set(["tripo_part_9", "tripo_part_14"])]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([
+      makeNode({ cid: "bafyGoat", path: "composite.gltf", format: "gltf" }),
+    ]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.removeSourceParts.mockResolvedValue({
+      sourceCid: "bafyHornless",
+      format: "gltf",
+      removed: 2,
+    });
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Hornless");
+
+    expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyHornless");
+    expect(ctx.gltfHandler.removeSourceParts.mock.calls[0][1]).toEqual(["tripo_part_9", "tripo_part_14"]);
+  });
+
+  it("removes parts from the color-baked source when both edits are pending", async () => {
+    mockEngineModules({
+      pendingColors: new Map([["n1", new Map([["tripo_part_1", "#ff0000"]])]]),
+      pendingParts: new Map([["n1", new Set(["tripo_part_9"])]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([makeNode({ cid: "bafyGoat" })]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.editSourceColors.mockResolvedValue({ sourceCid: "bafyColored", format: "gltf" });
+    ctx.gltfHandler.removeSourceParts.mockImplementation(async (node) => ({
+      sourceCid: `${node.source.cid}+parts`,
+      format: "gltf",
+      removed: 1,
+    }));
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Both");
+
+    expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyColored+parts");
+  });
+
+  it("keeps the source when part removal fails", async () => {
+    mockEngineModules({
+      pendingParts: new Map([["n1", new Set(["tripo_part_9"])]]),
+    });
+    const ctx = await load();
+    const store = await freshStore();
+
+    const manifest = makeManifest([makeNode({ cid: "bafyGoat" })]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    ctx.gltfHandler.removeSourceParts.mockRejectedValue(new Error("ipfs down"));
+    store.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+
+    const result = await ctx.mod.prepareManifestForWrite("Failed");
+
+    expect(result.manifest.scene.nodes[0].source.cid).toBe("bafyGoat");
   });
 
   it("leaves the source unchanged when a format has no editSourceColors hook", async () => {

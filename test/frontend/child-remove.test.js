@@ -62,6 +62,8 @@ async function loadModule() {
     "../../frontend/src/js/engine/scene-selection.js",
     () => ({
       deselectNodes: _deselectNodes,
+      // part-remove (imported by child-remove for the shared Delete trigger)
+      selectNode: jest.fn(),
     })
   );
   await mock.module(
@@ -81,6 +83,11 @@ async function loadModule() {
   const { state } = await import("../../frontend/src/js/engine/state.js");
   _state = state;
   return { mod, state };
+}
+
+/** The child_ref applier registration (part-remove registers its own too). */
+function childRefApplierCall() {
+  return _registerUndoApplier.mock.calls.find(([type]) => type === "child_ref");
 }
 
 beforeEach(() => {
@@ -176,7 +183,7 @@ describe("child_ref undo applier", () => {
     setManifestNodes([CHILD_A, REGULAR]);
 
     expect(_registerUndoApplier).toHaveBeenCalled();
-    const [type, applier] = _registerUndoApplier.mock.calls[0];
+    const [type, applier] = childRefApplierCall();
     expect(type).toBe("child_ref");
 
     const captured = { node: CHILD_A, fromPending: false };
@@ -237,7 +244,7 @@ describe("Insert a copy (pending fork node) unlink + undo", () => {
 
     mod.removeChildAssetNodes([FORK.node_id]);
     const item = _pushUndoEntry.mock.calls[0][0].items[0];
-    const applier = _registerUndoApplier.mock.calls[0][1];
+    const applier = childRefApplierCall()[1];
 
     applier(item, "before");
     expect(state.pendingChildRefs).toEqual([FORK]);

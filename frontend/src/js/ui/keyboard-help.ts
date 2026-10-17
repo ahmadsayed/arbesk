@@ -40,7 +40,7 @@ const SECTIONS = [
       [`${MOD}+N`, "New asset"],
       [`${MOD}+O`, "Upload model…"],
       [`${MOD}+S`, "Save draft"],
-      ["Delete", "Unlink selected child asset"],
+      ["Delete", "Remove selected part, or unlink selected child asset"],
       [`${MOD}+Z`, "Undo edit"],
       [`${MOD}+Shift+Z / ${MOD}+Y`, "Redo edit"],
     ],

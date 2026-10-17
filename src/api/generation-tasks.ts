@@ -18,6 +18,8 @@ export interface TaskEntry {
   animations?: string[];
   /** stop after the rig step (no retarget) */
   rigOnly?: boolean;
+  /** stop after rig-check and report { riggable, rigType } (free probe) */
+  checkOnly?: boolean;
   /** retarget with animate_in_place */
   animateInPlace?: boolean;
   /** Tripo rig model used for the rig step (v1.0 biped rigs take preset:biped:* retarget IDs) */
@@ -36,6 +38,7 @@ export interface RegisterTaskInput {
   phase?: "rig-check" | "rig" | "retarget";
   animations?: string[];
   rigOnly?: boolean;
+  checkOnly?: boolean;
   animateInPlace?: boolean;
   rigModel?: string;
   sourceFileToken?: string;
@@ -65,6 +68,7 @@ export function registerTask({
   phase,
   animations,
   rigOnly,
+  checkOnly,
   animateInPlace,
   rigModel,
   sourceFileToken,
@@ -81,6 +85,7 @@ export function registerTask({
     ...(phase && { phase }),
     ...(animations && { animations }),
     ...(rigOnly && { rigOnly }),
+    ...(checkOnly && { checkOnly }),
     ...(animateInPlace && { animateInPlace }),
     ...(rigModel && { rigModel }),
     ...(sourceFileToken && { sourceFileToken }),

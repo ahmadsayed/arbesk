@@ -5,7 +5,7 @@
  */
 import type { GenerationConfig, GenerationProvider } from "../facade.ts";
 import type { GenerationCapability } from "../types.ts";
-import { requireCapability } from "../errors.ts";
+import { requireCapability, unsupportedFollowups } from "../errors.ts";
 import { mockGenerate } from "./mock.ts";
 
 interface MockTask {
@@ -46,11 +46,7 @@ export function createMockProvider(config: GenerationConfig): GenerationProvider
     },
     imageToModel: () => unsupported("image-to-3d"),
     multiviewToModel: () => unsupported("multiview-to-3d"),
-    retexture: () => unsupported("retexture"),
-    retopo: () => unsupported("retopo"),
-    rigCheck: () => unsupported("rig-check"),
-    rig: () => unsupported("rig"),
-    animate: () => unsupported("animate"),
+    ...unsupportedFollowups(id, capabilities),
 
     poll: (taskId) => {
       const t = tasks.get(taskId);

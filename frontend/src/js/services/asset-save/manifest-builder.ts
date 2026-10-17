@@ -18,6 +18,10 @@ import {
   clearPendingSourceColorEdits,
 } from "../../engine/parametric-preview.ts";
 import {
+  getPendingPartRemovals,
+  clearPendingPartRemovals,
+} from "../../engine/part-remove.ts";
+import {
   getPendingPostProcessorEdits,
   clearPendingPostProcessorEdits,
   getPendingTransformEdits,
@@ -490,20 +494,85 @@ async function applySourceColorEdits(
     );
   }
 
-  const colorResults = await Promise.allSettled(colorJobs);
+  applyColorBakeResults(manifest, await Promise.allSettled(colorJobs));
+}
+
+/** Points each successfully color-baked node at its new source. */
+function applyColorBakeResults(manifest: any, colorResults: PromiseSettledResult<any>[]) {
   for (const r of colorResults) {
     if (r.status !== "fulfilled" || !r.value) continue;
     const { nodeId, result } = r.value;
     const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
     if (!node) continue;
-    node.source.cid = result.sourceCid;
-    // The edited source is always glTF JSON now; keep the node's
-    // format/path truthful so the loader doesn't treat it as a binary GLB.
-    if (result.format) node.source.format = result.format;
-    if (result.path) node.source.path = result.path;
+    pointNodeAtEditedSource(node, result);
     log(
       `Save: baked colors into source | node=${nodeId} newCid=${result.sourceCid} format=${node.source.format} modified=${result.modified} skipped=${result.skipped}`
     );
+  }
+}
+
+/**
+ * Points a node at its edited source.
+ * @remarks The edited source is always glTF JSON now; keep the node's
+ *   format/path truthful so the loader doesn't treat it as a binary GLB.
+ */
+function pointNodeAtEditedSource(node: any, result: { sourceCid: string; format?: string; path?: string }) {
+  node.source.cid = result.sourceCid;
+  if (result.format) node.source.format = result.format;
+  if (result.path) node.source.path = result.path;
+}
+
+/**
+ * Builds the async job that rewrites one node's source without its removed
+ * parts.
+ * @returns null when the node has no source or its format can't remove parts
+ */
+function buildPartRemovalJob(
+  manifest: any,
+  nodeId: string,
+  names: Set<string>,
+  dedupMap: Map<string, string>
+) {
+  const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
+  if (!node?.source?.cid || names.size === 0) return null;
+  const handler = resolveFormatHandler(node.source);
+  if (typeof handler.removeSourceParts !== "function") {
+    warn(`Save: part removal unsupported for format ${handler.format} | node=${nodeId}`);
+    return null;
+  }
+  return handler
+    .removeSourceParts(node, [...names], {
+      assetName: manifest.name,
+      assetId: manifest.asset_id,
+      dedupMap,
+    })
+    .then((result: any) => ({ node, nodeId, result }));
+}
+
+/**
+ * Rewrites each node's source without its removed parts.
+ * @param pendingParts - nodeId → removed sub-mesh names
+ * @remarks Runs after the color bake, so a node with both edits keeps its
+ *   new colors (the removal reads the color-baked source CID).
+ */
+async function applySourcePartRemovals(
+  manifest: any,
+  pendingParts: Map<string, Set<string>>,
+  dedupMap: Map<string, string>
+) {
+  const jobs = [...pendingParts]
+    .map(([nodeId, names]) => buildPartRemovalJob(manifest, nodeId, names, dedupMap))
+    .filter(Boolean);
+  for (const r of await Promise.allSettled(jobs)) {
+    if (r.status !== "fulfilled") {
+      if (isRateLimitError(r.reason)) throw r.reason;
+      warn("Save: failed to remove parts from source:", (r.reason as Error)?.message);
+      continue;
+    }
+    const { node, nodeId, result } = r.value as any;
+    if (!result?.removed) continue;
+    pointNodeAtEditedSource(node, result);
+    log(`Save: removed parts from source | node=${nodeId} newCid=${result.sourceCid} removed=${result.removed}`);
   }
 }
 
@@ -676,6 +745,10 @@ async function loadOrBuildBaseManifest(assetName: string) {
   const pendingPP = getPendingPostProcessorEdits();
   const pendingTransforms = getPendingTransformEdits();
   const pendingColors = getPendingSourceColorEdits();
+  // Snapshot: a part removed while this save writes stays pending.
+  const pendingParts = new Map(
+    [...getPendingPartRemovals()].map(([id, names]) => [id, new Set(names)])
+  );
   const pendingOverrides = getPendingSourceOverrides();
 
   const activeCid = getActiveAssetManifestCid();
@@ -691,6 +764,7 @@ async function loadOrBuildBaseManifest(assetName: string) {
     pendingPP.size > 0 ||
     pendingTransforms.size > 0 ||
     pendingColors.size > 0 ||
+    pendingParts.size > 0 ||
     pendingOverrides.size > 0
   ) {
     manifest = {
@@ -715,6 +789,7 @@ async function loadOrBuildBaseManifest(assetName: string) {
     pendingPP,
     pendingTransforms,
     pendingColors,
+    pendingParts,
     pendingOverrides,
   };
 }
@@ -729,6 +804,7 @@ export async function prepareManifestForWrite(assetName: string) {
     pendingPP,
     pendingTransforms,
     pendingColors,
+    pendingParts,
     pendingOverrides,
   } = loaded;
 
@@ -779,7 +855,7 @@ export async function prepareManifestForWrite(assetName: string) {
     (n: any) => n.source?.cid && !n.child_ref
   );
   const needsDedup =
-    pendingColors.size > 0 || sourceNodes.some((n: any) => !looksStored(n));
+    pendingColors.size > 0 || pendingParts.size > 0 || sourceNodes.some((n: any) => !looksStored(n));
 
   const dedupMap = needsDedup
     ? await buildDedupMapFromManifests(
@@ -790,6 +866,9 @@ export async function prepareManifestForWrite(assetName: string) {
 
   // Apply direct source color edits (mutate source glTF/GLB, update node.source.cid).
   await applySourceColorEdits(manifest, pendingColors, dedupMap);
+
+  // Remove parts the user deleted (rewrites node.source.cid again).
+  await applySourcePartRemovals(manifest, pendingParts, dedupMap);
 
   // Apply post-processor edits (decomposed bake / monolithic overlay).
   await applyPostProcessorEdits(manifest, pendingPP);
@@ -895,6 +974,7 @@ export async function saveAssetDraftCore(
     clearPendingPostProcessorEdits();
     clearPendingTransformEdits();
     clearPendingSourceColorEdits();
+    clearPendingPartRemovals();
     clearPendingSourceOverrides();
     clearPendingAnnotations();
     // Keep the in-memory manifest cache aligned with the active CID even when
@@ -942,6 +1022,7 @@ export async function saveAssetDraftCore(
   clearPendingPostProcessorEdits();
   clearPendingTransformEdits();
   clearPendingSourceColorEdits();
+  clearPendingPartRemovals();
   clearPendingSourceOverrides();
   clearPendingAnnotations();
 

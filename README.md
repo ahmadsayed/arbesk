@@ -17,7 +17,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 - **EVM PayGo contracts** — `ArbeskAssetFree.sol` (free tier) and `ArbeskAsset.sol` (paid tier) support generation payments/quotas, ERC721 collection minting, token URI updates, and Merkle-proof editor authorization.
 - **Collection manifests** — every published token is a collection manifest that maps `assetID`s to asset manifest CIDs; galleries expand collections into per-asset cards.
 - **Merkle editor proofs** — editor sets are stored on IPFS; the contract stores only a Merkle root and version. URI updates, editor set changes, and burns require a valid Merkle proof.
-- **Real 3D generation (Tripo3D v3, BYOK)** — text-to-3D and image-to-3D (JPEG/PNG/WebP attach) as async tasks with live polling; HD texture toggle; texture-only refine; smart retopology (`mesh/decimate` v2.0) for animation-ready topology; rig & animate chain (`rig-check → rig → retarget`, plus retarget-only re-animation of rigged models); credit balance display. Results land as chat bubbles with live orbitable previews and load into Studio on demand.
+- **Real 3D generation (Tripo3D v3, BYOK)** — text-to-3D and image-to-3D (JPEG/PNG/WebP attach) as async tasks with live polling; HD texture toggle; texture-only refine; smart retopology (`mesh/decimate` v2.0) for animation-ready topology; split into parts (`mesh/segment` v2.0, each part listed in the Outline and selectable); rig & animate chain (`rig-check → rig → retarget`, plus retarget-only re-animation of rigged models); credit balance display. Results land as chat bubbles with live orbitable previews and load into Studio on demand.
 - **Mock 3D generation** — backend mock adapter returns local GLTF/GLB-style assets for deterministic development.
 - **Fractal manifests** — worlds are JSON manifests on IPFS with nodes, sources, transforms, token-based `child_ref` links, and optional thumbnails.
 - **Parametric versions** — color and scale edits are saved as first-class manifest versions without payment or SaaS generation.
@@ -78,6 +78,8 @@ Status legend: **✅** supported today (MCP cells name the tool) · **TODO** —
 | | Multiview-to-3D (up to 4 oriented views) | ✅ | ✅ | ✅ `generate_model` | `generate --view front f.png --view left f.png …` (MCP: `views[]`) |
 | | Retexture (texture-only refine) | ✅ | ✅ | ✅ `retexture_model` | `retexture <asset> "<prompt>"` |
 | | Smart retopology (polygon budget) | ✅ | ✅ | ✅ `retopo_model` | `retopo <asset> [faceLimit]` |
+| | Split into parts (`mesh/segment`; parts listed in the Outline) | ✅ | TODO | TODO | Studio-only for now; the part list needs the viewer, the split itself is headless-feasible |
+| | Remove a part (Inspector "Remove part", Outline [−], Delete; saved as a new version) | ✅ | TODO | TODO | Headless-feasible by node name (`removeSourceParts` in asset-core) |
 | | Auto-rig (biped-first with fallback) | ✅ | ✅ | ✅ `rig_model` | `rig <asset>` (fallback is server-side) |
 | | Animate (preset picker, in-place toggle) | ✅ | ✅ | ✅ `animate_model` | `animate <asset> <preset>…` (positional presets, `--no-in-place`; MCP: `presets[]`, `inPlace`; no categorized picker) |
 | | Provider selection, BYOK key, credit balance | ✅ | ✅ | ✅ `provider_balance` | Interactive provider picker + key prompt; flags/env for scripts & MCP (`--provider`, `--key`, `ARBESK_PROVIDER`, `ARBESK_PROVIDER_KEY`); `balance` |

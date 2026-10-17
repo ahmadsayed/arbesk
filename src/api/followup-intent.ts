@@ -22,9 +22,10 @@
  */
 import type { JevConfig } from "@arbesk/cad-gen/backend/index.js";
 import { askJev, JevError } from "@arbesk/cad-gen/backend/index.js";
+import { ANIMATION_PRESETS } from "./animation-presets.ts";
 
 /** Operations a mesh bubble can offer; mirrors asset-core's FollowupAction. */
-export const MESH_ACTIONS = ["retexture", "retopo", "auto-rig", "animate"] as const;
+export const MESH_ACTIONS = ["retexture", "retopo", "split", "auto-rig", "animate"] as const;
 export type MeshAction = (typeof MESH_ACTIONS)[number];
 
 /** Non-operation outcomes, always on offer. */
@@ -64,46 +65,17 @@ export const RETOPO_TIERS: Record<string, number> = { light: 20000, medium: 8000
 const ACTION_CRITERIA: Record<IntentOutcome, string> = {
   retexture: "Change only its surface: colour, material, texture, paint or finish, keeping the shape",
   retopo: "Rebuild its mesh topology: fewer or cleaner polygons, lower poly count, optimise or decimate the mesh",
+  split: "Separate it into its parts or components, for example to remove, hide or recolour one part such as horns, a hat or wheels",
   "auto-rig": "Add a skeleton or bones so it can be posed or animated later, without asking for a specific motion",
   animate: "Make it move: perform a motion or action such as walking, running, dancing, waving or fighting",
-  new_model: "Change its shape or geometry, add or remove parts, or make a different object entirely",
+  new_model: "Change its overall shape or geometry, add new parts, or make a different object entirely",
   unclear: "None of these, or too vague to tell which",
 };
 
-/**
- * Tripo preset id -> the motion it plays, in the Animate dialog's order.
- * @remarks Keep in step with ANIMATE_PRESET_GROUPS in the frontend's
- *   create-panel.ts; the client drops any id it does not list.
- */
-export const ANIMATION_MOTIONS: Record<string, string> = {
-  "preset:idle": "Idle, standing still breathing",
-  "preset:walk": "Walk",
-  "preset:run": "Run",
-  "preset:jump": "Jump",
-  "preset:climb": "Climb",
-  "preset:turn": "Turn around",
-  "preset:slash": "Slash with a blade",
-  "preset:shoot": "Shoot a weapon",
-  "preset:biped:front_kick_01": "Front kick",
-  "preset:biped:box_01": "Boxing punches",
-  "preset:biped:cast_a_spell": "Cast a spell",
-  "preset:hurt": "Get hurt, hit reaction",
-  "preset:fall": "Fall down",
-  "preset:dive": "Dive",
-  "preset:biped:defeat_02": "Defeat, losing",
-  "preset:biped:scared_01": "Scared, frightened",
-  "preset:biped:dance_01": "Dance",
-  "preset:biped:dance_02": "Dance (second style)",
-  "preset:biped:cheer": "Cheer",
-  "preset:biped:victory_celebration": "Victory celebration",
-  "preset:biped:wave_goodbye_01": "Wave goodbye",
-  "preset:biped:clap": "Clap",
-  "preset:biped:bow": "Bow",
-  "preset:biped:sit": "Sit down",
-  "preset:biped:look_around": "Look around",
-  "preset:biped:standing_relax": "Stand relaxed",
-  "preset:biped:swim": "Swim",
-};
+/** Tripo preset id -> the motion it plays, in the Animate dialog's order. */
+export const ANIMATION_MOTIONS: Record<string, string> = Object.fromEntries(
+  ANIMATION_PRESETS.map((p) => [p.id, p.motion]),
+);
 
 export interface FollowupIntentInput {
   prompt: string;

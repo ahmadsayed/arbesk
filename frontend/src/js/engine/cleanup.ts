@@ -264,6 +264,7 @@ export function clearScene() {
 
   state.pendingChildRefs.length = 0;
   state.pendingChildRefRemovals.clear();
+  state.pendingPartRemovals.clear();
   state.pendingPostProcessorEdits.clear();
   state.pendingTransformEdits.clear();
   state.pendingSourceOverrides.clear();

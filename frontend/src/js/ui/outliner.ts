@@ -14,12 +14,17 @@ import {
 } from "@arbesk/asset-core/domain/asset.js";
 import { getManifestNodes } from "../engine/transforms.ts";
 import { state } from "../engine/state.ts";
+import { listNodeParts } from "./outline-parts.ts";
+import { canRemoveSelectedPart } from "../engine/part-remove.ts";
+import type { OutlinePart } from "./outline-parts.ts";
 
 let outlinerTree: Element | null = null;
 let outlinerFooter: Element | null = null;
 let removeBtn: HTMLButtonElement | null = null;
 const selectedNodeIds: Set<string> = new Set();
 const collapsedNodeIds: Set<string> = new Set();
+// Small-piece groups are collapsed until opened (keyed by node_id).
+const expandedFragmentGroups: Set<string> = new Set();
 let renderedManifestCid: string | null = null;
 
 function getOutlinerTree(): Element | null {
@@ -57,6 +62,10 @@ function initOutliner(): void {
   on(EVENTS.SCENE_CLEARED, onSceneEmpty);
   on(EVENTS.NODE_DESELECTED, clearSelection);
   on(EVENTS.SELECTION_CHANGED, syncFromEngine);
+  on(EVENTS.SUBMESH_SELECTED, () => {
+    _syncRowSelectionClasses();
+    _syncRemoveButtonState();
+  });
 
   // Drag-and-drop from library
   outlinerTree.addEventListener("dragover", (e) => {
@@ -195,9 +204,13 @@ function renderTree(
     const el = createNodeElement(node, isChild, depth);
     tree.appendChild(el);
 
+    const isCollapsed = collapsedNodeIds.has(node.node_id);
+    // A loaded multi-mesh model lists its parts before any child assets.
+    const parts = isChild ? null : listNodeParts(node.node_id);
+    if (parts && !isCollapsed) renderParts(tree, node.node_id, parts, depth + 1);
+
     const hasChildren =
       Array.isArray(node.children) && node.children.length > 0;
-    const isCollapsed = hasChildren && collapsedNodeIds.has(node.node_id);
     if (hasChildren && !isCollapsed) {
       const childStats = renderTree(node.children, depth + 1);
       totalNodes += childStats.totalNodes;
@@ -210,6 +223,96 @@ function renderTree(
   }
 
   return { totalNodes, childCount };
+}
+
+/**
+ * Renders a model's part rows (largest first) and, when Tripo left tiny
+ * fragments, one collapsed "small pieces" group holding them.
+ */
+function renderParts(
+  tree: Element,
+  nodeId: string,
+  parts: { main: OutlinePart[]; fragments: OutlinePart[] },
+  depth: number,
+): void {
+  for (const part of parts.main) tree.appendChild(createPartElement(nodeId, part, depth));
+  if (parts.fragments.length === 0) return;
+  const expanded = expandedFragmentGroups.has(nodeId);
+  tree.appendChild(createFragmentGroupElement(nodeId, parts.fragments.length, expanded, depth));
+  if (expanded) {
+    for (const part of parts.fragments) tree.appendChild(createPartElement(nodeId, part, depth + 1));
+  }
+}
+
+/** Indentation guides for a row nested `depth` levels deep. */
+function appendIndent(el: HTMLElement, depth: number): void {
+  for (let i = 0; i < depth; i++) {
+    const guide = document.createElement("span");
+    guide.className = "outliner-node-guide";
+    guide.setAttribute("aria-hidden", "true");
+    el.appendChild(guide);
+  }
+}
+
+function createPartElement(nodeId: string, part: OutlinePart, depth: number): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "outliner-node outliner-part";
+  el.dataset.nodeId = nodeId;
+  el.dataset.partName = part.name;
+  el.dataset.depth = String(depth);
+  appendIndent(el, depth);
+
+  const spacer = document.createElement("span");
+  spacer.className = "outliner-node-toggle";
+  spacer.setAttribute("aria-hidden", "true");
+  el.appendChild(spacer);
+
+  const icon = document.createElement("span");
+  icon.className = "outliner-node-icon";
+  icon.textContent = "◆";
+  el.appendChild(icon);
+
+  const label = document.createElement("span");
+  label.className = "outliner-node-label";
+  label.textContent = part.label;
+  el.appendChild(label);
+
+  el.title = `${part.label} — click to select this part`;
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    emit(EVENTS.OUTLINER_PART_SELECTED, { nodeId, meshName: part.name });
+  });
+  return el;
+}
+
+function createFragmentGroupElement(nodeId: string, count: number, expanded: boolean, depth: number): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "outliner-node outliner-part-group";
+  el.dataset.nodeId = nodeId;
+  el.dataset.depth = String(depth);
+  appendIndent(el, depth);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "outliner-node-toggle";
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} small pieces`);
+  toggle.textContent = expanded ? "▼" : "▶";
+  el.appendChild(toggle);
+
+  const label = document.createElement("span");
+  label.className = "outliner-node-label";
+  label.textContent = `${count} small piece${count === 1 ? "" : "s"}`;
+  el.appendChild(label);
+
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (expandedFragmentGroups.has(nodeId)) expandedFragmentGroups.delete(nodeId);
+    else expandedFragmentGroups.add(nodeId);
+    renderTree(buildOutlineTree(getNodes()));
+    _syncRowSelectionClasses();
+  });
+  return el;
 }
 
 function getNodeDisplayName(node: any): string {
@@ -237,15 +340,12 @@ function createNodeElement(node: any, isChildAsset: boolean, depth = 0): HTMLDiv
   el.dataset.depth = String(depth);
   el.draggable = true;
 
-  const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+  const hasChildren =
+    (Array.isArray(node.children) && node.children.length > 0) ||
+    (!isChildAsset && listNodeParts(node.node_id) !== null);
 
   // Indentation guides for nested rows
-  for (let i = 0; i < depth; i++) {
-    const guide = document.createElement("span");
-    guide.className = "outliner-node-guide";
-    guide.setAttribute("aria-hidden", "true");
-    el.appendChild(guide);
-  }
+  appendIndent(el, depth);
 
   // Expand/collapse toggle or leaf spacer
   let toggle: HTMLElement;
@@ -356,23 +456,29 @@ function _isChildAssetNode(nodeId: string): boolean {
   );
 }
 
-/** Enable [-] only when the current selection contains a child asset. */
+/** Enable [-] when the selection holds a removable part or a child asset. */
 function _syncRemoveButtonState(): void {
   if (!removeBtn) return;
+  if (canRemoveSelectedPart()) {
+    removeBtn.disabled = false;
+    removeBtn.title = "Remove selected part";
+    return;
+  }
   const hasChildSelected = [...selectedNodeIds].some((id) =>
     _isChildAssetNode(id)
   );
   removeBtn.disabled = !hasChildSelected;
   removeBtn.title = hasChildSelected
     ? "Remove selected child asset"
-    : "Select a child asset to remove";
+    : "Select a part or child asset to remove";
 }
 
 // ─── Selection ────────────────────────────────────────────────────────
 
+/** The model's own row — part and small-piece rows share its data-node-id. */
 function _rowFor(nodeId: string): Element | null | undefined {
   return getOutlinerTree()?.querySelector(
-    `[data-node-id="${CSS.escape(nodeId)}"]`
+    `.outliner-node:not(.outliner-part):not(.outliner-part-group)[data-node-id="${CSS.escape(nodeId)}"]`
   );
 }
 
@@ -384,6 +490,17 @@ function _syncRowSelectionClasses(): void {
   }
   for (const id of selectedNodeIds) {
     _rowFor(id)?.classList.add("selected");
+  }
+  _markSelectedPartRow(tree);
+}
+
+/** The engine's selected part, if any, lights its row too. */
+function _markSelectedPartRow(tree: Element): void {
+  const partName = state.highlightedSubMeshName;
+  const partNode = state.highlightedNodeId;
+  if (!partName || !partNode || !selectedNodeIds.has(partNode)) return;
+  for (const el of tree.querySelectorAll<HTMLElement>(".outliner-part")) {
+    if (el.dataset.nodeId === partNode && el.dataset.partName === partName) el.classList.add("selected");
   }
 }
 
@@ -497,6 +614,7 @@ function onSceneEmpty(): void {
   renderEmpty();
   clearSelection();
   collapsedNodeIds.clear();
+  expandedFragmentGroups.clear();
 }
 
 // ─── Exports ─────────────────────────────────────────────────────────

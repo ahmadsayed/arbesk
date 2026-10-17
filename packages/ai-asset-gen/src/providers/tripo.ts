@@ -12,6 +12,9 @@ const TRIPO_RIG_MODEL = process.env.TRIPO_3D_RIG_MODEL || "v2.5-20260210";
 // so the better rig kicks in automatically when Tripo re-enables it.
 const TRIPO_RIG_BIPED_MODEL =
   process.env.TRIPO_3D_RIG_BIPED_MODEL || "v1.0-20240301";
+// Segmentation model line: v2.0 (beta) adds semantic grouping on top of
+// v1.0's geometry-only split.
+const TRIPO_SEGMENT_MODEL = process.env.TRIPO_3D_SEGMENT_MODEL || "v2.0-20260430";
 
 /** Valid Tripo texture_quality levels (generation ≥ v3.0 and models/texture). */
 const TEXTURE_QUALITIES = ["standard", "detailed", "extreme", "fast"];
@@ -498,6 +501,27 @@ export async function decimateTask(
   }, TRIPO_INGEST_TIMEOUT_MS);
   console.log(`[GEN] Tripo decimate task created task_id=${taskId}`);
   return taskId;
+}
+
+/**
+ * Create a segmentation task: splits a model into separate part meshes.
+ * @remarks Output is one GLB with a node per part (`tripo_part_N`, unlabeled
+ *   even on v2), textures kept. Connectivity splitting stays on (Tripo's
+ *   default): it isolated a goat's two horns as their own parts, at the cost
+ *   of ~30 tiny fragments the client groups away (observed live 2026-10-17,
+ *   40 credits).
+ * @param fileToken - file_token from uploadModel()
+ * @returns task_id
+ */
+export async function segmentTask(fileToken: string, apiKey: string): Promise<string> {
+  requireString(fileToken, "fileToken");
+  requireString(apiKey, "apiKey");
+  console.log(`[GEN] Tripo segmentTask input=${fileToken} model=${TRIPO_SEGMENT_MODEL}`);
+  return startTask("mesh/segment", apiKey, {
+    input: fileToken,
+    model: TRIPO_SEGMENT_MODEL,
+    segmentation_granularity: "balanced",
+  }, TRIPO_INGEST_TIMEOUT_MS);
 }
 
 /**

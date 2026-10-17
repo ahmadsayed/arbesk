@@ -12,6 +12,7 @@ import { pushUndoEntry } from "./undo-stack.ts";
 import { registerUndoApplier } from "./undo-controller.ts";
 import { notifyPendingEditsChanged, registerPendingSource } from "../state/unsaved-changes.ts";
 import { isEditing, subscribeEditMode } from "../state/edit-mode.ts";
+import { canRemoveSelectedPart, removeSelectedPart } from "./part-remove.ts";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -44,6 +45,7 @@ const selectedComponentSwatch = document.getElementById(
   "selectedComponentSwatch"
 );
 const selectedComponentColor: HTMLInputElement|null = document.getElementById("selectedComponentColor") as HTMLInputElement | null;
+const removeComponentBtn = document.getElementById("removeComponentBtn");
 
 // Token child info elements
 const tokenChildIdEl = document.getElementById("tokenChildId");
@@ -523,12 +525,36 @@ function onOutlinerNodeSelected(e: { nodeId: string; additive?: boolean }) {
 }
 on(EVENTS.OUTLINER_NODE_SELECTED, onOutlinerNodeSelected);
 
+// A part row in the Outline: open its model, then select that part — the
+// same result as clicking the part in the viewport.
+function onOutlinerPartSelected(e: { nodeId: string; meshName: string }) {
+  if (activeNodeId !== e.nodeId) {
+    selectNodeById(e.nodeId);
+    openInspector(e.nodeId);
+  }
+  selectSubMesh(e.nodeId, e.meshName);
+}
+on(EVENTS.OUTLINER_PART_SELECTED, onOutlinerPartSelected);
+
 // Sub-mesh selected from the viewport: sync the inspector to that component.
 on(EVENTS.SUBMESH_SELECTED, (e: {meshName?: string}) => {
   const meshName = e?.meshName;
   if (!meshName || !activeNodeId) return;
   selectComponent(meshName);
+  _syncRemovePartButton();
 });
+
+/** "Remove part" shows while a removable part (not the model's last) is selected. */
+function _syncRemovePartButton(): void {
+  if (removeComponentBtn) removeComponentBtn.hidden = !canRemoveSelectedPart();
+}
+if (removeComponentBtn) {
+  removeComponentBtn.addEventListener("click", () => {
+    removeSelectedPart();
+    _syncRemovePartButton();
+  });
+}
+on(EVENTS.SELECTION_CHANGED, _syncRemovePartButton);
 
 // Inspector toggle + reveal buttons (same behavior as the left sidebar)
 if (inspectorToggle) inspectorToggle.addEventListener("click", toggleInspector);
