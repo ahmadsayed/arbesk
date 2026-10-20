@@ -10,7 +10,7 @@ import { getRuntime } from "../../runtime-state.ts";
 import { sanitizeFileName } from "../../utils/uri.ts";
 import { parse3mfModel } from "./parser.ts";
 import { decompose, isComposite3mf } from "./decomposer.ts";
-import { isZipBytes, strFromU8 } from "./zip.ts";
+import { isZipBytes, strFromU8, unzipBytes } from "./zip.ts";
 
 const COMPOSITE_3MF_PATH = "composite.3mf.json";
 
@@ -149,4 +149,35 @@ export async function editSourceColors(
   });
   console.log(`[3MF-COLOR] source ${sourceCid} → ${newCid} | modified=${modified} skipped=${skipped}`);
   return { sourceCid: newCid, ...result };
+}
+
+/**
+ * Object-level colours already baked into a model, by viewer mesh name.
+ * @returns mesh name (the object's name, else `object_<id>`) → "#rrggbb";
+ *   objects without an object-level basematerials reference are left out.
+ */
+export function readObjectColors(modelXml: string): Record<string, string> {
+  const parsed = parse3mfModel(modelXml);
+  const colors: Record<string, string> = {};
+  for (const obj of parsed.objects) {
+    if (obj.pid === null || obj.pindex === null) continue;
+    const entry = parsed.basematerials.filter((m) => m.groupId === obj.pid)[obj.pindex];
+    if (entry) colors[obj.name || `object_${obj.id}`] = entry.color.slice(0, 7).toLowerCase();
+  }
+  return colors;
+}
+
+/** The model XML of a raw .3mf or composite 3MF source. */
+async function sourceModelXml(sourceCid: string): Promise<string> {
+  const bytes = new Uint8Array(await getRuntime().ipfsRead.getBytes(sourceCid));
+  if (!isZipBytes(bytes)) return JSON.parse(strFromU8(bytes)).model;
+  const entries = unzipBytes(bytes);
+  const modelPath = Object.keys(entries).find((p) => p.endsWith(".model"));
+  if (!modelPath) throw new Error(`[3MF] no .model part in package | cid=${sourceCid}`);
+  return strFromU8(entries[modelPath]);
+}
+
+/** readObjectColors for a stored source (raw .3mf or composite 3MF), by CID. */
+export async function readSourceColors(sourceCid: string): Promise<Record<string, string>> {
+  return readObjectColors(await sourceModelXml(sourceCid));
 }
