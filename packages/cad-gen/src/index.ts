@@ -9,11 +9,11 @@ export {
   CadError, CadDesignError, CadGenerationFailed, CadGuardError, CadKernelError, CadRequestUnsuitable,
 } from "./errors.ts";
 export type {
-  CadDesign, CadMesh, CadParameter, CadParameterMap,
+  CadColorParameter, CadDesign, CadLengthParameter, CadMesh, CadParameter, CadParameterMap,
   CadStats, ManifoldModule, TokenUsage,
 } from "./types.ts";
 export {
-  parseDesign, validateParameterOverrides, referencedIdentifiers,
+  isColorParameter, parseDesign, validateParameterOverrides, referencedIdentifiers,
 } from "./core/document.ts";
 export { ATTRIBUTED_HELPERS, attributionsFor } from "./core/attribution.ts";
 export type { Attribution } from "./core/attribution.ts";

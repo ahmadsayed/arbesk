@@ -35,8 +35,8 @@ interface ManifoldBox {
 }
 
 /** Builds the parameter name -> value map the script sees as PARAMETERS/P. */
-function parameterValues(design: CadDesign): Record<string, number> {
-  const values: Record<string, number> = {};
+function parameterValues(design: CadDesign): Record<string, number | string> {
+  const values: Record<string, number | string> = {};
   for (const [name, p] of Object.entries(design.parameters)) values[name] = p.value;
   return values;
 }
@@ -61,7 +61,7 @@ function compileScript(code: string, names: string[]): (...args: unknown[]) => u
  */
 function callScript(
   fn: (...args: unknown[]) => unknown,
-  values: Record<string, number>,
+  values: Record<string, number | string>,
   module: ManifoldModule,
   helpers: PreludeHelpers,
   names: string[],

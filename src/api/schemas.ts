@@ -348,13 +348,25 @@ const CAD_MAX_SUMMARY_CHARS = 2000;
  *   must be a finite number - a JSON null there reaches PARAMETERS as NaN and
  *   fails a static gate with a message about the script, not the request.
  */
-const cadParameterSchema = z.object({
+const cadLengthParameterSchema = z.object({
+  type: z.literal("length").optional(),
   value: z.number().finite(),
   unit: z.literal("mm").optional().default("mm"),
   min: z.number().finite().optional(),
   max: z.number().finite().optional(),
   label: z.string().max(200).optional(),
 });
+
+/** One colour, mirroring CadColorParameter: a #rrggbb value and a label, nothing else. */
+const cadColorParameterSchema = z
+  .object({
+    type: z.literal("color"),
+    value: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    label: z.string().max(200).optional(),
+  })
+  .strict();
+
+const cadParameterSchema = z.union([cadColorParameterSchema, cadLengthParameterSchema]);
 
 /**
  * A design document as the client echoes it back.

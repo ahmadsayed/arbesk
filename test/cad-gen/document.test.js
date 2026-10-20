@@ -49,6 +49,58 @@ describe("parseDesign", () => {
   });
 });
 
+describe("parseDesign - colour parameters", () => {
+  const withColour = (c) => ({
+    code: "return box(P.w, 1, 1);",
+    parameters: { w: { value: 1, unit: "mm" }, c },
+  });
+
+  it("parses a colour parameter and lowercases it", () => {
+    const d = parseDesign(withColour({ type: "color", value: "#D33A2C" }));
+    expect(d.parameters.c).toEqual({ type: "color", value: "#d33a2c" });
+  });
+
+  it("keeps a colour parameter's label", () => {
+    const d = parseDesign(withColour({ type: "color", value: "#000000", label: "Lid colour" }));
+    expect(d.parameters.c).toEqual({ type: "color", value: "#000000", label: "Lid colour" });
+  });
+
+  it("rejects bad hex", () => {
+    for (const value of ["red", "#d33", 3]) {
+      expect(() => parseDesign(withColour({ type: "color", value }))).toThrow(/\bc\b/);
+    }
+  });
+
+  it("rejects unit/min/max on a colour", () => {
+    for (const extra of [{ unit: "mm" }, { min: 0 }, { max: 1 }]) {
+      expect(() => parseDesign(withColour({ type: "color", value: "#000000", ...extra }))).toThrow(CadDesignError);
+    }
+  });
+
+  it("rejects an unknown type", () => {
+    expect(() => parseDesign(withColour({ type: "angle", value: 1 }))).toThrow(CadDesignError);
+  });
+
+  it("length parameters unchanged", () => {
+    expect(parseDesign(VALID).parameters).toEqual({
+      width: { value: 60, unit: "mm", min: 10, max: 200, label: "Overall width" },
+    });
+    expect(parseDesign({ ...VALID, parameters: { w: { type: "length", value: 2, unit: "mm" } } }).parameters)
+      .toEqual({ w: { value: 2, unit: "mm" } });
+  });
+});
+
+describe("validateParameterOverrides - kinds", () => {
+  it("override kind mismatch", () => {
+    const design = parseDesign({
+      code: "return box(P.w, 1, 1);",
+      parameters: { w: { value: 1, unit: "mm" }, c: { type: "color", value: "#000000" } },
+    });
+    expect(validateParameterOverrides(design, { c: 5, w: "#000000" })).toEqual(["c", "w"]);
+    expect(validateParameterOverrides(design, { c: "#ffffff", w: 3 })).toEqual([]);
+  });
+});
+
 describe("validateParameterOverrides", () => {
   const design = parseDesign(VALID);
 

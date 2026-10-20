@@ -1,13 +1,25 @@
 /** Port + shared types for @arbesk/cad-gen. No runtime code here. */
 
 /** One named, user-editable dimension baked into the design's PARAMETERS block. */
-export interface CadParameter {
+export interface CadLengthParameter {
+  /** Absent on every design written before colour parameters existed. */
+  type?: "length";
   value: number;
   unit: "mm";
   min?: number;
   max?: number;
   label?: string;
 }
+
+/** One named, user-editable colour; the script passes it to color(). */
+export interface CadColorParameter {
+  type: "color";
+  /** "#rrggbb", lowercase once parsed. */
+  value: string;
+  label?: string;
+}
+
+export type CadParameter = CadLengthParameter | CadColorParameter;
 
 export type CadParameterMap = Record<string, CadParameter>;
 

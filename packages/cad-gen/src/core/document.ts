@@ -2,7 +2,9 @@
  * The design document: parse, validate and inspect it.
  * @remarks Environment-agnostic — no Node or browser globals.
  */
-import type { CadDesign, CadParameter, CadParameterMap } from "../types.ts";
+import type {
+  CadColorParameter, CadDesign, CadLengthParameter, CadParameter, CadParameterMap,
+} from "../types.ts";
 import { CadDesignError } from "../errors.ts";
 
 const MAX_CODE_BYTES = 64 * 1024;
@@ -12,12 +14,49 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/** True for a colour parameter; every other parameter is a millimetre length. */
+export function isColorParameter(p: CadParameter): p is CadColorParameter {
+  return p.type === "color";
+}
+
+/**
+ * Validates a colour entry: a #rrggbb value and an optional label, nothing else.
+ * @throws CadDesignError on any other value or on length-only keys.
+ */
+function parseColorParameter(name: string, p: Record<string, unknown>): CadColorParameter {
+  if (typeof p.value !== "string" || !HEX_COLOR.test(p.value)) {
+    throw new CadDesignError("parameter " + name + " must be a #rrggbb colour");
+  }
+  for (const key of ["unit", "min", "max"]) {
+    if (key in p) throw new CadDesignError("parameter " + name + " is a colour and takes no " + key);
+  }
+  return {
+    type: "color",
+    value: p.value.toLowerCase(),
+    ...(typeof p.label === "string" ? { label: p.label } : {}),
+  };
+}
+
 /**
  * Validates one entry of a design's PARAMETERS block.
- * @throws CadDesignError when the entry is not a millimetre-valued dimension.
+ * @throws CadDesignError when the entry is neither a millimetre dimension nor a colour.
  */
 function parseParameter(name: string, p: unknown): CadParameter {
   if (!isPlainObject(p)) throw new CadDesignError("parameter " + name + " is not an object");
+  if (p.type === "color") return parseColorParameter(name, p);
+  if (p.type !== undefined && p.type !== "length") {
+    throw new CadDesignError("parameter " + name + " has an unknown type");
+  }
+  return parseLengthParameter(name, p);
+}
+
+/**
+ * Validates a millimetre dimension; the output never carries `type`.
+ * @throws CadDesignError when the value is not finite or the unit is not mm.
+ */
+function parseLengthParameter(name: string, p: Record<string, unknown>): CadLengthParameter {
   if (typeof p.value !== "number" || !Number.isFinite(p.value)) {
     throw new CadDesignError("parameter " + name + " has a non-finite value");
   }
@@ -72,16 +111,19 @@ export function parseDesign(input: unknown): CadDesign {
 }
 
 /**
- * Checks numeric overrides against a design's declared parameters.
- * @returns the names that are NOT declared (empty when all are valid).
+ * Checks overrides against a design's declared parameters.
+ * @returns the names that are not declared, or whose value is the wrong kind
+ *   (a colour needs a string, a length a number); empty when all are valid.
  */
 export function validateParameterOverrides(
   design: CadDesign,
-  overrides: Record<string, number>,
+  overrides: Record<string, number | string>,
 ): string[] {
-  return Object.keys(overrides).filter(
-    (name) => !Object.prototype.hasOwnProperty.call(design.parameters, name),
-  );
+  return Object.keys(overrides).filter((name) => {
+    if (!Object.prototype.hasOwnProperty.call(design.parameters, name)) return true;
+    const expected = isColorParameter(design.parameters[name]) ? "string" : "number";
+    return typeof overrides[name] !== expected;
+  });
 }
 
 /**
