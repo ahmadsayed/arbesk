@@ -38,3 +38,13 @@ export function unzipBytes(
 export function zipBytes(files: Record<string, Uint8Array>): Uint8Array {
   return zipSync(files);
 }
+
+/** True for a ZIP that holds a 3MF model part (the shared 3MF sniff). */
+export function isThreeMfPackage(bytes: Uint8Array): boolean {
+  if (!isZipBytes(bytes)) return false;
+  try {
+    return Object.keys(unzipBytes(bytes)).some((p) => p.endsWith(".model"));
+  } catch {
+    return false;
+  }
+}

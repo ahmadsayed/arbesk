@@ -9,7 +9,7 @@
  */
 
 import { getArrayBufferFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
-import { unzipBytes, isZipBytes, strFromU8 } from "@arbesk/asset-core/formats/3mf/zip.js";
+import { unzipBytes, isZipBytes, isThreeMfPackage, strFromU8 } from "@arbesk/asset-core/formats/3mf/zip.js";
 import { parse3mfModel } from "@arbesk/asset-core/formats/3mf/parser.js";
 import { parsed3mfToGltf } from "@arbesk/asset-core/formats/3mf/to-gltf.js";
 import type {
@@ -32,13 +32,7 @@ export const threeMfHandler: FormatHandler = {
   extensions: [".3mf"],
 
   sniff(bytes: Uint8Array): boolean {
-    if (!isZipBytes(bytes)) return false;
-    try {
-      const entries = unzipBytes(bytes);
-      return Object.keys(entries).some((p) => p.endsWith(".model"));
-    } catch {
-      return false;
-    }
+    return isThreeMfPackage(bytes);
   },
 
   /**
@@ -46,10 +40,10 @@ export const threeMfHandler: FormatHandler = {
    */
   async load(src: any, ctx: FormatLoadContext) {
     const cid = ctx.cid || src.cid;
-    console.log(`[FORMATS-3mf] fetching 3MF | cid=${cid}`);
+    console.log(`[FORMATS-3mf] ${ctx.bytes ? "in-memory" : "fetching"} 3MF | cid=${cid}`);
     // Gzip-sniffing reader: uncompressed today, but tolerant if compression
     // is ever enabled on source uploads (glTF/GLB handlers use it too).
-    const raw = new Uint8Array(await getArrayBufferFromRemoteIPFS(cid, ctx.onProgress));
+    const raw = ctx.bytes ?? new Uint8Array(await getArrayBufferFromRemoteIPFS(cid, ctx.onProgress));
 
     let packageBytes = raw;
     if (!isZipBytes(raw)) {

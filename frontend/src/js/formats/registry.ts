@@ -20,6 +20,8 @@ export interface FormatLoadContext {
   }>;
   /** optional byte-level download progress (0..1) for the source fetch */
   onProgress?: (fraction: number) => void;
+  /** Source bytes already in memory (a CAD preview render); skips the fetch. */
+  bytes?: Uint8Array;
 }
 
 export interface FormatSaveContext {
