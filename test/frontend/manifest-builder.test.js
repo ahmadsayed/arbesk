@@ -934,7 +934,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
     cadSave.settledCadParamEdits.mockResolvedValue(cadEdits);
     cadSave.applyCadParameterEdits.mockImplementation(async (m) => {
       m.scene.nodes[0].source = { cid: "bafyCadNew", path: "composite.gltf", format: "gltf" };
-      return new Map([["n1", { summary: "Parameters: w 1→2 mm" }]]);
+      return new Map([["n1", { design: { summary: "Parameters: w 1→2 mm" }, edit: {} }]]);
     });
     const ctx = await load();
     const store = await freshStore();
@@ -951,7 +951,7 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
 
     expect(ctx.cadSave.applyCadParameterEdits.mock.calls[0][1]).toBe(cadEdits);
     expect(colouredCid).toBe("bafyCadNew");
-    expect(result.cadSaved.get("n1").summary).toBe("Parameters: w 1→2 mm");
+    expect(result.cadSaved.get("n1").design.summary).toBe("Parameters: w 1→2 mm");
   });
 
   it("rewrites a node's source without its removed parts", async () => {

@@ -9,7 +9,7 @@
 import type { CadDesign } from "@arbesk/cad-gen";
 import { getCurrentManifest } from "@arbesk/asset-core/domain/asset.js";
 import { renderCadDesignInWorker } from "./cad-render.ts";
-import { replaceNodeModelFromBytes, replaceRootModelSource } from "../engine/scene-loader.ts";
+import { reloadNodeModel, replaceNodeModelFromBytes } from "../engine/scene-loader.ts";
 import type { AssetSourceRef } from "../engine/scene-loader.ts";
 import { registerUndoApplier } from "../engine/undo-controller.ts";
 import {
@@ -46,7 +46,7 @@ function sourceOf(nodeId: string): AssetSourceRef | null {
 
 async function restoreStored(nodeId: string): Promise<void> {
   const source = sourceOf(nodeId);
-  if (_previewed.delete(nodeId) && source) await replaceRootModelSource(nodeId, source);
+  if (_previewed.delete(nodeId) && source) await reloadNodeModel(nodeId, source);
 }
 
 async function renderOne(nodeId: string): Promise<void> {

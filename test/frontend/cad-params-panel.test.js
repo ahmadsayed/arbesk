@@ -193,6 +193,23 @@ describe("editing", () => {
     expect(state().status).toBe("error");
   });
 
+  it("an undo moves the commit baseline", () => {
+    c.onCommit("w", "80");
+    // What the cad-params undo applier does: back to the saved value.
+    edits.setCadParamValues("n1", DESIGN, { w: 60 });
+    c.onCommit("w", "70");
+    expect(pushUndoEntry).toHaveBeenCalledTimes(2);
+    expect(pushUndoEntry.mock.calls[1][0].items[0]).toMatchObject({ before: { w: 60 }, after: { w: 70 } });
+  });
+
+  it("a render landing mid-drag keeps the gesture's baseline", () => {
+    c.onInput("w", "70");
+    edits.markCadParamRendered("n1", { bytes: new Uint8Array([1]), stats: {} });
+    c.onInput("w", "75");
+    c.onCommit("w", "75");
+    expect(pushUndoEntry.mock.calls[0][0].items[0]).toMatchObject({ before: { w: 60 }, after: { w: 75 } });
+  });
+
   it("Reset restores saved values", () => {
     c.onCommit("w", "70");
     c.reset();
@@ -240,15 +257,24 @@ describe("routeCadPartColor", () => {
   });
 
   it("routes a CAD part colour to its parameter", () => {
-    expect(panel.routeCadPartColor("n1", "part-2", "#112233", "#00FF00")).toBe(true);
+    expect(panel.routeCadPartColor("n1", "part-2", "#112233", "#00FF00", true)).toBe(true);
     expect(edits.getCadParamEdit("n1").design.parameters.c.value).toBe("#00ff00");
     expect(pushUndoEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps routing through a drag with no render in between", () => {
+    expect(panel.routeCadPartColor("n1", "part-2", "#112233", "#00ff00")).toBe(true);
+    expect(panel.routeCadPartColor("n1", "part-2", "#112233", "#00ff40")).toBe(true);
+    expect(panel.routeCadPartColor("n1", "part-2", "#112233", "#00ff80", true)).toBe(true);
+    expect(edits.getCadParamEdit("n1").design.parameters.c.value).toBe("#00ff80");
+    expect(pushUndoEntry).toHaveBeenCalledTimes(1);
+    expect(pushUndoEntry.mock.calls[0][0].items[0]).toMatchObject({ before: { c: "#112233" }, after: { c: "#00ff80" } });
   });
 
   it("uses the rendered part colours once a preview exists", () => {
     panel.routeCadPartColor("n1", "part-2", "#112233", "#00ff00");
     edits.markCadParamRendered("n1", { bytes: new Uint8Array([1]), stats: {}, partColors: [undefined, "#00ff00"] });
-    // The viewport may still show the old colour; the render is the authority.
+    // The viewport may still show the old colour; the route holds.
     expect(panel.routeCadPartColor("n1", "part-2", "#112233", "#0000ff")).toBe(true);
     expect(edits.getCadParamEdit("n1").design.parameters.c.value).toBe("#0000ff");
   });

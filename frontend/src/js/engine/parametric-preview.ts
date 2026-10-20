@@ -611,17 +611,21 @@ if (selectedComponentColor) {
   selectedComponentColor.addEventListener("input", onComponentColorChange);
   // Push one undo entry when the picker closes (end of gesture)
   selectedComponentColor.addEventListener("change", (e) => {
-    if (!activeNodeId || !activeMeshName) return;
     const target = (e.target as HTMLInputElement);
+    // Same part resolution as the input listener (onComponentColorChange).
+    const meshName = target.dataset?.meshName || activeMeshName;
+    if (!activeNodeId || !meshName) return;
     const newColor = target.value;
-    if (_colorBeforeEdit && _colorBeforeEdit !== newColor) {
+    // A script-coloured CAD part: the panel records one cad-params undo entry.
+    const routed = routeCadPartColor(activeNodeId, meshName, originalMaterialColors[meshName], newColor, true);
+    if (!routed && _colorBeforeEdit && _colorBeforeEdit !== newColor) {
       pushUndoEntry({
         type: "color",
         label: "Color",
         items: [
           {
             nodeId: activeNodeId,
-            meshName: activeMeshName,
+            meshName,
             before: _colorBeforeEdit,
             after: newColor,
           },

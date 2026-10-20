@@ -12,7 +12,9 @@ import { resolveFormatHandler } from "../../formats/index.ts";
 import type { FormatSaveContext } from "../../formats/registry.ts";
 import { writeToIPFS } from "../../ipfs/write-to-ipfs.ts";
 import { showToast } from "../../ui/toasts.ts";
-import { cadPartIndex, clearCadParamEdits, getPendingCadParamEdits } from "../../state/cad-param-edits.ts";
+import {
+  cadPartIndex, clearCadParamEdits, getCadParamEdit, getPendingCadParamEdits,
+} from "../../state/cad-param-edits.ts";
 import type { CadParamEdit } from "../../state/cad-param-edits.ts";
 import { setCadParamBase, whenCadPreviewsSettled } from "../cad-param-preview.ts";
 
@@ -86,30 +88,41 @@ async function saveOne(manifest: any, node: any, edit: CadParamEdit, ctx: Format
   return design;
 }
 
+/** One node's saved design and the pending edit it was saved from. */
+export interface CadParamSaved {
+  design: CadDesign;
+  edit: CadParamEdit;
+}
+
 /**
  * Writes every pending parameter edit into its node's source.
- * @returns the saved design per node (for finishCadParameterSave).
+ * @returns the saved design and source edit per node (for finishCadParameterSave).
  * @throws Error when an edit has no successful preview; nothing is written.
  */
 export async function applyCadParameterEdits(
   manifest: any,
   pending: Map<string, CadParamEdit>,
   ctx: FormatSaveContext,
-): Promise<Map<string, CadDesign>> {
+): Promise<Map<string, CadParamSaved>> {
   for (const edit of pending.values()) {
     if (edit.status !== "ok" || !edit.bytes) throw new Error("CAD parameters have no successful preview");
   }
-  const saved = new Map<string, CadDesign>();
+  const saved = new Map<string, CadParamSaved>();
   for (const [nodeId, edit] of pending) {
     const node = manifest.scene.nodes.find((n: any) => n.node_id === nodeId);
-    if (node?.source?.cid) saved.set(nodeId, await saveOne(manifest, node, edit, ctx));
+    if (node?.source?.cid) saved.set(nodeId, { design: await saveOne(manifest, node, edit, ctx), edit });
   }
   return saved;
 }
 
-/** After the manifest is written: the saved designs become the new base. */
-export function finishCadParameterSave(saved: Map<string, CadDesign>): void {
+/**
+ * After the manifest is written: the saved designs become the new base.
+ * @remarks An edit replaced while the save uploaded (the user kept dragging)
+ *   is newer than what was saved, so it stays pending.
+ */
+export function finishCadParameterSave(saved: Map<string, CadParamSaved>): void {
   if (saved.size === 0) return;
-  for (const [nodeId, design] of saved) setCadParamBase(nodeId, design);
-  clearCadParamEdits([...saved.keys()]);
+  for (const [nodeId, { design }] of saved) setCadParamBase(nodeId, design);
+  const settled = [...saved].filter(([nodeId, { edit }]) => getCadParamEdit(nodeId) === edit).map(([id]) => id);
+  if (settled.length > 0) clearCadParamEdits(settled);
 }

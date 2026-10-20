@@ -43,7 +43,7 @@ beforeEach(async () => {
   mock.module("../../frontend/src/js/services/cad-render.ts", () => ({ renderCadDesignInWorker: render }));
   mock.module("../../frontend/src/js/engine/scene-loader.ts", () => ({
     replaceNodeModelFromBytes: replace,
-    replaceRootModelSource: restore,
+    reloadNodeModel: restore,
   }));
   mock.module("../../frontend/src/js/engine/undo-controller.ts", () => ({
     registerUndoApplier: (type, fn) => { if (type === "cad-params") applyUndo = fn; },

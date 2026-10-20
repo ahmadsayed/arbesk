@@ -70,6 +70,10 @@ let _saved: CadDesign | null = null;
 let _names: string[] = [];
 /** Values at the last commit: an undo entry's `before`. */
 let _committed: CadParamValues = {};
+/** Values the panel itself last applied; anything else moving them is external (undo). */
+let _applied: CadParamValues = {};
+/** Mesh name → colour parameter, resolved once per shown node so a drag keeps its target. */
+const _routes = new Map<string, string | null>();
 /** Bumped per showCadParams so a slow design fetch for an old node is dropped. */
 let _showSeq = 0;
 
@@ -136,6 +140,8 @@ export async function showCadParams(nodeId: string): Promise<void> {
   const s = cadParamsState();
   Object.assign(s, { visible: true, nodeId, blocked: !guardScript(design.code, PRELUDE_NAMES).ok });
   _committed = currentValues();
+  _applied = _committed;
+  _routes.clear();
   refresh();
 }
 
@@ -159,9 +165,20 @@ function parseValue(name: string, raw: string, clamp: boolean): number | string 
 
 function apply(values: CadParamValues): void {
   const s = cadParamsState();
+  _applied = { ...currentValues(), ...values };
   setCadParamValues(s.nodeId!, _saved!, values);
   scheduleCadPreview(s.nodeId!);
   refresh();
+}
+
+/** Values moved by something other than the panel (an undo/redo): the baseline follows. */
+function followExternalChange(): void {
+  if (!_saved) return;
+  const now = currentValues();
+  if (Object.keys(now).some((k) => now[k] !== _applied[k])) {
+    _committed = now;
+    _applied = now;
+  }
 }
 
 /** Pushes one undo entry from the last commit to now. */
@@ -209,21 +226,38 @@ export function colorParameterForPart(design: CadDesign, partColor: string | und
 }
 
 /**
- * Sends a Studio part-colour edit to the part's colour parameter.
- * @param shownColor - the colour the part showed when the Inspector opened
- * @returns true when handled; false leaves the edit to the source-colour bake.
+ * The colour parameter behind a part, matched once per shown node.
+ * @remarks A rendered edit's part colours describe its current design; before
+ *   any render, the part shows the saved design's colours.
  */
-export function routeCadPartColor(nodeId: string, meshName: string, shownColor: string | undefined, hex: string): boolean {
-  const s = cadParamsState();
-  if (s.nodeId !== nodeId || !canEdit()) return false;
+function routeFor(nodeId: string, meshName: string, shownColor: string | undefined): string | null {
+  if (_routes.has(meshName)) return _routes.get(meshName)!;
   const edit = getCadParamEdit(nodeId);
   const index = cadPartIndex(meshName);
   const rendered = index === null ? undefined : edit?.partColors?.[index];
-  const name = colorParameterForPart(edit?.design ?? _saved!, rendered ?? shownColor);
+  const name = rendered
+    ? colorParameterForPart(edit!.design, rendered)
+    : colorParameterForPart(edit?.savedDesign ?? _saved!, shownColor);
+  _routes.set(meshName, name);
+  return name;
+}
+
+/**
+ * Sends a Studio part-colour edit to the part's colour parameter.
+ * @param shownColor - the colour the part showed when the Inspector opened
+ * @param commit - true at the end of the gesture (change): pushes the undo entry
+ * @returns true when handled; false leaves the edit to the source-colour bake.
+ */
+export function routeCadPartColor(
+  nodeId: string, meshName: string, shownColor: string | undefined, hex: string, commit = false,
+): boolean {
+  const s = cadParamsState();
+  if (s.nodeId !== nodeId || !canEdit()) return false;
+  const name = routeFor(nodeId, meshName, shownColor);
   const value = name ? parseValue(name, hex, true) : null;
   if (!name || value === null) return false;
   apply({ [name]: value });
-  commitUndo("Colour");
+  if (commit) commitUndo("Colour");
   return true;
 }
 
@@ -264,6 +298,8 @@ export function cadParamsPanel() {
 registerAlpineComponent("cadParamsPanel", cadParamsPanel);
 
 on(EVENTS.CAD_PARAMS_CHANGED, (e: any) => {
-  if (e?.nodeId && e.nodeId === cadParamsState().nodeId) refresh();
+  if (!e?.nodeId || e.nodeId !== cadParamsState().nodeId) return;
+  followExternalChange();
+  refresh();
 });
 subscribeEditMode(refresh);

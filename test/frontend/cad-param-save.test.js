@@ -52,8 +52,10 @@ mock.module("../../frontend/src/js/services/cad-param-preview.ts", () => ({
   whenCadPreviewsSettled: settle,
   setCadParamBase: setBase,
 }));
+let current = new Map();
 mock.module("../../frontend/src/js/state/cad-param-edits.ts", () => ({
   getPendingCadParamEdits: () => pending,
+  getCadParamEdit: (id) => current.get(id),
   clearCadParamEdits: jest.fn(),
   cadPartIndex: (name) => {
     const m = /^(?:part-|object_)(\d+)$/.exec(name);
@@ -151,9 +153,11 @@ describe("applyCadParameterEdits", () => {
   });
 
   it("returns the saved design per node", async () => {
-    const saved = await save.applyCadParameterEdits(manifest(), new Map([["n1", okEdit()]]), CTX);
-    expect(saved.get("n1").parameters.width.value).toBe(80);
-    expect(saved.get("n1").summary).toMatch(/^Parameters: /);
+    const edit = okEdit();
+    const saved = await save.applyCadParameterEdits(manifest(), new Map([["n1", edit]]), CTX);
+    expect(saved.get("n1").design.parameters.width.value).toBe(80);
+    expect(saved.get("n1").design.summary).toMatch(/^Parameters: /);
+    expect(saved.get("n1").edit).toBe(edit);
   });
 });
 
@@ -172,9 +176,19 @@ describe("settledCadParamEdits", () => {
 
 describe("finishCadParameterSave", () => {
   it("moves the base on and clears the saved edits", () => {
-    save.finishCadParameterSave(new Map([["n1", EDITED]]));
+    const edit = okEdit();
+    current = new Map([["n1", edit]]);
+    save.finishCadParameterSave(new Map([["n1", { design: EDITED, edit }]]));
     expect(setBase).toHaveBeenCalledWith("n1", EDITED);
     expect(edits.clearCadParamEdits).toHaveBeenCalledWith(["n1"]);
+  });
+
+  it("keeps an edit made while the save was uploading", () => {
+    const edit = okEdit();
+    current = new Map([["n1", okEdit({ status: "rendering" })]]);
+    save.finishCadParameterSave(new Map([["n1", { design: EDITED, edit }]]));
+    expect(setBase).toHaveBeenCalledWith("n1", EDITED);
+    expect(edits.clearCadParamEdits).not.toHaveBeenCalled();
   });
 
   it("does nothing without saved CAD edits", () => {

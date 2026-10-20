@@ -888,10 +888,27 @@ async function replaceRootModelSource(
  *   post_processor overlay, as loadNode does; the manifest is not touched.
  * @returns false when the node has no live anchor.
  */
-async function replaceNodeModelFromBytes(
+function replaceNodeModelFromBytes(
   nodeId: string,
   source: AssetSourceRef,
   bytes: Uint8Array
+): Promise<boolean> {
+  return swapNodeModel(nodeId, source, bytes);
+}
+
+/**
+ * Reloads a node's stored model (a CAD preview reverted to saved values),
+ * keeping its transform and post_processor overlay.
+ * @returns false when the node has no live anchor.
+ */
+function reloadNodeModel(nodeId: string, source: AssetSourceRef): Promise<boolean> {
+  return swapNodeModel(nodeId, source);
+}
+
+async function swapNodeModel(
+  nodeId: string,
+  source: AssetSourceRef,
+  bytes?: Uint8Array
 ): Promise<boolean> {
   const anchor = state.nodeAnchors.get(nodeId);
   if (!anchor) return false;
@@ -926,6 +943,7 @@ export {
   waitForPendingLinkedDrops,
   replaceRootModelSource,
   replaceNodeModelFromBytes,
+  reloadNodeModel,
   createRootDraftSource,
   ensureRootSceneAnchor,
 };

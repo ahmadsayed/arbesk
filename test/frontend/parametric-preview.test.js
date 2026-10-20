@@ -203,6 +203,17 @@ describe("part colour picker on a CAD part", () => {
     expect(mod.getPendingSourceColorEdits().has("cad-node")).toBe(false);
   });
 
+  test("a routed colour pushes no source-colour undo entry", async () => {
+    await pick(true);
+    const undo = await import("../../frontend/src/js/engine/undo-stack.js");
+    const input = document.getElementById("selectedComponentColor");
+    input.dispatchEvent(new Event("pointerdown"));
+    input.value = "#0000ff";
+    input.dispatchEvent(new Event("change"));
+    expect(undo.pushUndoEntry).not.toHaveBeenCalled();
+    expect(cadParams.routeCadPartColor).toHaveBeenLastCalledWith("cad-node", "part-2", undefined, "#0000ff", true);
+  });
+
   test("falls back to the source bake", async () => {
     const mod = await pick(false);
     expect(mod.getPendingSourceColorEdits().get("cad-node").get("part-2")).toBe("#00ff00");
