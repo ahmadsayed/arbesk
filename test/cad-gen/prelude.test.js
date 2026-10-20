@@ -1211,3 +1211,10 @@ describe("zero-volume flakes", () => {
     expect(r.stats.bodies.count).toBe(2);
   });
 });
+
+describe("prelude surface", () => {
+  it("PRELUDE_NAMES includes color", async () => {
+    const { PRELUDE_NAMES } = await import("@arbesk/cad-gen/core/prelude.js");
+    expect(PRELUDE_NAMES).toContain("color");
+  });
+});

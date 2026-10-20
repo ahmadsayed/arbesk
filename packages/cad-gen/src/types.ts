@@ -93,6 +93,8 @@ export interface CadStats {
 export interface CadMesh {
   positions: Float32Array;
   indices: Uint32Array;
+  /** Lowercase "#rrggbb" when the script tagged this part with color(). */
+  color?: string;
 }
 
 /** Token accounting for one LLM call. */

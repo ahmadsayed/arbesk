@@ -318,6 +318,11 @@ function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
   };
 }
 
+/** The mesh with its color() tag, or unchanged (no `color` key) when untagged. */
+function withColor(mesh: CadMesh, color: string | undefined): CadMesh {
+  return color ? { ...mesh, color } : mesh;
+}
+
 /**
  * Builds a kernel bound to a loaded Manifold module.
  * @throws CadKernelError when the script is malformed, throws, or does not
@@ -331,16 +336,19 @@ export function createCadKernel(
 
   return {
     run(design: CadDesign): KernelRunResult {
-      const helpers = buildPrelude(module, options);
+      const colorTags = new WeakMap<object, string>();
+      const helpers = buildPrelude(module, { ...options, colorTags });
       const fn = compileScript(design.code, names);
       const { solids: raw, array } = partsOf(
         callScript(fn, parameterValues(design), module, helpers, names),
         module,
       );
+      // Read before withoutFlakes: it may hand back a new (untagged) instance.
+      const colors = raw.map((s) => colorTags.get(s));
       if (!array) {
         const { solid: result, dropped } = withoutFlakes(module, raw[0]);
         const stats = statsFrom(result, helpers);
-        const mesh = meshFrom(result.getMesh());
+        const mesh = withColor(meshFrom(result.getMesh()), colors[0]);
         const parts = {
           count: 1, array: false, boxes: [stats.bboxMm], bodyCounts: [stats.bodies?.count ?? 1],
         };
@@ -350,11 +358,12 @@ export function createCadKernel(
           stats: { ...stats, ...(dropped > 0 ? { degenerateBodiesDropped: dropped } : {}), parts },
         };
       }
-      const cleaned = raw.map((s) => withoutFlakes(module, s));
+      const cleaned = raw.map((s, i) => ({ ...withoutFlakes(module, s), color: colors[i] }));
       // A part that is nothing but a flake is not a part.
-      const solids = cleaned.map((c) => c.solid).filter((s) => !isDegenerate(s));
+      const kept = cleaned.filter((c) => !isDegenerate(c.solid));
+      const solids = kept.map((c) => c.solid);
       const dropped = cleaned.reduce((n, c) => n + c.dropped, 0) + (cleaned.length - solids.length);
-      const parts = solids.map((s) => meshFrom(s.getMesh()));
+      const parts = kept.map((c) => withColor(meshFrom(c.solid.getMesh()), c.color));
       const stats = arrayStatsFrom(solids, helpers);
       return {
         mesh: concatMeshes(parts),
