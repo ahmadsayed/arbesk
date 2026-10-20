@@ -13,6 +13,7 @@ import { registerUndoApplier } from "./undo-controller.ts";
 import { notifyPendingEditsChanged, registerPendingSource } from "../state/unsaved-changes.ts";
 import { isEditing, subscribeEditMode } from "../state/edit-mode.ts";
 import { canRemoveSelectedPart, removeSelectedPart } from "./part-remove.ts";
+import { hideCadParams, routeCadPartColor, showCadParams } from "../ui/cad-params-panel.ts";
 import {
   getNodeMeshes,
   getNodeSubMeshes,
@@ -349,10 +350,12 @@ async function openInspector(nodeId: string) {
 
   const childRef = getNodeChildRef(nodeId);
   if (childRef) {
+    hideCadParams();
     showTokenChildInfo(nodeId);
     expandInspector();
     return;
   }
+  void showCadParams(nodeId);
 
   if (parametricEditor) parametricEditor.hidden = false;
   if (parametricEditorDetails) parametricEditorDetails.open = false;
@@ -396,6 +399,7 @@ function closeInspector() {
   activeNodeId = null;
   activeMeshName = null;
   originalMaterialColors = {};
+  hideCadParams();
   // NOTE: we intentionally do not collapse the panel here. The user controls
   // collapse explicitly via the X button; programmatic scene clears should not
   // hide the panel.
@@ -453,11 +457,17 @@ function onComponentColorChange(e: Event) {
   if (selectedComponentSwatch)
     selectedComponentSwatch.style.backgroundColor = color;
 
-  // Record for Save/Publish to bake into the source asset.
-  let nodeEdits = pendingSourceColorEdits.get(activeNodeId);
+  // A CAD part coloured by the script: the edit is its colour parameter.
+  if (routeCadPartColor(activeNodeId, meshName, originalMaterialColors[meshName], color)) return;
+  recordSourceColorEdit(activeNodeId, meshName, color);
+}
+
+/** Records a part colour for Save/Publish to bake into the source asset. */
+function recordSourceColorEdit(nodeId: string, meshName: string, color: string) {
+  let nodeEdits = pendingSourceColorEdits.get(nodeId);
   if (!nodeEdits) {
     nodeEdits = new Map();
-    pendingSourceColorEdits.set(activeNodeId, nodeEdits);
+    pendingSourceColorEdits.set(nodeId, nodeEdits);
   }
   nodeEdits.set(meshName, color);
   notifyPendingEditsChanged();

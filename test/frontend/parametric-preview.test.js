@@ -4,6 +4,7 @@ import { describe, expect, jest, mock, test } from "bun:test";
 import { resetModules } from "../helpers/module-registry.js";
 
 const editMode = { editing: false, subs: new Set() };
+const cadParams = { showCadParams: jest.fn(), hideCadParams: jest.fn(), routeCadPartColor: jest.fn(() => false) };
 
 function setupDom() {
   document.body.innerHTML = [
@@ -13,6 +14,7 @@ function setupDom() {
     '<div id="parametricEditor"><details></details></div>',
     '<div id="tokenChildInfo"><details></details></div>',
     '<div id="componentEditor"></div>',
+    '<input id="selectedComponentColor" type="color" />',
     '<div id="scaleSection"></div>',
     '<input id="nodeScaleFactor" />',
     '<input id="nodeScalePercent" />',
@@ -71,6 +73,11 @@ async function load(getNodeChildRef) {
   await mock.module("../../frontend/src/js/engine/undo-controller.js", () => ({
     registerUndoApplier: jest.fn(),
   }));
+  cadParams.showCadParams.mockClear();
+  cadParams.hideCadParams.mockClear();
+  cadParams.routeCadPartColor.mockReset();
+  cadParams.routeCadPartColor.mockReturnValue(false);
+  await mock.module("../../frontend/src/js/ui/cad-params-panel.ts", () => cadParams);
   await mock.module("../../frontend/src/js/engine/scene-graph.js", () => ({
     getNodeMeshes: jest.fn(),
     getNodeSubMeshes: jest.fn().mockReturnValue([]),
@@ -160,5 +167,44 @@ describe("scale fields follow Edit mode", () => {
     editMode.subs.forEach((fn) => fn());
     expect(factor.disabled).toBe(false);
     expect(hint.textContent).toBe("Applies the same scale on all axes.");
+  });
+});
+
+describe("CAD Parameters section", () => {
+  test("opening a regular node shows its parameters", async () => {
+    const { openInspector } = await load(jest.fn().mockReturnValue(null));
+    await openInspector("cad-node");
+    expect(cadParams.showCadParams).toHaveBeenCalledWith("cad-node");
+  });
+
+  test("a linked child hides the parameters", async () => {
+    const { openInspector } = await load(jest.fn().mockReturnValue({ tokenId: "1" }));
+    await openInspector("child-node");
+    expect(cadParams.showCadParams).not.toHaveBeenCalled();
+    expect(cadParams.hideCadParams).toHaveBeenCalled();
+  });
+});
+
+describe("part colour picker on a CAD part", () => {
+  async function pick(routed) {
+    const mod = await load(jest.fn().mockReturnValue(null));
+    cadParams.routeCadPartColor.mockReturnValue(routed);
+    await mod.openInspector("cad-node");
+    const input = document.getElementById("selectedComponentColor");
+    input.dataset.meshName = "part-2";
+    input.value = "#00ff00";
+    input.dispatchEvent(new Event("input"));
+    return mod;
+  }
+
+  test("routes a CAD part colour to its parameter", async () => {
+    const mod = await pick(true);
+    expect(cadParams.routeCadPartColor).toHaveBeenCalledWith("cad-node", "part-2", undefined, "#00ff00");
+    expect(mod.getPendingSourceColorEdits().has("cad-node")).toBe(false);
+  });
+
+  test("falls back to the source bake", async () => {
+    const mod = await pick(false);
+    expect(mod.getPendingSourceColorEdits().get("cad-node").get("part-2")).toBe("#00ff00");
   });
 });

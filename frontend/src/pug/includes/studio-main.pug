@@ -98,6 +98,35 @@ aside#inspector.inspector
         div
           select#animationSelect.form-select(aria-label="Animation clip")
             option(value="") None
+    section#cadParamsSection.inspector-section.cad-params(hidden x-data="cadParamsPanel" :hidden="!visible")
+      details(open)
+        summary.inspector-section-title Parameters
+        div
+          #cadParamsList.cad-params-list
+            template(x-for="row in rows" :key="row.name")
+              .cad-param-row
+                template(x-if="row.kind === 'length'")
+                  .cad-param-length
+                    .cad-param-head
+                      label.cad-param-label(:for="'cadParam-' + row.name" x-text="row.label")
+                      input.form-input.cad-param-number.tabular(:id="'cadParam-' + row.name" type="number" step="0.5" :min="row.min" :max="row.max" :value="row.value" :disabled="!editable" @change="onCommit(row.name, $event.target.value); $event.target.value = row.value")
+                      span.cad-param-unit mm
+                    template(x-if="row.hasRange")
+                      .cad-param-range
+                        span.cad-param-bound.tabular(x-text="row.min" aria-hidden="true")
+                        input.cad-param-slider(:id="'cadParamRange-' + row.name" type="range" step="0.5" :min="row.min" :max="row.max" :value="row.value" :disabled="!editable" :aria-label="row.label + ' slider'" @input="onInput(row.name, $event.target.value)" @change="onCommit(row.name, $event.target.value)")
+                        span.cad-param-bound.tabular(x-text="row.max" aria-hidden="true")
+                template(x-if="row.kind === 'color'")
+                  .cad-param-head
+                    label.cad-param-label(:for="'cadParam-' + row.name" x-text="row.label")
+                    input.form-color.cad-param-color(:id="'cadParam-' + row.name" type="color" :value="row.value" :disabled="!editable" @input="onInput(row.name, $event.target.value)" @change="onCommit(row.name, $event.target.value)")
+                    span.cad-param-hex.tabular(x-text="row.value")
+          .cad-params-status
+            span(:class="'cad-params-dot is-' + status" aria-hidden="true")
+            span#cadParamsStatus(:class="'cad-params-status-text is-' + status" role="status" x-text="statusText")
+            button#cadParamsReset.btn.btn-secondary.btn-sm(type="button" :disabled="!canReset" @click="reset()") Reset
+          p#cadParamsHint.inspector-hint(x-show="hint" x-text="hint")
+          p.inspector-hint Values come from the part's script. Changes rebuild here; Save draft writes a new 3MF.
     section#parametricEditor.inspector-section
       details
         summary.inspector-section-title Color
