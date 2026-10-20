@@ -4,7 +4,8 @@
  * 3MF stays the native stored form: decomposeForSave turns a raw .3mf OPC
  * package into a composite 3MF JSON (XML verbatim + binary parts by CID).
  * Rendering parses the package and converts it to glTF in memory — the glTF
- * is never persisted. Color/scale edits stay as post_processor overlays.
+ * is never persisted. Per-part color edits are baked into the model XML
+ * (editSourceColors); whole-node color and scale stay post_processor overlays.
  */
 
 import { getArrayBufferFromRemoteIPFS } from "../../ipfs/remote-ipfs.ts";
@@ -106,6 +107,22 @@ export const threeMfHandler: FormatHandler = {
       );
     }
     return { cid: compositeCid, path: COMPOSITE_3MF_PATH, format: "3mf" };
+  },
+
+  /**
+   * Bake per-part colors into the 3MF model (new composite CID).
+   */
+  async editSourceColors(
+    node: any,
+    colorMap: Record<string, string>,
+    ctx: FormatSaveContext
+  ) {
+    const { editSourceColors } = await import("@arbesk/asset-core/formats/3mf/color-editor.js");
+    return editSourceColors(node.source.cid, colorMap, {
+      assetName: ctx.assetName,
+      assetId: ctx.assetId,
+      dedupMap: ctx.dedupMap,
+    });
   },
 
   isStoredForm(node: any): boolean {

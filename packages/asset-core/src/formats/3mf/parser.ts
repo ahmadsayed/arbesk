@@ -38,7 +38,7 @@ const PARSER_OPTIONS = {
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   isArray: (tagName: string) =>
-    ["object", "vertex", "triangle", "item", "basematerial"].includes(tagName),
+    ["object", "vertex", "triangle", "item", "base", "basematerial"].includes(tagName),
 };
 
 function toArray(value: any): any[] {
@@ -64,7 +64,9 @@ export function parse3mfModel(xml: string): Parsed3mf {
   const basematerials: Parsed3mfBaseMaterial[] = [];
   for (const group of toArray(resources.basematerials)) {
     const groupId = String(group["@_id"]);
-    for (const mat of toArray(group.basematerial)) {
+    // The 3MF core spec names the entry <base>; <basematerial> is accepted
+    // for files written by older tooling.
+    for (const mat of [...toArray(group.base), ...toArray(group.basematerial)]) {
       basematerials.push({
         groupId,
         name: mat["@_name"] || "",

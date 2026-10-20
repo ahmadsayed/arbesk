@@ -71,6 +71,22 @@ describe("parse3mfModel", () => {
     ]);
   });
 
+  it("parses spec <base> entries in basematerials", async () => {
+    const { parse3mfModel } = await import(
+      "@arbesk/asset-core/formats/3mf/parser.js"
+    );
+    const xml = `<?xml version="1.0"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <basematerials id="3"><base name="Red" displaycolor="#FF0000" /></basematerials>
+  </resources>
+  <build />
+</model>`;
+    expect(parse3mfModel(xml).basematerials).toEqual([
+      { groupId: "3", name: "Red", color: "#FF0000" },
+    ]);
+  });
+
   it("throws on <components> objects", async () => {
     const { parse3mfModel } = await import(
       "@arbesk/asset-core/formats/3mf/parser.js"
