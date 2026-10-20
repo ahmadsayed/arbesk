@@ -2,8 +2,22 @@
 
 import { beforeEach, describe, expect, it, jest, mock } from "bun:test";
 import { resetModules } from "../helpers/module-registry.js";
+
+/** The cad-param-save stand-in load() installs; a test may swap it first. */
+let cadSave = null;
+function defaultCadSave() {
+  return {
+    settledCadParamEdits: jest.fn(async () => new Map()),
+    applyCadParameterEdits: jest.fn(async () => new Map()),
+    finishCadParameterSave: jest.fn(),
+  };
+}
+
 async function load() {
   resetModules();
+  const cadSaveMock = cadSave ?? defaultCadSave();
+  cadSave = null;
+  mock.module("../../frontend/src/js/services/asset-save/cad-param-save.ts", () => cadSaveMock);
 
   mock.module(
     "../../frontend/src/js/ipfs/remote-ipfs.js",
@@ -84,7 +98,7 @@ async function load() {
   const { glbHandler } = await import(
     "../../frontend/src/js/formats/handlers/glb-handler.js"
   );
-  return { mod, remote, asyncGltf, decomposer, gltfHandler, glbHandler };
+  return { mod, remote, asyncGltf, decomposer, gltfHandler, glbHandler, cadSave: cadSaveMock };
 }
 
 function makeManifest(nodes = []) {
@@ -909,6 +923,35 @@ describe("prepareManifestForWrite — edit-baking branches", () => {
     expect(ctx.gltfHandler.editSourceColors.mock.calls[0][1]).toEqual({
       Body: "#ff0000",
     });
+  });
+
+  it("runs CAD parameter edits before the colour bake", async () => {
+    mockEngineModules({
+      pendingColors: new Map([["n1", new Map([["Body", "#ff0000"]])]]),
+    });
+    const cadEdits = new Map([["n1", { status: "ok" }]]);
+    cadSave = defaultCadSave();
+    cadSave.settledCadParamEdits.mockResolvedValue(cadEdits);
+    cadSave.applyCadParameterEdits.mockImplementation(async (m) => {
+      m.scene.nodes[0].source = { cid: "bafyCadNew", path: "composite.gltf", format: "gltf" };
+      return new Map([["n1", { summary: "Parameters: w 1→2 mm" }]]);
+    });
+    const ctx = await load();
+    const store = await freshStore();
+    const manifest = makeManifest([makeNode({ cid: "bafyOld", path: "composite.gltf", format: "gltf" })]);
+    ctx.gltfHandler.isStoredForm.mockReturnValue(true);
+    let colouredCid = null;
+    ctx.gltfHandler.editSourceColors.mockImplementation(async (node) => {
+      colouredCid = node.source.cid;
+      return { sourceCid: "bafyColored", format: "gltf" };
+    });
+    store.set({ activeAssetManifestCid: "bafyManifest", currentManifest: { ...manifest, _manifestCid: "bafyManifest" } });
+
+    const result = await ctx.mod.prepareManifestForWrite("Cad");
+
+    expect(ctx.cadSave.applyCadParameterEdits.mock.calls[0][1]).toBe(cadEdits);
+    expect(colouredCid).toBe("bafyCadNew");
+    expect(result.cadSaved.get("n1").summary).toBe("Parameters: w 1→2 mm");
   });
 
   it("rewrites a node's source without its removed parts", async () => {

@@ -11,6 +11,7 @@ import {
   meshToGlb, meshToGltf, meshTo3mf, readDesignFrom3mf, serializeDesign, parseEmbeddedDesign,
   attributionsFor,
 } from "@arbesk/cad-gen";
+import { withDesign } from "@arbesk/cad-gen/core/export/three-mf.js";
 import { detectFormat } from "@arbesk/asset-core/formats/index.js";
 import { parse3mfModel } from "@arbesk/asset-core/formats/3mf/parser.js";
 
@@ -297,5 +298,16 @@ describe("3MF part colours", () => {
     const gltf = parsed3mfToGltf(parse3mfModel(modelXml(meshTo3mf([RED], DESIGN))));
     const factor = gltf.materials[gltf.meshes[0].primitives[0].material].pbrMetallicRoughness.baseColorFactor;
     [0x11 / 255, 0x22 / 255, 0x33 / 255, 1].forEach((v, i) => expect(factor[i]).toBeCloseTo(v, 5));
+  });
+});
+
+describe("withDesign", () => {
+  it("withDesign replaces only the sidecar", () => {
+    const before = meshTo3mf([MESH, SHIFTED], DESIGN);
+    const edited = { ...DESIGN, parameters: { s: { value: 25, unit: "mm" } }, summary: "Parameters: s 10→25 mm" };
+    const after = withDesign(before, edited);
+    expect(modelXml(after)).toBe(modelXml(before));
+    expect(readDesignFrom3mf(after)).toEqual(edited);
+    expect(Object.keys(unzipSync(after)).sort()).toEqual(Object.keys(unzipSync(before)).sort());
   });
 });

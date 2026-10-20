@@ -136,6 +136,7 @@ mock.module("@arbesk/asset-core/domain/asset.js", () => ({
   getLatestAssetManifestCid: () => assetDomainState.latestCid,
   getActiveAssetTokenId: () => assetDomainState.tokenId,
   getActiveAssetName: () => assetDomainState.name,
+  getCurrentManifest: () => assetDomainState.manifest,
 }));
 mock.module("@arbesk/asset-core/domain/collection.js", () => ({
   selectCollection: mockSelectCollection,
@@ -646,6 +647,25 @@ test("after a successful edit the chip moves to the new version", async () => {
   promptInput.value = "add a 3 mm fillet";
   await clickGenerate();
   expect(mockGenerateCadAsset.mock.calls[0][0].priorDesign).toEqual(edited);
+});
+
+test("refine chip follows the save", async () => {
+  connectWallet();
+  bus.emit(bus.EVENTS.SCENE_READY, { manifest: cadManifest("asset-cad-save"), manifestCid: "bafyS1" });
+  const saved = cadManifest("asset-cad-save");
+  saved.scene.nodes[0].source = { cid: "bafyNewSrc", format: "3mf", path: "composite.3mf.json" };
+  assetDomainState.manifest = saved;
+  assetDomainState.activeCid = "bafyS2";
+  try {
+    bus.emit(bus.EVENTS.ASSET_DRAFT_SAVED, { cid: "bafyS2" });
+    mockResolveCadDesign.mockClear();
+    mockGenerateCadAsset.mockClear();
+    promptInput.value = "make it wider";
+    await clickGenerate();
+    expect(mockResolveCadDesign).toHaveBeenCalledWith("bafyNewSrc");
+  } finally {
+    assetDomainState.manifest = undefined;
+  }
 });
 
 test("a fresh cad generation (no chip) sends no priorDesign", async () => {

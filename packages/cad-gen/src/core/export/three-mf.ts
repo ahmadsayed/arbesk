@@ -129,6 +129,17 @@ export function meshTo3mf(mesh: CadMesh | CadMesh[], design: CadDesign): Uint8Ar
 }
 
 /**
+ * The same .3mf package carrying a different design document.
+ * @remarks Every other part (the model, its colours) is kept byte for byte,
+ *   so a parameter edit's summary can be stamped after the render without
+ *   running the kernel again.
+ */
+export function withDesign(bytes: Uint8Array, design: CadDesign): Uint8Array {
+  const parts = unzipSync(bytes);
+  return zipSync({ ...parts, [SIDECAR_PART_PATH]: strToU8(serializeDesign(design)) }, { level: 6 });
+}
+
+/**
  * Reads the design document back out of a .3mf package.
  * @returns null when the part is absent or unusable.
  */
