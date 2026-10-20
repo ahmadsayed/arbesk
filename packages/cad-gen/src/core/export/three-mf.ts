@@ -31,8 +31,34 @@ const ROOT_RELS = [
   "</Relationships>",
 ].join("\n");
 
+/** A colour group reference for one `<object>`: basematerials id and entry index. */
+interface MaterialRef {
+  pid: number;
+  pindex: number;
+}
+
+/**
+ * The `<basematerials>` group for every coloured part, and each part's reference.
+ * @remarks One `<base>` per distinct colour, in first-use order; the group id
+ *   follows the part objects (n + 1). Empty when no part is coloured, so an
+ *   uncoloured design writes exactly what it always did.
+ */
+function colourGroup(meshes: CadMesh[]): { xml: string[]; refs: (MaterialRef | undefined)[] } {
+  const palette = [...new Set(meshes.map((m) => m.color).filter((c): c is string => !!c))];
+  if (palette.length === 0) return { xml: [], refs: meshes.map(() => undefined) };
+  const pid = meshes.length + 1;
+  return {
+    xml: [
+      '    <basematerials id="' + pid + '">',
+      ...palette.map((c) => '      <base name="' + c + '" displaycolor="' + c.toUpperCase() + 'FF"/>'),
+      "    </basematerials>",
+    ],
+    refs: meshes.map((m) => (m.color ? { pid, pindex: palette.indexOf(m.color) } : undefined)),
+  };
+}
+
 /** One `<object>` element for a part; a lone part keeps today's unnamed form. */
-function objectXml(mesh: CadMesh, id: number, name?: string): string[] {
+function objectXml(mesh: CadMesh, id: number, name?: string, material?: MaterialRef): string[] {
   const verts: string[] = [];
   for (let i = 0; i < mesh.positions.length; i += 3) {
     verts.push(
@@ -50,7 +76,8 @@ function objectXml(mesh: CadMesh, id: number, name?: string): string[] {
     );
   }
   return [
-    '    <object id="' + id + '"' + (name ? ' name="' + name + '"' : "") + ' type="model">',
+    '    <object id="' + id + '"' + (name ? ' name="' + name + '"' : "") +
+      (material ? ' pid="' + material.pid + '" pindex="' + material.pindex + '"' : "") + ' type="model">',
     "      <mesh>",
     "        <vertices>",
     verts.join("\n"),
@@ -70,13 +97,15 @@ function objectXml(mesh: CadMesh, id: number, name?: string): string[] {
  */
 function buildModelXml(meshes: CadMesh[]): string {
   const named = meshes.length > 1;
+  const colours = colourGroup(meshes);
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<model unit="millimeter" xml:lang="en-US" ' +
       'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
     '  <metadata name="Application">Arbesk CAD</metadata>',
     "  <resources>",
-    ...meshes.flatMap((m, i) => objectXml(m, i + 1, named ? "part-" + (i + 1) : undefined)),
+    ...colours.xml,
+    ...meshes.flatMap((m, i) => objectXml(m, i + 1, named ? "part-" + (i + 1) : undefined, colours.refs[i])),
     "  </resources>",
     "  <build>",
     ...meshes.map((_m, i) => '    <item objectid="' + (i + 1) + '"/>'),

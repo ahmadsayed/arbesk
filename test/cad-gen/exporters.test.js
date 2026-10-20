@@ -262,3 +262,40 @@ describe("multi-part export", () => {
     expect(json.asset.extras.arbesk_cad).toEqual(DESIGN);
   });
 });
+
+describe("3MF part colours", () => {
+  const RED = { ...MESH, color: "#112233" };
+  const RED_SHIFTED = { ...SHIFTED, color: "#112233" };
+  const modelSha = (bytes) => new Bun.CryptoHasher("sha256").update(modelXml(bytes)).digest("hex");
+
+  it("writes basematerials for coloured parts", () => {
+    const parsed = parse3mfModel(modelXml(meshTo3mf([RED, SHIFTED], DESIGN)));
+    expect(parsed.basematerials.length).toBe(1);
+    expect(parsed.basematerials[0].color).toBe("#112233FF");
+    expect(parsed.basematerials[0].groupId).toBe("3");
+    expect(parsed.objects[0].pid).toBe("3");
+    expect(parsed.objects[0].pindex).toBe(0);
+    expect(parsed.objects[1].pid).toBeNull();
+  });
+
+  it("shared colour has one base entry", () => {
+    const parsed = parse3mfModel(modelXml(meshTo3mf([RED, RED_SHIFTED], DESIGN)));
+    expect(parsed.basematerials.length).toBe(1);
+    expect(parsed.objects.map((o) => o.pindex)).toEqual([0, 0]);
+  });
+
+  it("uncoloured output is byte-identical", () => {
+    // Captured from the exporter before colours existed.
+    expect(modelSha(meshTo3mf(MESH, DESIGN)))
+      .toBe("914343f43904a18ac9a03df6844939a5e636ae6f45902bf28094ab44d84c6697");
+    expect(modelSha(meshTo3mf([MESH, SHIFTED], DESIGN)))
+      .toBe("10a1626ca5de6e7bde4a24640153adae12bbe9ad534c751ead7867c25b0aef18");
+  });
+
+  it("renders through asset-core", async () => {
+    const { parsed3mfToGltf } = await import("@arbesk/asset-core/formats/3mf/to-gltf.js");
+    const gltf = parsed3mfToGltf(parse3mfModel(modelXml(meshTo3mf([RED], DESIGN))));
+    const factor = gltf.materials[gltf.meshes[0].primitives[0].material].pbrMetallicRoughness.baseColorFactor;
+    [0x11 / 255, 0x22 / 255, 0x33 / 255, 1].forEach((v, i) => expect(factor[i]).toBeCloseTo(v, 5));
+  });
+});
