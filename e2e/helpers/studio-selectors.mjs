@@ -87,6 +87,15 @@ export const SELECTORS = {
   // Parametric component (color) editor inside the Node Inspector
   componentEditor: "#componentEditor",
   componentColorInput: "#selectedComponentColor",
+  // CAD Parameters section inside the Node Inspector
+  cadParamsSection: "#cadParamsSection",
+  cadParamsStatus: "#cadParamsStatus",
+  cadParamsReset: "#cadParamsReset",
+  /**
+   * @param {string} name
+   * @returns {string}
+   */
+  cadParamInput: (name) => `#cadParam-${name}`,
   // Version history / time-travel
   versionTimeline: "#versionTimeline",
   vtTicks: "#versionTimeline .vt-tick",
