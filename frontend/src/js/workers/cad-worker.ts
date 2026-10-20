@@ -28,7 +28,7 @@ self.onmessage = async (event: MessageEvent) => {
   try {
     const out = renderCadDesign(design, module, runtime ?? {});
     (self as unknown as Worker).postMessage(
-      { type: "ok", bytes: out.bytes, summary: out.summary, stats: out.stats },
+      { type: "ok", bytes: out.bytes, summary: out.summary, stats: out.stats, partColors: out.partColors },
       [out.bytes.buffer],
     );
   } catch (err) {

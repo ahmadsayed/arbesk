@@ -13,6 +13,8 @@ export interface CadRenderResult {
   bytes: Uint8Array;
   summary: string;
   stats: CadStats;
+  /** Each part's color() tag, in part order. */
+  partColors: (string | undefined)[];
 }
 
 const DEFAULT_TIMEOUT_MS = 90_000;
@@ -21,7 +23,7 @@ const DEFAULT_TIMEOUT_MS = 90_000;
 // ESM where import.meta is valid. Absolute path against import.meta.url so
 // the URL stays correct from any chunk; ?v= cache-busts the fixed-name asset
 // (bump when the worker bundle changes, same discipline as gltf-worker).
-const WORKER_URL = new URL("/js/workers/cad-worker.js?v=1", import.meta.url).href;
+const WORKER_URL = new URL("/js/workers/cad-worker.js?v=2", import.meta.url).href;
 
 export function renderCadDesignInWorker(
   design: CadDesign,
@@ -46,7 +48,9 @@ export function renderCadDesignInWorker(
     worker.onmessage = (event: MessageEvent) => {
       const data = event.data;
       if (data?.type === "ok") {
-        finish(() => resolve({ bytes: data.bytes, summary: data.summary, stats: data.stats }));
+        finish(() => resolve({
+          bytes: data.bytes, summary: data.summary, stats: data.stats, partColors: data.partColors ?? [],
+        }));
       } else if (data?.type === "error") {
         finish(() => reject(new CadRenderError(data.code ?? "CAD_KERNEL_FAILED", data.message ?? "CAD rendering failed.")));
       }

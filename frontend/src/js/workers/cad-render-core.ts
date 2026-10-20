@@ -26,6 +26,8 @@ export interface CadRenderOutput {
   bytes: Uint8Array;
   summary: string;
   stats: unknown;
+  /** Each part's color() tag, in part order (undefined when untagged). */
+  partColors: (string | undefined)[];
 }
 
 /**
@@ -57,7 +59,7 @@ export function renderCadDesign(
     // One 3MF object per part: an array return's parts stay separate objects.
     const { parts, stats } = kernel.run(design);
     const bytes = meshTo3mf(parts, design);
-    return { bytes, summary: design.summary, stats };
+    return { bytes, summary: design.summary, stats, partColors: parts.map((p) => p.color) };
   } catch (err) {
     if (err instanceof CadRenderError) throw err;
     throw new CadRenderError(
