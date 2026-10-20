@@ -3,6 +3,7 @@ import {
   parseDesign,
   validateParameterOverrides,
   referencedIdentifiers,
+  usedParameterNames,
 } from "@arbesk/cad-gen/core/document.js";
 import { CadDesignError } from "@arbesk/cad-gen/errors.js";
 
@@ -148,5 +149,42 @@ describe("referencedIdentifiers - ignores non-code", () => {
   it("still collects real calls", () => {
     const names = referencedIdentifiers("return hole(box(1,1,1), {});");
     expect([...names].sort()).toEqual(["box", "hole"]);
+  });
+});
+
+describe("usedParameterNames", () => {
+  it("dot access", () => {
+    expect(usedParameterNames("return box(P.width, PARAMETERS.depth, P.width)"))
+      .toEqual({ names: ["width", "depth"], dynamic: false });
+  });
+
+  it("bracket literal", () => {
+    expect(usedParameterNames("return box(P[\"a\"], P['b'], 1)"))
+      .toEqual({ names: ["a", "b"], dynamic: false });
+  });
+
+  it("destructuring with alias and default", () => {
+    expect(usedParameterNames("const { a, b: bee, c = 2 } = P;\nreturn box(a, bee, c);"))
+      .toEqual({ names: ["a", "b", "c"], dynamic: false });
+  });
+
+  it("ignores comments and strings", () => {
+    expect(usedParameterNames("// P.ghost\nconst s = 'P.fake'; return box(P.real, 1, 1)"))
+      .toEqual({ names: ["real"], dynamic: false });
+  });
+
+  it("ignores a property that happens to be named P", () => {
+    expect(usedParameterNames("const o = M.P; return box(P.w, 1, 1)"))
+      .toEqual({ names: ["w"], dynamic: false });
+  });
+
+  it("computed key marks dynamic", () => {
+    expect(usedParameterNames("const k = 'w'; return box(P[k], 1, 1)").dynamic).toBe(true);
+  });
+
+  it("aliasing P marks dynamic", () => {
+    expect(usedParameterNames("const p = P; return box(p.w, 1, 1)").dynamic).toBe(true);
+    expect(usedParameterNames("f(PARAMETERS); return box(1, 1, 1)").dynamic).toBe(true);
+    expect(usedParameterNames("const { ...rest } = P; return box(rest.w, 1, 1)").dynamic).toBe(true);
   });
 });

@@ -232,3 +232,53 @@ export function referencedIdentifiers(code: string): Set<string> {
   while ((m = re.exec(source)) !== null) names.add(m[1]);
   return names;
 }
+
+/** The parameter names a script reads, and whether it reads any it cannot name. */
+export interface UsedParameters {
+  names: string[];
+  /** True when PARAMETERS/P is read by a computed key or passed around whole. */
+  dynamic: boolean;
+}
+
+const PARAMETER_ROOT = /(?<![\w$.]\s*)\b(?:P|PARAMETERS)\b/g;
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+/** The keys of a `{ a, b: alias, c = 1 } =` pattern ending right before `at`, or null. */
+function destructuredKeys(source: string, at: number): string[] | null {
+  const m = /\{([^{}]*)\}\s*=\s*$/.exec(source.slice(0, at));
+  if (!m) return null;
+  const keys = m[1].split(",").map((e) => e.split(/[:=]/)[0].trim()).filter(Boolean);
+  return keys.every((k) => IDENTIFIER.test(k)) ? keys : null;
+}
+
+/**
+ * The names one read of PARAMETERS/P at `at` names, or null when it names none.
+ * @param source - the script with comments and strings blanked
+ * @param code - the original script (bracket keys are string literals)
+ */
+function namesAt(source: string, code: string, at: number, end: number): string[] | null {
+  const dot = /^\s*\.\s*([A-Za-z_$][\w$]*)/.exec(source.slice(end));
+  if (dot) return [dot[1]];
+  const bracket = /^\s*\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/.exec(code.slice(end));
+  if (bracket) return [bracket[2]];
+  return destructuredKeys(source, at);
+}
+
+/**
+ * The parameters a script actually reads, in first-read order.
+ * @remarks Lexical, like referencedIdentifiers: dot reads, string-literal
+ *   bracket reads and destructuring are named; any other use of PARAMETERS/P
+ *   (a computed key, an alias, a call argument) sets `dynamic`, and the caller
+ *   then treats every declared parameter as used.
+ */
+export function usedParameterNames(code: string): UsedParameters {
+  const source = stripNonCode(code);
+  const names = new Set<string>();
+  let dynamic = false;
+  for (const m of source.matchAll(PARAMETER_ROOT)) {
+    const found = namesAt(source, code, m.index, m.index + m[0].length);
+    if (found) found.forEach((n) => names.add(n));
+    else dynamic = true;
+  }
+  return { names: [...names], dynamic };
+}

@@ -13,10 +13,11 @@ export type {
   CadStats, ManifoldModule, TokenUsage,
 } from "./types.ts";
 export {
-  isColorParameter, parseDesign, validateParameterOverrides, referencedIdentifiers,
+  isColorParameter, parseDesign, validateParameterOverrides, referencedIdentifiers, usedParameterNames,
 } from "./core/document.ts";
 export { ATTRIBUTED_HELPERS, attributionsFor } from "./core/attribution.ts";
 export type { Attribution } from "./core/attribution.ts";
+export type { UsedParameters } from "./core/document.ts";
 export { guardScript } from "./core/guard.ts";
 export type { GuardResult } from "./core/guard.ts";
 export {
