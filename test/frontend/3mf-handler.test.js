@@ -90,6 +90,17 @@ describe("3mf format handler", () => {
     });
   });
 
+  it("load uses ctx.bytes without fetching", async () => {
+    const box = new Uint8Array(fs.readFileSync(BOX_PATH));
+    const fetch = jest.fn();
+    mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({ getArrayBufferFromRemoteIPFS: fetch }));
+    const { threeMfHandler } = await import("../../frontend/src/js/formats/handlers/3mf-handler.js");
+    const importFromBlob = jest.fn().mockResolvedValue({ meshes: [], transformNodes: [] });
+    await threeMfHandler.load({ cid: "bafyPreview" }, { cid: "bafyPreview", importFromBlob, bytes: box });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(importFromBlob).toHaveBeenCalledTimes(1);
+  });
+
   it("load converts a raw 3MF CID into a glTF blob", async () => {
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));
     mock.module(

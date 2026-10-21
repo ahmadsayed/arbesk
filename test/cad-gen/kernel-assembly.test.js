@@ -125,3 +125,53 @@ describe("sealed voids", () => {
     expect(run.stats.voids.boxes[0].part).toBe(2);
   });
 });
+
+describe("color()", () => {
+  const coloured = (code) => ({
+    code,
+    parameters: { s: { value: 10, unit: "mm" }, c: { type: "color", value: "#112233" } },
+    summary: "",
+  });
+
+  it("color() tags a returned part", () => {
+    const run = kernel.run(coloured("return [color(box(P.s, P.s, P.s), P.c), box(1, 1, 1).translate([20, 0, 0])];"));
+    expect(run.parts[0].color).toBe("#112233");
+    expect(run.parts[1].color).toBeUndefined();
+  });
+
+  it("tags a single returned solid and lowercases the hex", () => {
+    const run = kernel.run(coloured("P.s; return color(box(1, 1, 1), '#AABBCC');"));
+    expect(run.parts[0].color).toBe("#aabbcc");
+  });
+
+  it("keeps the colour paired with its part when a flake part is dropped", () => {
+    const run = kernel.run(coloured(
+      "return [box(5, 5, 5).subtract(box(6, 6, 6)), color(box(P.s, P.s, P.s), P.c)];",
+    ));
+    expect(run.parts.length).toBe(1);
+    expect(run.parts[0].color).toBe("#112233");
+  });
+
+  it("a boolean after color() drops the tag", () => {
+    const run = kernel.run(coloured("return color(box(P.s, P.s, P.s), P.c).subtract(box(1, 1, 20));"));
+    expect(run.parts[0].color).toBeUndefined();
+  });
+
+  it("bad hex throws", () => {
+    expect(() => kernel.run(coloured("P.s; return color(box(1, 1, 1), 'blue');")))
+      .toThrow(/color needs a #rrggbb hex/);
+  });
+
+  it("colour parameters reach the script as strings", () => {
+    expect(() => kernel.run(coloured(
+      "if (typeof P.c !== 'string') throw new Error('not a string'); return box(P.s, 1, 1);",
+    ))).not.toThrow();
+  });
+
+  it("untagged design parts unchanged", () => {
+    const run = kernel.run(design("return [box(P.s, P.s, P.s), box(1, 1, 1).translate([20, 0, 0])];"));
+    expect(run.parts.every((p) => !("color" in p))).toBe(true);
+    const single = kernel.run(design("return box(P.s, P.s, P.s);"));
+    expect(Object.keys(single.parts[0])).toEqual(["positions", "indices"]);
+  });
+});

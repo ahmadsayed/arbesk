@@ -45,6 +45,7 @@ export const EVENTS = {
   OUTLINER_PART_SELECTED:     "outliner:partSelected",
   OUTLINER_REMOVE_REQUESTED:  "outliner:removeRequested",
   PENDING_EDITS_CHANGED:      "pending:editsChanged",
+  CAD_PARAMS_CHANGED:         "cad:paramsChanged",
   SCENE_CLEARED:              "scene:cleared",
   SCENE_EMPTY:                "scene:empty",
   SCENE_READY:                "scene:ready",

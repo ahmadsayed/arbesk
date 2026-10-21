@@ -33,7 +33,7 @@ initRuntime({
 });
 afterAll(() => _resetRuntimeForTesting());
 
-const { applyObjectColors, editSourceColors } = await import(
+const { applyObjectColors, editSourceColors, readObjectColors, readSourceColors } = await import(
   "@arbesk/asset-core/formats/3mf/color-editor.js"
 );
 const { parse3mfModel } = await import("@arbesk/asset-core/formats/3mf/parser.js");
@@ -169,5 +169,35 @@ describe("editSourceColors (3MF)", () => {
     const result = await editSourceColors("bafySrc", { nope: "#ff0000" });
     expect(result.sourceCid).toBe("bafySrc");
     expect(result.modified).toBe(0);
+  });
+});
+
+describe("readObjectColors", () => {
+  const UNNAMED = model(
+    `    <object id="1" type="model">${TRI}</object>
+    <object id="2" type="model">${TRI}</object>`
+  );
+
+  it("round-trips applyObjectColors", () => {
+    expect(readObjectColors(applyObjectColors(UNNAMED, { object_1: "#AABBCC" }).model))
+      .toEqual({ object_1: "#aabbcc" });
+  });
+
+  it("keys a named object by its name", () => {
+    expect(readObjectColors(applyObjectColors(TWO_PARTS, { "part-2": "#112233" }).model))
+      .toEqual({ "part-2": "#112233" });
+  });
+
+  it("an uncoloured model has no colours", () => {
+    expect(readObjectColors(TWO_PARTS)).toEqual({});
+  });
+});
+
+describe("readSourceColors", () => {
+  it("reads colours from a raw .3mf and from its colour-baked composite", async () => {
+    store.set("bafyRawRead", new Uint8Array(fs.readFileSync(BOX_PATH)));
+    expect(await readSourceColors("bafyRawRead")).toEqual({});
+    const baked = await editSourceColors("bafyRawRead", { object_1: "#123456" });
+    expect(await readSourceColors(baked.sourceCid)).toEqual({ object_1: "#123456" });
   });
 });

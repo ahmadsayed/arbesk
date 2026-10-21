@@ -26,6 +26,15 @@ beforeAll(async () => {
 });
 
 describe("renderCadDesign", () => {
+  test("reports each part's color() tag", () => {
+    const coloured = {
+      ...DESIGN,
+      parameters: { ...DESIGN.parameters, lid: { type: "color", value: "#d33a2c" } },
+      code: "return [box(P.width, P.depth, P.height), color(box(P.width, P.depth, 2).translate([0, 0, P.height]), P.lid)];",
+    };
+    expect(renderCadDesign(coloured, module_).partColors).toEqual([undefined, "#d33a2c"]);
+  });
+
   test("renders an array return as one 3MF object per part", () => {
     const twoPart = {
       ...DESIGN,

@@ -63,6 +63,7 @@ import {
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
   getActiveAssetName,
+  getCurrentManifest,
 } from "@arbesk/asset-core/domain/asset.js";
 import { selectCollection } from "@arbesk/asset-core/domain/collection.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
@@ -3197,7 +3198,17 @@ function presentOpenedAsset(manifest: any, manifestCid: string, name: string | n
 on(EVENTS.ASSET_DRAFT_SAVED, () => {
   const manifestCid = getActiveAssetManifestCid();
   if (manifestCid) void renderChatProvenance(manifestCid);
+  if (manifestCid && activeVersion?.kind === "cad") followSavedCadSource(manifestCid);
 });
+
+/**
+ * Re-targets the cad chip when a save gave the part a new source (a parameter
+ * edit), so the next prompt edits the saved values; the design reloads lazily.
+ */
+function followSavedCadSource(manifestCid: string) {
+  const chip = availableCadChip(getCurrentManifest(), manifestCid, activeVersion!.name);
+  if (chip && chip.sourceAssetCid !== activeVersion!.sourceAssetCid) setActiveVersion(chip);
+}
 
 // Viewport file drop / Library upload: present the staged model as an
 // actionable chat bubble (Retopo et al. run off its sourceAssetCid).

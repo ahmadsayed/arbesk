@@ -11,6 +11,15 @@ const design = (summary) => ({
   turn: 1,
 });
 
+describe("SYSTEM_PROMPT - colour", () => {
+  it("teaches color() and colour parameters", () => {
+    expect(SYSTEM_PROMPT).toContain("color(part, hex)");
+    expect(SYSTEM_PROMPT).toContain('"type": "color"');
+    expect(SYSTEM_PROMPT).toContain("call color() last");
+    expect(SYSTEM_PROMPT).not.toContain("PARAMETERS hold NUMBERS only.");
+  });
+});
+
 describe("SYSTEM_PROMPT", () => {
   it("documents the array return for multi-part objects", () => {
     expect(SYSTEM_PROMPT).toContain("return an ARRAY of solids, one per part");

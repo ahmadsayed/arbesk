@@ -46,6 +46,7 @@ import {
   updatePendingGeneration,
 } from "../../state/pending-generations.ts";
 import { notifyPendingEditsChanged } from "../../state/unsaved-changes.ts";
+import { applyCadParameterEdits, finishCadParameterSave, settledCadParamEdits } from "./cad-param-save.ts";
 import { log, warn } from "../../utils/log.ts";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 
@@ -867,6 +868,12 @@ export async function prepareManifestForWrite(assetName: string) {
     : new Map();
   log(`Save: dedup map built | entries=${dedupMap.size} skipped=${!needsDedup}`);
 
+  // CAD parameter edits first: the previewed 3MF becomes the node source, so
+  // a pending colour edit below bakes onto it.
+  const cadSaved = await applyCadParameterEdits(manifest, await settledCadParamEdits(), {
+    assetName: manifest.name, assetId: manifest.asset_id, dedupMap,
+  });
+
   // Apply direct source color edits (mutate source glTF/GLB, update node.source.cid).
   await applySourceColorEdits(manifest, pendingColors, dedupMap);
 
@@ -918,6 +925,7 @@ export async function prepareManifestForWrite(assetName: string) {
     prevCid: latestCid,
     prevManifest: prevManifest || baseManifest,
     pendingRefs,
+    cadSaved,
   };
 }
 
@@ -1019,6 +1027,7 @@ export async function saveAssetDraftCore(
   });
 
   recordSavedVersion(cid, prepared.manifest);
+  finishCadParameterSave(prepared.cadSaved);
 
   clearBakedChildRefs(prepared.pendingRefs);
   clearPendingChildRefRemovals();

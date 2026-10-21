@@ -15,6 +15,14 @@ describe("3mf zip helpers", () => {
     expect(isZipBytes(new Uint8Array([0x50]))).toBe(false);
   });
 
+  it("isThreeMfPackage accepts a 3MF package and rejects other bytes", async () => {
+    const { isThreeMfPackage, zipBytes, strToU8 } = await import("@arbesk/asset-core/formats/3mf/zip.js");
+    expect(isThreeMfPackage(new Uint8Array(fs.readFileSync(BOX_PATH)))).toBe(true);
+    expect(isThreeMfPackage(zipBytes({ "a.txt": strToU8("x") }))).toBe(false);
+    expect(isThreeMfPackage(strToU8('{"json":true}'))).toBe(false);
+    expect(isThreeMfPackage(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2]))).toBe(false);
+  });
+
   it("unzips the box sample into its three OPC entries", async () => {
     const { unzipBytes } = await import("@arbesk/asset-core/formats/3mf/zip.js");
     const box = new Uint8Array(fs.readFileSync(BOX_PATH));

@@ -9,14 +9,15 @@ export {
   CadError, CadDesignError, CadGenerationFailed, CadGuardError, CadKernelError, CadRequestUnsuitable,
 } from "./errors.ts";
 export type {
-  CadDesign, CadMesh, CadParameter, CadParameterMap,
+  CadColorParameter, CadDesign, CadLengthParameter, CadMesh, CadParameter, CadParameterMap,
   CadStats, ManifoldModule, TokenUsage,
 } from "./types.ts";
 export {
-  parseDesign, validateParameterOverrides, referencedIdentifiers,
+  isColorParameter, parseDesign, validateParameterOverrides, referencedIdentifiers, usedParameterNames,
 } from "./core/document.ts";
 export { ATTRIBUTED_HELPERS, attributionsFor } from "./core/attribution.ts";
 export type { Attribution } from "./core/attribution.ts";
+export type { UsedParameters } from "./core/document.ts";
 export { guardScript } from "./core/guard.ts";
 export type { GuardResult } from "./core/guard.ts";
 export {
@@ -26,7 +27,7 @@ export {
 export type { GateResult, KernelLimits } from "./core/gates.ts";
 export { meshToGlb } from "./core/export/glb.ts";
 export { meshToGltf } from "./core/export/gltf.ts";
-export { meshTo3mf, readDesignFrom3mf } from "./core/export/three-mf.ts";
+export { meshTo3mf, readDesignFrom3mf, withDesign } from "./core/export/three-mf.ts";
 export {
   SIDECAR_PART_PATH, SIDECAR_REL_TYPE, serializeDesign, parseEmbeddedDesign,
 } from "./core/export/embed.ts";

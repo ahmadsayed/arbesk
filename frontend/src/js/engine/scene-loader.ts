@@ -38,18 +38,18 @@ async function loadAsset(
   src: any,
   parentNode: BABYLON.TransformNode,
   nodeId: string,
-  onProgress: ((fraction: number) => void) | null = null
+  onProgress: ((fraction: number) => void) | null = null, bytes?: Uint8Array
 ): Promise<BABYLON.AbstractMesh[]> {
   const cid = extractCid(src);
   const handler = resolveFormatHandler(src);
-  console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${handler.format}`);
+  console.log(`[SCENE] loadAsset nodeId=${nodeId} cid=${cid} format=${handler.format}${bytes ? " (in-memory)" : ""}`);
 
   try {
     const result = await handler.load(src, {
       scene: state.scene,
       cid,
       importFromBlob,
-      onProgress: onProgress ?? undefined,
+      onProgress: onProgress ?? undefined, bytes,
     });
     attachMetadata(
       result.meshes,
@@ -883,6 +883,46 @@ async function replaceRootModelSource(
 }
 
 /**
+ * Replaces a node's model with in-memory source bytes (a CAD preview render).
+ * @remarks Keeps the anchor (transform) and re-applies the manifest node's
+ *   post_processor overlay, as loadNode does; the manifest is not touched.
+ * @returns false when the node has no live anchor.
+ */
+function replaceNodeModelFromBytes(
+  nodeId: string,
+  source: AssetSourceRef,
+  bytes: Uint8Array
+): Promise<boolean> {
+  return swapNodeModel(nodeId, source, bytes);
+}
+
+/**
+ * Reloads a node's stored model (a CAD preview reverted to saved values),
+ * keeping its transform and post_processor overlay.
+ * @returns false when the node has no live anchor.
+ */
+function reloadNodeModel(nodeId: string, source: AssetSourceRef): Promise<boolean> {
+  return swapNodeModel(nodeId, source);
+}
+
+async function swapNodeModel(
+  nodeId: string,
+  source: AssetSourceRef,
+  bytes?: Uint8Array
+): Promise<boolean> {
+  const anchor = state.nodeAnchors.get(nodeId);
+  if (!anchor) return false;
+  disposeNodeContent(nodeId);
+  const meshes = await loadAsset(source, anchor, nodeId, null, bytes);
+  const pp = getManifestNodes(getCurrentManifest()).find((n: any) => n?.node_id === nodeId)?.post_processor;
+  if (meshes.length > 0 && pp) {
+    applyColor(meshes, pp.color, pp.meshOverrides || null);
+    applyScale(meshes, pp.scale);
+  }
+  return true;
+}
+
+/**
  * Creates a fresh single-node draft scene from a dropped file.
  */
 async function createRootDraftSource(nodeId: string, source: AssetSourceRef) {
@@ -902,6 +942,8 @@ export {
   handleLinkedAssetDropped,
   waitForPendingLinkedDrops,
   replaceRootModelSource,
+  replaceNodeModelFromBytes,
+  reloadNodeModel,
   createRootDraftSource,
   ensureRootSceneAnchor,
 };

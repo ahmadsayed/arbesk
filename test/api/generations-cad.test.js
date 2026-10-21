@@ -253,6 +253,17 @@ describe("POST /api/v1/generations with provider cad", () => {
     });
   });
 
+  test("accepts a colour parameter in priorDesign", async () => {
+    const priorDesign = {
+      ...DESIGN,
+      parameters: { ...DESIGN.parameters, c: { type: "color", value: "#112233" } },
+    };
+    const res = await post({ prompt: "recolour", nodeId: "n_cad_colour", provider: "cad", priorDesign });
+    expect(res.status).toBe(202);
+    await until(async () => generate.mock.calls.length > 0, "generate call");
+    expect(generate.mock.calls[0][0].priorDesign.parameters.c).toEqual({ type: "color", value: "#112233" });
+  });
+
   test("rejects a malformed priorDesign with 400 naming the field", async () => {
     const res = await post({
       prompt: "edit", nodeId: "n_cad_bad", provider: "cad", priorDesign: { code: "", parameters: {} },

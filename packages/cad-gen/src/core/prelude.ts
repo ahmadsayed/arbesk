@@ -22,7 +22,7 @@ export const PRELUDE_NAMES = [
   "rect", "circle", "roundRect", "polygon", "extrude", "revolve",
   "roundedBox", "hole", "boltCircle", "spurGear", "ringGear", "rack", "gearDistance", "bevelGear", "bevelApex", "worm", "wormGear", "wormDistance", "gridfinityBase", "gridfinityBaseplate", "standoffs", "boardCase", "phoneStand", "railHook",
   "cupRack", "knuckleHinge", "printInPlaceHinge", "spoolHolder", "gridfinityCup", "wallHook", "knob", "gt2Pulley", "extrusionSpoolArm", "pipeClamp", "boardCaseLid", "stack",
-  "filletEdges", "chamferEdges",
+  "filletEdges", "chamferEdges", "color",
   "bbox", "volume",
 ] as const;
 
@@ -548,7 +548,16 @@ export interface PreludeOptions {
    *   passes 0 here and sets the adaptive controls on the module.
    */
   segments?: number;
+  /**
+   * Where color() records each tagged solid's colour, for the kernel to read.
+   * @remarks Keyed by the exact solid instance, so the script cannot forge a
+   *   tag and any boolean or transform after color() yields an untagged solid.
+   */
+  colorTags?: WeakMap<object, string>;
 }
+
+/** The only colour form color() accepts. */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 /** Ball tessellation per quality level. */
 const BALL_SEGMENTS: Record<FilletQuality, number> = { draft: 16, high: 32 };
@@ -783,6 +792,7 @@ export function buildPrelude(
   lastFilletMode = undefined;
   lastFilletQuality = undefined;
   const { Manifold, CrossSection } = module;
+  const colorTags = options.colorTags ?? new WeakMap<object, string>();
 
   /** One feature's segment count: the script's choice, else the host's. */
   const segmentsFor = (featureOpts: any): number =>
@@ -1613,6 +1623,12 @@ export function buildPrelude(
     },
 
     volume: (part: any) => part.volume(),
+
+    color: (part: any, hex: unknown) => {
+      if (typeof hex !== "string" || !HEX_COLOR.test(hex)) throw new Error("color needs a #rrggbb hex");
+      colorTags.set(part, hex.toLowerCase());
+      return part;
+    },
   };
 
   const result = helpers as PreludeHelpers;

@@ -1,7 +1,7 @@
 import type { FormatCodec, DecomposeResult } from "../codec.ts";
 import { compose } from "./composer.ts";
 import { decompose as decompose3mf, isComposite3mf } from "./decomposer.ts";
-import { unzipBytes, isZipBytes } from "./zip.ts";
+import { isThreeMfPackage } from "./zip.ts";
 
 function toBytes(input: unknown): Uint8Array {
   if (input instanceof Uint8Array) return input;
@@ -14,13 +14,7 @@ export const threeMfCodec: FormatCodec = {
   extensions: [".3mf"],
 
   sniff(bytes: Uint8Array): boolean {
-    if (!isZipBytes(bytes)) return false;
-    try {
-      const entries = unzipBytes(bytes);
-      return Object.keys(entries).some((p) => p.endsWith(".model"));
-    } catch {
-      return false;
-    }
+    return isThreeMfPackage(bytes);
   },
 
   isStoredForm(data: unknown): boolean {

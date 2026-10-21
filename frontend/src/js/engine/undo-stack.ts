@@ -8,13 +8,13 @@ export interface UndoItem {
   nodeId: string;
   /** color and part entries only */
   meshName?: string;
-  /** transform: number[16] column-major matrix; color: hex string */
+  /** transform: number[16] column-major matrix; color: hex string; cad-params: name → value */
   before: any;
   after: any;
 }
 
 export interface UndoEntry {
-  type: "transform" | "color" | "child_ref" | "part";
+  type: "transform" | "color" | "child_ref" | "part" | "cad-params";
   /** human label for tooltips/logs ("Move", "Rotate", "Scale", "Color") */
   label: string;
   items: UndoItem[];

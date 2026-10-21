@@ -124,6 +124,7 @@ mock.module("@arbesk/asset-core/domain/asset.js", () => ({
   getLatestAssetManifestCid: () => assetDomainState.latestCid,
   getActiveAssetTokenId: () => assetDomainState.tokenId,
   getActiveAssetName: () => assetDomainState.name,
+  getCurrentManifest: () => null,
 }));
 mock.module("@arbesk/asset-core/domain/collection.js", () => ({
   selectCollection: mockSelectCollection,

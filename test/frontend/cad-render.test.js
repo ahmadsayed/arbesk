@@ -19,9 +19,9 @@ const DESIGN = { code: "return box(P.width, P.depth, P.height);", parameters: {}
 describe("renderCadDesignInWorker", () => {
   test("spawns a module worker at /js/workers/cad-worker.js and resolves bytes", async () => {
     const Fake = mockWorker((w) => {
-      expect(w.url).toContain("/js/workers/cad-worker.js?v=1");
+      expect(w.url).toContain("/js/workers/cad-worker.js?v=2");
       expect(w.opts).toEqual({ type: "module" });
-      w.onmessage({ data: { type: "ok", bytes: new Uint8Array([1, 2, 3]), summary: "box", stats: { tris: 12 } } });
+      w.onmessage({ data: { type: "ok", bytes: new Uint8Array([1, 2, 3]), summary: "box", stats: { tris: 12 }, partColors: ["#112233"] } });
     });
     const orig = globalThis.Worker;
     globalThis.Worker = Fake;
@@ -29,6 +29,7 @@ describe("renderCadDesignInWorker", () => {
       const out = await renderCadDesignInWorker(DESIGN, { preludeVersion: "x" }, { timeoutMs: 5000 });
       expect(out.bytes).toEqual(new Uint8Array([1, 2, 3]));
       expect(out.summary).toBe("box");
+      expect(out.partColors).toEqual(["#112233"]);
       expect(Fake.instances[0].lastMessage.type).toBe("render");
       expect(Fake.instances[0].lastMessage.design).toBe(DESIGN);
       expect(Fake.instances[0].terminated).toBe(true);

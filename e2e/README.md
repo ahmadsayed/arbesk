@@ -448,6 +448,17 @@ Validates typed follow-ups on a Parametric CAD part (the e2e backend spawns with
 
 **Why it matters:** This is the only E2E coverage of CAD incremental editing: the `#refineIndicator` chip lifecycle, the provider lock while a chip is attached, the `priorDesign` request wiring, and version chaining for design edits. Changes to `refine-target.ts`, the `create-panel.ts` generation routing, or the CAD edit manifest chain can break it.
 
+### 29. CAD parameters (`e2e/specs/29-cad-parameters.spec.js`)
+
+Validates the Inspector's **Parameters** section on the mock CAD box (40 × 30 × 20 mm, parameters `width`/`depth`/`height`):
+
+1. Generates a Parametric CAD part and sends it to the Studio; selecting it shows `#cadParamsSection` with `#cadParam-width|depth|height`, disabled in View mode.
+2. In Edit, sets width to 60 and leaves the field — `#cadParamsStatus` reaches `Preview up to date · not saved` after the local worker render.
+3. **Save draft** writes a new version whose root `source.cid` changed and whose `metadata.cad.stats` box is 60 mm wide; the status bar shows 60 and the status returns to `Saved values`.
+4. After a reload the width field reads 60 (the value came back from the saved 3MF's design sidecar).
+
+**Why it matters:** This is the only E2E coverage of client-side parameter edits: the panel, the worker preview swap and the save step that rebuilds the 3MF. Changes to `cad-params-panel.ts`, `cad-param-preview.ts`, `cad-param-save.ts`, the 3MF handler's in-memory load or `withDesign` can break it.
+
 ### Chat version restore (`e2e/specs/chat-version-restore.spec.js`)
 
 Validates that a version-card bubble's **Show in Studio** button stays a live restore path:
