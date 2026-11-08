@@ -1,8 +1,6 @@
 /**
- * Mesh to .3mf (OPC package, millimetres, Z-up).
- * @remarks Written by hand rather than via manifold's lib/export-3mf.js: that
- *   path pulls @jscadui/3mf-export, a second @gltf-transform and an esbuild-wasm
- *   peer, and offers no hook for the design sidecar (spec section 7).
+ * Mesh to .3mf (OPC, millimetres, Z-up), by hand: manifold's exporter pulls
+ * heavy dependencies and has no hook for the design sidecar.
  */
 import { zipSync, strToU8, unzipSync, strFromU8 } from "fflate";
 import type { CadDesign, CadMesh } from "../../types.ts";
@@ -31,18 +29,12 @@ const ROOT_RELS = [
   "</Relationships>",
 ].join("\n");
 
-/** A colour group reference for one `<object>`: basematerials id and entry index. */
 interface MaterialRef {
   pid: number;
   pindex: number;
 }
 
-/**
- * The `<basematerials>` group for every coloured part, and each part's reference.
- * @remarks One `<base>` per distinct colour, in first-use order; the group id
- *   follows the part objects (n + 1). Empty when no part is coloured, so an
- *   uncoloured design writes exactly what it always did.
- */
+/** One `<base>` per distinct colour; empty when nothing is coloured. */
 function colourGroup(meshes: CadMesh[]): { xml: string[]; refs: (MaterialRef | undefined)[] } {
   const palette = [...new Set(meshes.map((m) => m.color).filter((c): c is string => !!c))];
   if (palette.length === 0) return { xml: [], refs: meshes.map(() => undefined) };
@@ -57,7 +49,6 @@ function colourGroup(meshes: CadMesh[]): { xml: string[]; refs: (MaterialRef | u
   };
 }
 
-/** One `<object>` element for a part; a lone part keeps today's unnamed form. */
 function objectXml(mesh: CadMesh, id: number, name?: string, material?: MaterialRef): string[] {
   const verts: string[] = [];
   for (let i = 0; i < mesh.positions.length; i += 3) {
@@ -90,11 +81,7 @@ function objectXml(mesh: CadMesh, id: number, name?: string, material?: Material
   ];
 }
 
-/**
- * Renders the 3MF core-spec model part: one object and one build item per part.
- * @remarks Items carry no transform: the vertices are already at the
- *   assembled positions. Parts are named part-1..n only when there are several.
- */
+/** One object and one build item per part; vertices are already in assembled positions. */
 function buildModelXml(meshes: CadMesh[]): string {
   const named = meshes.length > 1;
   const colours = colourGroup(meshes);
@@ -114,11 +101,7 @@ function buildModelXml(meshes: CadMesh[]): string {
   ].join("\n");
 }
 
-/**
- * Serialises a mesh (or one mesh per part) plus its design document to .3mf bytes.
- * @remarks The design travels as a declared OPC part, so the package alone
- *   reconstructs the design state - and therefore its licence credits.
- */
+/** The design travels as an OPC part, so the package alone reconstructs it. */
 export function meshTo3mf(mesh: CadMesh | CadMesh[], design: CadDesign): Uint8Array {
   return zipSync({
     "[Content_Types].xml": strToU8(CONTENT_TYPES),
@@ -128,21 +111,13 @@ export function meshTo3mf(mesh: CadMesh | CadMesh[], design: CadDesign): Uint8Ar
   }, { level: 6 });
 }
 
-/**
- * The same .3mf package carrying a different design document.
- * @remarks Every other part (the model, its colours) is kept byte for byte,
- *   so a parameter edit's summary can be stamped after the render without
- *   running the kernel again.
- */
+/** Replaces the design part, keeping everything else byte for byte. */
 export function withDesign(bytes: Uint8Array, design: CadDesign): Uint8Array {
   const parts = unzipSync(bytes);
   return zipSync({ ...parts, [SIDECAR_PART_PATH]: strToU8(serializeDesign(design)) }, { level: 6 });
 }
 
-/**
- * Reads the design document back out of a .3mf package.
- * @returns null when the part is absent or unusable.
- */
+/** null when the part is absent or unusable. */
 export function readDesignFrom3mf(bytes: Uint8Array): CadDesign | null {
   try {
     const parts = unzipSync(bytes);

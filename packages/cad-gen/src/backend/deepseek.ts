@@ -1,8 +1,4 @@
-/**
- * DeepSeek chat-completions client (OpenAI-compatible).
- * @remarks Images ride inline as base64 data URLs - the same shape the repo
- *   already uses for generation input. The API key is never logged.
- */
+/** DeepSeek chat-completions client (OpenAI-compatible). The API key is never logged. */
 import type { TokenUsage } from "../types.ts";
 
 export interface LlmContentBlock {
@@ -21,21 +17,16 @@ export interface DeepSeekConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
-  /** Provider thinking mode. Off unless a caller asks for it - see buildPayload. */
+  /** Off unless a caller asks - see buildPayload. */
   thinking?: boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }
 
-/** Transport/auth failure from the provider, carrying the documented code. */
 export class ProviderError extends Error {
   readonly status: number;
   readonly code: string;
-  /**
-   * Why a transport failure happened, when it carried no HTTP status.
-   * @remarks Lets a caller retry a timeout without also retrying a request the
-   *   user cancelled - the two share PROVIDER_ERROR on the wire.
-   */
+  /** Set when there is no HTTP status, so a timeout can be retried but a user cancel not. */
   readonly reason?: TransportReason;
   constructor(message: string, status: number, code: string, reason?: TransportReason) {
     super(message);
@@ -53,13 +44,10 @@ export interface DeepSeekClient {
   ): Promise<{ text: string; usage: TokenUsage }>;
 }
 
-/** Why a request failed, when there is no HTTP status to report. */
 export type TransportReason = "timeout" | "abort" | "network";
 
-/** Status for failures that carry no HTTP status of their own (gateway-class). */
 const PROVIDER_FAILURE_STATUS = 502;
 
-/** Maps an HTTP status to the documented provider error code. */
 function providerErrorCode(status: number): string {
   if (status === 401 || status === 403) return "PROVIDER_AUTH_FAILED";
   if (status === 402) return "PROVIDER_CREDITS_EXHAUSTED";
@@ -75,29 +63,14 @@ function toWireContent(content: LlmMessage["content"]): unknown {
       : { type: "text", text: b.text ?? "" });
 }
 
-/** Links a caller-supplied signal to the request controller, if one was given. */
 function linkAbort(controller: AbortController, signal?: AbortSignal): void {
   if (signal) signal.addEventListener("abort", () => controller.abort(), { once: true });
 }
 
 /**
- * Builds the OpenAI-compatible request body for one turn.
- * @remarks Thinking mode is ENABLED by default by the provider, at effort
- *   "high", and it is disabled here on purpose. Measured on one prompt against
- *   the live API: the provider default never returned inside 240s;
- *   `reasoning_effort: "low"` took 111s and still spent 98% of its completion
- *   tokens on reasoning; disabled answered in 2.0s for 479 tokens, and was the
- *   only one of the three that actually produced the requested fillet. Latency
- *   is not the whole cost: at three repair attempts a request that can exceed
- *   240s per turn cannot be served inside any sane request budget, and it
- *   outlives the lock TTL derived from a 120s provider timeout. Turning it back
- *   on restores the provider's "high" effort, so pair that with a larger
- *   `timeoutMs`.
- * @remarks `temperature` is ignored WHILE thinking is on: "Thinking mode does
- *   not support the temperature, presence_penalty, or frequency_penalty
- *   parameters... setting these parameters will not trigger an error but will
- *   also have no effect" (DeepSeek API docs, Thinking Mode). In the default
- *   configuration, where thinking is off, it takes effect.
+ * Thinking mode is disabled on purpose: the provider default (effort "high")
+ * did not answer within 240s on a test prompt, while disabled answered in 2s.
+ * Enabling it needs a larger `timeoutMs`, and makes `temperature` a no-op.
  */
 function buildPayload(config: DeepSeekConfig, messages: LlmMessage[]): unknown {
   return {
@@ -109,12 +82,7 @@ function buildPayload(config: DeepSeekConfig, messages: LlmMessage[]): unknown {
   };
 }
 
-/**
- * Extracts the completion text and token usage.
- * @remarks An empty completion is a failure, not a silent empty string: a
- *   design document cannot be empty, and the caller would otherwise hand an
- *   unparseable result to the design parser.
- */
+/** An empty completion is a failure: a design document cannot be empty. */
 function readCompletion(json: any): { text: string; usage: TokenUsage } {
   const text = json?.choices?.[0]?.message?.content;
   if (typeof text !== "string" || text.length === 0) {
@@ -129,10 +97,6 @@ function readCompletion(json: any): { text: string; usage: TokenUsage } {
   };
 }
 
-/**
- * Classifies why a request ended: the caller gave up, our timeout fired, or the
- * network did.
- */
 function failureReason(
   input: AbortSignal | undefined,
   controller: AbortController,
@@ -141,12 +105,7 @@ function failureReason(
   return controller.signal.aborted ? "timeout" : "network";
 }
 
-/**
- * Normalizes anything the transport layer throws into the documented contract.
- * @remarks Nothing is swallowed - the original message travels in the text, so
- *   a timeout still reads as a timeout - but every failure reaches the caller
- *   as one type, instead of every caller needing its own instanceof fallback.
- */
+/** Normalises any transport failure into a ProviderError, keeping the original message. */
 function transportFailure(
   err: unknown,
   reason: TransportReason,
@@ -165,17 +124,12 @@ function transportFailure(
   );
 }
 
-/** True for the abort error a fetch body read raises when its signal fires. */
 function isAbort(err: unknown): boolean {
   return typeof err === "object" && err !== null
     && (err as { name?: string }).name === "AbortError";
 }
 
-/**
- * Reads the completion body, reporting an unparseable one as a provider failure.
- * @remarks An abort is re-thrown untouched so the caller can report it as the
- *   timeout or caller-cancel that it is, rather than as malformed JSON.
- */
+/** Re-throws an abort untouched, so it reads as a timeout or cancel, not bad JSON. */
 async function readJsonBody(response: Response): Promise<any> {
   try {
     return await response.json();
@@ -227,8 +181,7 @@ export function createDeepSeekClient(config: DeepSeekConfig): DeepSeekClient {
       } catch (err) {
         throw transportFailure(err, failureReason(signal, controller), timeoutMs);
       } finally {
-        // Cleared here and nowhere earlier: the timer stays armed through the
-        // body read, so a server that sends headers then stalls still times out.
+        // Cleared only after the body read, so a stalled body still times out.
         clearTimeout(timer);
       }
     },

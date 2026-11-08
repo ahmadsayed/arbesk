@@ -1,27 +1,11 @@
 /**
- * A star- or round-profile control knob with an optional spacer stem, ported
- * from Maciej Małecki's knob.scad.
- * @remarks PORT of knob() (and star_shape()/round_shape()) from
- *   https://github.com/mmalecki/openscad-knobs (knob.scad), MIT, by Maciej
- *   Małecki (https://github.com/mmalecki). The credit is declared in
- *   ATTRIBUTED_HELPERS in ../attribution.ts. Licence checked before porting:
- *   GitHub's SPDX (MIT), Jev's reading of the LICENSE text and of the file's
- *   provenance (permissive, the repository's own work) and a human read
- *   agreed, via scripts/cad-candidates.mjs.
+ * Port of knob(), star_shape() and round_shape() from
+ * https://github.com/mmalecki/openscad-knobs, MIT, by Maciej Małecki; credited
+ * in ATTRIBUTED_HELPERS (../attribution.ts). Built at the original's $fn = 50 so
+ * it matches OpenSCAD's render (cad-reference cases knob-*).
  *
- *   The original is fastener/axle-agnostic: it difference()s OpenSCAD
- *   children() translated to the top face, so the caller passes a nut catch or
- *   shaft bore as a child. Manifold has no children, so the port returns the
- *   UNCUTOFF solid and the caller subtracts the bore from the returned solid
- *   (see the catalog entry for the pattern).
- *
- *   The original pins $fn = 50, so every cylinder below is built with 50
- *   facets and the port reproduces OpenSCAD's render, not an approximation of
- *   it - see scripts/cad-reference.mjs, cases knob-*.
- *
- *   Not ported: the nut catch (catchnhole submodule, GPL-adjacent dependency
- *   the original pulls for nut="yes"); subtract a hex pocket per the fasteners
- *   entry instead.
+ * Manifold has no children(), so the port returns the uncut solid and the
+ * caller subtracts the bore. The nut catch (a GPL-adjacent submodule) is not ported.
  *
  *   ---------------------------------------------------------------------------
  *   MIT License
@@ -49,32 +33,22 @@
 import type { ManifoldModule } from "../../types.ts";
 
 export interface KnobOptions {
-  /** Diameter of the knob's base shape (SCAD `d`, the customizer's `head_d`). */
+  /** Head diameter (SCAD `d`). */
   d?: number;
-  /** Height of the knob head (SCAD `h`, the customizer's `head_h`). */
+  /** Head height (SCAD `h`). */
   h?: number;
-  /** "star" (default, rounded points around a central body) or "round". */
   shape?: "star" | "round";
-  /** Edge chamfer on every cylinder of the profile (SCAD `chamfer`). */
   chamfer?: number;
-  /** Stem (spacer) diameter; 0 means no stem (SCAD `stem_d`). */
+  /** 0 means no stem. */
   stemD?: number;
-  /** Stem height; 0 means no stem (SCAD `stem_h`). */
+  /** 0 means no stem. */
   stemH?: number;
-  /** Number of star points (SCAD `star_points`, star shape only). */
   starPoints?: number;
-  /** Center the whole knob vertically on the origin (SCAD `center`). */
   center?: boolean;
-  /** Facet count; the original pins $fn = 50. */
   segments?: number;
 }
 
-/**
- * A control knob, in the SCAD's frame: face down on z = 0, axis on the origin,
- * an optional stem rising from z = h to z = h + stemH.
- * @remarks The bottom edge of every profile cylinder is chamfered inward by
- *   `chamfer`, exactly as the source's d1 = d - 2 * chamfer cones.
- */
+/** A control knob face down on z = 0, with an optional stem from z = h to h + stemH. */
 export function knob(module: ManifoldModule, opts: KnobOptions = {}): any {
   const { Manifold } = module as any;
   const d = opts.d ?? 32;
@@ -98,14 +72,11 @@ export function knob(module: ManifoldModule, opts: KnobOptions = {}): any {
       .add(Manifold.cylinder(height - chamfer, dia / 2, dia / 2, segs).translate([0, 0, chamfer]));
 
   // star_shape(d, h, points, chamfer): a central round body plus one
-  // round_shape arm per point at radius d/4 (SCAD `outset`).
   const starShape = (points: number): any => {
     const arm = roundShape(d / 2, h);
     let body = roundShape((3 * d) / 4, h);
     for (let i = 0; i < points; i++) {
-      // OpenSCAD rotate(a) translate(t) nests t INSIDE the rotated frame, so
-      // the translate chains before the rotate in Manifold's post-multiplied
-      // method order.
+      // OpenSCAD's rotate(a) translate(t) means translate first in Manifold's method order.
       body = body.add(arm.translate([d / 4, 0, 0]).rotate([0, 0, (i * 360) / points]));
     }
     return body;

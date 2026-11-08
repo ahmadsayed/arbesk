@@ -1,9 +1,6 @@
 /**
- * Validation of one attempt. Two entries, because the two hosts do different
- * jobs: `validateStatic` is the whole of server-side validation, and
- * `validateDesign` is the EVALUATION HARNESS - it runs the kernel and is not in
- * the request path.
- * @remarks The mesh is discarded in both — callers receive stats only.
+ * `validateStatic` is all of server-side validation; `validateDesign` runs the
+ * kernel for the evaluation harness only. Callers receive stats, never meshes.
  */
 import type { CadDesign, CadStats } from "../types.ts";
 import { evaluateStaticGates, evaluateKernelGates } from "../core/gates.ts";
@@ -25,12 +22,7 @@ export interface ValidationOutcome {
   error?: string;
 }
 
-/**
- * Fails a design that skips a helper its request requires (CatalogEntry.requires).
- * @remarks Backend-only because the catalog is: the rule is about what the user
- *   ASKED for, which the client never sees, and the server is where the repair
- *   loop can act on it before anything ships.
- */
+/** Backend-only: the rule depends on the user's prompt, which the client gate never sees. */
 function requiredHelpersGate(design: CadDesign, prompt: string): GateResult {
   const missing = missingRequiredHelpers(prompt, referencedIdentifiers(design.code));
   return missing.length === 0
@@ -39,15 +31,9 @@ function requiredHelpersGate(design: CadDesign, prompt: string): GateResult {
 }
 
 /**
- * Runs the static gates - the whole of server-side validation.
- * @remarks The server does not run the kernel in the request path any more. Not
- *   a reduction in coverage but a correction of WHERE the check belongs: a
- *   server-side run evaluates a PROXY at a different fidelity, and the two
- *   provably disagree. Measured: an 80x60x8 plate with six 5mm holes and a 2mm
- *   edge fillet is 15,466 triangles at the validation profile and 245,652 at
- *   delivery fidelity, against a 200,000 budget - the proxy passes what the real
- *   part fails. A host that builds the mesh is the only authority on whether it
- *   builds, and the client is that host. It reports failures back for repair.
+ * The server does not run the kernel: its proxy run at validation fidelity
+ * disagreed with the delivered part, so the client, which builds the mesh,
+ * validates geometry and reports failures back.
  */
 export function validateStatic(
   design: CadDesign,
@@ -60,13 +46,7 @@ export function validateStatic(
   return failure ? { ok: false, gates, error: failure.error } : { ok: true, gates };
 }
 
-/**
- * Validates a design end to end, including a kernel run.
- * @remarks EVALUATION HARNESS ONLY - never call this from a request path. It
- *   spawns a child process and loads manifold.wasm, which is the most expensive
- *   step in the pipeline (91% of it, measured). Static failures short-circuit
- *   before the kernel runs, so a script the guard rejects never costs a spawn.
- */
+/** Evaluation harness only: spawns a child and loads manifold.wasm. */
 export async function validateDesign(
   design: CadDesign,
   opts: ValidateOptions,

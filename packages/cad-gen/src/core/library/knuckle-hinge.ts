@@ -1,22 +1,13 @@
 /**
- * Knuckle hinges, ported from BOSL2's `hinges.scad`.
- * @remarks PORT of `knuckle_hinge()` and `_knuckle_hinge_profile()` from BOSL2
- *   (https://github.com/BelfrySCAD/BOSL2), BSD-2-Clause, by Adrian Mariano
- *   (https://github.com/adrianVmariano) and Revar Desmera
- *   (https://github.com/revarbat), with the BOSL2 contributors. Credited to
- *   the user through ATTRIBUTED_HELPERS in ../attribution.ts.
+ * Port of knuckle_hinge() and _knuckle_hinge_profile() from BOSL2 hinges.scad
+ * (https://github.com/BelfrySCAD/BOSL2), BSD-2-Clause, by Adrian Mariano and
+ * Revar Desmera; credited in ATTRIBUTED_HELPERS (../attribution.ts). The SCAD
+ * arithmetic is kept close to verbatim so each line can be checked against the
+ * original; verified with scripts/cad-reference/hinge-pip.scad.
  *
- *   The SCAD arithmetic is kept as close to verbatim as the language allows, so
- *   a reader can check each line against the original. Verified against
- *   OpenSCAD's own render of BOSL2's print-in-place example (hinges.scad,
- *   "positioned for printing"): see scripts/cad-reference/hinge-pip.scad.
+ * Not ported: screw-pin holes, teardrop, clear_top, round_top,
+ * knuckle_clearance and the attachment framework.
  *
- *   Not ported, deliberately: screw-pin holes (`pin_diam` as a screw spec),
- *   `teardrop`, `clear_top`, `round_top`, `knuckle_clearance` and the
- *   attachment framework.
- *
- *   The BSD-2-Clause licence requires redistributed source to retain this
- *   notice, so it is reproduced verbatim:
  *   ---------------------------------------------------------------------------
  *   BSD 2-Clause License
  *
@@ -46,7 +37,6 @@
  */
 import type { ManifoldModule } from "../../types.ts";
 
-/** Options for one hinge half, mirroring BOSL2's argument names in camelCase. */
 export interface KnuckleHingeOptions {
   length: number;
   segs: number;
@@ -74,11 +64,7 @@ function circumCircle(CrossSection: any, d: number, n: number): any {
   return CrossSection.circle(d / 2 / Math.cos(Math.PI / n), n);
 }
 
-/**
- * One straight stroke of width w from a to b.
- * @param startX When set, the start end is cut on the vertical line x = startX
- *   (BOSL2's `os_flat(abs_angle=90)`) instead of square to the stroke.
- */
+/** One straight stroke of width w from a to b; `startX` cuts the start end on x = startX. */
 function stroke(a: number[], b: number[], w: number, startX?: number): number[][] {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
@@ -93,7 +79,6 @@ function stroke(a: number[], b: number[], w: number, startX?: number): number[][
   return [side(1), side(-1), [b[0] - n[0], b[1] - n[1]], [b[0] + n[0], b[1] + n[1]]];
 }
 
-/** A point on the Bezier curve with control points P at parameter t. */
 function bezierPoint(P: number[][], t: number): number[] {
   const n = P.length - 1;
   const out = [0, 0];
@@ -107,13 +92,7 @@ function bezierPoint(P: number[][], t: number): number[] {
   return out;
 }
 
-/**
- * The outward flare BOSL2's `os_round(cut=-c, k)` puts where a stroke meets its
- * flat end - `_stroke_end`'s "roundover" branch for a NEGATIVE cut.
- * @param q The stroke's corner on the end line. @param along Unit vector up the
- *   stroke side. @param across Unit vector along the end line, into the stroke.
- * @returns The region between the curve and the sharp corner, to union on.
- */
+/** The outward flare BOSL2's os_round(cut=-c, k) adds where a stroke meets its flat end. */
 function flare(q: number[], along: number[], across: number[], cut: number, k: number, n: number): number[][] {
   const theta = Math.acos(along[0] * across[0] + along[1] * across[1]);
   // leftangle = 90 - vector_angle(...)/2 for an outside corner; joint = 8*cut/cos/(1+4k)
@@ -175,11 +154,7 @@ function hingeProfile(module: ManifoldModule, o: Required<KnuckleHingeOptions>):
     .translate([0, clearance]);
 }
 
-/**
- * The captive pin stub one in-place segment carries: a male cone on one end and
- * a female socket on the other, so neighbouring segments of the OTHER half
- * interlock without ever touching.
- */
+/** A segment's captive pin: a male cone on one end, a female socket on the other. */
 function inPlacePin(
   module: ManifoldModule, o: Required<KnuckleHingeOptions>, len: number, idx: number, numsegs: number,
 ): any {
@@ -198,10 +173,7 @@ function inPlacePin(
     .translate([o.offset, o.clearance, 0]);
 }
 
-/**
- * The most segments (2..limit) whose shortest knuckle still holds a captive pin.
- * @returns 2 when even two segments are too short - the caller then refuses.
- */
+/** The most segments (2..limit) whose shortest knuckle still holds a pin; 2 means none fit. */
 function maxSegsForPins(
   length: number, gap: number, segRatio: number, pinDiam: number, limit: number,
 ): number {
@@ -214,14 +186,10 @@ function maxSegsForPins(
 }
 
 /**
- * Refuses in-place segments too short to hold their captive pins.
- * @remarks Not in BOSL2, which trusts the caller. Each segment's female socket
- *   is pinDiam/2 deep, so a shorter segment is pierced right through by the
- *   neighbour's cone and the hinge falls apart: a live request for 32 segments
- *   over 50mm came out as 16 loose pieces.
+ * Not in BOSL2: a segment shorter than its pinDiam/2 socket is pierced by the
+ * neighbour's cone and the hinge falls apart.
  */
 function assertSegmentsHoldPins(o: Required<KnuckleHingeOptions>, shortest: number): void {
-  // The socket is exactly pinDiam/2 deep; BOSL2's own example clears it by 0.09mm.
   const need = o.pinDiam / 2;
   if (shortest >= need) return;
   const most = maxSegsForPins(o.length, o.gap, o.segRatio, o.pinDiam, o.segs);
@@ -232,10 +200,7 @@ function assertSegmentsHoldPins(o: Required<KnuckleHingeOptions>, shortest: numb
   );
 }
 
-/**
- * Fills BOSL2's defaults and applies its argument checks.
- * @throws Error naming the bad argument, as BOSL2's asserts do.
- */
+/** Fills BOSL2's defaults and applies its argument checks. */
 function hingeOptions(opts: KnuckleHingeOptions): Required<KnuckleHingeOptions> {
   const kd = opts.knuckleDiam ?? 4;
   const o = {
@@ -255,11 +220,7 @@ function hingeOptions(opts: KnuckleHingeOptions): Required<KnuckleHingeOptions> 
   return o;
 }
 
-/**
- * One half of a knuckle hinge, in BOSL2's frame after `anchor=BOT`: the mounting
- * face is z = 0, the pin axis runs along X at y = clearance, z = offset, and the
- * arm reaches back toward -y.
- */
+/** One hinge half after anchor=BOT: mounting face z = 0, pin along X at y = clearance, z = offset. */
 export function knuckleHinge(module: ManifoldModule, opts: KnuckleHingeOptions): any {
   const o = hingeOptions(opts);
   const { Manifold } = module as any;
@@ -287,7 +248,6 @@ export function knuckleHinge(module: ManifoldModule, opts: KnuckleHingeOptions):
   return part.translate([0, 0, zAdjust]).rotate([0, -90, 0]);
 }
 
-/** Options for the complete two-leaf print-in-place hinge. */
 export interface PrintInPlaceHingeOptions {
   length?: number;
   leafWidth?: number;
@@ -303,7 +263,7 @@ export interface PrintInPlaceHingeOptions {
   segments?: number;
 }
 
-/** A leaf plate whose two OUTER corners are rounded, centred on the origin. */
+/** A leaf plate with its two outer corners rounded, centred. */
 function leaf(module: ManifoldModule, w: number, l: number, t: number, r: number, side: -1 | 1, n: number): any {
   const { Manifold, CrossSection } = module as any;
   const rr = Math.min(r, w / 2, l / 2);
@@ -318,25 +278,17 @@ function leaf(module: ManifoldModule, w: number, l: number, t: number, r: number
   return Manifold.extrude(outline, t, 0, 0, [1, 1], true);
 }
 
-/**
- * BOSL2's print-in-place hinge example: two rounded leaves side by side, each
- * carrying one half of a knuckle hinge, captured on cone-tipped pins.
- * @remarks Deliberately TWO bodies: the leaves must never fuse, or it is not a
- *   hinge. Laid flat for printing, leaves on z = -thickness/2 .. +thickness/2.
- */
+/** BOSL2's print-in-place example: two leaves on cone-tipped pins, deliberately two bodies. */
 export function printInPlaceHinge(module: ManifoldModule, opts: PrintInPlaceHingeOptions = {}): any {
   const knuckleDiam = opts.knuckleDiam ?? 4;
   const o = {
     length: 25, leafWidth: 20, thickness: 2, leafGap: 0.4, segGap: 0.2, segs: 7,
-    // BOSL2's example pairs a 4mm knuckle with offset 3.1. The ratio is kept
-    // rather than the number: measured, a 6mm knuckle at offset 3.1 FUSES the two
-    // leaves, and the clearance it needs grows with the knuckle (~0.18 x diam).
+    // Offset keeps BOSL2's 4mm/3.1 ratio: a fixed 3.1 fuses larger knuckles.
     offset: knuckleDiam * 0.775, segRatio: 1 / 3, cornerRadius: 7, roundBot: 0.5, segments: 64,
     ...opts,
     knuckleDiam,
   };
-  // Unspecified segs: BOSL2's 7, or fewer when the knuckle is too fat for 7 to
-  // hold their pins. Odd, so both ends belong to the same leaf, as in BOSL2.
+  // Default segs: BOSL2's 7, fewer if the pins would not hold; odd so both ends share a leaf.
   if (opts.segs === undefined) {
     const most = maxSegsForPins(o.length, o.segGap, o.segRatio, knuckleDiam - 1, 7);
     o.segs = Math.max(3, most % 2 === 1 ? most : most - 1);
@@ -357,8 +309,7 @@ export function printInPlaceHinge(module: ManifoldModule, opts: PrintInPlaceHing
     .translate([rightX, 0, 0])
     .add(half(true).rotate([0, 0, 90]).translate([rightX - w / 2, 0, top]));
   const hinge = left.add(right);
-  // A hinge whose leaves touch is a plate. Checked here, exactly, because the
-  // render cannot show it: fused and free leaves are pixel-identical.
+  // Fused leaves look identical when rendered, so check the body count.
   const bodies = hinge.decompose().length;
   if (bodies !== 2) {
     throw new Error(

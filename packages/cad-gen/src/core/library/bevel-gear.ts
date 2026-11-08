@@ -1,29 +1,13 @@
 /**
- * A bevel gear - teeth on a cone, for shafts that meet at an angle - ported from BOSL2.
- * @remarks PORT of bevel_gear() from https://github.com/BelfrySCAD/BOSL2
- *   (gears.scad), BSD-2-Clause, by Adrian Mariano
- *   (https://github.com/adrianVmariano) and Revar Desmera
- *   (https://github.com/revarbat), with the BOSL2 contributors. The credit is
- *   declared in ATTRIBUTED_HELPERS in ../attribution.ts. Licence and
- *   provenance as for the rack port (gear-rack.ts): BOSL2's own work, with
- *   Leemon Baird's public-domain 2011 involute gear as its inspiration.
+ * Port of bevel_gear() from BOSL2 gears.scad (https://github.com/BelfrySCAD/BOSL2),
+ * BSD-2-Clause, by Adrian Mariano and Revar Desmera; credited in
+ * ATTRIBUTED_HELPERS (../attribution.ts). Each slice is the tooth scaled by
+ * cone distance, tilted onto the pitch cone and turned along the cutter arc.
+ * Verified against OpenSCAD renders: scripts/cad-reference.mjs, cases bevel-*.
  *
- *   Faithful to the original's construction: the pitch angle
- *   atan(sin(shaftAngle) / (mateTeeth / teeth + cos(shaftAngle))), the outer
- *   cone distance pitchRadius / sin(pitchAngle), the default face width
- *   min(coneDistance / 3, 10 x module), and the sweep - each slice is the
- *   tooth profile scaled by its cone distance, tilted onto the pitch cone and
- *   turned along the cutter arc (which is what makes spiral teeth spiral) -
- *   with BOSL2's top faces, flat centre and conical backing. The tooth
- *   profile is spurGear's (passed in), so a bevel gear's teeth are the same
- *   involute as every other gear here. Verified against OpenSCAD's render of
- *   BOSL2's own bevel_gear(): scripts/cad-reference.mjs, cases bevel-*.
- *
- *   One deliberate difference: spiral: 0 here means STRAIGHT teeth (BOSL2's
- *   cutter_radius=0). BOSL2's spiral=0 alone gives "zerol" teeth, curved on a
- *   2 x faceWidth cutter, which nobody asking for "a bevel gear" means.
- *   Not ported: pitch angles of 90 degrees or more (crown and internal bevel
- *   gears), and BOSL2's thickness/bottom alternatives to backing.
+ * Deliberate difference: spiral 0 means straight teeth (BOSL2 cutter_radius=0),
+ * not BOSL2's zerol. Not ported: pitch angles of 90 degrees or more, and the
+ * thickness/bottom alternatives to backing.
  *
  *   ---------------------------------------------------------------------------
  *   BSD 2-Clause License
@@ -57,13 +41,12 @@ import type { ManifoldModule } from "../../types.ts";
 import { sideFaces, signedVolume } from "./triangle-soup.ts";
 import type { Vec3 } from "./triangle-soup.ts";
 
-/** One tooth's outline: centred on +Y with its pitch point at the origin, mirror-symmetric. */
+/** One tooth centred on +Y with its pitch point at the origin, mirror-symmetric. */
 export type BevelTooth = (module: number, teeth: number, pressureAngle: number) => number[][];
 
 const DEG = Math.PI / 180;
 /** BOSL2's dedendum, 1 + clearance (module / 4), in modules. */
 const DEDENDUM = 1.25;
-/** BOSL2's default slice count along the face for spiral teeth. */
 const SPIRAL_SLICES = 5;
 
 interface BevelSpec {
@@ -72,21 +55,19 @@ interface BevelSpec {
   mateTeeth: number;
   shaftAngle: number;
   pressureAngle: number;
-  /** Spiral angle in degrees; 0 is a straight bevel gear. */
+  /** 0 is a straight bevel gear. */
   spiral: number;
   rightHanded: boolean;
   slices: number;
   bore: number;
-  /** Degrees. */
   pitchAngle: number;
   pitchRadius: number;
-  /** Outer cone distance: apex to the outer end of the teeth along the pitch cone. */
+  /** Apex to the outer end of the teeth along the pitch cone. */
   coneDistance: number;
   faceWidth: number;
   backing?: number;
 }
 
-/** The pitch angle BOSL2 gives a gear of `teeth` meshing with `mateTeeth`, in degrees. */
 function pitchAngleOf(teeth: number, mateTeeth: number, shaftAngle: number): number {
   const a = Math.atan(Math.sin(shaftAngle * DEG) / (mateTeeth / teeth + Math.cos(shaftAngle * DEG))) / DEG;
   return ((a % 180) + 180) % 180;
@@ -94,7 +75,6 @@ function pitchAngleOf(teeth: number, mateTeeth: number, shaftAngle: number): num
 
 const isWholeAtLeast3 = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 3;
 
-/** Each option check and the refusal it gives, in the order they are tried. */
 const BEVEL_RULES: [(o: any) => boolean, string][] = [
   [(o) => o.module > 0, "bevelGear needs a positive module"],
   [(o) => isWholeAtLeast3(o.teeth), "bevelGear needs a whole number of teeth, at least 3"],
@@ -106,13 +86,12 @@ const BEVEL_RULES: [(o: any) => boolean, string][] = [
   [(o) => o.backing === undefined || o.backing >= 0, "bevelGear needs a non-negative backing"],
 ];
 
-/** Throws when an option is outside what the port builds, naming it. */
 function assertBevelBasics(o: any): void {
   const broken = BEVEL_RULES.find(([ok]) => !ok(o));
   if (broken) throw new Error(broken[1]);
 }
 
-/** The pitch angle, refusing the crown and internal gears the port does not build. */
+/** Refuses crown and internal gears, which the port does not build. */
 function checkedPitchAngle(o: any, shaftAngle: number): number {
   const pitchAngle = pitchAngleOf(o.teeth, o.mateTeeth, shaftAngle);
   if (pitchAngle >= 90) {
@@ -122,7 +101,7 @@ function checkedPitchAngle(o: any, shaftAngle: number): number {
   return pitchAngle;
 }
 
-/** The face width: as given, or BOSL2's min(coneDistance / 3, 10 x module). */
+/** As given, or BOSL2's min(coneDistance / 3, 10 x module). */
 function faceWidthOf(o: any, coneDistance: number): number {
   const faceWidth = o.faceWidth ?? Math.min(coneDistance / 3, 10 * o.module);
   if (!(faceWidth > 0 && faceWidth < coneDistance)) {
@@ -131,7 +110,6 @@ function faceWidthOf(o: any, coneDistance: number): number {
   return faceWidth;
 }
 
-/** Validates the options and fills BOSL2's defaults. */
 function resolveBevelSpec(o: any): BevelSpec {
   assertBevelBasics(o);
   const shaftAngle = o.shaftAngle ?? 90;
@@ -142,7 +120,6 @@ function resolveBevelSpec(o: any): BevelSpec {
   return {
     module: o.module, teeth: o.teeth, mateTeeth: o.mateTeeth, shaftAngle,
     pressureAngle: o.pressureAngle ?? 20, spiral, rightHanded: Boolean(o.rightHanded),
-    // Straight teeth need no slicing along the face.
     slices: spiral === 0 ? 1 : Math.max(1, Math.round(o.slices ?? SPIRAL_SLICES)),
     bore: o.bore ?? 0, pitchAngle, pitchRadius, coneDistance, faceWidth: faceWidthOf(o, coneDistance),
     ...(o.backing !== undefined ? { backing: o.backing } : {}),
@@ -155,10 +132,8 @@ function angleOpposite(a: number, b: number, c: number): number {
 }
 
 /**
- * The cutter arc's samples, outer end first: each slice's cone distance and turn.
- * @remarks A straight gear uses BOSL2's cutter_radius=0, a radius of
- *   100 x faceWidth, so the arc is a straight line up the cone and the turn is
- *   ~0; a spiral gear's turn grows along the face.
+ * Cutter arc samples, outer end first. Straight teeth use a 100 x faceWidth
+ * radius, so the turn is ~0.
  */
 function slicePlaces(s: BevelSpec): { u: number; turn: number }[] {
   const inner = s.coneDistance - s.faceWidth;
@@ -176,7 +151,6 @@ function slicePlaces(s: BevelSpec): { u: number; turn: number }[] {
   });
 }
 
-/** One slice: every tooth, scaled to cone distance u, tilted onto the pitch cone and turned. */
 function sliceRing(s: BevelSpec, tooth: number[][], u: number, turn: number): Vec3[] {
   const pa = s.pitchAngle * DEG;
   const lift = DEDENDUM * s.module * Math.sin(pa) + ((1 - u) * s.pitchRadius) / Math.tan(pa);
@@ -196,7 +170,7 @@ function sliceRing(s: BevelSpec, tooth: number[][], u: number, turn: number): Ve
   return ring;
 }
 
-/** Triangles across one end face: each tooth zipped from its two flanks, plus a fan of the roots to a centre. */
+/** One end face: each tooth zipped from its flanks, plus a fan of the roots. */
 function endFaces(base: number, perTooth: number, teeth: number, centre: number): number[][] {
   const faces: number[][] = [];
   const total = perTooth * teeth;
@@ -214,7 +188,7 @@ function endFaces(base: number, perTooth: number, teeth: number, centre: number)
   return faces;
 }
 
-/** The backing a gear gets by default: none when its centre is at least half a face width thick. */
+/** No backing by default when the centre is at least half a face width thick. */
 function backingOf(s: BevelSpec, centreThickness: number): number {
   if (s.backing !== undefined) {
     if (!(centreThickness > 0 || s.backing > 0)) throw new Error("bevelGear: this gear needs backing > 0");
@@ -223,10 +197,7 @@ function backingOf(s: BevelSpec, centreThickness: number): number {
   return centreThickness > s.faceWidth / 2 ? 0 : s.faceWidth / 2 - centreThickness;
 }
 
-/**
- * The backing below the outer slice: each tooth root pair pushed down by
- * `backing`, continuing the cone, with its own floor (BOSL2's cone_backing).
- */
+/** Backing below the outer slice, continuing the cone (BOSL2's cone_backing). */
 function backingFaces(s: BevelSpec, verts: Vec3[], perTooth: number, backing: number): number[][] {
   const shift = verts.length;
   const pull = -backing / Math.tan(s.pitchAngle * DEG);
@@ -254,10 +225,7 @@ function backingFaces(s: BevelSpec, verts: Vec3[], perTooth: number, backing: nu
   return faces;
 }
 
-/**
- * The gear's vertices and triangles, positioned as BOSL2's "pitchbase"
- * anchor: the base of the pitch cone on z = 0, axis on Z, teeth toward +Z.
- */
+/** Positioned at BOSL2's "pitchbase" anchor: pitch cone base on z = 0, teeth toward +Z. */
 function bevelGearMesh(s: BevelSpec, tooth: number[][]): { verts: Vec3[]; faces: number[][] } {
   const perTooth = tooth.length;
   const ringSize = perTooth * s.teeth;
@@ -287,17 +255,12 @@ function bevelGearMesh(s: BevelSpec, tooth: number[][]): { verts: Vec3[]; faces:
   return { verts: placed, faces: oriented };
 }
 
-/**
- * How far above the pitch base the pitch-cone apex is, in millimetres.
- * @remarks pitchRadius / tan(pitchAngle) - BOSL2's "apex" anchor measured
- *   from its "pitchbase". Two bevel gears mesh with their apexes at one point.
- */
+/** pitchRadius / tan(pitchAngle): the apex height above the pitch base. */
 export function bevelApexHeight(opts: any): number {
   const s = resolveBevelSpec(opts ?? {});
   return s.pitchRadius / Math.tan(s.pitchAngle * DEG);
 }
 
-/** The bevel gear as a Manifold solid, minus its bore. */
 export function bevelGear(module: ManifoldModule, opts: any, toothFor: BevelTooth): any {
   const { Manifold, Mesh } = module as any;
   const s = resolveBevelSpec(opts ?? {});

@@ -1,9 +1,6 @@
 /**
- * Mesh to GLB, for previewing a CAD part.
- * @remarks Vertex data stays in Manifold coordinates (mm, Z-up): the mm-to-m and
- *   Z-up-to-Y-up correction is applied as a NODE MATRIX, matching the convention
- *   asset-core's 3mf/to-gltf.ts already uses for 3MF input. Baking it into the
- *   vertices would corrupt the mesh for every other consumer.
+ * Mesh to GLB. Vertices stay in mm, Z-up; the conversion to m, Y-up is a node
+ * matrix, as asset-core's 3MF import does.
  */
 import { serializeGLB } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import type { CadDesign, CadMesh } from "../../types.ts";
@@ -16,7 +13,6 @@ const MM_TO_M_Z_UP_TO_Y_UP = [
   0, 0, 0, 1,
 ];
 
-/** Area-weighted vertex normals computed from positions and indices. */
 function computeNormals(mesh: CadMesh): Float32Array {
   const { positions, indices } = mesh;
   const normals = new Float32Array(positions.length);
@@ -48,12 +44,10 @@ function computeNormals(mesh: CadMesh): Float32Array {
   return normals;
 }
 
-/** A view over the same bytes a typed array holds, without copying them. */
 function bytesOf(view: Float32Array | Uint32Array): Uint8Array {
   return new Uint8Array(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
 }
 
-/** Axis-aligned bounds, which glTF requires on a POSITION accessor. */
 function positionBounds(positions: Float32Array) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
@@ -65,12 +59,7 @@ function positionBounds(positions: Float32Array) {
   return { min, max };
 }
 
-/**
- * Packs three byte runs into one binary chunk, each 4-byte aligned.
- * @remarks glTF requires every bufferView offset to be a multiple of its
- *   component size; an unaligned VEC3 accessor is the classic "renders in one
- *   viewer, black in another" bug.
- */
+/** Packs three byte runs into one chunk, each 4-byte aligned as glTF requires. */
 function packChunk(indexBytes: Uint8Array, posBytes: Uint8Array, normalBytes: Uint8Array) {
   const posOffset = indexBytes.length + ((4 - (indexBytes.length % 4)) % 4);
   const normalOffset = posOffset + posBytes.length + ((4 - (posBytes.length % 4)) % 4);
@@ -81,11 +70,7 @@ function packChunk(indexBytes: Uint8Array, posBytes: Uint8Array, normalBytes: Ui
   return { bin, posOffset, normalOffset };
 }
 
-/**
- * One part's binary run, buffer views, accessors and primitive.
- * @param byteBase Where the run starts in the shared buffer (4-byte aligned).
- * @param viewBase Index of the part's first buffer view (= its first accessor).
- */
+/** One part's binary run, buffer views, accessors and primitive, from the given bases. */
 function partBuffers(mesh: CadMesh, byteBase: number, viewBase: number) {
   const normals = computeNormals(mesh);
   const indexBytes = bytesOf(mesh.indices);
@@ -114,7 +99,6 @@ function partBuffers(mesh: CadMesh, byteBase: number, viewBase: number) {
   };
 }
 
-/** The scene's nodes: today's single node, or a root holding one node per part. */
 function partNodes(count: number) {
   if (count === 1) return [{ mesh: 0, matrix: MM_TO_M_Z_UP_TO_Y_UP, name: "cad_part" }];
   return [
@@ -123,12 +107,7 @@ function partNodes(count: number) {
   ];
 }
 
-/**
- * Builds the shared glTF document plus its binary chunk.
- * @remarks meshToGlb wraps this in a GLB container; meshToGltf (gltf.ts)
- *   embeds the chunk as a base64 data URI. One builder means the two formats
- *   cannot drift apart. A single mesh writes exactly the pre-assembly layout.
- */
+/** The glTF document and binary chunk shared by meshToGlb and meshToGltf, so they cannot drift. */
 export function buildPartDocument(mesh: CadMesh | CadMesh[], design: CadDesign) {
   const meshes = Array.isArray(mesh) ? mesh : [mesh];
   const runs: ReturnType<typeof partBuffers>[] = [];
@@ -171,11 +150,7 @@ export function buildPartDocument(mesh: CadMesh | CadMesh[], design: CadDesign) 
   return { gltf, bin };
 }
 
-/**
- * Serialises a mesh (or one mesh per part) plus its design document to GLB bytes.
- * @remarks Single self-contained buffer; the design rides in asset.extras, so
- *   the exported file alone reconstructs the design and its credits.
- */
+/** The design rides in asset.extras, so the file alone reconstructs the design and its credits. */
 export function meshToGlb(mesh: CadMesh | CadMesh[], design: CadDesign): Uint8Array {
   const { gltf, bin } = buildPartDocument(mesh, design);
   return new Uint8Array(serializeGLB(gltf as never, bin));

@@ -1,9 +1,6 @@
 /**
- * Static guard for model-written scripts.
- * @remarks Runs on BOTH hosts: the server gates before spawning a child, and the
- *   client gates before executing in its worker — the client must never trust
- *   that the server ran it. This is a deny-list plus a helper allow-list, not a
- *   sandbox; the process/worker boundary is the sandbox.
+ * Static guard for model-written scripts, run on both server and client. A
+ * deny-list plus a helper allow-list, not a sandbox: the worker boundary is.
  */
 import { referencedIdentifiers, stripNonCode } from "./document.ts";
 
@@ -19,9 +16,7 @@ const DENIED: { pattern: RegExp; label: string }[] = [
   { pattern: /\beval\s*\(/, label: "eval" },
   { pattern: /\bnew\s+Function\b/, label: "Function constructor" },
   { pattern: /\bFunction\s*\(/, label: "Function constructor" },
-  // A global is only reachable through a member access (process.exit,
-  // globalThis.fetch, self.importScripts), so these require one - a bare
-  // mention, e.g. in a comment about a self-tapping screw, cannot do anything.
+  // Globals require a member access, so a bare word (e.g. in prose) is not denied.
   { pattern: /\bprocess\s*\??\s*[.[]/, label: "process" },
   { pattern: /\bglobalThis\s*\??\s*[.[]/, label: "globalThis" },
   { pattern: /\bglobal\s*\??\s*[.[]/, label: "global" },
@@ -38,12 +33,7 @@ const DENIED: { pattern: RegExp; label: string }[] = [
   { pattern: /\bfor\s*\(\s*;\s*;\s*\)/, label: "unbounded loop" },
 ];
 
-/**
- * JS syntax keywords that are followed by a parenthesised expression.
- * @remarks Without this, the lexical scan below reports `if` and `for` as
- *   unknown helpers and rejects perfectly valid scripts - verified with the
- *   controller before Task 4 shipped.
- */
+/** Keywords followed by parentheses, which the call scan would otherwise report as helpers. */
 const KEYWORDS = new Set([
   "if", "else", "for", "while", "do", "switch", "case", "default", "try",
   "catch", "finally", "throw", "return", "typeof", "instanceof", "new",
@@ -58,29 +48,17 @@ const ALLOWED_GLOBALS = new Set([
   "isFinite", "isNaN", "parseFloat", "parseInt", "console",
 ]);
 
-/**
- * Escapes an identifier before it is interpolated into a RegExp source.
- * @remarks `referencedIdentifiers` admits `$` (its pattern is `[A-Za-z_$][\w$]*`),
- *   which is an anchor rather than a literal in a pattern. Escaping every
- *   non-word character is exact for that identifier alphabet.
- */
+/** Identifiers may contain `$`, which is special in a RegExp. */
 function escapeIdentifier(value: string): string {
   return value.replace(/[^\w]/g, "\\$&");
 }
 
-/**
- * Validates a script before it is handed to the kernel.
- * @param code Script body (the inside of a function).
- * @param preludeNames Helper names the host will inject.
- */
 export function guardScript(code: string, preludeNames: Iterable<string>): GuardResult {
   if (typeof code !== "string" || code.trim().length === 0) {
     return { ok: false, reason: "EMPTY_CODE" };
   }
 
-  // Prose cannot execute. Every scan below runs on the source with comments and
-  // string literals blanked out, so a parenthesised aside in a comment is not
-  // read as a call and a comment cannot stand in for a missing `return`.
+  // Scan with comments and strings blanked: prose cannot execute.
   const source = stripNonCode(code);
 
   for (const { pattern, label } of DENIED) {

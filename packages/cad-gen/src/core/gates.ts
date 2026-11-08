@@ -1,7 +1,4 @@
-/**
- * Validation gates. Static gates never execute; kernel gates read stats only.
- * @remarks Environment-agnostic — the caller supplies the stats.
- */
+/** Validation gates. Static gates never execute; kernel gates read stats only. */
 import type { CadDesign, CadStats } from "../types.ts";
 import { guardScript } from "./guard.ts";
 import { referencedIdentifiers } from "./document.ts";
@@ -14,36 +11,20 @@ export interface GateResult {
 
 export interface KernelLimits {
   maxTriangles: number;
-  /**
-   * Most bodies the part may have; 1 when absent. More than one is the intent
-   * for a print-in-place hinge or a clamp in two halves - see bodyAllowance.
-   */
+  /** Most bodies the part may have; 1 when absent (see bodyAllowance). */
   maxBodies?: number;
-  /**
-   * Fewest bodies the part may have; 1 when absent. Above 1 only when the
-   * request needs separate pieces that would be wrong fused - see bodyFloor.
-   */
+  /** Fewest bodies the part may have; 1 when absent (see bodyFloor). */
   minBodies?: number;
-  /**
-   * Most bodies one part of an ARRAY return may have; 1 when absent. Above 1
-   * only for a part built by a multi-body helper - see bodyAllowance with no
-   * piece count.
-   */
+  /** Most bodies one part of an array return may have; 1 when absent. */
   maxBodiesPerPart?: number;
 }
 
-/**
- * Library helpers that return several bodies BY CONSTRUCTION, and how many.
- * @remarks Deterministic, so a design that calls one is never failed for
- *   being what the helper is - whatever the request's wording led Jev to
- *   judge. attempt#17's hinge passed the old yes/no question at exactly 0.5.
- */
+/** Helpers that return several bodies by construction, so they are never failed for it. */
 export const MULTI_BODY_HELPERS: Record<string, number> = { printInPlaceHinge: 2, pipeClamp: 2, boardCaseLid: 2 };
 
 /**
- * How many bodies a design may have: Jev's piece count, raised to what any
- * multi-body helper it calls produces. A count of 5 means "5 or more", so no cap.
- * @param code The design's script. @param expectedPieces Jev's count, if asked.
+ * Jev's piece count, raised to what any multi-body helper produces. A count of
+ * 5 means "5 or more", so no cap.
  */
 export function bodyAllowance(code: string, expectedPieces?: number): number {
   if (expectedPieces !== undefined && expectedPieces >= 5) return Number.POSITIVE_INFINITY;
@@ -54,21 +35,14 @@ export function bodyAllowance(code: string, expectedPieces?: number): number {
 }
 
 /**
- * Jev's `pieces_separate` probability at or above which fewer bodies than its
- * piece count is a defect.
- * @remarks Measured live on 20 requests: fused-is-wrong 0.84-0.97 (two-half
- *   clamp, coasters, sliding or snap-fit lid, spacers), fused-may-be-fine
- *   0.05-0.65 (the highest a box with a hinged lid, which may be a living hinge).
+ * Jev's `pieces_separate` probability at which too few bodies is a defect.
+ * Measured: fused-is-wrong cases scored 0.84-0.97, fused-may-be-fine 0.05-0.65.
  */
 export const SEPARATE_THRESHOLD = 0.75;
 
 /**
- * The fewest bodies a design may have: Jev's piece count, but only when Jev
- * also judged that one fused solid would be wrong for the request.
- * @remarks Fails open - with either answer missing, or a count of one, it is
- *   1, so a Jev outage never fails a part. A count of 5 ("5 or more") asks for
- *   at least 5.
- * @param expectedPieces Jev's count. @param piecesSeparate Jev's probability.
+ * Jev's piece count, but only when Jev also judged one fused solid wrong.
+ * Fails open: any missing answer gives 1, so a Jev outage never fails a part.
  */
 export function bodyFloor(expectedPieces?: number, piecesSeparate?: number): number {
   if (expectedPieces === undefined || piecesSeparate === undefined) return 1;
@@ -78,13 +52,8 @@ export function bodyFloor(expectedPieces?: number, piecesSeparate?: number): num
 type Box = { min: [number, number, number]; max: [number, number, number] };
 
 /**
- * Says how a loose body sits relative to the main one.
- * @remarks Two failures look identical in a body count and need opposite
- *   fixes. A piece INSIDE the main body's bounds is touching it face to face -
- *   attempt#10's Gridfinity base poked up into the bin's cavity and rested on
- *   the floor - and faces that only touch never fuse; it must overlap. A piece
- *   OUTSIDE is floating, and has to be moved, usually by a centring mistake.
- *   Two live repair rounds failed on the first case until it was named.
+ * A loose body inside the main body's bounds is touching and must overlap; one
+ * outside is floating and must move. Same count, opposite fixes.
  */
 function whereLoose(b: Box, main: Box): string {
   const inside = [0, 1, 2].every((a) => b.min[a] >= main.min[a] - 1e-6 && b.max[a] <= main.max[a] + 1e-6);
@@ -105,12 +74,8 @@ function whereLoose(b: Box, main: Box): string {
 }
 
 /**
- * The axis along which a loose body exactly matches the main body's extent.
- * @remarks The signature of a part a through-cut has split: a live cable clip
- *   cut its cable slots through the full height and came back as four fins,
- *   each spanning z -6..6 like the main one. "Move it so it overlaps" - the
- *   advice for a floating piece - cost both repair rounds; the fix is to leave
- *   material under the cut.
+ * The axis along which a loose body exactly matches the main body's extent:
+ * the sign of a through-cut that split the part.
  */
 function severedAlong(b: Box, main: Box): string | undefined {
   const tol = 0.05;
@@ -120,10 +85,8 @@ function severedAlong(b: Box, main: Box): string | undefined {
   return axis === undefined ? undefined : "xyz"[axis];
 }
 
-/** A point as gate errors print it: one decimal per axis. */
 const fmt = (v: number[]) => "[" + v.map((x) => x.toFixed(1)).join(", ") + "]";
 
-/** The connected-gate failure, naming every loose piece so a repair can join it. */
 function disconnectedError(bodies: NonNullable<CadStats["bodies"]>, allowed: number): string {
   const main = bodies.boxes[0];
   const listed = bodies.boxes.map((b, i) =>
@@ -136,12 +99,7 @@ function disconnectedError(bodies: NonNullable<CadStats["bodies"]>, allowed: num
     "remember every builder is centred on the origin, and use stack() to put parts end to end.";
 }
 
-/**
- * The pieces-gate failure: the request's separate pieces came out fused.
- * @remarks attempt#4's two-half pipe clamp came back as one block and passed,
- *   because the connected gate only caps bodies from above. The repair must
- *   SEPARATE, the opposite of the connected gate's "overlap" advice.
- */
+/** The pieces-gate failure: separate pieces came out fused, so the repair must separate them. */
 function fusedError(count: number, wanted: number): string {
   const want = wanted >= 5 ? "5 or more" : String(wanted);
   return "the part is " + count + " bod" + (count === 1 ? "y" : "ies") + ", but the request needs " +
@@ -153,7 +111,6 @@ function fusedError(count: number, wanted: number): string {
     "go through each piece.";
 }
 
-/** The pieces-gate failure for an array return: too few parts in the array. */
 function tooFewPartsError(count: number, wanted: number): string {
   const want = wanted >= 5 ? "5 or more" : String(wanted);
   return "the design returns " + count + " part" + (count === 1 ? "" : "s") + ", but the request " +
@@ -161,41 +118,27 @@ function tooFewPartsError(count: number, wanted: number): string {
     "sits in the assembled object: return [pieceA, pieceB].";
 }
 
-/** The connected-gate failure for an array return with more parts than allowed. */
 function tooManyPartsError(count: number, allowed: number): string {
   return "the design returns " + count + " parts, but the request needs at most " + allowed +
     ". Combine features that belong to one piece into one solid before returning the array.";
 }
 
-/** The connected-gate failure for one array part that fell apart. */
 function splitPartError(part: number, bodies: CadStats["bodies"]): string {
   const own = (bodies?.boxes ?? []).filter((b) => b.part === part);
   return "part " + part + " of the returned array " +
     disconnectedError({ count: own.length, boxes: own }, 1).slice("the part ".length);
 }
 
-/**
- * The nonempty failure text.
- * @remarks This string *is* the repair instruction: it is handed straight back
- *   to the model on the next turn, so it names the cause rather than the
- *   symptom. A hole wider than the part, a fillet radius larger than the body
- *   and an over-sized bolt circle all arrive here as the same empty mesh.
- */
+/** Handed straight to the model as the repair instruction, so it names likely causes. */
 const EMPTY_MESH_ERROR = "mesh has no triangles - the operation removed the whole part" +
   " (check hole, boltCircle, fillet and chamfer sizes against the part dimensions)";
 
 /**
- * Compiles the body with the kernel's exact signature, without calling it.
- * @remarks Static gating used to stop at the guard, so a body that does not
- *   even parse - attempt#1's hinge redeclared a const - passed every server
- *   gate and failed only in the client, costing a repair round trip. The
- *   parameter list must match `compileScript` in kernel.ts: redeclaring a
- *   parameter name (`const P = ...`) is itself a syntax error.
- * @returns The parser's message, or undefined when the body compiles.
+ * Compiles the body with the kernel's signature, without calling it, so a
+ * syntax error fails on the server. Must match `compileScript` in kernel.ts.
  */
 function parseError(code: string, preludeNames: Iterable<string>): string | undefined {
   try {
-    // Compiled, never invoked: nothing in the body runs.
     new Function("PARAMETERS", "P", "M", ...preludeNames, code);
     return undefined;
   } catch (e) {
@@ -203,7 +146,6 @@ function parseError(code: string, preludeNames: Iterable<string>): string | unde
   }
 }
 
-/** Gates that need no execution. Cheap enough to run before every attempt. */
 export function evaluateStaticGates(
   design: CadDesign,
   preludeNames: Iterable<string>,
@@ -234,10 +176,7 @@ export function evaluateStaticGates(
   return gates;
 }
 
-/**
- * Caps bodies from above - or, for an array return, parts and each part's bodies.
- * @remarks Passes when the kernel reported no body count.
- */
+/** Caps bodies (or, for an array return, parts and bodies per part); passes with no count. */
 function connectedGate(stats: CadStats, max: number, perPart: number): GateResult {
   const parts = stats.parts;
   if (parts?.array) {
@@ -253,10 +192,7 @@ function connectedGate(stats: CadStats, max: number, perPart: number): GateResul
     : { gate: "connected", ok: false, error: disconnectedError(bodies, max) };
 }
 
-/**
- * Floors bodies from below - or, for an array return, parts.
- * @remarks Passes when the kernel reported no body count.
- */
+/** Floors bodies (or parts); passes with no count. */
 function piecesGate(stats: CadStats, min: number): GateResult {
   const parts = stats.parts;
   if (parts?.array) {
@@ -270,14 +206,7 @@ function piecesGate(stats: CadStats, min: number): GateResult {
     : { gate: "pieces", ok: false, error: fusedError(bodies.count, min) };
 }
 
-/**
- * Fails a cavity a cut left entirely inside the solid.
- * @remarks The kernel reports these apart from bodies (CadStats.voids). Before
- *   that, CADPrompt 00851553, 00520726 and 00522865 - hollows cut from the
- *   centre instead of through a face - failed the connected gate as a piece
- *   "INSIDE the main body's bounds" that "only TOUCHES it", and three repair
- *   rounds each went looking for a loose piece that was not there.
- */
+/** Fails a sealed cavity, which the kernel reports as a void rather than a body. */
 function sealedGate(stats: CadStats): GateResult {
   const voids = stats.voids;
   if (voids === undefined || voids.count === 0) return { gate: "sealed", ok: true };
@@ -294,7 +223,6 @@ function sealedGate(stats: CadStats): GateResult {
   };
 }
 
-/** Gates evaluated against a successful kernel run. */
 export function evaluateKernelGates(stats: CadStats, limits: KernelLimits): GateResult[] {
   return [
     stats.triangles > 0

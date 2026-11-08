@@ -1,9 +1,4 @@
-/**
- * Bounded repair loop: generate, validate, feed failures back, retry.
- * @remarks One accepted request costs the user exactly one quota unit no matter
- *   how many attempts it spends (spec section 6). Repairs are internal to the
- *   server and free to the user.
- */
+/** Bounded repair loop. Repairs are internal: one accepted request costs one quota unit. */
 import type { CadDesign, TokenUsage } from "../types.ts";
 import type { GateResult } from "../core/gates.ts";
 import type { LlmMessage } from "./deepseek.ts";
@@ -59,24 +54,14 @@ function documentRepairMessages(
   ];
 }
 
-/** What one validator call produced: a verdict. */
 type ValidatorVerdict = Awaited<ReturnType<RepairDeps["validate"]>>;
 
-/**
- * Gate name recorded when the validator threw instead of returning a verdict.
- * @remarks Mirrors "document", the gate the parse failure is filed under: both
- *   name the *stage* that failed rather than a property of the design.
- */
+/** Names the stage that failed, like "document" for a parse failure. */
 const VALIDATOR_FAULT_GATE = "validator";
 
 /**
- * Runs the validator, turning a throw into an ordinary failed attempt.
- * @remarks A validator that throws is a host fault, but it lands *after* the
- *   provider has been paid for a reply. Letting it escape would discard the
- *   attempt log - the token accounting the repair loop exists to produce - and
- *   hand the route an opaque 500 instead of a CadGenerationFailed carrying
- *   diagnostics. Only the validator call is covered here; the client call stays
- *   outside the try, so a ProviderError keeps propagating to the route's 502.
+ * Turns a validator throw into a failed attempt, so the paid-for attempt log
+ * survives. Provider errors still propagate to the route's 502.
  */
 async function runValidate(
   validate: RepairDeps["validate"],
@@ -94,11 +79,7 @@ async function runValidate(
   }
 }
 
-/**
- * Runs generation with bounded repair.
- * @param signal Optional caller cancellation, threaded to every provider call.
- * @throws CadGenerationFailed when the attempt budget is exhausted.
- */
+/** @throws CadGenerationFailed when the attempt budget is exhausted. */
 export async function generateWithRepair(
   deps: RepairDeps,
   baseMessages: LlmMessage[],

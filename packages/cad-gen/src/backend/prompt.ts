@@ -1,11 +1,6 @@
 /**
- * System prompt and turn assembly.
- * @remarks The system prompt is the *published API documentation* for the
- *   prelude: changing it changes what the model writes, so it moves in lockstep
- *   with PRELUDE_VERSION (spec section 4). Every statement about a helper below
- *   is the helper's MEASURED behaviour, not its planned one - a prompt that
- *   describes geometry the kernel cannot produce costs a failed generation and
- *   a repair round.
+ * System prompt and turn assembly. The prompt documents the prelude, so it
+ * moves in lockstep with PRELUDE_VERSION and must describe measured behaviour.
  */
 import type { CadDesign } from "../types.ts";
 import type { LlmMessage } from "./deepseek.ts";
@@ -15,7 +10,6 @@ import { CATALOG_IDS, catalogEntries } from "./catalog.ts";
 import { FIT_LEVELS } from "./jev.ts";
 import type { LibraryFit } from "./jev.ts";
 
-/** Rules the generated script must obey. */
 const RULES = [
   "Units are millimetres. The coordinate system is Z-up (CAD convention).",
   "Solids only - no surfaces, no open shells. For a single part, return one solid.",
@@ -103,7 +97,6 @@ const RULES = [
   "size and volume, so never use it for a part whose dimensions matter.",
 ].join("\n");
 
-/** Helper reference the model is prompted against. */
 const HELPER_DOCS = [
   "box(w, d, h)                          centred box, mm",
   "cylinder(r, h, opts?)                 CENTRED Z-aligned cylinder, opts.segments",
@@ -127,14 +120,8 @@ const HELPER_DOCS = [
 ].join("\n");
 
 /**
- * The solid's own method surface.
- * @remarks Added after the live run showed the model writing `part.union(...)`:
- *   Manifold has add/subtract/intersect on the INSTANCE and union/difference/
- *   intersection only as STATICS, so that one wrong guess cost a whole round
- *   trip ("base.union is not a function"). Names verified against
- *   manifold-3d 3.5.3's manifold.d.ts. This block deliberately sits AFTER the
- *   OUTPUT section: the helper-table lockstep test parses every name-paren
- *   occurrence before it, and these are not helpers.
+ * Manifold's instance methods. Kept after OUTPUT, because the helper-table
+ * lockstep test parses every name-paren before it.
  */
 const SOLID_METHODS = [
   "Every helper above returns a solid. A solid has exactly these chainable",
@@ -159,29 +146,18 @@ const OUTPUT_SHAPE = [
   '  "summary": "<one-line description of what changed>" }',
 ].join("\n");
 
-/**
- * The line that tells the model how strongly an entry was judged to fit.
- * @remarks Jev scores fit on FIT_LEVELS (0-2). Stated, not hidden: a module
- *   judged "Clearly needed" is one the model should build the part around, and
- *   one judged merely "Possibly useful" is one it may leave out.
- */
+/** States Jev's fit so the model can leave out a merely "Possibly useful" entry. */
 function fitLine(id: string, fit: LibraryFit | undefined): string[] {
   if (!fit) return [];
   const level = FIT_LEVELS[Math.min(FIT_LEVELS.length - 1, Math.round(fit.score))];
   return ["[module " + id + ": fit " + fit.score.toFixed(2) + " of 2 - " + level + "]"];
 }
 
-/** Section heading for the selected catalog entries' guidance. */
 const LIBRARY_HEADING = "LIBRARY AND REFERENCE";
 
 /**
- * The system prompt for one request: the core rules and helpers, plus the
- * catalog entries the selector chose.
- * @remarks The AVAILABLE HELPERS table gets the selected entries' rows, and
- *   their guidance follows SOLID METHODS under LIBRARY AND REFERENCE - AFTER
- *   the OUTPUT section, so the helper-table lockstep test, which parses every
- *   name-paren occurrence before OUTPUT, never reads a dimension as a helper.
- * @param ids Catalog ids to include; defaults to the whole catalog.
+ * Core rules and helpers plus the selected catalog entries (all when omitted).
+ * Entry guidance goes after OUTPUT, out of reach of the lockstep test.
  */
 export function buildSystemPrompt(
   ids: Iterable<string> = CATALOG_IDS,
@@ -210,7 +186,6 @@ export function buildSystemPrompt(
   ].join("\n");
 }
 
-/** The full prompt, every catalog entry included - what an unselected request sees. */
 export const SYSTEM_PROMPT = buildSystemPrompt();
 
 
@@ -219,17 +194,12 @@ export interface TurnInput {
   priorDesign?: CadDesign;
   images?: { data: string; mime: string }[];
   priorSourceNote?: string;
-  /** Catalog ids to document; the whole catalog when omitted. */
+  /** The whole catalog when omitted. */
   libraries?: string[];
-  /** Jev's fit for the selected ids, stated in the prompt. */
   libraryFit?: Record<string, LibraryFit>;
 }
 
-/**
- * Builds the message list for one generation turn.
- * @remarks The prior document is echoed verbatim: code alone would lose the
- *   prior parameter *values*, which live outside the script (spec section 6).
- */
+/** The prior document is echoed verbatim: parameter values live outside the script. */
 export function buildTurnMessages(input: TurnInput): LlmMessage[] {
   const messages: LlmMessage[] = [{ role: "system", content: buildSystemPrompt(input.libraries, input.libraryFit) }];
 
@@ -265,20 +235,10 @@ export function buildTurnMessages(input: TurnInput): LlmMessage[] {
   return messages;
 }
 
-/**
- * Gates whose failure is fully explained by another gate's failure.
- * @remarks Task 7 measured one empty mesh failing BOTH the nonempty and the
- *   volume gate. Rendering both would ask the model to fix a single cause
- *   twice, and the redundancy is dropped here rather than in the gates, which
- *   must keep reporting every gate they ran.
- */
+/** Gates whose failure another gate's failure explains, so one cause is reported once. */
 const IMPLIED_BY: Record<string, string> = { volume: "nonempty" };
 
-/**
- * Renders the failing gates as repair instructions, one line per cause.
- * @param gates Every gate that ran, passing or failing.
- * @returns One "- <gate>: <error>" line per distinct cause, or "" if none.
- */
+/** One "- <gate>: <error>" line per distinct failing cause, or "". */
 function formatFailures(gates: GateResult[]): string {
   const failed = new Set(gates.filter((g) => !g.ok).map((g) => g.gate));
   const rendered = new Set<string>();
@@ -294,11 +254,7 @@ function formatFailures(gates: GateResult[]): string {
   return lines.join("\n");
 }
 
-/**
- * Appends a repair turn carrying the failing script and the gate errors.
- * @remarks The failing code is included so the model edits rather than
- *   re-derives, which measurably reduces repeat failures.
- */
+/** Includes the failing code so the model edits rather than re-derives. */
 export function buildRepairMessages(
   base: LlmMessage[],
   previous: CadDesign,
@@ -337,5 +293,5 @@ export function buildRepairMessages(
   ];
 }
 
-/** Helper names the prompt documents - the guard accepts exactly these. */
+/** The guard accepts exactly these. */
 export const PROMPT_HELPER_NAMES: string[] = [...PRELUDE_NAMES];
