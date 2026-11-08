@@ -37,6 +37,12 @@
     "frontend/src/js/vendor/**",
     "docs/diagrams/**"
   ],
+  // Root-absolute URLs in src/api/cli-auth.html (the CLI login page): the
+  // backend serves them from the built frontend/dist, not from source.
+  "ignoreUnresolvedImports": [
+    "/css/styles.css",
+    "/js/engine/theme-init.js"
+  ],
   "ignoreExportsUsedInFile": false,
   "boundaries": {
     "zones": [

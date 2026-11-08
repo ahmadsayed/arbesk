@@ -28,7 +28,7 @@ export async function login(email?: string): Promise<void> {
     return;
   }
   const normalized = email.trim().toLowerCase();
-  console.log("Opening your browser for login (CDP will email a code)…");
+  console.log('Opening your browser for login. Press "Email me a code" there…');
 
   const result = await new Promise<CallbackResult>((resolve, reject) => {
     const server = http.createServer((req, res) => {

@@ -2,9 +2,10 @@
   "name": "arbesk-frontend",
   "version": "0.1.0",
   "scripts": {
-    "build": "bun run clean && bun run build:pug && bun run build:scss && bun run build:bundle && bun run build:assets && bun run build:compress",
+    "build": "bun run clean && bun run build:pug && bun run build:scss && bun run build:bundle && bun run build:vendor && bun run build:assets && bun run build:compress",
     "build:compress": "bun scripts/compress.js",
     "build:bundle": "bun scripts/bundle.js",
+    "build:vendor": "bun scripts/build-vendor.js",
     "build:assets": "bun scripts/build-assets.js",
     "build:ts": "bun scripts/build-ts.js",
     "build:pug": "bun scripts/build-pug.js",

@@ -45,6 +45,7 @@
 @use 'components/library-details';
 @use 'components/library-context-menu';
 @use 'components/landing';
+@use 'components/cli-auth';
 
 // ── Utilities ───────────────────────────────────────────────────────
 @use 'utilities/responsive';

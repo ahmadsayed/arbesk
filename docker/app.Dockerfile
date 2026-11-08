@@ -25,6 +25,11 @@ RUN bun install --frozen-lockfile \
   && cd frontend && bun install --frozen-lockfile
 RUN bun run build:packages \
   && cd frontend && bun run build
+# The CLI login page (src/api/cli-auth.html) is not in app.js: it loads
+# @arbesk/wallet from /js/vendor/wallet/ through its import map, staged by
+# the frontend build:vendor step. Fail here rather than ship a 404 (#137).
+RUN test -f frontend/dist/js/vendor/wallet/facade.js \
+  || { echo "frontend/dist/js/vendor/wallet/facade.js missing: the CLI login page would 404" >&2; exit 1; }
 # Docker's arch names → Bun's compile targets.
 RUN case "$TARGETARCH" in \
       amd64) target=bun-linux-x64 ;; \

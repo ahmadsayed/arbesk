@@ -88,4 +88,38 @@ for (const f of MANIFEST_ORDER) {
 kubectl("rollout status deploy/arbesk --timeout=180s");
 kubectl("rollout status deploy/nostr --timeout=60s");
 
-log(`done — https://promptscad.com running ${IMAGE}:${TAG}`);
+// 6. Smoke-check what the app bundle does not cover: the CLI login page and
+// the @arbesk/wallet module it loads from /js/vendor/ (#137). The query
+// string keeps Cloudflare from answering with a cached 404.
+const origin = readPublicOrigin();
+const SMOKE_PATHS = ["/api/v1/cli-auth", "/js/vendor/wallet/facade.js"];
+for (const p of SMOKE_PATHS) await expectOk(`${origin}${p}?deploy=${TAG}`);
+
+log(`done — ${origin} running ${IMAGE}:${TAG}`);
+
+/** PUBLIC_ORIGIN from the .env.k3s written in step 1. */
+function readPublicOrigin() {
+  const env = fs.readFileSync(path.join(root, ".env.k3s"), "utf8");
+  const value = env.match(/^PUBLIC_ORIGIN=(.*)$/m)?.[1].trim().replace(/^["']|["']$/g, "");
+  return (value || "https://promptscad.com").replace(/\/$/, "");
+}
+
+/** GETs `url` until it answers 200; throws after a few attempts. */
+async function expectOk(url, attempts = 5) {
+  let last = "";
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch(url, { redirect: "follow" });
+      await res.arrayBuffer();
+      if (res.ok) {
+        log(`smoke OK ${res.status} ${url}`);
+        return;
+      }
+      last = `HTTP ${res.status}`;
+    } catch (err) {
+      last = err.message;
+    }
+    if (i < attempts) await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw new Error(`smoke check failed: GET ${url} → ${last}`);
+}

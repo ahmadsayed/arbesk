@@ -95,11 +95,16 @@ in-cluster.
 
 `bun run deploy:k3s` handles the full update loop. Manual equivalent: rebuild +
 push a new tag, update `deployment.yaml`, re-apply. Strategy is `Recreate`
-(in-memory sessions + RWO volume): expect a few seconds of downtime.
+(in-memory sessions + RWO volume): expect a few seconds of downtime. After
+the rollout it GETs `/api/v1/cli-auth` and `/js/vendor/wallet/facade.js` on
+`PUBLIC_ORIGIN` and fails unless both answer 200: the CLI login page loads
+`@arbesk/wallet` from `/js/vendor/`, outside the app bundle (#137).
 
 ## Verify
 
 - `curl https://promptscad.com/api/v1/config` → `defaultChainId: 84532`,
   `ipfsBackend: "pinata"`, `nostrPublicUrl: "wss://promptscad.com/nostr"`
+- `ARBESK_BACKEND=https://promptscad.com ./besk login <email>` finishes
+  (the CLI login page at `/api/v1/cli-auth`)
 - Browser: testnet banner visible, SIWE login, CDP email login (requires the
   CDP Portal domain allowlist), comments live-update over `/nostr` WSS.

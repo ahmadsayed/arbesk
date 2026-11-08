@@ -24,6 +24,7 @@ import fs from "fs";
 import path from "path";
 import url from "url";
 import { execSync } from "child_process";
+import { VENDORED_PACKAGES } from "../../frontend/scripts/vendor-packages.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const DIST_JS = path.resolve(__dirname, "../../frontend/dist/js");
@@ -84,8 +85,11 @@ describe("Frontend Build", () => {
 
   describe("bundle structure", () => {
     test("dist/js ships exactly app.js + 2 vendor bundles + 2 workers + head scripts", () => {
+      // The vendored @arbesk/* packages (build:vendor, for the CLI login
+      // page's import map) are covered by vendor-packages.test.js.
       const rel = walkJsFiles(DIST_JS)
         .map((f) => path.relative(DIST_JS, f).split(path.sep).join("/"))
+        .filter((f) => !VENDORED_PACKAGES.some((name) => f.startsWith(`vendor/${name}/`)))
         .sort();
       expect(rel).toEqual([
         "app.js",
@@ -97,6 +101,15 @@ describe("Frontend Build", () => {
         "workers/cad-worker.js",
         "workers/gltf-worker.js",
       ]);
+    });
+
+    test("dist/js/vendor/wallet ships the modules the CLI login page imports (#137)", () => {
+      // src/api/cli-auth.html loads @arbesk/wallet/facade.js through its import
+      // map; facade.js imports ./siwe.js and ./merkle.js.
+      for (const name of ["facade.js", "siwe.js", "merkle.js"]) {
+        expect(fs.existsSync(path.join(DIST_JS, "vendor/wallet", name))).toBe(true);
+      }
+      expect(fs.readdirSync(path.join(DIST_JS, "vendor/wallet")).filter((f) => f.endsWith(".d.ts"))).toEqual([]);
     });
 
     test("cdp-core is pre-bundled separately, not inlined into app.js", () => {
