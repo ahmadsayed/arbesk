@@ -2,6 +2,7 @@
 const fs = require('fs');
 const packageJSON = require('../package.json');
 const path = require('path');
+const { vendorPackages } = require('./vendor-packages');
 
 module.exports = function renderScripts() {
     const sourcePath = path.resolve(__dirname, '../src/js');
@@ -14,27 +15,9 @@ module.exports = function renderScripts() {
 
     fs.cpSync(sourcePath, path.join(destPath, 'js'), { recursive: true });
 
-    // Vendor the built @arbesk/asset-core workspace package so the browser
-    // import map (head.pug) can resolve the bare specifier. The package is
-    // compiled by the root `prebuild:frontend` hook; skip quietly when absent.
-    const assetCoreDist = path.resolve(__dirname, '../../packages/asset-core/dist');
-    const assetCoreDest = path.resolve(destPath, 'js/vendor/asset-core');
-    if (fs.existsSync(assetCoreDist)) {
-        fs.cpSync(assetCoreDist, assetCoreDest, { recursive: true });
-        console.log('### INFO: Vendored @arbesk/asset-core into dist/js/vendor/asset-core');
-    } else {
-        console.log('### WARN: packages/asset-core/dist missing — run `bun run build:packages` first');
-    }
-
-  // Vendor the built @arbesk/wallet workspace package (same pattern as asset-core).
-  const walletDist = path.resolve(__dirname, '../../packages/wallet/dist');
-  const walletDest = path.resolve(destPath, 'js/vendor/wallet');
-  if (fs.existsSync(walletDist)) {
-    fs.cpSync(walletDist, walletDest, { recursive: true });
-    console.log('### INFO: Vendored @arbesk/wallet into dist/js/vendor/wallet');
-  } else {
-    console.log('### WARN: packages/wallet/dist missing — run `bun run build:packages` first');
-  }
+    // Vendor the built @arbesk/* packages that import-map pages load (the CLI
+    // login page); warn rather than fail when a package has not been built.
+    vendorPackages({ distRoot: destPath });
 
     // Copy shared root-level constants so browser imports like
     // `../../../../constants/chains.js` resolve at runtime.

@@ -29,10 +29,9 @@ import { composeGltfJson } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
   `prebuild:frontend`, so it runs automatically where needed).
 - **Node (backend, scripts)** — resolves `@arbesk/asset-core` through the
   workspace symlink to `dist/`.
-- **Browser (this repo's frontend)** — the frontend build vendors `dist/` into
-  `dist/js/vendor/asset-core/` and an import map entry (`head.pug`) resolves
-  the bare specifier. The glTF Web Worker, which has no import map, imports the
-  vendored copy by relative path. Frontend code should not build its own core —
+- **Browser (this repo's frontend)** — `frontend/scripts/bundle.js` bundles
+  the package into `app.js` and the self-contained glTF Web Worker; nothing
+  loads it from `/js/vendor/`. Frontend code should not build its own core —
   call the existing composition root:
   ```ts
   import { initAssetCoreBrowser } from "./asset-core-init.ts";
