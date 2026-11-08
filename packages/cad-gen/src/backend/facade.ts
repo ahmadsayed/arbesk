@@ -1,8 +1,4 @@
-/**
- * Backend composition root for CAD generation.
- * @remarks Wires the DeepSeek client, the prompt, the kernel-backed validator
- *   and the repair loop. This is the only entry the Express route needs.
- */
+/** Backend composition root for CAD generation: the only entry a route needs. */
 import type { CadDesign, TokenUsage } from "../types.ts";
 import { CONTRACT_VERSION, PRELUDE_VERSION } from "../core/contract.ts";
 import { PRELUDE_NAMES } from "../core/prelude.ts";
@@ -22,13 +18,8 @@ import { createJevClient } from "./jev.ts";
 import type { JevConfig } from "./jev.ts";
 import type { AttemptRecord } from "./repair.ts";
 
-/**
- * What the server bounds. Deliberately small: the kernel limits (timeout,
- * triangle budget, wasm directory) belong to the host that runs the kernel, and
- * that host is the client.
- */
+/** What the server bounds. Kernel limits belong to the client, which runs the kernel. */
 export interface CadLimits {
-  /** Static repair rounds spent before giving up. */
   maxRepairAttempts: number;
 }
 
@@ -36,30 +27,22 @@ export interface CadGenConfig {
   apiKey: string;
   baseUrl?: string;
   model?: string;
-  /** Provider thinking mode. Off by default - see buildPayload's measurements. */
+  /** Off by default - see buildPayload. */
   thinking?: boolean;
   /**
-   * Answer client repair rounds in thinking mode. On unless set to false.
-   * @remarks On CADPrompt (2026-10-10) the plain model returned the failing
-   *   script byte for byte on 11 of 11 parts a cut had severed; in thinking mode
-   *   it rebuilt 10 of them as one solid. Repairs are a small share of requests,
-   *   so the latency lands only where a part already failed.
+   * Thinking mode for client repair rounds; on unless false. On CADPrompt it
+   * fixed 10 of 11 severed parts that plain mode returned unchanged.
    */
   repairThinking?: boolean;
-  /** Wall clock for one thinking repair call before falling back to plain mode. */
+  /** Before falling back to plain mode. */
   repairThinkingTimeoutMs?: number;
   limits?: Partial<CadLimits>;
   fetchImpl?: typeof fetch;
-  /** Jev, for library selection. Without it every request sees the whole catalog. */
+  /** Without it every request sees the whole catalog. */
   jev?: JevConfig;
 }
 
-/**
- * A geometric-gate failure the CLIENT reported after running the kernel.
- * @remarks A hint fed to the prompt, never a verdict. The server cannot see the
- *   geometry, so it re-runs the static gates on whatever comes back regardless
- *   of what the client claims - see the spec's section 6.
- */
+/** A client-reported kernel failure: a hint for the prompt, never a verdict. */
 export interface CadFailure {
   gate: string;
   error: string;
@@ -67,13 +50,12 @@ export interface CadFailure {
 
 export interface CadGenerateInput extends TurnInput {
   repairAttempts?: number;
-  /** Failures from a client-side kernel run; turns this into a repair round. */
+  /** Present on a repair round. */
   failures?: CadFailure[];
   signal?: AbortSignal;
 }
 
 export interface CadDiagnostics {
-  /** Catalog entries the generation prompt documented, and how they were chosen. */
   selection: Omit<LibrarySelection, "tokens"> & { jevTokens: TokenUsage };
   attempts: AttemptRecord[];
   durationMs: number;
@@ -81,25 +63,14 @@ export interface CadDiagnostics {
 }
 
 /**
- * One generated design.
- * @remarks There is deliberately NO `validation` field. The server ran no
- *   kernel, so it cannot claim the design is geometrically sound; a field named
- *   `validation` that no longer validates is a trap for whoever reads the API
- *   next. What the server does guarantee is that the design passed every static
- *   gate, which is what `diagnostics.attempts` records.
+ * Deliberately no `validation` field: the server runs no kernel, so it only
+ * guarantees the static gates, recorded in `diagnostics.attempts`.
  */
 export interface CadGenerateResult {
   design: CadDesign;
   runtime: { contractVersion: number; preludeVersion: string };
-  /** Which provider produced the design, so a client can log or attribute it. */
   provider: { id: string; model: string };
-  /**
-   * Credits owed for any ported design this part derives from.
-   * @remarks Computed from the helpers the script CALLS, never from the model,
-   *   so it cannot be forgotten or over-claimed. Empty when nothing licensed is
-   *   involved - standard dimensions and our own maths are facts, not works.
-   *   This is the field the UI shows the user.
-   */
+  /** Computed from the helpers the script calls; empty when nothing licensed is used. */
   attribution: Attribution[];
   diagnostics: CadDiagnostics;
 }
@@ -112,23 +83,17 @@ const DEFAULTS: CadLimits = {
   maxRepairAttempts: 3,
 };
 
-/** Model the provider falls back to when the caller names none. */
 export const DEFAULT_CAD_MODEL = "deepseek-flash";
 
 /**
- * Builds the opening message list for one request.
- * @remarks A client-driven repair is the same conversation plus one turn: the
- *   design the client actually built, and what its kernel found wrong with it.
- *   Reusing buildRepairMessages means a client-reported failure is rendered by
- *   the same formatter - including its redundancy dedupe - as one the server
- *   found itself, so the two paths cannot drift apart.
+ * A client repair is the same conversation plus one turn, rendered by
+ * buildRepairMessages so client and server failures cannot drift apart.
  */
 function openingMessages(input: CadGenerateInput): LlmMessage[] {
   const failures = input.failures ?? [];
   if (failures.length === 0 || !input.priorDesign) return buildTurnMessages(input);
-  // The failed design is the assistant's reply, NOT the turn's CURRENT DESIGN:
-  // framed as the state to edit, under "preserve everything the user did not
-  // ask to change", the model returned the failing script byte for byte.
+  // The failed design goes in as the assistant's reply: framed as the current
+  // design to preserve, the model returned it unchanged.
   const { priorDesign: _failed, ...request } = input;
   return buildRepairMessages(
     buildTurnMessages(request),
@@ -138,10 +103,7 @@ function openingMessages(input: CadGenerateInput): LlmMessage[] {
   );
 }
 
-/**
- * Refuses a request parametric CAD cannot model, before DeepSeek is paid for it.
- * @throws CadRequestUnsuitable when Jev judged it below SUITABILITY_THRESHOLD.
- */
+/** Refuses unsuitable requests before DeepSeek is paid for them. */
 function refuseUnsuitable(selection: LibrarySelection): void {
   const s = selection.suitability;
   if (s === undefined || s >= SUITABILITY_THRESHOLD) return;
@@ -153,25 +115,15 @@ function refuseUnsuitable(selection: LibrarySelection): void {
   );
 }
 
-/** The selection as diagnostics report it: Jev's tokens named apart from DeepSeek's. */
 function selectionDiagnostics(selection: LibrarySelection): CadDiagnostics["selection"] {
   const { tokens, ...rest } = selection;
   return { ...rest, jevTokens: tokens };
 }
 
-/**
- * Thinking-mode repair calls that take longer than this fall back to plain mode.
- * @remarks Thinking answered in a median 19 s (p90 50 s) on CADPrompt, but 9% of
- *   calls ran into the provider's 120 s limit. A repair that fails on a timeout
- *   would lose a part plain mode might still have fixed.
- */
+/** Thinking repairs had a 19s median but 9% hit the provider's 120s limit. */
 const REPAIR_THINKING_TIMEOUT_MS = 90000;
 
-/**
- * Retries a timed-out call on the fallback client.
- * @remarks Only a timeout falls back: a caller's abort, an auth failure or a
- *   rate limit would fail the same way on the second client.
- */
+/** Retries only a timeout on the fallback client: other failures would repeat. */
 function withPlainFallback(primary: DeepSeekClient, fallback: DeepSeekClient): DeepSeekClient {
   return {
     async complete(messages, signal) {
@@ -185,11 +137,7 @@ function withPlainFallback(primary: DeepSeekClient, fallback: DeepSeekClient): D
   };
 }
 
-/**
- * Builds the CAD generator.
- * @remarks repairAttempts is capped by the configured maximum, so a caller
- *   cannot buy more provider spend than the server allows.
- */
+/** repairAttempts is capped by the configured maximum. */
 export function createCadGenerator(config: CadGenConfig): CadGenerator {
   const limits: CadLimits = { ...DEFAULTS, ...config.limits };
   const model = config.model ?? DEFAULT_CAD_MODEL;
@@ -218,7 +166,6 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         ? Math.min(input.repairAttempts, limits.maxRepairAttempts)
         : limits.maxRepairAttempts;
 
-      // Stage one: which catalog entries this request needs (see select.ts).
       const selection = await selectLibraries(jev, input, input.signal);
       refuseUnsuitable(selection);
       const turn = { ...input, libraries: selection.libraries, libraryFit: selection.fit };
@@ -227,10 +174,7 @@ export function createCadGenerator(config: CadGenConfig): CadGenerator {
         client: input.failures?.length ? repairClient : client,
         parseDesign,
         buildRepairMessages,
-        // Static only, and deliberately so: the server never runs the kernel.
-        // See validateStatic for why, and for the measurement that shows the
-        // server-side proxy disagreeing with the delivered part.
-        // The prompt feeds the required-helper gate (CatalogEntry.requires).
+        // Static only: the server never runs the kernel. The prompt feeds the required-helper gate.
         validate: async (design) => validateStatic(design, PRELUDE_NAMES, input.prompt),
       }, openingMessages(turn), attempts, input.signal);
 

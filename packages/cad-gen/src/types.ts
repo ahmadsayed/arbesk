@@ -2,7 +2,7 @@
 
 /** One named, user-editable dimension baked into the design's PARAMETERS block. */
 export interface CadLengthParameter {
-  /** Absent on every design written before colour parameters existed. */
+  /** Absent on designs written before colour parameters. */
   type?: "length";
   value: number;
   unit: "mm";
@@ -14,7 +14,7 @@ export interface CadLengthParameter {
 /** One named, user-editable colour; the script passes it to color(). */
 export interface CadColorParameter {
   type: "color";
-  /** "#rrggbb", lowercase once parsed. */
+  /** Lowercase "#rrggbb" once parsed. */
   value: string;
   label?: string;
 }
@@ -28,13 +28,11 @@ export interface CadDesign {
   /** Body of a function taking (PARAMETERS, ...preludeHelpers, M) that returns a Manifold. */
   code: string;
   parameters: CadParameterMap;
-  /** Human-readable change note for provenance. */
   summary: string;
-  /** 1-based turn index in the conversation. */
+  /** 1-based. */
   turn?: number;
 }
 
-/** Geometry facts computed from a validated mesh. */
 export interface CadStats {
   triangles: number;
   vertices: number;
@@ -43,42 +41,22 @@ export interface CadStats {
     min: [number, number, number];
     max: [number, number, number];
   };
-  /** Which fillet strategy actually ran (see the spec's fidelity table). */
   filletMode?: "exact" | "minkowski" | "smooth";
-  /** Ball resolution the opening actually used, so a draft fillet is never
-   *  mistaken for a high-quality one. Only set when an opening ran. */
   filletQuality?: "draft" | "high";
-  /**
-   * How many separate bodies the solid is, and where each one is.
-   * @remarks A part whose feature floats a hair clear of the body is a valid,
-   *   watertight solid that passes every other check; this is the only stat
-   *   that sees it. Bounds are listed (largest first, capped) so a repair turn
-   *   can say WHICH piece came loose, not just that one did.
-   */
+  /** Separate bodies with their bounds (largest first, capped), so a repair can name the loose one. */
   bodies?: {
     count: number;
     /** `part` is the 1-based part a body belongs to; set for array returns only. */
     boxes: { min: [number, number, number]; max: [number, number, number]; part?: number }[];
   };
-  /**
-   * Sealed internal voids: cavities a cut left entirely inside the solid.
-   * @remarks Absent when there are none. Not bodies - Manifold decomposes a
-   *   cavity's skin as a negative-volume component - so the connected gate
-   *   never counts them; the sealed gate fails them instead.
-   */
+  /** Sealed cavities: negative-volume components, failed by the sealed gate, never counted as bodies. */
   voids?: {
     count: number;
     boxes: { min: [number, number, number]; max: [number, number, number]; part?: number }[];
   };
-  /** Zero-volume flakes the kernel removed from the solid (see DEGENERATE_BODY_MM3). */
+  /** See DEGENERATE_BODY_MM3. */
   degenerateBodiesDropped?: number;
-  /**
-   * The parts the script returned.
-   * @remarks `array` is true when the script returned an array of solids;
-   *   parts in an array are never unioned, so they cannot fuse. A single
-   *   solid is one part. `bodyCounts[i]` is how many connected bodies part
-   *   i+1 has. Overlaps between parts are recorded, never failed.
-   */
+  /** Array returns are never unioned; overlaps between parts are recorded, never failed. */
   parts?: {
     count: number;
     array: boolean;
@@ -97,28 +75,16 @@ export interface CadMesh {
   color?: string;
 }
 
-/** Token accounting for one LLM call. */
 export interface TokenUsage {
   prompt: number;
   completion: number;
 }
 
-/**
- * The Manifold module the kernel needs, injected by the host.
- * @remarks Deliberately untyped past this boundary: the module is Emscripten
- *   WASM output whose API is described by manifold.d.ts, and mirroring it here
- *   would mean maintaining a second, drifting copy of an external surface.
- *   Verified against manifold-3d 3.5.3.
- */
+/** Untyped past this boundary: manifold.d.ts describes it, so there is no second copy here. */
 export interface ManifoldModule {
   Manifold: any;
   CrossSection: any;
-  /**
-   * Adaptive circular-resolution controls.
-   * @remarks Module-level, NOT static on Manifold, despite what manifold.d.ts
-   *   implies — verified against manifold-3d 3.5.3 at runtime. Optional so a
-   *   host that only needs geometry can inject a bare module.
-   */
+  /** Module-level, not static on Manifold as manifold.d.ts implies; optional for bare modules. */
   setMinCircularAngle?: (angle: number) => void;
   setMinCircularEdgeLength?: (length: number) => void;
   setCircularSegments?: (segments: number) => void;

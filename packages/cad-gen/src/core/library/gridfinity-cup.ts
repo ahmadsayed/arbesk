@@ -1,22 +1,11 @@
 /**
- * Gridfinity bins ("cups"), ported from vector76's gridfinity_openscad.
- * @remarks PORT of basic_cup() and the modules it calls in
- *   gridfinity_cup_modules.scad and gridfinity_modules.scad
- *   (https://github.com/vector76/gridfinity_openscad), MIT, by Jamie
- *   (https://github.com/vector76). Credited to the user through
- *   ATTRIBUTED_HELPERS in ../attribution.ts. Licence checked before porting:
- *   GitHub's SPDX (MIT), Jev's reading of the LICENSE text and of each file's
- *   provenance (permissive, the repository's own work) and a human read agreed.
- *   Gridfinity itself is Zack Freedman's open standard; its dimensions are
- *   facts and carry no credit of their own.
+ * Port of basic_cup() and the modules it calls from vector76's
+ * gridfinity_openscad (https://github.com/vector76/gridfinity_openscad), MIT,
+ * by Jamie; credited in ATTRIBUTED_HELPERS (../attribution.ts).
  *
- *   Almost every surface here is a hull() of OpenSCAD cylinders and spheres, so
- *   the port hulls the SAME POINTS OpenSCAD tessellates those primitives into
- *   (circle angles 360*i/$fn, sphere rings at 180*(i+0.5)/rings). That is what
- *   lets the result match OpenSCAD's render, not merely resemble it - see
- *   scripts/cad-reference.mjs, cases gf-cup-*.
- *
- *   Not ported: half_pitch, efficient_floor and irregular_cup.
+ * Surfaces are hulls of the same points OpenSCAD tessellates its cylinders and
+ * spheres into, so the result matches OpenSCAD's render (cad-reference cases
+ * gf-cup-*). Not ported: half_pitch, efficient_floor and irregular_cup.
  *
  *   ---------------------------------------------------------------------------
  *   MIT License
@@ -309,18 +298,10 @@ function partitionedCavity(module: ManifoldModule, p: typeof GRIDFINITY_CUP_DEFA
 const LIP_STYLES = ["normal", "reduced", "none"];
 const LABEL_STYLES = ["disabled", "left", "right", "center", "leftchamber", "rightchamber", "centerchamber"];
 
-/**
- * Why a string option came out wrong, said so the caller can fix it.
- * @remarks PARAMETERS hold numbers only, so a model that wants an editable label
- *   style reaches for a lookup table - labelMap[P.labelIdx] - and passes
- *   undefined when the index misses. attempt#14 lost three repair rounds to
- *   exactly that, two of them on a crash ("startsWith is not a function") that
- *   named nothing it could change.
- */
+/** PARAMETERS hold numbers only, so a label style looked up by index can arrive undefined. */
 const STRING_HINT = " - write the string literally in the call: a PARAMETER cannot hold a string";
 const gotten = (v: unknown): string => " (got " + (typeof v === "string" ? "'" + v + "'" : String(v)) + ")";
 
-/** Refuses what the port does not support, and what the SCAD would get wrong. */
 function check(p: typeof GRIDFINITY_CUP_DEFAULTS): void {
   const rules: [boolean, string][] = [
     [p.width > 0 && p.depth > 0 && p.height > 0, "width, depth and height must be positive"],
@@ -334,11 +315,7 @@ function check(p: typeof GRIDFINITY_CUP_DEFAULTS): void {
   if (failed) throw new Error("gridfinityCup: " + failed[1]);
 }
 
-/**
- * A Gridfinity bin: basic_cup(), or grid_block() when filledIn.
- * @remarks Frame as in the SCAD: the first cell is centred on the origin, the
- *   bin extends +x and +y in 42mm cells, and its feet sit on z = 0.
- */
+/** basic_cup(), or grid_block() when filledIn: first cell centred on the origin, feet on z = 0. */
 export function gridfinityCup(module: ManifoldModule, opts: GridfinityCupOptions = {}): any {
   const p = { ...GRIDFINITY_CUP_DEFAULTS, ...opts };
   check(p);

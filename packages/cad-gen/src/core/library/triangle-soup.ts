@@ -1,15 +1,9 @@
-/**
- * Building blocks for parts swept as rings of vertices and closed by hand.
- * @remarks Shared by the gear ports that build their own triangle soup
- *   (bevel-gear.ts, worm-gear.ts) rather than extrude a CrossSection.
- */
+/** Triangle-soup helpers for the gear ports that sweep rings of vertices. */
 export type Vec3 = [number, number, number];
 
 /**
- * Quads between consecutive rings of `ringSize` vertices, wrapping round each ring.
- * @param alt Split each quad along its other diagonal (BOSL2's style="alt"):
- *   on a helix whose rings climb with the thread, that diagonal runs along the
- *   thread instead of across it, so the flanks do not facet into a sawtooth.
+ * Quads between consecutive rings, wrapping round each ring. `alt` splits along
+ * the other diagonal (BOSL2's style="alt") so helical flanks do not sawtooth.
  */
 export function sideFaces(rings: number, ringSize: number, alt = false): number[][] {
   const faces: number[][] = [];

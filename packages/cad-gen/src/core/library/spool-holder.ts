@@ -1,19 +1,10 @@
 /**
- * A parametric multipart filament spool holder, ported from Matthew Burke's
- * 3dthings-filament-spool-holder.
- * @remarks PORT of filament_spool_holder.scad
- *   (https://github.com/Burke9077/3dthings-filament-spool-holder), MIT, by
- *   Matthew Burke (https://github.com/Burke9077). Credited to the user through
- *   ATTRIBUTED_HELPERS in ../attribution.ts. Licence checked before porting:
- *   GitHub's SPDX (MIT), Jev's reading of the LICENSE text (permissive, no
- *   third-party code in the file) and a human read all agreed.
- *
- *   The SCAD names and arithmetic are kept verbatim (in camelCase) so each line
- *   can be checked against the original. Verified against OpenSCAD's own render
- *   of every ported part: scripts/cad-reference.mjs, cases spool-*.
- *
- *   Ported: the four print parts - side_frame, crossbar, axle, axle_cap. Not
- *   ported: the assembly previews, the linking clip and the test pieces.
+ * Port of filament_spool_holder.scad from Matthew Burke's
+ * 3dthings-filament-spool-holder
+ * (https://github.com/Burke9077/3dthings-filament-spool-holder), MIT; credited
+ * in ATTRIBUTED_HELPERS (../attribution.ts). SCAD names and arithmetic are kept
+ * verbatim in camelCase and verified against OpenSCAD renders (cad-reference
+ * cases spool-*). Ported: side_frame, crossbar, axle and axle_cap.
  *
  *   ---------------------------------------------------------------------------
  *   MIT License
@@ -40,7 +31,6 @@
  */
 import type { ManifoldModule } from "../../types.ts";
 
-/** The SCAD customizer parameters, in camelCase, with the SCAD defaults. */
 const SPOOL_HOLDER_DEFAULTS = {
   part: "side_frame" as "side_frame" | "crossbar" | "axle" | "axle_cap",
   spoolMaxDiameter: 220,
@@ -82,16 +72,11 @@ export type SpoolHolderOptions = Partial<typeof SPOOL_HOLDER_DEFAULTS>;
 const EPSILON = 0.02;
 const DEG = Math.PI / 180;
 
-/**
- * OpenSCAD's fragment count for a circle of radius r with no $fn set
- * ($fa = 12, $fs = 2): get_fragments_from_r. Used so offset() rounds its
- * corners with the same polygon OpenSCAD does, and the volumes agree.
- */
+/** OpenSCAD's get_fragments_from_r ($fa = 12, $fs = 2), so offset() rounds identically. */
 function fragments(r: number): number {
   return Math.ceil(Math.max(Math.min(360 / 12, (r * 2 * Math.PI) / 2), 5));
 }
 
-/** The hidden derived values, verbatim from the SCAD. */
 function derive(p: typeof SPOOL_HOLDER_DEFAULTS) {
   const insideWidth = p.spoolMaxWidth + 2 * p.spoolSideClearance;
   const spoolRadius = p.spoolMaxDiameter / 2;
@@ -126,10 +111,7 @@ function derive(p: typeof SPOOL_HOLDER_DEFAULTS) {
 
 type Derived = ReturnType<typeof derive>;
 
-/**
- * The SCAD's own asserts, so a bad request is refused with its message rather
- * than producing a frame that does not hold a spool.
- */
+/** The SCAD's own asserts. */
 function check(p: typeof SPOOL_HOLDER_DEFAULTS, d: Derived): void {
   const rules: [boolean, string][] = [
     [p.spoolMaxDiameter > p.axleDiameter, "spoolMaxDiameter must exceed axleDiameter"],
@@ -148,7 +130,6 @@ function check(p: typeof SPOOL_HOLDER_DEFAULTS, d: Derived): void {
   if (failed) throw new Error("spoolHolder: " + failed[1]);
 }
 
-/** offset(r = r) polygon(points): the SCAD's rounded profiles. */
 function roundedPolygon(module: ManifoldModule, points: number[][], r: number): any {
   const { CrossSection } = module as any;
   return CrossSection.ofPolygons([points], "NonZero").offset(r, "Round", 2, fragments(r));
@@ -239,10 +220,7 @@ function axleCap(module: ManifoldModule, p: typeof SPOOL_HOLDER_DEFAULTS): any {
       .translate([0, 0, p.axleCapEndThickness]));
 }
 
-/**
- * One print part of the spool holder, in the SCAD's print orientation.
- * @param opts Any SCAD customizer parameter, camelCased, plus `part`.
- */
+/** One print part of the spool holder, in the SCAD's print orientation. */
 export function spoolHolder(module: ManifoldModule, opts: SpoolHolderOptions = {}): any {
   const p = { ...SPOOL_HOLDER_DEFAULTS, ...opts };
   const d = derive(p);

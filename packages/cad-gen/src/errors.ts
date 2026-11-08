@@ -40,14 +40,7 @@ export class CadGenerationFailed extends CadError {
   }
 }
 
-/**
- * The request is not something parametric CAD can model - a figurine, a bust,
- * an animal - so no design was generated.
- * @remarks Thrown BEFORE any DeepSeek call, from Jev's suitability judgement.
- *   Carries what a UI needs to steer the user elsewhere: the score, and the
- *   kind of generator that does fit (organic mesh generation, which this repo
- *   offers through Tripo3D).
- */
+/** Thrown before any DeepSeek call when Jev judges the request organic (use Tripo3D instead). */
 export class CadRequestUnsuitable extends CadError {
   readonly suitability: number;
   readonly alternative: { kind: "organic-mesh"; provider: "tripo3d" };

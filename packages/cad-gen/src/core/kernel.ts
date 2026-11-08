@@ -1,18 +1,13 @@
-/**
- * Kernel port: design document becomes mesh plus stats.
- * @remarks The Manifold module is injected by the host (Emscripten glue in the
- *   validation child, bundled web build in the browser worker), so core/ owns
- *   no loader and no WASM path resolution.
- */
+/** Kernel port: design document to mesh plus stats. The host injects the Manifold module. */
 import type { CadDesign, CadMesh, CadStats, ManifoldModule } from "../types.ts";
 import { CadKernelError } from "../errors.ts";
 import { PRELUDE_NAMES, buildPrelude } from "./prelude.ts";
 import type { PreludeHelpers, PreludeOptions } from "./prelude.ts";
 
 export interface KernelRunResult {
-  /** Every part's mesh laid side by side (never unioned). */
+  /** Every part's mesh side by side, never unioned. */
   mesh: CadMesh;
-  /** One mesh per returned part, in the script's order. */
+  /** One mesh per returned part, in script order. */
   parts: CadMesh[];
   stats: CadStats;
 }
@@ -21,33 +16,25 @@ export interface CadKernel {
   run(design: CadDesign): KernelRunResult;
 }
 
-/** The interleaved property buffers Manifold hands back. */
 interface ManifoldMeshData {
   vertProperties: ArrayLike<number>;
   numProp: number;
   triVerts: ArrayLike<number>;
 }
 
-/** The axis-aligned bounds Manifold reports. */
 interface ManifoldBox {
   min: [number, number, number];
   max: [number, number, number];
 }
 
-/** Builds the parameter name -> value map the script sees as PARAMETERS/P. */
 function parameterValues(design: CadDesign): Record<string, number | string> {
   const values: Record<string, number | string> = {};
   for (const [name, p] of Object.entries(design.parameters)) values[name] = p.value;
   return values;
 }
 
-/**
- * Compiles a script body into a callable bound to the injected surface.
- * @throws CadKernelError when the body does not parse.
- */
 function compileScript(code: string, names: string[]): (...args: unknown[]) => unknown {
   try {
-    // The script is the product; the process boundary is the sandbox.
     // eslint-disable-next-line no-new-func
     return new Function("PARAMETERS", "P", "M", ...names, code) as never;
   } catch (e) {
@@ -55,10 +42,6 @@ function compileScript(code: string, names: string[]): (...args: unknown[]) => u
   }
 }
 
-/**
- * Calls a compiled script with the injected surface.
- * @throws CadKernelError when the script throws.
- */
 function callScript(
   fn: (...args: unknown[]) => unknown,
   values: Record<string, number | string>,
@@ -74,14 +57,8 @@ function callScript(
 }
 
 /**
- * Asserts a script handed back a usable, error-free Manifold.
- * @remarks Identity, not duck typing. The script is the untrusted party and it
- *   holds `M`, so it can return a hand-rolled object that mimics every method
- *   the stat gates read — and every gate would then be reporting numbers the
- *   script itself chose. `instanceof` against the injected module is the one
- *   check the script cannot forge.
- * @param label Prefix naming the part, for an array return ("part 2: ").
- * @throws CadKernelError when it did not.
+ * `instanceof`, not duck typing: the untrusted script holds `M` and could
+ * return an object that mimics the methods the gates read.
  */
 function assertManifold(result: any, module: ManifoldModule, label = ""): any {
   if (!(result instanceof module.Manifold)) {
@@ -94,14 +71,9 @@ function assertManifold(result: any, module: ManifoldModule, label = ""): any {
   return result;
 }
 
-/** Most parts a script may return: a bound for the browser worker, not a design rule. */
+/** A bound for the browser worker, not a design rule. */
 export const MAX_PARTS = 64;
 
-/**
- * The script's return as checked parts, and whether it was an array.
- * @throws CadKernelError naming the 1-based part that is not a usable Manifold,
- *   or when there are more than MAX_PARTS.
- */
 function partsOf(result: unknown, module: ManifoldModule): { solids: any[]; array: boolean } {
   if (!Array.isArray(result)) return { solids: [assertManifold(result, module)], array: false };
   if (result.length > MAX_PARTS) {
@@ -110,11 +82,7 @@ function partsOf(result: unknown, module: ManifoldModule): { solids: any[]; arra
   return { solids: result.map((r, i) => assertManifold(r, module, "part " + (i + 1) + ": ")), array: true };
 }
 
-/**
- * Lays meshes side by side in one mesh, offsetting each one's indices.
- * @remarks Concatenation, never a union: touching parts stay separate and
- *   overlapping ones cannot produce a non-manifold result.
- */
+/** Concatenation, never a union: touching parts stay separate. */
 export function concatMeshes(meshes: CadMesh[]): CadMesh {
   const positions = new Float32Array(meshes.reduce((n, m) => n + m.positions.length, 0));
   const indices = new Uint32Array(meshes.reduce((n, m) => n + m.indices.length, 0));
@@ -130,7 +98,6 @@ export function concatMeshes(meshes: CadMesh[]): CadMesh {
   return { positions, indices };
 }
 
-/** De-interleaves Manifold's property buffer into a renderer-neutral mesh. */
 export function meshFrom(raw: ManifoldMeshData): CadMesh {
   const vertCount = raw.vertProperties.length / raw.numProp;
   const positions = new Float32Array(vertCount * 3);
@@ -142,32 +109,18 @@ export function meshFrom(raw: ManifoldMeshData): CadMesh {
   return { positions, indices: new Uint32Array(raw.triVerts) };
 }
 
-/** The bounds reported for a solid with no geometry. */
 const EMPTY_BBOX: [number, number, number] = [0, 0, 0];
 
 /**
- * The axis-aligned bounds of a solid, with the empty case made concrete.
- * @remarks An empty manifold has no extent, so Manifold reports
- *   min = [+Infinity, +Infinity, +Infinity] and max = [-Infinity, ...].
- *   JSON.stringify turns every one of those into null, so the payload failed
- *   the parent's shape check and an empty result — a *script* fault the
- *   nonempty gate exists to explain — came back as "kernel host produced an
- *   invalid result". A message that names no cause and reads like a server
- *   problem gives the repair loop nothing to act on.
- *   Zeros are the honest bound for nothing, and they keep the payload the
- *   three finite numbers CadStats promises. This normalises the *empty* case
- *   only: the shape check downstream is untouched, so a forged or malformed
- *   payload is still rejected fail-closed.
+ * Manifold reports an empty solid's bounds as +/-Infinity, which JSON turns
+ * into null; zeros keep the payload valid so the nonempty gate can explain it.
  */
 function boundsOf(result: any, triangles: number): ManifoldBox {
   if (triangles > 0) return result.boundingBox() as ManifoldBox;
   return { min: EMPTY_BBOX, max: EMPTY_BBOX };
 }
 
-/** Collects the geometry facts the validation gates read. */
 function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
-  // The module is untyped past the port, so the kernel's Box shape is
-  // restated here (and only here) to keep the tuple type on bboxMm.
   const triangles = result.numTri();
   const box = boundsOf(result, triangles);
   return {
@@ -181,25 +134,13 @@ function statsFrom(result: any, helpers: PreludeHelpers): CadStats {
   };
 }
 
-/**
- * The volume below which a decomposed body is a numerical flake, not a part.
- * @remarks Measured live: a cable clip's filletEdges opening left a body of
- *   -5e-14 mm3 and 4 triangles where a channel nearly broke through the top
- *   face. The connected gate counted it as a loose piece and sent the model -
- *   twice - to "extend it into the solid", which no edit to the design can do.
- *   0.001 mm3 is a 0.1mm cube: far below any feature a printer can make.
- */
+/** Below this (a 0.1mm cube) a decomposed body is a numerical flake, not a part. */
 export const DEGENERATE_BODY_MM3 = 1e-3;
 
-/** Whether a decomposed body is a zero-volume flake. */
 function isDegenerate(body: any): boolean {
   return Math.abs(body.volume()) < DEGENERATE_BODY_MM3;
 }
 
-/**
- * The solid with any zero-volume flakes removed, and how many there were.
- * @remarks So the delivered mesh is clean as well as the body count honest.
- */
 function withoutFlakes(module: ManifoldModule, result: any): { solid: any; dropped: number } {
   if (typeof result.decompose !== "function") return { solid: result, dropped: 0 };
   const parts: any[] = result.decompose();
@@ -209,25 +150,19 @@ function withoutFlakes(module: ManifoldModule, result: any): { solid: any; dropp
   return { solid: (module as any).Manifold.compose(kept), dropped };
 }
 
-/** Bodies listed in a repair message; past this the count says enough. */
+/** Bodies listed in a repair message. */
 const MAX_BODY_BOXES = 8;
 
 type Component = { volume: number; box: ManifoldBox; part?: number };
 
-/**
- * A solid's non-flake components, split into bodies and sealed voids.
- * @remarks A cut that never reaches a face leaves a cavity whose skin
- *   decomposes as its own component with NEGATIVE volume (CADPrompt 00851553:
- *   -78398 mm3). It is not a body: counting it sent the connected gate's repair
- *   after a "loose piece" no edit could move. It is reported as a void instead.
- */
+/** A cut that never reaches a face leaves a negative-volume component: a void, not a body. */
 function componentsOf(solid: any, part?: number): { bodies: Component[]; voids: Component[] } {
   const all: Component[] = solid.decompose().filter((p: any) => !isDegenerate(p))
     .map((p: any) => ({ volume: p.volume() as number, box: p.boundingBox() as ManifoldBox, ...(part ? { part } : {}) }));
   return { bodies: all.filter((c) => c.volume > 0), voids: all.filter((c) => c.volume < 0) };
 }
 
-/** Components as stats list them: largest first (by magnitude), capped, part kept when set. */
+/** Largest first by magnitude, capped. */
 function listed(components: Component[]): NonNullable<CadStats["bodies"]> {
   const boxes = [...components]
     .sort((a, b) => Math.abs(b.volume) - Math.abs(a.volume))
@@ -239,7 +174,6 @@ function listed(components: Component[]): NonNullable<CadStats["bodies"]> {
   return { count: components.length, boxes };
 }
 
-/** The solid's separate bodies and sealed voids; nothing when the host cannot decompose. */
 function bodiesOf(result: any): Pick<CadStats, "bodies" | "voids"> {
   if (typeof result.decompose !== "function") return {};
   const { bodies, voids } = componentsOf(result);
@@ -248,7 +182,6 @@ function bodiesOf(result: any): Pick<CadStats, "bodies" | "voids"> {
 
 type Box = { min: [number, number, number]; max: [number, number, number] };
 
-/** The bounds of every non-empty box, or the empty-solid zeros when there are none. */
 function unionBox(boxes: Box[]): Box {
   if (boxes.length === 0) return { min: [...EMPTY_BBOX], max: [...EMPTY_BBOX] };
   const min = [0, 1, 2].map((a) => Math.min(...boxes.map((b) => b.min[a])));
@@ -256,7 +189,6 @@ function unionBox(boxes: Box[]): Box {
   return { min: min as Box["min"], max: max as Box["max"] };
 }
 
-/** Every part's bodies and voids, tagged with their 1-based part, plus each part's body count. */
 function partBodiesOf(solids: any[]): Pick<CadStats, "bodies" | "voids"> & { bodyCounts: number[] } {
   if (solids.length === 0 || typeof solids[0].decompose !== "function") {
     return { bodyCounts: solids.map(() => 1) };
@@ -270,20 +202,14 @@ function partBodiesOf(solids: any[]): Pick<CadStats, "bodies" | "voids"> & { bod
   };
 }
 
-/** Overlapping part pairs listed in stats; past this the count says enough. */
 const MAX_OVERLAPS = 8;
 
-/** Whether two boxes share interior volume; boxes that only touch do not. */
+/** Boxes that only touch do not meet. */
 function boxesMeet(a: Box, b: Box): boolean {
   return [0, 1, 2].every((k) => a.min[k] < b.max[k] && b.min[k] < a.max[k]);
 }
 
-/**
- * Part pairs whose solids share more than DEGENERATE_BODY_MM3.
- * @remarks Recorded, never failed: a pin in its hole overlaps by design, and
- *   printing at assembled positions is out of scope (spec decision 4). Only
- *   pairs whose boxes meet are intersected, so disjoint parts cost box checks.
- */
+/** Recorded, never failed: a pin in its hole overlaps by design. */
 function overlapsOf(solids: any[], boxes: Box[]): Pick<NonNullable<CadStats["parts"]>, "overlaps" | "overlapCount"> {
   const found: { a: number; b: number; volumeMm3: number }[] = [];
   for (let i = 0; i < solids.length; i++) {
@@ -298,7 +224,6 @@ function overlapsOf(solids: any[], boxes: Box[]): Pick<NonNullable<CadStats["par
   return { overlaps: found.slice(0, MAX_OVERLAPS), overlapCount: found.length };
 }
 
-/** Stats for an array return: totals over the parts, plus per-part facts. */
 function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
   const boxes: Box[] = solids.map((s) => {
     const b = boundsOf(s, s.numTri());
@@ -318,16 +243,10 @@ function arrayStatsFrom(solids: any[], helpers: PreludeHelpers): CadStats {
   };
 }
 
-/** The mesh with its color() tag, or unchanged (no `color` key) when untagged. */
 function withColor(mesh: CadMesh, color: string | undefined): CadMesh {
   return color ? { ...mesh, color } : mesh;
 }
 
-/**
- * Builds a kernel bound to a loaded Manifold module.
- * @throws CadKernelError when the script is malformed, throws, or does not
- *   return a valid Manifold.
- */
 export function createCadKernel(
   module: ManifoldModule,
   options: PreludeOptions = {},
@@ -343,7 +262,7 @@ export function createCadKernel(
         callScript(fn, parameterValues(design), module, helpers, names),
         module,
       );
-      // Read before withoutFlakes: it may hand back a new (untagged) instance.
+      // Read before withoutFlakes, which may return a new, untagged instance.
       const colors = raw.map((s) => colorTags.get(s));
       if (!array) {
         const { solid: result, dropped } = withoutFlakes(module, raw[0]);
@@ -359,7 +278,6 @@ export function createCadKernel(
         };
       }
       const cleaned = raw.map((s, i) => ({ ...withoutFlakes(module, s), color: colors[i] }));
-      // A part that is nothing but a flake is not a part.
       const kept = cleaned.filter((c) => !isDegenerate(c.solid));
       const solids = kept.map((c) => c.solid);
       const dropped = cleaned.reduce((n, c) => n + c.dropped, 0) + (cleaned.length - solids.length);

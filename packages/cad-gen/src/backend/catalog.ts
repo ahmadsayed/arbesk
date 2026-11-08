@@ -1,71 +1,39 @@
 /**
- * The library catalog: everything the system prompt says about ONE part family
- * or ONE body of reference knowledge, kept together so it can be selected.
- * @remarks Two-stage generation (see select.ts) shows the model only the
- *   entries a request needs: a selector call reads each entry's one-line
- *   `summary`, and the generation call then receives the chosen entries' helper
- *   rows and guidance in full. The core rules and helpers in prompt.ts are
- *   always sent. So adding a ported part means adding an entry here - never a
- *   paragraph in prompt.ts - and the prompt stays the size of what is asked.
+ * The library catalog: one entry per part family or body of reference
+ * knowledge, so a request's system prompt carries only what it needs (see
+ * select.ts). Add a ported part as an entry here, never as a paragraph in
+ * prompt.ts. Every prelude helper is either core (prompt.ts) or belongs to
+ * exactly one entry; test/cad-gen/catalog.test.js enforces that.
  *
- *   Every prelude helper is either a CORE helper (prompt.ts) or belongs to
- *   exactly one entry here; test/cad-gen/catalog.test.js holds that line.
- *
- * PROVENANCE, checked 2026-09-12. The numbers below are physical facts about
- * real hardware - a board's outline, a connector's shell - and facts are not
- * copyrightable, so quoting them creates no derivative work. The check that
- * matters is that we copy NUMBERS and never EXPRESSION (names, structure,
- * comments), and that is what happened here.
- *
- * The licences of every source consulted, so the next person does not have to
- * redo this:
- *   - Raspberry Pi board, hole pattern and connector sizes: cross-checked
- *     against process1183/openscad-library, which is GPL-3.0. NO code, names or
- *     comments were taken from it - the facts are also in Raspberry Pi's own
- *     mechanical drawings, which is the correct primary citation. Treat that
- *     repository as off-limits for anything expressive.
- *   - Arduino Uno R3 hole pattern: KiCad's footprint library (CC-BY-SA-4.0 with
- *     a design exception) and Arduino's published drawing, which agree exactly.
- *     Used to VERIFY, not to copy.
- *   - Gridfinity: the published specification's grid and base profile.
- *   - BOSL2 gear proportions and hinges: BSD-2-Clause. Credited in
- *     ATTRIBUTED_HELPERS.
- *   - Matthew Burke's spool holder: MIT. Credited in ATTRIBUTED_HELPERS.
- *   - Maciej Małecki's knobs: MIT. Credited in ATTRIBUTED_HELPERS.
- *   - GT2 pulley dimensions (2mm pitch, 0.254mm pitch factor, 0.76mm groove):
- *     Gates PowerGrip GT standard, cross-checked against a Gates-licensee
- *     catalog (CMT 2MR: pitch dia - outside dia = 0.020" at every size).
- *     Dimensions are facts and carry no credit, as Gridfinity's do.
+ * Provenance: the dimensions below are facts about real hardware and are
+ * quoted, never copied as expression. Raspberry Pi numbers come from Raspberry
+ * Pi's mechanical drawings (process1183/openscad-library, GPL-3.0, was used to
+ * cross-check only and is off-limits for anything expressive). The Arduino Uno
+ * pattern was verified against KiCad and Arduino's drawing. GT2 dimensions are
+ * the Gates PowerGrip GT standard. Ported code is credited in ATTRIBUTED_HELPERS.
  */
 
-/** One selectable block of prompt documentation. */
 export interface CatalogEntry {
-  /** Stable id the selector returns. */
   id: string;
-  /** Prelude helpers this entry documents; empty for a knowledge-only entry. */
+  /** Empty for a knowledge-only entry. */
   helpers: string[];
-  /** One line for the selector: what requests this entry is for. */
+  /** One line for the selector. */
   summary: string;
-  /** Rows for the AVAILABLE HELPERS table, in its two-column format. */
+  /** Rows for the AVAILABLE HELPERS table. */
   helperRows: string[];
-  /** Rules, frames and reference numbers, sent when the entry is selected. */
+  /** Sent when the entry is selected. */
   guidance: string[];
   /**
-   * Helpers a request of this kind MUST call - a static gate in the repair loop.
-   * @remarks Guidance alone is not enough: the model calls a helper when it
-   *   believes it cannot do the job itself, and a hand-drawn part can still be
-   *   one watertight body that passes every geometric gate. This turns the rule
-   *   into a failed attempt whose error is the repair instruction.
+   * Helpers a request of this kind must call, enforced as a static gate: a
+   * hand-drawn part can pass every geometric gate.
    */
   requires?: HelperRequirement[];
 }
 
-/** One "this request must call that helper" rule. */
 export interface HelperRequirement {
-  /** True when the request (the user's prompt) is of this kind. */
   when: (prompt: string) => boolean;
   helper: string;
-  /** The repair instruction handed back to the model when the helper is missing. */
+  /** The repair instruction when the helper is missing. */
   error: string;
 }
 
@@ -298,8 +266,7 @@ export const CATALOG: CatalogEntry[] = [
       "                                      a COMPLETE Gridfinity bin",
     ],
     requires: [{
-      // "fits on a baseplate" is a part that SITS on one - a bin or a custom
-      // holder, built on gridfinityCup or gridfinityBase - not a baseplate.
+      // A part that fits on a baseplate is a bin, not a baseplate.
       when: (prompt) => /gridfinity/i.test(prompt) &&
         /base[\s-]*plat|grid[\s-]*plate/i.test(prompt) &&
         !/\b(?:fits?|sits?|for|on|onto|into|in|compatible with)\s+(?:an?\s+|the\s+|my\s+)?(?:gridfinity\s+)?(?:base[\s-]*plat|grid[\s-]*plate)/i.test(prompt),
@@ -581,25 +548,19 @@ export const CATALOG: CatalogEntry[] = [
   },
 ];
 
-/** Every catalog id, in catalog order. */
 export const CATALOG_IDS: string[] = CATALOG.map((e) => e.id);
 
-/** The entries for these ids, in catalog order; unknown ids are ignored. */
+/** Unknown ids are ignored. */
 export function catalogEntries(ids: Iterable<string>): CatalogEntry[] {
   const wanted = new Set(ids);
   return CATALOG.filter((e) => wanted.has(e.id));
 }
 
-/** The ids of the entries owning any helper a script references. */
 export function entriesUsedBy(referenced: Set<string>): string[] {
   return CATALOG.filter((e) => e.helpers.some((h) => referenced.has(h))).map((e) => e.id);
 }
 
-/**
- * The helpers this request must call that the script does not.
- * @remarks Checked against EVERY entry, not only the selected ones: the rule is
- *   about what was asked for, and Jev failing open must not switch it off.
- */
+/** Checked against every entry, not only the selected ones, so Jev failing open cannot skip it. */
 export function missingRequiredHelpers(
   prompt: string,
   referenced: Set<string>,

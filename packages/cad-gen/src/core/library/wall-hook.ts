@@ -1,46 +1,32 @@
 /**
- * A screw-mounted J-shaped wall hook, ported from AaronVerDow's
- * parametrized_wall_hook.scad.
- * @remarks PORT of wall_hook() from https://github.com/AaronVerDow/cad
- *   (parametrized_wall_hook.scad), released into the public domain under the
- *   Unlicense, by AaronVerDow (https://github.com/AaronVerDow). The Unlicense
- *   asks for no notice; the author is credited anyway, through
- *   ATTRIBUTED_HELPERS in ../attribution.ts. Licence checked before porting:
- *   GitHub's SPDX (Unlicense), Jev's reading of the LICENSE text (permissive)
- *   and a human read agreed.
- *
- *   The hook is a half ring, a wall plate down one side and a tip up the other,
- *   rounded by minkowski() with a 12-sided disc, with two countersunk screw
- *   holes through the plate. Manifold's minkowskiSum is the same exact
- *   operation, so the port reproduces OpenSCAD's render rather than
- *   approximating it - see scripts/cad-reference.mjs, cases wall-hook-*.
+ * Port of wall_hook() from https://github.com/AaronVerDow/cad
+ * (parametrized_wall_hook.scad), Unlicense, by AaronVerDow; credited anyway in
+ * ATTRIBUTED_HELPERS (../attribution.ts). minkowskiSum matches OpenSCAD's
+ * minkowski() exactly (cad-reference cases wall-hook-*).
  */
 import type { ManifoldModule } from "../../types.ts";
 
 export interface WallHookOptions {
-  /** Extrusion width of the hook (SCAD `width`). */
+  /** SCAD `width`. */
   width?: number;
-  /** Material thickness (SCAD `thick`, defaults to width). */
+  /** SCAD `thick`; defaults to width. */
   thick?: number;
-  /** Centre-line diameter of the hook's curve (SCAD `d`, defaults to 33 + width). */
+  /** Centre-line diameter of the curve (SCAD `d`); defaults to 33 + width. */
   d?: number;
-  /** Height of the wall plate (SCAD `height`). */
+  /** SCAD `height`. */
   height?: number;
-  /** Height of the tip (SCAD `theight`). */
+  /** Tip height (SCAD `theight`). */
   theight?: number;
-  /** Facets of the rounding disc (SCAD `roundsegs`). */
+  /** SCAD `roundsegs`. */
   roundsegs?: number;
 }
 
-/**
- * OpenSCAD's fragment count for a radius with no $fn ($fa = 12, $fs = 2).
- * @remarks The SCAD leaves $fn unset for the hook's own cylinders.
- */
+/** OpenSCAD's fragment count with no $fn ($fa = 12, $fs = 2). */
 function fragments(r: number): number {
   return Math.ceil(Math.max(Math.min(360 / 12, (r * 2 * Math.PI) / 2), 5));
 }
 
-/** One wall hook, in the SCAD's frame: the curve centred on the origin, the plate up +y. */
+/** In the SCAD's frame: curve centred on the origin, plate up +y. */
 export function wallHook(module: ManifoldModule, opts: WallHookOptions = {}): any {
   const { Manifold } = module as any;
   const width = opts.width ?? 12;

@@ -1,8 +1,5 @@
 /** @arbesk/cad-gen backend — Node-only. Never imported by the browser. */
-// EVALUATION HARNESS - not in the request path. These spawn a child process and
-// load manifold.wasm, which is the most expensive step in the pipeline. They
-// exist so a design can be built, measured and rendered offline; the runtime
-// server uses validateStatic and never touches the kernel.
+// Evaluation harness only: these spawn a child and load manifold.wasm.
 export { runValidation } from "./validate-runner.ts";
 export type { RunnerOptions, RunnerResult } from "./validate-runner.ts";
 export { validateDesign } from "./validate.ts";

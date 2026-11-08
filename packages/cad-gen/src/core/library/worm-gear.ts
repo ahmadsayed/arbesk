@@ -1,32 +1,13 @@
 /**
- * A worm and the worm gear it drives - a high-ratio drive between crossed shafts - ported from BOSL2.
- * @remarks PORT of worm(), worm_gear() and worm_dist() from
- *   https://github.com/BelfrySCAD/BOSL2 (gears.scad), BSD-2-Clause, by
- *   Adrian Mariano (https://github.com/adrianVmariano) and Revar Desmera
- *   (https://github.com/revarbat), with the BOSL2 contributors. The credit is
- *   declared in ATTRIBUTED_HELPERS in ../attribution.ts. Licence and
- *   provenance as for the rack port (gear-rack.ts): BOSL2's own work, with
- *   Leemon Baird's public-domain 2011 involute gear as its inspiration.
+ * Port of worm(), worm_gear() and worm_dist() from BOSL2 gears.scad
+ * (https://github.com/BelfrySCAD/BOSL2), BSD-2-Clause, by Adrian Mariano and
+ * Revar Desmera; credited in ATTRIBUTED_HELPERS (../attribution.ts). Verified
+ * against OpenSCAD renders: scripts/cad-reference.mjs, cases worm-* and wormgear-*.
  *
- *   Faithful to the original's construction. The worm: the lead angle
- *   asin(starts x module / diameter), rack2d()'s tooth on the transverse
- *   pitch, and BOSL2's grid of rings - each ring samples the rack profile,
- *   shifted along the axis by the lead as it goes round, so the thread is a
- *   helix. The worm gear: the gear's involute tooth (helical, on the worm's
- *   lead angle) swept round the virtual worm across worm_arc, sheared along
- *   the face by the lead, crowned by crowning, resampled to `slices` and
- *   closed by twisted flat faces, then copied round the gear. The tooth is
- *   spurGear's (passed in), so it is the same involute as every other gear
- *   here. Verified against OpenSCAD's render of BOSL2's own worm() and
- *   worm_gear(): scripts/cad-reference.mjs, cases worm-* and wormgear-*.
- *
- *   Deliberate differences: leftHanded on wormGear MIRRORS the gear. BOSL2's
- *   worm_gear() accepts left_handed but never applies it (it only reaches an
- *   unused shear variable), so its left-handed gear is right-handed and would
- *   not mesh with its own left-handed worm. And a worm gear needs at least 18
- *   teeth: below that BOSL2 profile-shifts the teeth automatically, which no
- *   gear in this library does. Not ported: enveloping worms, profile shift,
- *   backlash and clearance options.
+ * Deliberate differences: leftHanded on wormGear mirrors the gear (BOSL2
+ * accepts left_handed but never applies it), and a worm gear needs at least
+ * 18 teeth because nothing here profile-shifts. Not ported: enveloping worms,
+ * profile shift, backlash and clearance options.
  *
  *   ---------------------------------------------------------------------------
  *   BSD 2-Clause License
@@ -61,22 +42,15 @@ import { rackOutline, resolveRackSpec } from "./gear-rack.ts";
 import { sideFaces, signedVolume } from "./triangle-soup.ts";
 import type { Vec3 } from "./triangle-soup.ts";
 
-/**
- * One gear tooth: centred on +Y, pitch point at the origin, mirror-symmetric,
- * root to root (+X side first), with an EVEN point count.
- * @param helical Helix angle in degrees: the tooth is laid out on its transverse section.
- */
+/** One tooth centred on +Y, pitch point at the origin, +X root first, with an even point count. */
 export type WormTooth = (module: number, teeth: number, pressureAngle: number, helical: number) => number[][];
 
 const DEG = Math.PI / 180;
 /** BOSL2's dedendum, 1 + clearance (module / 4), in modules. */
 const DEDENDUM = 1.25;
 /**
- * Vertices a worm may spend, about half the 200 000-triangle delivery budget.
- * @remarks BOSL2's grid puts a ring every lead / steps along the axis, so the
- *   count is length / (pitch x starts) x steps^2: a fine, long worm (module
- *   0.5, 80 mm) is 417 000 triangles at 64 segments. steps comes down until it
- *   fits, never below BOSL2's own 36.
+ * About half the 200 000-triangle budget. BOSL2's ring grid grows with
+ * length x steps^2, so steps is reduced to fit, never below BOSL2's 36.
  */
 const WORM_VERTEX_BUDGET = 50000;
 /** Fewest teeth a worm gear builds without profile shift: BOSL2's floor(2 / sin(20 deg)^2). */
@@ -84,7 +58,7 @@ const MIN_WORM_GEAR_TEETH = 18;
 
 const isWholeAtLeast = (v: unknown, n: number): boolean => Number.isInteger(v) && (v as number) >= n;
 
-/** The worm's lead angle, asin(starts x module / diameter), in degrees. */
+/** Lead angle in degrees: asin(starts x module / diameter). */
 function leadAngle(caller: string, module: number, starts: number, diameter: number): number {
   const sine = (starts * module) / diameter;
   if (!(sine < 1)) {
@@ -94,7 +68,6 @@ function leadAngle(caller: string, module: number, starts: number, diameter: num
   return Math.asin(sine) / DEG;
 }
 
-/** Throws when a pressure angle is outside 0-90 degrees. */
 function assertPressureAngle(caller: string, pa: number): void {
   if (!(pa >= 0 && pa < 90)) throw new Error(caller + " needs a pressureAngle between 0 and 90 degrees");
 }
@@ -107,13 +80,11 @@ interface WormSpec {
   leftHanded: boolean;
   pressureAngle: number;
   bore: number;
-  /** Ring samples round the axis: BOSL2's max(36, segments), capped by WORM_VERTEX_BUDGET. */
+  /** BOSL2's max(36, segments), capped by WORM_VERTEX_BUDGET. */
   steps: number;
-  /** Degrees. */
   lead: number;
 }
 
-/** Each worm option check and the refusal it gives, in the order they are tried. */
 const WORM_RULES: [(o: any) => boolean, string][] = [
   [(o) => o.module > 0, "worm needs a positive module"],
   [(o) => o.diameter > 0, "worm needs a positive diameter (its pitch diameter)"],
@@ -122,7 +93,6 @@ const WORM_RULES: [(o: any) => boolean, string][] = [
   [(o) => (o.bore ?? 0) >= 0, "worm needs a non-negative bore"],
 ];
 
-/** Validates worm options and fills BOSL2's defaults. */
 function resolveWormSpec(o: any): WormSpec {
   const broken = WORM_RULES.find(([ok]) => !ok(o));
   if (broken) throw new Error(broken[1]);
@@ -143,7 +113,7 @@ function resolveWormSpec(o: any): WormSpec {
   };
 }
 
-/** OpenSCAD lookup(): linear interpolation over a [key, value] table, clamped at both ends. */
+/** OpenSCAD lookup(): linear interpolation, clamped at both ends. */
 function lookupIn(table: number[][]): (key: number) => number {
   const sorted = [...table].sort((a, b) => a[0] - b[0]);
   return (key) => {
@@ -157,11 +127,7 @@ function lookupIn(table: number[][]): (key: number) => number {
   };
 }
 
-/**
- * The worm's thread height above its pitch cylinder, by axial position.
- * @remarks BOSL2: rack2d()'s single tooth on the transverse pitch, mirrored,
- *   repeated 2 x ceil(length / pitch) + 1 times along the axis.
- */
+/** Thread height above the pitch cylinder by axial position: rack2d()'s tooth, repeated. */
 function threadProfile(s: WormSpec): { height: (z: number) => number; pitch: number } {
   const rackSpec = { ...resolveRackSpec({ module: s.module, teeth: 1, thickness: 1, pressureAngle: s.pressureAngle }), helical: s.lead };
   const tooth = rackOutline(rackSpec).slice(1, -1).map(([x, y]) => [-x, y]);
@@ -180,10 +146,7 @@ function capFaces(base: number, ringSize: number, centre: number): number[][] {
   return Array.from({ length: ringSize }, (_v, i) => [centre, base + ((i + 1) % ringSize), base + i]);
 }
 
-/**
- * Rings of `ringSize` vertices, capped top and bottom by fans to the axis, wound outward.
- * @param alt Quad diagonal style, as sideFaces: the worm uses BOSL2's "alt".
- */
+/** Rings of `ringSize` vertices, capped by fans to the axis; `alt` is BOSL2's quad style. */
 function closedRings(verts: Vec3[], ringSize: number, alt = false): { verts: Vec3[]; faces: number[][] } {
   const rings = verts.length / ringSize;
   const first = verts[0][2];
@@ -199,12 +162,7 @@ function closedRings(verts: Vec3[], ringSize: number, alt = false): { verts: Vec
   return { verts: all, faces: signedVolume(all, faces) < 0 ? faces.map((f) => [...f].reverse()) : faces };
 }
 
-/**
- * The worm's vertices and triangles: axis on Z, centred, right-handed unless leftHanded.
- * @remarks BOSL2's grid: ring j at z = j x zstep - length / 2, sample i at
- *   angle 360 x (1 - u) + 90 with u = i / steps - 0.5, radius
- *   diameter / 2 + the thread height at z + pitch x starts x u.
- */
+/** BOSL2's ring grid: ring j at z = j x zstep - length / 2, each sample shifted by the lead. */
 function wormMesh(s: WormSpec): { verts: Vec3[]; faces: number[][] } {
   const { height, pitch } = threadProfile(s);
   const zsteps = Math.ceil((s.length / pitch / s.starts) * s.steps);
@@ -228,19 +186,17 @@ interface WormGearSpec {
   teeth: number;
   wormDiameter: number;
   wormStarts: number;
-  /** Degrees of the worm the gear wraps. */
   wormArc: number;
   crowning: number;
   leftHanded: boolean;
   pressureAngle: number;
   slices: number;
   bore: number;
-  /** The worm's lead angle, degrees: the gear's helix angle. */
+  /** The worm's lead angle in degrees, used as the gear's helix angle. */
   lead: number;
   pitchRadius: number;
 }
 
-/** Each worm gear option check and the refusal it gives, in the order they are tried. */
 const WORM_GEAR_RULES: [(o: any) => boolean, string][] = [
   [(o) => o.module > 0, "wormGear needs a positive module"],
   [(o) => isWholeAtLeast(o.teeth, MIN_WORM_GEAR_TEETH),
@@ -253,7 +209,6 @@ const WORM_GEAR_RULES: [(o: any) => boolean, string][] = [
   [(o) => (o.bore ?? 0) >= 0, "wormGear needs a non-negative bore"],
 ];
 
-/** Validates worm gear options and fills BOSL2's defaults. */
 function resolveWormGearSpec(o: any): WormGearSpec {
   const broken = WORM_GEAR_RULES.find(([ok]) => !ok(o));
   if (broken) throw new Error(broken[1]);
@@ -274,7 +229,7 @@ function resolveWormGearSpec(o: any): WormGearSpec {
   };
 }
 
-/** BOSL2 resample_path(closed=false) on a smooth path: n points evenly spaced along its length. */
+/** BOSL2 resample_path(closed=false): n points evenly spaced along the path. */
 function resample(path: Vec3[], n: number): Vec3[] {
   const along = [0];
   for (let i = 1; i < path.length; i++) {
@@ -292,23 +247,21 @@ function resample(path: Vec3[], n: number): Vec3[] {
   });
 }
 
-/** Rotates [x, y, z] about the Z axis by `deg` degrees. */
 function zrot(deg: number, [x, y, z]: Vec3): Vec3 {
   const c = Math.cos(deg * DEG);
   const sn = Math.sin(deg * DEG);
   return [x * c - y * sn, x * sn + y * c, z];
 }
 
-/** (a - b) folded into (-180, 180]: BOSL2 modang. */
+/** BOSL2 modang: an angle folded into (-180, 180]. */
 function foldAngle(a: number): number {
   const m = ((a % 360) + 360) % 360;
   return m > 180 ? m - 360 : m;
 }
 
 /**
- * One tooth swept round the virtual worm: a row per tooth point, each running
- * across the face from z = +zmax to -zmax, in the worm's frame (worm axis on Y
- * through the origin, the tooth's pitch point at x = wormDiameter / 2).
+ * One tooth swept round the virtual worm, a row per tooth point, in the worm's
+ * frame (worm axis on Y, pitch point at x = wormDiameter / 2).
  */
 function toothRows(s: WormGearSpec, tooth: number[][]): Vec3[][] {
   // BOSL2: reverse(zrot(90, tooth)) on a tooth that starts at its -X root; this
@@ -344,13 +297,7 @@ function toothRows(s: WormGearSpec, tooth: number[][]): Vec3[][] {
   });
 }
 
-/**
- * The worm gear's vertices and triangles: axis on Z, centred on the origin,
- * tooth 0 pointing along +Y.
- * @remarks BOSL2 places each tooth with zrot(i x 360 / teeth) x
- *   back(pitchRadius) x zrot(-90) x left(wormDiameter / 2), then joins the
- *   rows across all teeth into rings.
- */
+/** Teeth placed as BOSL2 does, then joined into rings. Axis on Z, tooth 0 toward +Y. */
 function wormGearMesh(s: WormGearSpec, tooth: number[][]): { verts: Vec3[]; faces: number[][] } {
   const rows = toothRows(s, tooth);
   const across = rows[0].length;
@@ -366,7 +313,6 @@ function wormGearMesh(s: WormGearSpec, tooth: number[][]): { verts: Vec3[]; face
   return closedRings(verts, placed.length);
 }
 
-/** A Manifold solid from a triangle soup, minus a bore along Z. */
 function solidOf(module: ManifoldModule, mesh: { verts: Vec3[]; faces: number[][] }, bore: number): any {
   const { Manifold, Mesh } = module as any;
   const m = new Mesh({
@@ -382,23 +328,17 @@ function solidOf(module: ManifoldModule, mesh: { verts: Vec3[]; faces: number[][
   return solid.subtract(Manifold.cylinder(h, bore / 2, bore / 2, 0, true));
 }
 
-/** The worm as a Manifold solid, axis on Z, centred. */
 export function worm(module: ManifoldModule, opts: any): any {
   const s = resolveWormSpec(opts ?? {});
   return solidOf(module, wormMesh(s), s.bore);
 }
 
-/** The worm gear as a Manifold solid, axis on Z, centred, tooth 0 toward +Y. */
 export function wormGear(module: ManifoldModule, opts: any, toothFor: WormTooth): any {
   const s = resolveWormGearSpec(opts ?? {});
   return solidOf(module, wormGearMesh(s, toothFor(s.module, s.teeth, s.pressureAngle, s.lead)), s.bore);
 }
 
-/**
- * Centre distance between a worm and its worm gear, in millimetres.
- * @remarks BOSL2 worm_dist() at profile shift 0 and backlash 0:
- *   (wormDiameter + module x teeth / cos(lead)) / 2.
- */
+/** BOSL2 worm_dist(): (wormDiameter + module x teeth / cos(lead)) / 2. */
 export function wormDistance(opts: any): number {
   const o = opts ?? {};
   if (!(o.module > 0)) throw new Error("wormDistance needs a positive module");

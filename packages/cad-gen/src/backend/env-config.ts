@@ -1,26 +1,16 @@
 /**
- * The CAD generator's configuration, read from environment variables.
- * @remarks ONE reading shared by the API route (src/api/routes/cad.ts) and the
- *   offline harnesses (scripts/lib/cad-harness.mjs). Before it existed the two
- *   read different variables - the harness took CAD_MODEL where the route took
- *   DEEPSEEK_MODEL, and treated CAD_THINKING=false as on - so a benchmark could
- *   score a generator production never runs. Keep every variable here.
+ * CAD generator configuration from the environment, shared by the API route and
+ * the offline harnesses so a benchmark scores what production runs.
  */
 import type { CadGenConfig, CadLimits } from "./facade.ts";
 
 export type CadEnv = Record<string, string | undefined>;
 
-/** Shipped default for CAD_MAX_REPAIR_ATTEMPTS. */
 export const DEFAULT_REPAIR_ATTEMPTS = 3;
 
 /**
- * Reads a positive whole-number bound from the environment.
- * @remarks Unset or blank means the documented default; a value that is SET but
- *   unusable is returned verbatim so the caller can refuse the request. Silently
- *   defaulting would make a typo'd cap behave exactly like a cap nobody wrote,
- *   which is the failure cad-quota's own fail-closed normalization exists to
- *   stop happening one layer down. Reporting it as an unusable CONFIGURATION
- *   rather than a mysterious quota rejection is operator experience, not safety.
+ * Unset or blank gives the default; a set but unusable value is returned
+ * verbatim so the caller can refuse it rather than silently default.
  */
 export function readBound(env: CadEnv, name: string, fallback: number): number | string {
   const raw = env[name];
@@ -29,28 +19,19 @@ export function readBound(env: CadEnv, name: string, fallback: number): number |
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : raw;
 }
 
-/** Provider thinking mode, off unless explicitly asked for. */
+/** Off unless explicitly asked for. */
 export function isThinkingEnabled(env: CadEnv): boolean {
   const flag = (env.CAD_THINKING ?? "").trim().toLowerCase();
   return flag === "true" || flag === "1" || flag === "yes";
 }
 
-/**
- * Whether CAD_REPAIR_THINKING switches repair-round thinking OFF.
- * @remarks The opposite default to CAD_THINKING: repair rounds think unless an
- *   operator says otherwise, because the plain model measurably returns the
- *   failing script unchanged (see CadGenConfig.repairThinking).
- */
+/** Repair rounds think unless CAD_REPAIR_THINKING turns it off. */
 function repairThinkingDisabled(env: CadEnv): boolean {
   const flag = (env.CAD_REPAIR_THINKING ?? "").trim().toLowerCase();
   return flag === "false" || flag === "0" || flag === "no" || flag === "off";
 }
 
-/**
- * Jev library selection, when JEV_API_KEY is set.
- * @remarks Optional by design: without it every request sees the whole
- *   library catalog, which is how the service worked before selection existed.
- */
+/** Optional: without JEV_API_KEY every request sees the whole catalog. */
 function jevConfig(env: CadEnv, fetchImpl?: typeof fetch) {
   const apiKey = (env.JEV_API_KEY ?? "").trim();
   if (!apiKey) return {};
@@ -66,11 +47,7 @@ function jevConfig(env: CadEnv, fetchImpl?: typeof fetch) {
   };
 }
 
-/**
- * Builds the generator config the route and the harnesses both use.
- * @param limits Already-validated bounds: the caller validates them so it can
- *   name the variable at fault in its own way (the route answers 503).
- */
+/** `limits` are already validated, so the caller can name the variable at fault. */
 export function cadGenConfigFromEnv(
   env: CadEnv, limits: Partial<CadLimits>, fetchImpl?: typeof fetch,
 ): CadGenConfig {

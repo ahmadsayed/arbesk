@@ -1,11 +1,4 @@
-/**
- * Mesh to self-contained glTF JSON, for previewing a CAD part.
- * @remarks Same document as the GLB export (buildPartDocument) — the binary
- *   chunk rides as a base64 data URI, so one string carries the whole part
- *   plus the design sidecar. Matches how the platform handles .gltf assets
- *   (base64 data URIs at render, ipfs:// refs in storage after the
- *   asset-core composer runs).
- */
+/** Mesh to self-contained glTF JSON: the GLB document with its chunk as a base64 data URI. */
 import type { CadDesign, CadMesh } from "../../types.ts";
 import { buildPartDocument } from "./glb.ts";
 

@@ -1,9 +1,6 @@
 /**
- * Validation child: loads the Manifold kernel, runs one script, prints a stats
- * JSON line on stdout.
- * @remarks The mesh is deliberately discarded here — only stats cross back. The
- *   server validates, it does not export (spec section 5).
- * @remarks Run as: bun src/backend/child.ts <request.json path>
+ * Validation child: runs one script and prints one stats JSON line; the mesh is
+ * discarded. Run as: bun src/backend/child.ts <request.json path>
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,30 +12,18 @@ interface ChildRequest {
   design: CadDesign;
   maxTriangles: number;
   wasmDir: string;
-  /** Resolution controls; see VALIDATION_FIDELITY in validate-runner.ts. */
+  /** See VALIDATION_FIDELITY in validate-runner.ts. */
   segments?: number;
   minAngle?: number;
   minEdgeLength?: number;
 }
 
-/**
- * Applies the request's resolution controls to a loaded module.
- * @remarks These are module-level defaults read by the primitive constructors,
- *   so they must be set before the script builds anything. Extracted from
- *   main() to keep its branching - and the change-risk score the pre-commit
- *   gate enforces - down. The optional calls are guarded because a host may
- *   inject a bare module with no resolution API.
- */
+/** Module-level defaults, so they must be set before the script builds anything. */
 function applyResolution(module: ManifoldModule, req: ChildRequest): void {
   applyControl(module.setMinCircularAngle, req.minAngle);
   applyControl(module.setMinCircularEdgeLength, req.minEdgeLength);
 }
 
-/**
- * Calls one resolution setter, if the request specified it and the module has it.
- * @remarks Split out of applyResolution because the two optional guards in one
- *   function pushed its change-risk score over the gate.
- */
 function applyControl(
   set: ((value: number) => void) | undefined,
   value: number | undefined,
@@ -47,26 +32,19 @@ function applyControl(
 }
 
 /**
- * Runs one design and prints exactly one JSON line.
- * @remarks Script-level failures are reported in-band with exit code 0, so the
- *   parent can distinguish "the script is bad" (a repair turn) from "the kernel
- *   could not start" (a server fault, non-zero exit).
+ * Script failures are reported in-band with exit 0; a non-zero exit means the
+ * kernel could not start.
  */
 async function main(): Promise<void> {
   const requestPath = process.argv[2];
   const req = JSON.parse(fs.readFileSync(requestPath, "utf8")) as ChildRequest;
 
-  // manifold-3d's bundled manifold.d.ts declares `locateFile: () => string`
-  // (zero arity) while Emscripten actually calls it WITH the filename, so the
-  // typed config rejects a correct callback (TS2322). Cast the config object,
-  // never the callback, and do not augment the upstream .d.ts - an upgrade
-  // would silently drop it.
+  // manifold.d.ts types locateFile with zero arity but Emscripten passes the
+  // filename, so cast the config object (not the callback).
   const module = await Module({
     locateFile: (file: string) => path.join(req.wasmDir, file),
   } as unknown as Parameters<typeof Module>[0]);
-  // manifold-3d registers its JS API lazily. Without setup(), Manifold.cube is
-  // undefined and every script dies with "Manifold.cube is not a function".
-  // Verified in Task 1 - see docs/superpowers/plans/cad-spike-results.md.
+  // manifold-3d registers its JS API lazily; without setup() Manifold.cube is undefined.
   (module as { setup: () => void }).setup();
 
   const api = module as unknown as ManifoldModule;

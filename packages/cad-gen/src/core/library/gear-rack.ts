@@ -1,30 +1,11 @@
 /**
- * A straight gear rack - the linear gear a spur gear drives - ported from BOSL2.
- * @remarks PORT of rack2d() and the straight (non-helical) branch of rack()
- *   from https://github.com/BelfrySCAD/BOSL2 (gears.scad), BSD-2-Clause, by
- *   Adrian Mariano (https://github.com/adrianVmariano) and Revar Desmera
- *   (https://github.com/revarbat), with the BOSL2 contributors.
- *   The credit is declared in ATTRIBUTED_HELPERS in ../attribution.ts.
- *
- *   Licence checked before porting: GitHub's SPDX is BSD-2-Clause and Jev read
- *   the LICENSE as permissive, but scripts/cad-candidates.mjs flagged the
- *   file's provenance - its header says "Inspired by code by Leemon Baird,
- *   2011". A human read (2026-10-10) settled it: the rest of gears.scad is
- *   BOSL2's own work, and Leemon Baird's 2011 "Public Domain Parametric
- *   Involute Spur Gear" (thingiverse.com/thing:5505) is public domain, usable
- *   for any purpose. So the port carries BOSL2's BSD-2 notice below and a
- *   courtesy credit to Baird.
- *
- *   Faithful to the original: the trapezoidal tooth with BOSL2's four-point
- *   fillets (clearance radius at the root, pitch/16 at the tip), its addendum
- *   (module x (1 + profileShift)) and dedendum (module x (1 - profileShift) +
- *   clearance, clearance defaulting to module/4), and its base depth (2 x
- *   dedendum + addendum unless backing, width or bottom is given). Verified
- *   against OpenSCAD's render of BOSL2's own rack(): scripts/cad-reference.mjs,
- *   cases rack-*. rackOutline also carries rack2d()'s helical branch (the
- *   tooth on its transverse pitch and pressure angle), which worm() sweeps;
- *   the rack() helper itself stays straight. Not ported: helical and
- *   herringbone rack solids.
+ * Port of rack2d() and the straight branch of rack() from BOSL2 gears.scad
+ * (https://github.com/BelfrySCAD/BOSL2), BSD-2-Clause, by Adrian Mariano and
+ * Revar Desmera; credited in ATTRIBUTED_HELPERS (../attribution.ts). The
+ * file's "inspired by Leemon Baird, 2011" refers to a public-domain gear, so
+ * only BOSL2's notice applies. Verified against OpenSCAD renders
+ * (cad-reference cases rack-*). rackOutline also carries rack2d()'s helical
+ * branch, which worm() sweeps; helical rack solids are not ported.
  *
  *   ---------------------------------------------------------------------------
  *   BSD 2-Clause License
@@ -89,7 +70,6 @@ function cornerArc(n: number, r: number, p0: Pt, p1: Pt, p2: Pt): Pt[] {
   return out;
 }
 
-/** The rack's resolved dimensions, mm. */
 export interface RackSpec {
   module: number;
   teeth: number;
@@ -101,11 +81,10 @@ export interface RackSpec {
   addendum: number;
   dedendum: number;
   bottom: number;
-  /** Helix angle in degrees: rack2d() lays the tooth out on its transverse section. 0 is straight. */
+  /** Degrees; rack2d() lays the tooth on its transverse section. */
   helical: number;
 }
 
-/** Throws when a rack option is outside what BOSL2's rack() accepts. */
 function assertRackBasics(o: any): void {
   if (!(o.module > 0)) throw new Error("rack needs a positive module");
   if (!Number.isInteger(o.teeth) || o.teeth < 1) throw new Error("rack needs a whole number of teeth, at least 1");
@@ -117,11 +96,7 @@ function assertRackBasics(o: any): void {
   }
 }
 
-/**
- * Depth from the pitch line to the base, as BOSL2 resolves it: bottom as
- * given, width less the addendum, backing plus the dedendum, or by default
- * 2 x dedendum + addendum.
- */
+/** Depth from pitch line to base as BOSL2 resolves bottom, width, backing or its default. */
 function rackBottom(o: any, addendum: number, dedendum: number): number {
   if (o.bottom !== undefined) {
     if (!(o.bottom > dedendum)) throw new Error("rack: bottom must be deeper than the dedendum (" + dedendum.toFixed(3) + ")");
@@ -138,10 +113,6 @@ function rackBottom(o: any, addendum: number, dedendum: number): number {
   return 2 * dedendum + addendum;
 }
 
-/**
- * Resolves rack options the way BOSL2's rack() does.
- * @throws Error naming the option at fault.
- */
 export function resolveRackSpec(o: any): RackSpec {
   assertRackBasics(o);
   const m = o.module;
@@ -186,10 +157,7 @@ export function rackOutline(s: RackSpec): Pt[] {
   return [[path[0][0], -s.bottom], ...path, [path[path.length - 1][0], -s.bottom]];
 }
 
-/**
- * The rack solid: teeth along X, tips toward +Z, face width along Y, centred
- * on x and y, base at z = -bottom - BOSL2's rack() with its default anchor.
- */
+/** BOSL2's rack() at its default anchor: teeth along X, tips toward +Z, base at z = -bottom. */
 export function rack(module: ManifoldModule, opts: any): any {
   const { Manifold, CrossSection } = module as any;
   const s = resolveRackSpec(opts ?? {});

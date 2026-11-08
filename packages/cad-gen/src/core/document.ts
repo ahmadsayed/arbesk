@@ -1,7 +1,4 @@
-/**
- * The design document: parse, validate and inspect it.
- * @remarks Environment-agnostic — no Node or browser globals.
- */
+/** The design document: parse, validate and inspect it. */
 import type {
   CadColorParameter, CadDesign, CadLengthParameter, CadParameter, CadParameterMap,
 } from "../types.ts";
@@ -16,15 +13,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
-/** True for a colour parameter; every other parameter is a millimetre length. */
 export function isColorParameter(p: CadParameter): p is CadColorParameter {
   return p.type === "color";
 }
 
-/**
- * Validates a colour entry: a #rrggbb value and an optional label, nothing else.
- * @throws CadDesignError on any other value or on length-only keys.
- */
+/** A colour entry: a #rrggbb value and an optional label, nothing else. */
 function parseColorParameter(name: string, p: Record<string, unknown>): CadColorParameter {
   if (typeof p.value !== "string" || !HEX_COLOR.test(p.value)) {
     throw new CadDesignError("parameter " + name + " must be a #rrggbb colour");
@@ -39,10 +32,6 @@ function parseColorParameter(name: string, p: Record<string, unknown>): CadColor
   };
 }
 
-/**
- * Validates one entry of a design's PARAMETERS block.
- * @throws CadDesignError when the entry is neither a millimetre dimension nor a colour.
- */
 function parseParameter(name: string, p: unknown): CadParameter {
   if (!isPlainObject(p)) throw new CadDesignError("parameter " + name + " is not an object");
   if (p.type === "color") return parseColorParameter(name, p);
@@ -52,10 +41,7 @@ function parseParameter(name: string, p: unknown): CadParameter {
   return parseLengthParameter(name, p);
 }
 
-/**
- * Validates a millimetre dimension; the output never carries `type`.
- * @throws CadDesignError when the value is not finite or the unit is not mm.
- */
+/** A millimetre dimension; the output never carries `type`. */
 function parseLengthParameter(name: string, p: Record<string, unknown>): CadLengthParameter {
   if (typeof p.value !== "number" || !Number.isFinite(p.value)) {
     throw new CadDesignError("parameter " + name + " has a non-finite value");
@@ -72,10 +58,6 @@ function parseLengthParameter(name: string, p: Record<string, unknown>): CadLeng
   };
 }
 
-/**
- * Parses and validates a design document received from the model.
- * @throws CadDesignError when the document is unusable.
- */
 export function parseDesign(input: unknown): CadDesign {
   if (!isPlainObject(input)) {
     throw new CadDesignError("design document must be an object");
@@ -110,11 +92,7 @@ export function parseDesign(input: unknown): CadDesign {
   return { code, parameters, summary, turn };
 }
 
-/**
- * Checks overrides against a design's declared parameters.
- * @returns the names that are not declared, or whose value is the wrong kind
- *   (a colour needs a string, a length a number); empty when all are valid.
- */
+/** The override names that are undeclared or the wrong kind; empty when all are valid. */
 export function validateParameterOverrides(
   design: CadDesign,
   overrides: Record<string, number | string>,
@@ -127,11 +105,8 @@ export function validateParameterOverrides(
 }
 
 /**
- * Index of the quote closing the literal opened at `start`, or -1 when there
- * is none.
- * @remarks Template literals may span lines; the other two may not, so a
- *   newline before a closing quote means the opener was an apostrophe in
- *   prose, not a string.
+ * Index of the closing quote, or -1. Only template literals span lines, so a
+ * newline means the opener was an apostrophe in prose.
  */
 function stringEnd(code: string, start: number): number {
   const quote = code[start];
@@ -143,46 +118,37 @@ function stringEnd(code: string, start: number): number {
   return -1;
 }
 
-/** A half-open [from, to) span of source that is not code. */
 interface NonCodeSpan {
   from: number;
   to: number;
 }
 
-/** Quote characters that open a string literal. */
 const QUOTES = ["\"", "'", "`"];
 
-/** The span of a line comment, which runs to the end of the line. */
 function lineCommentSpan(code: string, i: number): NonCodeSpan {
   const end = code.indexOf("\n", i);
   return { from: i, to: end === -1 ? code.length : end };
 }
 
-/** The span of a block comment, or null when it is never closed. */
+/** Null when never closed. */
 function blockCommentSpan(code: string, i: number): NonCodeSpan | null {
   const end = code.indexOf("*/", i + 2);
   return end === -1 ? null : { from: i, to: end + 2 };
 }
 
-/** The span of a string literal, or null when it is never closed. */
+/** Null when never closed. */
 function stringSpan(code: string, i: number): NonCodeSpan | null {
   const end = stringEnd(code, i);
   return end === -1 ? null : { from: i, to: end + 1 };
 }
 
-/**
- * The non-code span opening at `i`, or null when `i` is ordinary code.
- * @remarks Every helper here fails closed: an unterminated block comment or
- *   string returns null, so its remainder stays visible to the scanners rather
- *   than being hidden behind a missing terminator.
- */
+/** Fails closed: an unterminated comment or string stays visible to the scanners. */
 function nonCodeSpanAt(code: string, i: number): NonCodeSpan | null {
   if (code.startsWith("//", i)) return lineCommentSpan(code, i);
   if (code.startsWith("/*", i)) return blockCommentSpan(code, i);
   return QUOTES.includes(code[i]) ? stringSpan(code, i) : null;
 }
 
-/** Overwrites a span with spaces, leaving line breaks in place. */
 function blank(out: string[], span: NonCodeSpan): void {
   for (let k = span.from; k < span.to; k++) {
     if (out[k] !== "\n") out[k] = " ";
@@ -190,15 +156,8 @@ function blank(out: string[], span: NonCodeSpan): void {
 }
 
 /**
- * Blanks out comments and string literals, preserving every length and line
- * break.
- * @remarks Every lexical scan in this package is looking for *code*, and prose
- *   cannot execute. Without this, `// hole through the vertical leg (normal =
- *   X)` reads as a call to a helper named `leg`, and the guard rejects a valid
- *   script. Measured against the live model: it diagnosed the false positive
- *   and repaired it by deleting its own comments, so the artifact we ship lost
- *   its documentation. Length is preserved so offsets and line breaks still
- *   line up.
+ * Blanks comments and string literals, preserving offsets and line breaks, so
+ * prose cannot trip the lexical scans.
  */
 export function stripNonCode(code: string): string {
   const out = code.split("");
@@ -217,13 +176,7 @@ export function stripNonCode(code: string): string {
   return out.join("");
 }
 
-/**
- * Collects identifiers that are *called* in the script, so static gates can
- * reject calls to prelude helpers that do not exist.
- * @remarks Deliberately lexical rather than a full parse: the gate only needs
- *   candidate names, and the kernel run is the real arbiter. Comments and
- *   string literals are blanked first - they are not code.
- */
+/** Identifiers called in the script. Lexical on purpose: the kernel run is the real arbiter. */
 export function referencedIdentifiers(code: string): Set<string> {
   const names = new Set<string>();
   const re = /([A-Za-z_$][\w$]*)\s*\(/g;
@@ -233,10 +186,9 @@ export function referencedIdentifiers(code: string): Set<string> {
   return names;
 }
 
-/** The parameter names a script reads, and whether it reads any it cannot name. */
 export interface UsedParameters {
   names: string[];
-  /** True when PARAMETERS/P is read by a computed key or passed around whole. */
+  /** PARAMETERS/P read by a computed key or passed around whole. */
   dynamic: boolean;
 }
 
@@ -251,11 +203,7 @@ function destructuredKeys(source: string, at: number): string[] | null {
   return keys.every((k) => IDENTIFIER.test(k)) ? keys : null;
 }
 
-/**
- * The names one read of PARAMETERS/P at `at` names, or null when it names none.
- * @param source - the script with comments and strings blanked
- * @param code - the original script (bracket keys are string literals)
- */
+/** `source` is the blanked script; `code` the original, for bracket-key literals. */
 function namesAt(source: string, code: string, at: number, end: number): string[] | null {
   const dot = /^\s*\.\s*([A-Za-z_$][\w$]*)/.exec(source.slice(end));
   if (dot) return [dot[1]];
@@ -265,11 +213,8 @@ function namesAt(source: string, code: string, at: number, end: number): string[
 }
 
 /**
- * The parameters a script actually reads, in first-read order.
- * @remarks Lexical, like referencedIdentifiers: dot reads, string-literal
- *   bracket reads and destructuring are named; any other use of PARAMETERS/P
- *   (a computed key, an alias, a call argument) sets `dynamic`, and the caller
- *   then treats every declared parameter as used.
+ * The parameters a script reads, in first-read order. Any read that cannot be
+ * named sets `dynamic`, and the caller then treats every parameter as used.
  */
 export function usedParameterNames(code: string): UsedParameters {
   const source = stripNonCode(code);
