@@ -45,7 +45,7 @@ async function openCreate(page) {
 async function openComposerAdvanced(page) {
   await openCreate(page);
   const advanced = page.locator(SELECTORS.composerAdvanced);
-  if (!(await advanced.evaluate((el) => /** @type {HTMLDetailsElement} */ (el).open))) {
+  if (!(await advanced.evaluate((el) => el.hasAttribute("open")))) {
     await page.locator(SELECTORS.composerAdvancedSummary).click();
   }
   await expect(page.locator(SELECTORS.providerSelect)).toBeVisible();

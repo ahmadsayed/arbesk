@@ -1,6 +1,8 @@
 // applyScale must compose post_processor.scale with a node root's imported
 // scaling: in a left-handed scene the glTF loader's __root__ carries
-// scaling (1, 1, -1), and overwriting it mirrors the model (#138).
+// scaling (1, 1, -1), and overwriting it mirrors the model (#138). It must
+// also scale the root's centring offset, or a scaled model drifts off its
+// anchor.
 import { beforeAll, describe, expect, mock, test } from "bun:test";
 
 mock.module("../../frontend/src/js/ipfs/remote-ipfs.js", () => ({
@@ -27,11 +29,15 @@ beforeAll(async () => {
   ({ applyScale } = await import("../../frontend/src/js/engine/time-travel.js"));
 });
 
-/** A glTF __root__ as attachMetadata leaves it in a left-handed scene. */
+/**
+ * A glTF __root__ as attachMetadata leaves it in a left-handed scene:
+ * centerImportedAsset has moved it so the geometry's centre sits on the anchor.
+ */
 function gltfRoot() {
   return {
     name: "__root__",
     scaling: new Vector3(1, 1, -1),
+    position: new Vector3(1, -0.5, -1),
     metadata: { nodeId: "n1", isNodeRoot: true },
   };
 }
@@ -82,6 +88,25 @@ describe("applyScale (#138)", () => {
     const other = gltfRoot();
     applyScale([other], null);
     expect(xyz(other.scaling)).toEqual([1, 1, -1]);
+  });
+
+  test("the centring offset scales with the model, keeping it centred", () => {
+    const root = gltfRoot();
+    applyScale([root], { x: 2, y: 3, z: 4 });
+    expect(xyz(root.position)).toEqual([2, -1.5, -4]);
+  });
+
+  test("unit scale leaves the centring offset alone", () => {
+    const root = gltfRoot();
+    applyScale([root], { x: 1, y: 1, z: 1 });
+    expect(xyz(root.position)).toEqual([1, -0.5, -1]);
+  });
+
+  test("re-applying does not compound the centring offset", () => {
+    const root = gltfRoot();
+    applyScale([root], { x: 2, y: 2, z: 2 });
+    applyScale([root], { x: 3, y: 3, z: 3 });
+    expect(xyz(root.position)).toEqual([3, -1.5, -3]);
   });
 
   test("each root gets its own Vector3", () => {

@@ -202,6 +202,90 @@ export function clearState() {
   }
 }
 
+// Global setup patches tracked source files (network-config.ts, src/config.ts)
+// with this run's Hardhat port and contract addresses. Each patch is recorded
+// here so teardown can put the committed contents back; otherwise a worktree
+// run's port ends up committed (it happened: rpcUrl 127.0.0.1:50624). The
+// backup lives in the checkout's own gitignored .data/, not os.tmpdir(), so it
+// survives a reboot (/tmp is tmpfs) between a killed run and the next one.
+const PATCH_BACKUP_FILE = path.join(ROOT, ".data", "e2e-patched-files.json");
+
+function readPatchBackup() {
+  try {
+    return JSON.parse(fs.readFileSync(PATCH_BACKUP_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Writes `patched` to a tracked file, recording its original contents for
+ * {@link restorePatchedFiles}. A no-op when nothing changes.
+ */
+export function writePatchedFile(filePath, patched) {
+  const original = fs.readFileSync(filePath, "utf8");
+  if (patched === original) return;
+  const backup = readPatchBackup();
+  backup[filePath] = { original: backup[filePath]?.original ?? original, patched };
+  fs.mkdirSync(path.dirname(PATCH_BACKUP_FILE), { recursive: true });
+  fs.writeFileSync(PATCH_BACKUP_FILE, JSON.stringify(backup), "utf8");
+  fs.writeFileSync(filePath, patched);
+}
+
+/**
+ * Reverts only the lines the patch changed, for a file edited since.
+ * @remarks The patch rewrites quoted values in place, so `original` and
+ *   `patched` have the same lines; a patched line still present exactly once
+ *   is swapped back, and everything else (the developer's edit) is kept.
+ */
+function revertPatchedLines(current, original, patched) {
+  const originalLines = original.split("\n");
+  let reverted = current;
+  patched.split("\n").forEach((line, i) => {
+    const before = originalLines[i];
+    if (before === undefined || line === before) return;
+    const parts = reverted.split(line);
+    if (parts.length === 2) reverted = parts.join(before);
+  });
+  return reverted;
+}
+
+/**
+ * Restores files patched by {@link writePatchedFile}.
+ * @remarks A file edited since it was patched keeps that edit: only the
+ *   patched lines are reverted. Also called at setup start to recover from a
+ *   run that died before teardown.
+ */
+export function restorePatchedFiles() {
+  for (const [filePath, { original, patched }] of Object.entries(readPatchBackup())) {
+    const name = path.relative(ROOT, filePath);
+    let current;
+    try {
+      current = fs.readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (current === original) continue;
+    if (current === patched) {
+      fs.writeFileSync(filePath, original);
+      log(`Restored ${name}`);
+      continue;
+    }
+    const reverted = revertPatchedLines(current, original, patched);
+    if (reverted !== current) {
+      fs.writeFileSync(filePath, reverted);
+      log(`Reverted E2E Hardhat values in ${name}; kept other edits`);
+    } else {
+      log(`WARN: ${name} changed since E2E patched it; check its Hardhat Local values`);
+    }
+  }
+  try {
+    fs.unlinkSync(PATCH_BACKUP_FILE);
+  } catch {
+    // nothing recorded
+  }
+}
+
 export async function rpc(rpcUrl, method, params = []) {
   const res = await fetch(rpcUrl, {
     method: "POST",

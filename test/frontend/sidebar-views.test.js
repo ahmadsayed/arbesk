@@ -112,9 +112,8 @@ describe("leaving the Create landing when an asset opens", () => {
     window.history.replaceState({}, "", "/studio");
     // The real "an asset is open" predicate, as app-init injects it
     // (resolved lazily: load() resets the module graph first).
-    let editMode;
     const mod = await load({ isAssetOpen: () => editMode.isAssetOpen() });
-    editMode = await import("../../frontend/src/js/state/edit-mode.js");
+    const editMode = await import("../../frontend/src/js/state/edit-mode.js");
     const bus = await import("@arbesk/asset-core/events/bus.js");
     const asset = await import("@arbesk/asset-core/domain/asset.js");
     const store = await import("@arbesk/asset-core/domain/asset-store.js");
