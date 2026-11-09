@@ -71,14 +71,18 @@ describe("Frontend Build", () => {
       expect(jsFiles.length).toBeGreaterThan(0);
     });
 
-    for (const file of jsFiles) {
-      const rel = path.relative(DIST_JS, file);
-      test("syntax: " + rel, () => {
-        execSync("node --check " + JSON.stringify(file), {
-          stdio: "pipe",
-        });
-      });
-    }
+    test("every built JS file passes node --check", () => {
+      const failures = [];
+      for (const file of jsFiles) {
+        try {
+          execSync("node --check " + JSON.stringify(file), { stdio: "pipe" });
+        } catch (e) {
+          const detail = e.stderr?.toString().trim() || e.message;
+          failures.push(`${path.relative(DIST_JS, file)}: ${detail}`);
+        }
+      }
+      expect(failures).toEqual([]);
+    });
   });
 
   // ── P0: Bundle structure — single minified entry, no cruft ───────────────
@@ -312,15 +316,7 @@ describe("Frontend Build", () => {
   describe("app-init.ts wallet lifecycle", () => {
     const init = readSource("app-init.ts");
 
-    test("calls initWallet() to start EIP-6963 discovery", () => {
-      expect(init).toMatch(/initWallet\(\)/);
-    });
-
-    test("does not call autoConnectWallet() directly; wires Login / Signup click", () => {
-      expect(init).not.toMatch(/autoConnectWallet\(\)/);
-      expect(init).toMatch(/connectWallet/);
-    });
-
+    // initWallet()/autoConnectWallet() are covered by library-init.test.js.
     test("initializes the router to activate the initial view", () => {
       expect(init).toMatch(/initRouter\(\)/);
     });

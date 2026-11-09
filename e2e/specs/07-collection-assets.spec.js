@@ -1,12 +1,11 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
-import { encodePacked, keccak256 } from "viem/utils";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   MANIFEST_URL_REGEX,
   fetchManifest,
   fetchTokenManifest,
   assertCollectionManifest,
+  findAssetCidByName,
 } from "../helpers/manifest.mjs";
 import {
   assetCardLocator,
@@ -21,24 +20,38 @@ import {
 
 const PROMPT_1 = "a wooden chair";
 const PROMPT_2 = "a small round table";
-const ASSET_NAME_1 = "Chair Test";
 
 function tokenIdHexFromUrl(url) {
   return new URL(url).searchParams.get("asset");
 }
 
+/**
+ * @typedef {{
+ *   tokenIdHex: string,
+ *   tokenIdDec: string,
+ *   firstAssetName: string,
+ *   firstAssetId: string,
+ * }} PublishedCollection
+ */
+
 // Run tests sequentially - they share the same wallet + Hardhat chain.
 test.describe.serial("Collection/asset model", () => {
+  /** @type {PublishedCollection | null} */
+  let published = null;
+
   test.beforeEach(({ page }) => {
     // startNewAsset() uses a native confirm(); auto-accept so the new-asset
     // flow actually clears in-memory state instead of no-oping.
     page.on("dialog", (d) => d.accept());
   });
-  test("first besk lazily mints a default collection containing at least one asset", async ({
+
+  test("publishes two assets into one lazily-minted default collection", async ({
     page,
   }) => {
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
+
+    const firstAssetName = uniqueAssetName("Chair Test");
 
     // The composer defaults to Auto; pin the mock provider (no Jev key here).
     await selectProvider(page, "mock");
@@ -52,11 +65,12 @@ test.describe.serial("Collection/asset model", () => {
 
     await page.click(SELECTORS.publishAssetBtn);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, ASSET_NAME_1);
+    await page.fill(SELECTORS.dialogInput, firstAssetName);
     await page.click(SELECTORS.dialogConfirmBtn);
 
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const tokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
+    const tokenIdDec = BigInt(tokenIdHex).toString();
 
     const collectionManifest = await fetchTokenManifest(tokenIdHex);
     assertCollectionManifest(collectionManifest, {
@@ -69,43 +83,41 @@ test.describe.serial("Collection/asset model", () => {
 
     const assetIds = Object.keys(collectionManifest.assets);
     const firstAssetCid = collectionManifest.assets[assetIds[0]];
-    const assetManifest = await fetchManifest(firstAssetCid);
-    expect(assetManifest.type).toBe("asset");
-    expect(assetManifest.scene.nodes).toHaveLength(1);
-  });
+    const firstAssetManifest = await fetchManifest(firstAssetCid);
+    expect(firstAssetManifest.type).toBe("asset");
+    expect(firstAssetManifest.scene.nodes).toHaveLength(1);
 
-  test("a second besk in the same collection adds a sibling without disturbing existing ones", async ({
-    page,
-  }) => {
-    await connectStudio(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-
-    // The composer defaults to Auto; pin the mock provider (no Jev key here).
-    await selectProvider(page, "mock");
-    await page.fill(SELECTORS.promptInput, PROMPT_1);
-    await page.click(SELECTORS.generateBtn);
-    await sendPendingGenerationToStudio(page);
-    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
-      "Model carved via mock",
+    // Locate our own asset within the (possibly pre-populated) collection so
+    // the later deep-link/viewport tests open the asset this spec published.
+    const ourAssetCid = await findAssetCidByName(
+      collectionManifest,
+      firstAssetName,
     );
-    await page.waitForURL(MANIFEST_URL_REGEX);
+    expect(ourAssetCid).toBeTruthy();
+    const firstAssetId = assetIds.find(
+      (id) => collectionManifest.assets[id] === ourAssetCid,
+    );
+    expect(firstAssetId).toBeTruthy();
 
-    await page.click(SELECTORS.publishAssetBtn);
-    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, "Chair");
-    await page.click(SELECTORS.dialogConfirmBtn);
+    const firstAssetIds = Object.keys(collectionManifest.assets);
 
-    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
-    const firstTokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
-    const firstCollection = await fetchTokenManifest(firstTokenIdHex);
-    const firstAssetIds = Object.keys(firstCollection.assets);
+    // ── Second asset lands in the same collection as a sibling while the
+    // New Asset flow preserves the collection context ────────────────
+    const savedCollectionId = await page
+      .locator(SELECTORS.collectionSelect)
+      .inputValue();
+    expect(savedCollectionId).toBeTruthy();
 
-    // Start fresh asset. startNewAsset() shows a GNOME HIG name dialog after
-    // the native confirm() (which is auto-accepted by beforeEach).
+    // startNewAsset() shows a GNOME HIG name dialog after the native
+    // confirm() (which is auto-accepted by beforeEach).
     await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, "Table");
+    await page.fill(SELECTORS.dialogInput, uniqueAssetName("Table"));
     await page.click(SELECTORS.dialogConfirmBtn);
+
+    await expect(page.locator(SELECTORS.collectionSelect)).toHaveValue(
+      savedCollectionId,
+    );
 
     // The composer defaults to Auto; pin the mock provider (no Jev key here).
     await selectProvider(page, "mock");
@@ -120,7 +132,7 @@ test.describe.serial("Collection/asset model", () => {
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const secondTokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
 
-    expect(secondTokenIdHex).toBe(firstTokenIdHex);
+    expect(secondTokenIdHex).toBe(tokenIdHex);
 
     // The URL already contained ?asset= from the first publish, so waitForURL
     // may return before the republish transaction lands. Poll the on-chain
@@ -142,35 +154,26 @@ test.describe.serial("Collection/asset model", () => {
 
     // All assets from the first snapshot must still be present.
     for (const id of firstAssetIds) {
-      expect(updatedCollection.assets[id]).toBe(firstCollection.assets[id]);
+      expect(updatedCollection.assets[id]).toBe(collectionManifest.assets[id]);
     }
+    expect(Object.keys(updatedCollection.assets).length).toBeGreaterThanOrEqual(
+      2,
+    );
+
+    published = {
+      tokenIdHex,
+      tokenIdDec,
+      firstAssetName,
+      firstAssetId,
+    };
   });
 
   test("opening a published token renders the first asset in the viewport", async ({
     page,
   }) => {
+    const { tokenIdHex, tokenIdDec, firstAssetName } = published;
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-
-    // The composer defaults to Auto; pin the mock provider (no Jev key here).
-    await selectProvider(page, "mock");
-    await page.fill(SELECTORS.promptInput, PROMPT_1);
-    await page.click(SELECTORS.generateBtn);
-    await sendPendingGenerationToStudio(page);
-    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
-      "Model carved via mock",
-    );
-    await page.waitForURL(MANIFEST_URL_REGEX);
-
-    await page.click(SELECTORS.publishAssetBtn);
-    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    const viewportName = uniqueAssetName("Chair Viewport");
-    await page.fill(SELECTORS.dialogInput, viewportName);
-    await page.click(SELECTORS.dialogConfirmBtn);
-
-    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
-    const tokenIdHex = tokenIdHexFromUrl(page.url());
-    const tokenIdDec = BigInt(tokenIdHex).toString();
 
     // The open asset's own card can't be reopened; start a fresh empty asset
     // so the published one is an ordinary card, then click it to open.
@@ -178,7 +181,7 @@ test.describe.serial("Collection/asset model", () => {
     await page.fill(SELECTORS.dialogInput, uniqueAssetName("Scratch"));
     await page.click(SELECTORS.dialogConfirmBtn);
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const assetCard = assetCardLocator(page, tokenIdDec, viewportName);
+    const assetCard = assetCardLocator(page, tokenIdDec, firstAssetName);
     await expect(assetCard).toHaveCount(1);
 
     await openAssetCard(assetCard);
@@ -191,116 +194,23 @@ test.describe.serial("Collection/asset model", () => {
       "No asset open",
     );
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      viewportName,
+      firstAssetName,
     );
 
     const urlTokenHex = tokenIdHexFromUrl(page.url());
     expect(BigInt(urlTokenHex)).toBe(BigInt(tokenIdHex));
   });
 
-  test("New Asset button clears the scene but preserves collection context", async ({
-    page,
-  }) => {
-    await connectStudio(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-
-    const savedCollectionId = await page
-      .locator(SELECTORS.collectionSelect)
-      .inputValue();
-    expect(savedCollectionId).toBeTruthy();
-
-    // The composer defaults to Auto; pin the mock provider (no Jev key here).
-    await selectProvider(page, "mock");
-    await page.fill(SELECTORS.promptInput, PROMPT_1);
-    await page.click(SELECTORS.generateBtn);
-    await sendPendingGenerationToStudio(page);
-    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
-      "Model carved via mock",
-    );
-    await page.waitForURL(MANIFEST_URL_REGEX);
-
-    await page.click(SELECTORS.publishAssetBtn);
-    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    const contextChairName = "Chair Context";
-    await page.fill(SELECTORS.dialogInput, contextChairName);
-    await page.click(SELECTORS.dialogConfirmBtn);
-
-    await page.waitForURL(
-      (url) => /[?&]asset=0x[0-9a-fA-F]+/.test(url.toString()),
-      { timeout: 30000 },
-    );
-    const firstTokenIdHex = tokenIdHexFromUrl(page.url());
-    expect(firstTokenIdHex).toBeTruthy();
-
-    await startEmptyAsset(page);
-    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, "Untitled Asset");
-    await page.click(SELECTORS.dialogConfirmBtn);
-
-    await expect(page.locator(SELECTORS.collectionSelect)).toHaveValue(
-      savedCollectionId,
-    );
-
-    // The composer defaults to Auto; pin the mock provider (no Jev key here).
-    await selectProvider(page, "mock");
-    await page.fill(SELECTORS.promptInput, PROMPT_2);
-    await page.click(SELECTORS.generateBtn);
-    await sendPendingGenerationToStudio(page);
-    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
-      "Model carved via mock",
-    );
-
-    await page.click(SELECTORS.publishAssetBtn);
-    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    const contextTableName = "Table Context";
-    await page.fill(SELECTORS.dialogInput, contextTableName);
-    await page.click(SELECTORS.dialogConfirmBtn);
-
-    await page.waitForURL(
-      (url) => /[?&]asset=0x[0-9a-fA-F]+/.test(url.toString()),
-      { timeout: 30000 },
-    );
-    const secondTokenIdHex = tokenIdHexFromUrl(page.url());
-    expect(secondTokenIdHex).toBe(firstTokenIdHex);
-
-    const updatedCollection = await fetchTokenManifest(secondTokenIdHex);
-    expect(Object.keys(updatedCollection.assets).length).toBeGreaterThanOrEqual(
-      2,
-    );
-  });
-
   test("page reload with ?asset=TOKENID restores the viewport", async ({
     page,
   }) => {
+    const { tokenIdHex, firstAssetId, firstAssetName } = published;
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
-    // The composer defaults to Auto; pin the mock provider (no Jev key here).
-    await selectProvider(page, "mock");
-    await page.fill(SELECTORS.promptInput, PROMPT_1);
-    await page.click(SELECTORS.generateBtn);
-    await sendPendingGenerationToStudio(page);
-    await expect(page.locator(SELECTORS.chatHistoryList)).toContainText(
-      "Model carved via mock",
-    );
-    await page.waitForURL(MANIFEST_URL_REGEX);
-
-    await page.click(SELECTORS.publishAssetBtn);
-    await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
-    await page.fill(SELECTORS.dialogInput, ASSET_NAME_1);
-    await page.click(SELECTORS.dialogConfirmBtn);
-
-    await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
-    const tokenIdHex = tokenIdHexFromUrl(page.url());
-
     // A bare ?asset=<collectionTokenId> opens the collection in the Gallery
     // sidebar with an empty viewport. To restore the viewport we must include
-    // an explicit assetId. Pick the first asset of the published collection.
-    const collection = await fetchTokenManifest(tokenIdHex);
-    const firstAssetId = Object.keys(collection.assets)[0];
-    const firstAssetCid = collection.assets[firstAssetId];
-    const firstAsset = await fetchManifest(firstAssetCid);
-
+    // an explicit assetId. Reuse the first asset published above.
     await page.goto(
       `/studio?asset=${tokenIdHex}&assetId=${firstAssetId}`,
     );
@@ -314,46 +224,11 @@ test.describe.serial("Collection/asset model", () => {
       { timeout: 30000 },
     );
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      firstAsset.name,
+      firstAssetName,
       { timeout: 30000 },
     );
 
     const urlTokenHex = tokenIdHexFromUrl(page.url());
     expect(BigInt(urlTokenHex)).toBe(BigInt(tokenIdHex));
-  });
-
-  test("collection selector populates on wallet connect", async ({ page }) => {
-    await injectHardhatProvider(page);
-    await page.goto("/studio");
-
-    // The injected provider reports an authorized account, so the wallet
-    // silently auto-restores on load (autoConnectWallet in wallet-core) — this
-    // simulates a returning user. Ensure we're connected, then verify the
-    // collection selector shows the wallet-derived Default collection.
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-
-    // The collection select lives in Properties → Asset, which stays hidden
-    // until an asset is open. It is still populated on connect, so check its
-    // options directly rather than its visibility.
-    await expect(page.locator(SELECTORS.assetSection)).toBeHidden();
-    const collectionSelect = page.locator(SELECTORS.collectionSelect);
-
-    const options = collectionSelect.locator("option");
-    await expect(options).toHaveCount(1);
-    await expect(options.first()).toHaveText("Default");
-
-    // The single Default option carries the wallet-derived collection id
-    // (keccak256 of the connected address), not the empty placeholder value.
-    const defaultValue = await options.first().getAttribute("value");
-    expect(defaultValue).toBeTruthy();
-
-    const expectedId = keccak256(
-      encodePacked(
-        ["address"],
-        ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".toLowerCase()],
-      ),
-    );
-    expect(defaultValue).toBe(expectedId);
   });
 });

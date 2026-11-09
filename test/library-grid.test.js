@@ -11,6 +11,7 @@ import {
   libraryState,
   _resetForTesting,
 } from "../frontend/src/js/state/library-state.js";
+import { initLibraryHistory } from "../frontend/src/js/ui/library-history.js";
 
 beforeEach(() => {
   _resetForTesting();
@@ -372,6 +373,8 @@ describe("keyboard shortcuts", () => {
       collections: [{ id: "c1", type: "collection", tokenId: "1", name: "Weapons" }],
       currentCollectionTokenId: "1",
     });
+    // goUp() needs library-history's module-level `current` seeded from state.
+    initLibraryHistory();
     initLibraryGrid();
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }),

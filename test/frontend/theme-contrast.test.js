@@ -67,34 +67,31 @@ for (const name of THEMES) {
       expect(missing).toEqual([]);
     });
 
-    for (const surface of SURFACES) {
-      for (const fg of TEXT_ON_SURFACE) {
-        test(`${fg} on ${surface} ≥ 4.5:1`, () => {
-          expect(contrast(t[fg], t[surface])).toBeGreaterThanOrEqual(4.5);
-        });
+    test("every text/background pair meets its WCAG minimum", () => {
+      /** @type {Array<[string, string, string, number]>} label, fg, bg, min */
+      const checks = [];
+      for (const surface of SURFACES) {
+        for (const fg of TEXT_ON_SURFACE) {
+          checks.push([`${fg} on ${surface}`, t[fg], t[surface], 4.5]);
+        }
+        checks.push([`border-color on ${surface}`, t["border-color"], t[surface], 3]);
       }
-      test(`border-color on ${surface} ≥ 3:1`, () => {
-        expect(contrast(t["border-color"], t[surface])).toBeGreaterThanOrEqual(3);
-      });
-    }
+      checks.push(
+        ["accent-fg on accent-bg", t["accent-fg"], t["accent-bg"], 4.5],
+        ["destructive-fg on destructive-bg", t["destructive-fg"], t["destructive-bg"], 4.5],
+        ["selection on viewport-bg", t.selection, t["viewport-bg"], 3],
+        // The 3D stage must read as its own surface, not blend into the chrome.
+        ["viewport-bg stands apart from window-bg", t["viewport-bg"], t["window-bg"], 1.15],
+        ["viewport-bg stands apart from sidebar-bg", t["viewport-bg"], t["sidebar-bg"], 1.15],
+        ["accent-text (focus ring) on window-bg", t["accent-text"], t["window-bg"], 3],
+      );
 
-    test("accent-fg on accent-bg ≥ 4.5:1", () => {
-      expect(contrast(t["accent-fg"], t["accent-bg"])).toBeGreaterThanOrEqual(4.5);
-    });
-    test("destructive-fg on destructive-bg ≥ 4.5:1", () => {
-      expect(contrast(t["destructive-fg"], t["destructive-bg"])).toBeGreaterThanOrEqual(4.5);
-    });
-    test("selection on viewport-bg ≥ 3:1", () => {
-      expect(contrast(t.selection, t["viewport-bg"])).toBeGreaterThanOrEqual(3);
-    });
-    // The 3D stage must read as its own surface, not blend into the chrome.
-    for (const surface of ["window-bg", "sidebar-bg"]) {
-      test(`viewport-bg stands apart from ${surface} (≥ 1.15:1)`, () => {
-        expect(contrast(t["viewport-bg"], t[surface])).toBeGreaterThanOrEqual(1.15);
-      });
-    }
-    test("accent-text (focus ring) on window-bg ≥ 3:1", () => {
-      expect(contrast(t["accent-text"], t["window-bg"])).toBeGreaterThanOrEqual(3);
+      const offenders = checks
+        .map(([label, fg, bg, min]) => ({ label, ratio: contrast(fg, bg), min }))
+        .filter(({ ratio, min }) => !(ratio >= min))
+        .map(({ label, ratio, min }) => `${label}: ${ratio.toFixed(2)} < ${min}`);
+
+      expect(offenders).toEqual([]);
     });
   });
 }
@@ -128,29 +125,37 @@ const DERIVED_TEXT_PAIRS = [
 for (const name of THEMES) {
   describe(`derived text pairs: ${name}`, () => {
     const t = parseTheme(name);
-    for (const [label, pair] of DERIVED_TEXT_PAIRS) {
-      test(`${label} ≥ 4.5:1`, () => {
-        const [fg, bg] = pair(t);
-        expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
-      });
-    }
+
+    test("every color-mix-derived text pair ≥ 4.5:1", () => {
+      const offenders = DERIVED_TEXT_PAIRS
+        .map(([label, pair]) => {
+          const [fg, bg] = pair(t);
+          return { label, ratio: contrast(fg, bg) };
+        })
+        .filter(({ ratio }) => ratio < 4.5)
+        .map(({ label, ratio }) => `${label}: ${ratio.toFixed(2)} < 4.5`);
+
+      expect(offenders).toEqual([]);
+    });
   });
 }
 
 describe("component colour leaks", () => {
-  const dir = path.join(SCSS, "components");
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".scss"));
-  const RAW = /var\(--(choco|gold|red|green|yellow)-\d+|--accent-bg-rgb|--highlight-amber|--error-bg|--success-bg|--bs-warning/;
-  const HEX = /#[0-9a-fA-F]{3,8}\b/;
+  test("component partials use only theme tokens", () => {
+    const dir = path.join(SCSS, "components");
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".scss"));
+    const RAW = /var\(--(choco|gold|red|green|yellow)-\d+|--accent-bg-rgb|--highlight-amber|--error-bg|--success-bg|--bs-warning/;
+    const HEX = /#[0-9a-fA-F]{3,8}\b/;
 
-  for (const f of files) {
-    test(`${f} uses only theme tokens`, () => {
+    const offenders = [];
+    for (const f of files) {
       const lines = fs.readFileSync(path.join(dir, f), "utf-8").split("\n");
-      const bad = lines
-        .map((l, i) => ({ l: l.replace(/\/\/.*$/, ""), n: i + 1 }))
-        .filter(({ l }) => HEX.test(l) || RAW.test(l))
-        .map(({ l, n }) => `${f}:${n}: ${l.trim()}`);
-      expect(bad).toEqual([]);
-    });
-  }
+      lines.forEach((line, i) => {
+        const l = line.replace(/\/\/.*$/, "");
+        if (HEX.test(l) || RAW.test(l)) offenders.push(`${f}:${i + 1}: ${l.trim()}`);
+      });
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

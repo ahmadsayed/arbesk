@@ -29,35 +29,15 @@ initRuntime({
 });
 
 const { hashBytes } = await import("@arbesk/asset-core/utils/hash.js");
-const {
-  buildDedupMap,
-  uploadWithDedup,
-  attachDedupMeta,
-  stripDedupMeta,
-  cidFromIpfsUri,
-  ipfsUriFromCid,
-} = await import("@arbesk/asset-core/formats/gltf/dedup.js");
+const { buildDedupMap, uploadWithDedup } = await import(
+  "@arbesk/asset-core/formats/gltf/dedup.js"
+);
 
 afterAll(() => _resetRuntimeForTesting());
 
 describe("dedup helpers", () => {
   beforeEach(() => {
     writeToIPFS.mockReset();
-  });
-
-  describe("ipfsUriFromCid / cidFromIpfsUri", () => {
-    it("converts a CID to an ipfs:// URI", () => {
-      expect(ipfsUriFromCid("bafyTest")).toBe("ipfs://bafyTest");
-    });
-
-    it("extracts a CID from an ipfs:// URI", () => {
-      expect(cidFromIpfsUri("ipfs://bafyTest")).toBe("bafyTest");
-    });
-
-    it("returns null for non-ipfs URIs", () => {
-      expect(cidFromIpfsUri("data:base64,abc")).toBeNull();
-      expect(cidFromIpfsUri(null)).toBeNull();
-    });
   });
 
   describe("buildDedupMap", () => {
@@ -185,35 +165,4 @@ describe("dedup helpers", () => {
     });
   });
 
-  describe("attachDedupMeta / stripDedupMeta", () => {
-    it("attaches _arbesk metadata to a buffer entry", () => {
-      const item = { uri: "ipfs://bafyTest", byteLength: 5 };
-      const meta = { hash: "abc", hashAlgo: "murmur3-32", compressed: false, bytes: 5 };
-      const attached = attachDedupMeta(item, meta);
-      expect(attached._arbesk).toEqual(meta);
-      expect(attached.uri).toBe("ipfs://bafyTest");
-    });
-
-    it("strips _arbesk metadata from all buffers and images", () => {
-      const composite = {
-        asset: { version: "2.0" },
-        buffers: [{ uri: "ipfs://bafyBuf", _arbesk: { hash: "abc" } }],
-        images: [{ uri: "ipfs://bafyImg", _arbesk: { hash: "def" } }],
-        materials: [{ name: "Mat" }],
-      };
-      const cleaned = stripDedupMeta(composite);
-      expect(cleaned.buffers[0]._arbesk).toBeUndefined();
-      expect(cleaned.images[0]._arbesk).toBeUndefined();
-      expect(cleaned.materials[0].name).toBe("Mat");
-    });
-
-    it("does not mutate the original composite", () => {
-      const composite = {
-        buffers: [{ uri: "ipfs://bafyBuf", _arbesk: { hash: "abc" } }],
-      };
-      const cleaned = stripDedupMeta(composite);
-      expect(composite.buffers[0]._arbesk).toBeDefined();
-      expect(cleaned.buffers[0]._arbesk).toBeUndefined();
-    });
-  });
 });

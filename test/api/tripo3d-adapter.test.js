@@ -28,6 +28,42 @@ describe("tripo3d adapter", () => {
     jest.restoreAllMocks();
   });
 
+  describe("argument validation", () => {
+    test.each([
+      ["createTask empty prompt", () => createTask("", key)],
+      ["uploadImage empty buffer", () => uploadImage(Buffer.alloc(0), "image/png", key)],
+      ["createImageTask empty fileToken", () => createImageTask("", key)],
+      [
+        "createMultiviewTask missing front view",
+        () => createMultiviewTask({ left: "ftok_l", back: "ftok_b" }, key),
+      ],
+      [
+        "createMultiviewTask single view",
+        () => createMultiviewTask({ front: "ftok_f" }, key),
+      ],
+      [
+        "createMultiviewTask unknown view key",
+        () =>
+          createMultiviewTask(
+            /** @type {any} */ ({ front: "ftok_f", left: "ftok_l", top: "ftok_t" }),
+            key,
+          ),
+      ],
+      ["retargetTask empty animations", () => retargetTask("task_rig", [], key)],
+      ["rigModelTask empty rigType", () => rigModelTask("file_glb_1", "", key)],
+      ["getBalance empty apiKey", () => getBalance("")],
+      ["createRefineTask empty file token", () => createRefineTask("x", "", key)],
+      ["pollTask empty taskId", () => pollTask("", key)],
+      ["downloadModel empty glbUrl", () => downloadModel("")],
+      ["uploadModel empty buffer", () => uploadModel(Buffer.alloc(0), "key")],
+      ["cancelTask empty taskId", () => cancelTask("", key)],
+    ])("%s rejects with status 400 without calling fetch", async (_name, invoke) => {
+      global.fetch = jest.fn();
+      await expect(invoke()).rejects.toMatchObject({ code: 0, status: 400 });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
   test("createTask submits text-to-model with v3 defaults", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -121,13 +157,6 @@ describe("tripo3d adapter", () => {
     });
   });
 
-  test("createTask rejects empty prompt with status 400", async () => {
-    await expect(createTask("", key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
-  });
-
   test("uploadImage posts multipart form to /files and returns file_token", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -142,13 +171,6 @@ describe("tripo3d adapter", () => {
     // Multipart: no manual Content-Type (fetch sets the boundary).
     expect(opts.headers["Content-Type"]).toBeUndefined();
     expect(opts.body).toBeInstanceOf(FormData);
-  });
-
-  test("uploadImage rejects empty buffer with status 400", async () => {
-    await expect(uploadImage(Buffer.alloc(0), "image/png", key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
   });
 
   test("createImageTask submits generation/image-to-model with the file token", async () => {
@@ -167,13 +189,6 @@ describe("tripo3d adapter", () => {
       pbr: true,
       auto_size: true,
       compress: "geometry",
-    });
-  });
-
-  test("createImageTask rejects empty fileToken with status 400", async () => {
-    await expect(createImageTask("", key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
     });
   });
 
@@ -202,15 +217,10 @@ describe("tripo3d adapter", () => {
       auto_size: true,
       compress: "geometry",
     });
-  });
 
-  test("createMultiviewTask skips absent views and keeps canonical order", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ code: 0, data: { task_id: "task_mv2" } }),
-    });
+    // Partial view sets keep canonical order and skip absent views.
     await createMultiviewTask({ back: "ftok_b", front: "ftok_f" }, key);
-    expect(JSON.parse(global.fetch.mock.calls[0][1].body).inputs).toEqual([
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body).inputs).toEqual([
       { front: "ftok_f" },
       { back: "ftok_b" },
     ]);
@@ -227,33 +237,6 @@ describe("tripo3d adapter", () => {
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("detailed");
   });
 
-  test("createMultiviewTask rejects a missing front view without calling fetch", async () => {
-    global.fetch = jest.fn();
-    await expect(
-      createMultiviewTask({ left: "ftok_l", back: "ftok_b" }, key),
-    ).rejects.toMatchObject({ code: 0, status: 400 });
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  test("createMultiviewTask rejects a single view without calling fetch", async () => {
-    global.fetch = jest.fn();
-    await expect(
-      createMultiviewTask({ front: "ftok_f" }, key),
-    ).rejects.toMatchObject({ code: 0, status: 400 });
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  test("createMultiviewTask rejects an unknown view key without calling fetch", async () => {
-    global.fetch = jest.fn();
-    await expect(
-      createMultiviewTask(
-        /** @type {any} */ ({ front: "ftok_f", left: "ftok_l", top: "ftok_t" }),
-        key,
-      ),
-    ).rejects.toMatchObject({ code: 0, status: 400 });
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
   test("createMultiviewTask maps upstream non-zero codes like the other methods", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -264,21 +247,55 @@ describe("tripo3d adapter", () => {
     ).rejects.toMatchObject({ code: 2010, status: 402 });
   });
 
-  test("pollTask returns output on success", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+  test("pollTask returns output and resolves the GLB URL", async () => {
+    const respond = (data) => ({
       ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
+      json: async () => ({ code: 0, data }),
+    });
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        respond({
           task_id: "task_abc",
           status: "success",
           output: { riggable: true, rig_type: "biped" },
-        },
-      }),
-    });
+        }),
+      )
+      .mockResolvedValueOnce(
+        respond({
+          task_id: "task_abc",
+          status: "success",
+          progress: 100,
+          output: {
+            model_url: "https://cdn/result.glb",
+            pbr_model: "https://cdn/other.glb",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        respond({
+          task_id: "task_abc",
+          status: "success",
+          output: { pbr_model: "https://cdn/pbr.glb" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        respond({
+          task_id: "task_abc",
+          status: "success",
+          output: { model: "https://cdn/model.glb" },
+        }),
+      );
+
     const result = await pollTask("task_abc", key);
     expect(result.status).toBe("success");
     expect(result.output).toEqual({ riggable: true, rig_type: "biped" });
+
+    expect((await pollTask("task_abc", key)).glbUrl).toBe(
+      "https://cdn/result.glb",
+    );
+    expect((await pollTask("task_abc", key)).glbUrl).toBe("https://cdn/pbr.glb");
+    expect((await pollTask("task_abc", key)).glbUrl).toBe("https://cdn/model.glb");
   });
 
   test("rigCheckTask submits animations/rig-check", async () => {
@@ -430,20 +447,6 @@ describe("tripo3d adapter", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  test("retargetTask rejects an empty animations array with status 400", async () => {
-    await expect(retargetTask("task_rig", [], key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
-  });
-
-  test("rigModelTask rejects empty rigType with status 400", async () => {
-    await expect(rigModelTask("file_glb_1", "", key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
-  });
-
   test("getBalance returns balance and frozen", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -467,13 +470,6 @@ describe("tripo3d adapter", () => {
     });
   });
 
-  test("getBalance rejects empty apiKey with status 400", async () => {
-    await expect(getBalance("")).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
-  });
-
   test("createRefineTask submits models/texture with text_prompt", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -492,13 +488,6 @@ describe("tripo3d adapter", () => {
     });
   });
 
-  test("createRefineTask rejects empty file token with status 400", async () => {
-    await expect(createRefineTask("x", "", key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
-  });
-
   test("pollTask returns status and progress", async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -511,120 +500,37 @@ describe("tripo3d adapter", () => {
     expect(result).toEqual({ status: "running", progress: 42 });
   });
 
-  test("pollTask returns glbUrl on success preferring model_url", async () => {
+  test.each([
+    [
+      "failed status with error_msg",
+      { status: "failed", error_msg: "generation failed" },
+      { status: "failed", error: expect.stringContaining("generation failed") },
+    ],
+    [
+      "failed status with error_code/error_message",
+      {
+        status: "failed",
+        error_code: 2010,
+        error_message: "insufficient credits",
+      },
+      { status: "failed", error: "insufficient credits (Tripo error 2010)" },
+    ],
+    [
+      "failed status with no error fields",
+      { status: "failed" },
+      { status: "failed", error: "Task failed" },
+    ],
+    [
+      "cancelled status",
+      { status: "cancelled", error_msg: "user cancelled" },
+      { status: "failed", error: "user cancelled" },
+    ],
+  ])("pollTask maps %s to failed", async (_name, data, expected) => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
-          task_id: "task_abc",
-          status: "success",
-          progress: 100,
-          output: {
-            model_url: "https://cdn/result.glb",
-            pbr_model: "https://cdn/other.glb",
-          },
-        },
-      }),
+      json: async () => ({ code: 0, data: { task_id: "task_abc", ...data } }),
     });
-    const result = await pollTask("task_abc", key);
-    expect(result.status).toBe("success");
-    expect(result.glbUrl).toBe("https://cdn/result.glb");
-  });
-
-  test("pollTask falls back to output.pbr_model then output.model", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
-          task_id: "task_abc",
-          status: "success",
-          output: { pbr_model: "https://cdn/pbr.glb" },
-        },
-      }),
-    });
-    let result = await pollTask("task_abc", key);
-    expect(result.glbUrl).toBe("https://cdn/pbr.glb");
-
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
-          task_id: "task_abc",
-          status: "success",
-          output: { model: "https://cdn/model.glb" },
-        },
-      }),
-    });
-    result = await pollTask("task_abc", key);
-    expect(result.glbUrl).toBe("https://cdn/model.glb");
-  });
-
-  test("pollTask returns failed on Tripo failure using error_msg", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
-          task_id: "task_abc",
-          status: "failed",
-          error_msg: "generation failed",
-        },
-      }),
-    });
-    const result = await pollTask("task_abc", key);
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("generation failed");
-  });
-
-  test("pollTask surfaces error_code and error_message from Tripo failures", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
-          task_id: "task_abc",
-          status: "failed",
-          error_code: 2010,
-          error_message: "insufficient credits",
-        },
-      }),
-    });
-    const result = await pollTask("task_abc", key);
-    expect(result).toEqual({
-      status: "failed",
-      error: "insufficient credits (Tripo error 2010)",
-    });
-  });
-
-  test("pollTask falls back to the bare status when Tripo sends no error fields", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 0,
-        data: { task_id: "task_abc", status: "failed" },
-      }),
-    });
-    const result = await pollTask("task_abc", key);
-    expect(result).toEqual({ status: "failed", error: "Task failed" });
-  });
-
-  test("pollTask maps cancelled status to failed with error", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 0,
-        data: {
-          task_id: "task_abc",
-          status: "cancelled",
-          error_msg: "user cancelled",
-        },
-      }),
-    });
-    const result = await pollTask("task_abc", key);
-    expect(result).toEqual({ status: "failed", error: "user cancelled" });
+    await expect(pollTask("task_abc", key)).resolves.toEqual(expected);
   });
 
   test.each(["banned", "expired"])(
@@ -642,13 +548,6 @@ describe("tripo3d adapter", () => {
       expect(result.error).toBe(`Task ${status}`);
     },
   );
-
-  test("pollTask rejects empty taskId with status 400", async () => {
-    await expect(pollTask("", key)).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
-  });
 
   test("downloadModel returns Buffer", async () => {
     const buf = Buffer.from("glb binary");
@@ -674,13 +573,6 @@ describe("tripo3d adapter", () => {
     await expect(downloadModel("https://cdn/empty.glb")).rejects.toThrow(
       "Downloaded model is empty"
     );
-  });
-
-  test("downloadModel rejects empty glbUrl with status 400", async () => {
-    await expect(downloadModel("")).rejects.toMatchObject({
-      code: 0,
-      status: 400,
-    });
   });
 
   test("TRIPO_3D_MODEL env override changes submitted model", async () => {
@@ -775,9 +667,6 @@ describe("uploadModel", () => {
     expect(opts.headers["Content-Type"]).toBeUndefined();
   });
 
-  it("rejects an empty buffer", async () => {
-    await expect(uploadModel(Buffer.alloc(0), "key")).rejects.toMatchObject({ status: 400 });
-  });
 });
 
 describe("file_token inputs", () => {
@@ -817,20 +706,23 @@ describe("textureQuality", () => {
     });
   });
 
-  it("omits texture_quality for standard", async () => {
+  it("omits texture_quality for standard and passes explicit values through", async () => {
     await createTask("a knight", "key", { textureQuality: "standard" });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-    expect(body.texture_quality).toBeUndefined();
-  });
+    expect(
+      JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality,
+    ).toBeUndefined();
 
-  it("passes extreme through", async () => {
     await createTask("a knight", "key", { textureQuality: "extreme" });
-    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("extreme");
-  });
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body).texture_quality).toBe(
+      "extreme",
+    );
 
-  it("createRefineTask passes texture_quality through", async () => {
-    await createRefineTask("rusty", "file_glb_1", "key", { textureQuality: "detailed" });
-    expect(JSON.parse(global.fetch.mock.calls[0][1].body).texture_quality).toBe("detailed");
+    await createRefineTask("rusty", "file_glb_1", "key", {
+      textureQuality: "detailed",
+    });
+    expect(JSON.parse(global.fetch.mock.calls[2][1].body).texture_quality).toBe(
+      "detailed",
+    );
   });
 });
 
@@ -1016,10 +908,6 @@ describe("cancelTask", () => {
       text: async () => "not found",
     });
     await expect(cancelTask("task_1", key)).resolves.toBe(false);
-  });
-
-  it("validates arguments", async () => {
-    await expect(cancelTask("", key)).rejects.toMatchObject({ status: 400 });
   });
 });
 

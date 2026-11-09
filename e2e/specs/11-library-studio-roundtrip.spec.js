@@ -1,4 +1,5 @@
 import { test, expect } from "../fixtures/coverage.mjs";
+import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   fetchManifest,
@@ -7,13 +8,11 @@ import {
 } from "../helpers/manifest.mjs";
 import {
   connectLibrary,
-  ensureLibraryConnected,
   ensureStudioConnected,
   libraryAssetLocator,
   openLibraryCollection,
   openLibraryAssetInStudio,
   generateSaveAndPublish,
-  seedDefaultCollection,
   uniqueAssetName,
 } from "../helpers/flows.mjs";
 
@@ -21,22 +20,30 @@ const ASSET_NAME_BASE = "Roundtrip Asset";
 const PROMPT = "a blue cylinder";
 
 // Studio/Library round-trip tests mutate the shared chain; run serially.
-// They self-seed in beforeAll so they can run in isolation.
+// The asset is published once in beforeAll and reused by both round-trip
+// directions so the spec does not pay for two generate/publish cycles.
 test.describe.serial("Library ↔ Studio round-trip", () => {
+  /** @type {{ tokenIdHex: string, assetName: string } | null} */
+  let seeded = null;
+
   test.beforeAll(async ({ browser }) => {
-    await seedDefaultCollection(browser);
-  });
-  test("asset published in Studio appears in the library", async ({ page }) => {
     const assetName = uniqueAssetName(ASSET_NAME_BASE);
+    const page = await browser.newPage();
+    try {
+      await injectHardhatProvider(page);
+      await page.goto("/studio");
+      await ensureStudioConnected(page);
+      const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
+      seeded = { tokenIdHex, assetName };
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("asset published in Studio appears in the library", async ({ page }) => {
+    const { assetName, tokenIdHex } = seeded;
     await connectLibrary(page);
 
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     await expect(libraryAssetLocator(page, assetName).first()).toBeVisible();
 
@@ -55,16 +62,9 @@ test.describe.serial("Library ↔ Studio round-trip", () => {
   test("opening an asset from the library loads it into Studio", async ({
     page,
   }) => {
-    const assetName = uniqueAssetName(ASSET_NAME_BASE);
+    const { assetName, tokenIdHex } = seeded;
     await connectLibrary(page);
 
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    const tokenIdHex = await generateSaveAndPublish(page, assetName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
     await openLibraryCollection(page, "Default");
     await openLibraryAssetInStudio(page, assetName);
     await ensureStudioConnected(page);
@@ -79,5 +79,4 @@ test.describe.serial("Library ↔ Studio round-trip", () => {
       assetName,
     );
   });
-
 });

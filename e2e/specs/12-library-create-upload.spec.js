@@ -3,6 +3,7 @@ import path from "path";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   connectLibrary,
+  ensureLibraryConnected,
   ensureStudioConnected,
   libraryAssetLocator,
   openLibraryCollection,
@@ -19,6 +20,8 @@ import {
 
 const GLB_FIXTURE = path.resolve("mock-gltf-assets/howdy.glb");
 const UPLOADED_ASSET_NAME = "howdy";
+const DROP_GLB_FIXTURE = path.resolve("mock-gltf-assets/suka.glb");
+const DROPPED_ASSET_NAME = "suka";
 const THREEMF_FIXTURE = path.resolve("mock-gltf-assets/box.3mf");
 const UPLOADED_3MF_ASSET_NAME = "box";
 
@@ -43,7 +46,7 @@ async function fetchUploadedAssetManifest(page, assetName) {
 
 // Creating collections and uploading into them mutates on-chain state; run serially.
 test.describe.serial("Library create collection and upload", () => {
-  test("creates a named collection and uploads a desktop GLB file into it", async ({
+  test("creates a named collection, uploads a GLB via button and drag-drop, and warns at the root", async ({
     page,
   }) => {
     const collectionName = uniqueAssetName("Upload Collection");
@@ -88,6 +91,41 @@ test.describe.serial("Library create collection and upload", () => {
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_ASSET_NAME,
     );
+
+    // ── Drag-drop a second GLB into the same collection ────────────────
+    await page.goto("/library");
+    await ensureLibraryConnected(page);
+    await openLibraryCollection(page, collectionName);
+    await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(1);
+
+    // dropLibraryFile also asserts the drop overlay activates on dragenter.
+    await dropLibraryFile(page, DROP_GLB_FIXTURE, DROPPED_ASSET_NAME);
+    await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(2);
+
+    // Same pipeline as the Upload button: decomposed at upload time into the
+    // canonical stored form, named after the file without extension.
+    const droppedManifest = await fetchUploadedAssetManifest(
+      page,
+      DROPPED_ASSET_NAME,
+    );
+    expect(droppedManifest.name).toBe(DROPPED_ASSET_NAME);
+    expect(droppedManifest.scene.nodes[0].source.path).toBe("composite.gltf");
+    expect(droppedManifest.scene.nodes[0].source.format).toBe("gltf");
+
+    // ── Upload button at the collection root warns ─────────────────────
+    // Back at the collections list the upload button still exists, but the
+    // handler shows a warning toast instead of opening the file picker.
+    await page.click(SELECTORS.libraryUpBtn);
+    await expect(page.locator(SELECTORS.libraryBreadcrumb)).not.toContainText(
+      collectionName,
+    );
+    await page.click(SELECTORS.libraryUploadBtn);
+
+    await expect(
+      page.locator(
+        ".notyf__message:has-text('Open or create a collection first')",
+      ),
+    ).toBeVisible();
   });
 
   test("uploads a 3MF file and stores it decomposed", async ({ page }) => {
@@ -122,43 +160,5 @@ test.describe.serial("Library create collection and upload", () => {
     await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
       UPLOADED_3MF_ASSET_NAME,
     );
-  });
-
-  test("drag-dropping a GLB onto the Library uploads it decomposed", async ({
-    page,
-  }) => {
-    const collectionName = uniqueAssetName("Drop Collection");
-    await connectLibrary(page);
-
-    await createLibraryCollection(page, collectionName);
-    await openLibraryCollection(page, collectionName);
-    await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(0);
-
-    // dropLibraryFile also asserts the drop overlay activates on dragenter.
-    await dropLibraryFile(page, GLB_FIXTURE, UPLOADED_ASSET_NAME);
-    await expect(page.locator(SELECTORS.libraryItem)).toHaveCount(1);
-
-    // Same pipeline as the Upload button: decomposed at upload time into the
-    // canonical stored form, named after the file without extension.
-    const uploadedManifest = await fetchUploadedAssetManifest(
-      page,
-      UPLOADED_ASSET_NAME,
-    );
-    expect(uploadedManifest.name).toBe(UPLOADED_ASSET_NAME);
-    expect(uploadedManifest.scene.nodes[0].source.path).toBe("composite.gltf");
-    expect(uploadedManifest.scene.nodes[0].source.format).toBe("gltf");
-  });
-
-  test("warns when uploading without an open collection", async ({ page }) => {
-    await connectLibrary(page);
-    // If at the collection root, the upload button still exists but the handler
-    // shows a warning toast instead of opening the file picker.
-    await page.click(SELECTORS.libraryUploadBtn);
-
-    await expect(
-      page.locator(
-        ".notyf__message:has-text('Open or create a collection first')",
-      ),
-    ).toBeVisible();
   });
 });

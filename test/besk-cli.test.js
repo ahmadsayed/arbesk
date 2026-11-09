@@ -251,31 +251,32 @@ test("generate: non-mock provider without a key fails with exit 2 (non-TTY)", as
   expect(mockRunGeneration).not.toHaveBeenCalled();
 });
 
-test("generate: --key goes out as providerKey; mock never sends one", async () => {
-  await runCli(["generate", "a", "cube", "--provider", "tripo3d", "--key", "tsk_1"]);
-  expect(mockRunGeneration.mock.calls[0][1].providerKey).toBe("tsk_1");
-});
+test("generate: flags win and env fills the provider key, quality and provider", async () => {
+  const cases = [
+    ["--key",
+      ["generate", "a", "cube", "--provider", "tripo3d", "--key", "tsk_1"], {},
+      (body) => expect(body.providerKey).toBe("tsk_1")],
+    ["ARBESK_PROVIDER_KEY",
+      ["generate", "a", "cube", "--provider", "tripo3d"], { ARBESK_PROVIDER_KEY: "tsk_env" },
+      (body) => expect(body.providerKey).toBe("tsk_env")],
+    ["--quality",
+      ["generate", "a", "cube", "--provider", "mock", "--quality", "detailed"], {},
+      (body) => expect(body.textureQuality).toBe("detailed")],
+    ["ARBESK_TEXTURE_QUALITY",
+      ["generate", "a", "cube", "--provider", "mock"], { ARBESK_TEXTURE_QUALITY: "extreme" },
+      (body) => expect(body.textureQuality).toBe("extreme")],
+    ["ARBESK_PROVIDER",
+      ["generate", "a", "cube"], { ARBESK_PROVIDER: "mock" },
+      (body) => expect(body.provider).toBe("mock")],
+  ];
 
-test("generate: provider key falls back to ARBESK_PROVIDER_KEY env", async () => {
-  process.env.ARBESK_PROVIDER_KEY = "tsk_env";
-  await runCli(["generate", "a", "cube", "--provider", "tripo3d"]);
-  expect(mockRunGeneration.mock.calls[0][1].providerKey).toBe("tsk_env");
-});
-
-test("generate: --quality flag wins, env ARBESK_TEXTURE_QUALITY is the fallback", async () => {
-  await runCli(["generate", "a", "cube", "--provider", "mock", "--quality", "detailed"]);
-  expect(mockRunGeneration.mock.calls[0][1].textureQuality).toBe("detailed");
-
-  jest.clearAllMocks();
-  process.env.ARBESK_TEXTURE_QUALITY = "extreme";
-  await runCli(["generate", "a", "cube", "--provider", "mock"]);
-  expect(mockRunGeneration.mock.calls[0][1].textureQuality).toBe("extreme");
-});
-
-test("generate: provider falls back to ARBESK_PROVIDER env", async () => {
-  process.env.ARBESK_PROVIDER = "mock";
-  await runCli(["generate", "a", "cube"]);
-  expect(mockRunGeneration.mock.calls[0][1].provider).toBe("mock");
+  for (const [_label, argv, env, check] of cases) {
+    jest.clearAllMocks();
+    for (const key of ENV_KEYS) delete process.env[key];
+    Object.assign(process.env, env);
+    await runCli(argv);
+    check(mockRunGeneration.mock.calls[0][1]);
+  }
 });
 
 test("generate: no provider anywhere (non-TTY) exits 2 with guidance", async () => {
@@ -343,25 +344,25 @@ test("generate: --name overrides; an existing asset is versioned, not duplicated
 
 // ─── cmdLink ───
 
-test("link: missing args prints usage, exit 2", async () => {
-  const { exitCode } = await runCli(["link", "only-child"]);
+test("link: missing args, unsupported modes and malformed geometry exit 2", async () => {
+  let r = await runCli(["link", "only-child"]);
   expect(errors.join("\n")).toContain("Usage: besk link <child> <parent>");
-  expect(exitCode).toBe(2);
-});
+  expect(r.exitCode).toBe(2);
 
-test("link: unsupported mode exits 2", async () => {
-  const { exitCode } = await runCli(["link", "c", "p", "mirror"]);
+  errors = [];
+  jest.clearAllMocks();
+  r = await runCli(["link", "c", "p", "mirror"]);
   expect(errors.join("\n")).toContain("Unsupported link mode: mirror");
-  expect(exitCode).toBe(2);
-});
+  expect(r.exitCode).toBe(2);
 
-test("link: malformed --position and non-positive --scale exit 2", async () => {
-  let r = await runCli(["link", "c", "p", "--position", "1,2"]);
+  errors = [];
+  jest.clearAllMocks();
+  r = await runCli(["link", "c", "p", "--position", "1,2"]);
   expect(errors.join("\n")).toContain('--position needs three numbers: "x,y,z"');
   expect(r.exitCode).toBe(2);
 
-  jest.clearAllMocks();
   errors = [];
+  jest.clearAllMocks();
   r = await runCli(["link", "c", "p", "--scale", "0"]);
   expect(errors.join("\n")).toContain("--scale must be a positive number.");
   expect(r.exitCode).toBe(2);

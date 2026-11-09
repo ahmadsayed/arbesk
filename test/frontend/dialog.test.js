@@ -110,17 +110,11 @@ function pressKey(target, key, extra = {}) {
 
 // ─── showDialog ───────────────────────────────────────────────────────────────
 
-test("showDialog renders the title", async () => {
+test("showDialog renders the title and body text", async () => {
   await setup();
-  showDialog("Name Your Asset", "Enter a name:");
+  showDialog("Name Your Asset", "Please enter something");
   await flush();
   expect(document.body.textContent).toContain("Name Your Asset");
-});
-
-test("showDialog renders the body text", async () => {
-  await setup();
-  showDialog("Title", "Please enter something");
-  await flush();
   expect(document.body.textContent).toContain("Please enter something");
 });
 
@@ -131,34 +125,31 @@ test("showDialog pre-fills the input with defaultValue", async () => {
   expect(document.querySelector(".dialog-input").value).toBe("My Default");
 });
 
-test("showDialog resolves with trimmed input when Confirm is clicked", async () => {
+test("showDialog resolves with the input value via Confirm (trimmed) and Enter", async () => {
   await setup();
-  const p = showDialog("Title", "Body", "");
+  let p = showDialog("Title", "Body", "");
   await flush();
   document.querySelector(".dialog-input").value = "  hello world  ";
   document.querySelector(".dialog-confirm-btn").click();
   expect(await p).toBe("hello world");
+
+  await setup();
+  p = showDialog("Title", "Body", "");
+  await flush();
+  document.querySelector(".dialog-input").value = "entered via enter";
+  pressKey(document.querySelector(".dialog-input"), "Enter");
+  expect(await p).toBe("entered via enter");
 });
 
-test("showDialog resolves null when Cancel is clicked", async () => {
+test("showDialog resolves null when Cancel or the backdrop is clicked", async () => {
   await setup();
-  const p = showDialog("Title", "Body");
+  let p = showDialog("Title", "Body");
   await flush();
   document.querySelector(".dialog-cancel-btn").click();
   expect(await p).toBeNull();
-});
 
-test("showDialog resolves null when Escape is pressed", async () => {
   await setup();
-  const p = showDialog("Title", "Body");
-  await flush();
-  pressKey(document, "Escape");
-  expect(await p).toBeNull();
-});
-
-test("showDialog resolves null when the backdrop is clicked", async () => {
-  await setup();
-  const p = showDialog("Title", "Body");
+  p = showDialog("Title", "Body");
   await flush();
   document.querySelector(".dialog-backdrop").click();
   expect(await p).toBeNull();
@@ -173,20 +164,19 @@ test("showDialog resolves null when input is blank and Confirm is clicked", asyn
   expect(await p).toBeNull();
 });
 
-test("showDialog resolves with value when Enter is pressed in the input", async () => {
+test("dialogs are removed from the DOM after resolution", async () => {
   await setup();
-  const p = showDialog("Title", "Body", "");
-  await flush();
-  document.querySelector(".dialog-input").value = "entered via enter";
-  pressKey(document.querySelector(".dialog-input"), "Enter");
-  expect(await p).toBe("entered via enter");
-});
-
-test("showDialog removes the dialog from DOM after resolution", async () => {
-  await setup();
-  const p = showDialog("Title", "Body");
+  let p = showDialog("Title", "Body");
   await flush();
   document.querySelector(".dialog-cancel-btn").click();
+  await p;
+  await flush();
+  expect(document.querySelector(".dialog-backdrop")).toBeNull();
+
+  await setup();
+  p = showConfirmDialog("Title", "Body");
+  await flush();
+  pressKey(document, "Escape");
   await p;
   await flush();
   expect(document.querySelector(".dialog-backdrop")).toBeNull();
@@ -223,14 +213,28 @@ test("concurrent dialogs queue FIFO and each resolves with its own result", asyn
   expect(await p2).toBe("second answer");
 });
 
-test("showDialog does not resolve twice if closed twice", async () => {
+test("dialogs resolve only once when closed twice", async () => {
   await setup();
   let calls = 0;
-  const p = showDialog("Title", "Body").then((v) => { calls++; return v; });
+  let p = showDialog("Title", "Body").then((v) => { calls++; return v; });
   await flush();
   document.querySelector(".dialog-cancel-btn").click();
   pressKey(document, "Escape"); // second close - should be a no-op
   await p;
+  expect(calls).toBe(1);
+
+  // Body-initiated close is likewise idempotent against a later Close/Escape.
+  await setup();
+  calls = 0;
+  let value;
+  const body = document.createElement("div");
+  p = showCustomDialog("Custom", body).then((v) => { calls++; value = v; return v; });
+  await flush();
+  body.closeDialog("first");
+  document.querySelector(".dialog-close-btn")?.click(); // backdrop already closing
+  pressKey(document, "Escape");
+  await p;
+  expect(value).toBe("first");
   expect(calls).toBe(1);
 });
 
@@ -257,14 +261,6 @@ test("showConfirmDialog resolves with the clicked button's value", async () => {
   expect(await p).toBe("delete");
 });
 
-test("showConfirmDialog resolves null when Escape is pressed", async () => {
-  await setup();
-  const p = showConfirmDialog("Sure?", "Body");
-  await flush();
-  pressKey(document, "Escape");
-  expect(await p).toBeNull();
-});
-
 test("showConfirmDialog renders default Cancel/Confirm buttons when none supplied", async () => {
   await setup();
   showConfirmDialog("Confirm?", "Are you sure?");
@@ -273,16 +269,6 @@ test("showConfirmDialog renders default Cancel/Confirm buttons when none supplie
   const labels = btns.map((b) => b.textContent.trim());
   expect(labels).toContain("Cancel");
   expect(labels).toContain("Confirm");
-});
-
-test("showConfirmDialog removes the dialog from DOM after resolution", async () => {
-  await setup();
-  const p = showConfirmDialog("Title", "Body");
-  await flush();
-  pressKey(document, "Escape");
-  await p;
-  await flush();
-  expect(document.querySelector(".dialog-backdrop")).toBeNull();
 });
 
 // ─── showInfoDialog ───────────────────────────────────────────────────────────
@@ -294,40 +280,66 @@ test("showInfoDialog renders the title", async () => {
   expect(document.body.textContent).toContain("Keyboard Shortcuts");
 });
 
-test("showInfoDialog resolves when Close is clicked", async () => {
+test("Escape dismisses every dialog kind with its documented result", async () => {
+  const cases = [
+    { name: "showDialog", open: () => showDialog("Title", "Body"), expected: null },
+    { name: "showConfirmDialog", open: () => showConfirmDialog("Sure?", "Body"), expected: null },
+    { name: "showInfoDialog", open: () => showInfoDialog("Info", "<p>Done</p>"), expected: null },
+    { name: "showCustomDialog", open: () => showCustomDialog("Custom", document.createElement("div")), expected: null },
+  ];
+  for (const c of cases) {
+    await setup();
+    const p = c.open();
+    await flush();
+    pressKey(document, "Escape");
+    expect(await p).toBe(c.expected);
+  }
+});
+
+test("Close button dismisses info and custom dialogs", async () => {
   await setup();
-  const p = showInfoDialog("Info", "<p>Done</p>");
+  let p = showInfoDialog("Info", "<p>Done</p>");
   await flush();
   document.querySelector(".dialog-close-btn").click();
   await p; // resolves (the value is not part of the contract)
-});
 
-test("showInfoDialog resolves when Escape is pressed", async () => {
   await setup();
-  const p = showInfoDialog("Info", "<p>Done</p>");
+  const body = document.createElement("div");
+  p = showCustomDialog("Custom", body);
   await flush();
-  pressKey(document, "Escape");
-  await p; // resolves (the value is not part of the contract)
+  document.querySelector(".dialog-close-btn").click();
+  expect(await p).toBeNull();
+
+  // A custom body can also close early with its own value.
+  await setup();
+  const valueBody = document.createElement("div");
+  valueBody.innerHTML = `<button id="go" type="button">Go</button>`;
+  p = showCustomDialog("Custom", valueBody);
+  valueBody.querySelector("#go").addEventListener("click", () => valueBody.closeDialog(42));
+  valueBody.querySelector("#go").click();
+  expect(await p).toBe(42);
+  await flush();
+  expect(document.querySelector(".dialog-backdrop")).toBeNull();
 });
 
 // ─── showForkOrLiveRefDialog ──────────────────────────────────────────────────
 
-test("showForkOrLiveRefDialog offers both fork and live-ref by default", async () => {
+test("showForkOrLiveRefDialog offers fork and live-ref unless disabled", async () => {
   await setup();
   showForkOrLiveRefDialog("asset_1");
   await flush();
-  const labels = [...document.querySelectorAll(".dialog-actions button")].map(
+  let labels = [...document.querySelectorAll(".dialog-actions button")].map(
     (b) => b.textContent.trim()
   );
   expect(labels).toContain("Fork (copy)");
   expect(labels).toContain("Live reference");
-});
 
-test("showForkOrLiveRefDialog hides live-ref when allowLiveRef is false", async () => {
+  pressKey(document, "Escape"); // dismiss before opening the next variant
+  await flush();
   await setup();
   showForkOrLiveRefDialog("asset_1", { allowLiveRef: false });
   await flush();
-  const labels = [...document.querySelectorAll(".dialog-actions button")].map(
+  labels = [...document.querySelectorAll(".dialog-actions button")].map(
     (b) => b.textContent.trim()
   );
   expect(labels).toContain("Fork (copy)");
@@ -365,40 +377,9 @@ test("showCustomDialog resolves null when Close is clicked", async () => {
   expect(await p).toBeNull();
 });
 
-test("showCustomDialog resolves null when Escape is pressed", async () => {
-  await setup();
-  const body = document.createElement("div");
-  const p = showCustomDialog("Custom", body);
-  await flush();
-  pressKey(document, "Escape");
-  expect(await p).toBeNull();
-});
 
-test("showCustomDialog body can close the dialog early with a value via bodyEl.closeDialog", async () => {
-  await setup();
-  const body = document.createElement("div");
-  body.innerHTML = `<button id="go" type="button">Go</button>`;
-  const p = showCustomDialog("Custom", body);
-  body.querySelector("#go").addEventListener("click", () => body.closeDialog(42));
-  body.querySelector("#go").click();
-  expect(await p).toBe(42);
-  await flush();
-  // Dialog is removed from the DOM — no lingering modal.
-  expect(document.querySelector(".dialog-backdrop")).toBeNull();
-});
 
-test("showCustomDialog body-close is idempotent against a later Close/Escape", async () => {
-  await setup();
-  let calls = 0;
-  const body = document.createElement("div");
-  const p = showCustomDialog("Custom", body).then((v) => { calls++; return v; });
-  await flush();
-  body.closeDialog("first");
-  document.querySelector(".dialog-close-btn")?.click(); // backdrop already closing
-  pressKey(document, "Escape");
-  expect(await p).toBe("first");
-  expect(calls).toBe(1);
-});
+
 
 // ─── showBurnCollectionDialog ─────────────────────────────────────────────────
 

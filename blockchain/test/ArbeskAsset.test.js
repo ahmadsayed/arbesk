@@ -224,8 +224,23 @@ describe("ArbeskAsset (Merkle)", function () {
   // ════════════════════════════════════════════════════════════════════
 
   describe("Access Control", function () {
-    it("only owner can pause/unpause", async () => {
-      await expect(asset.connect(user).pause()).to.be.reverted;
+    // Every onlyOwner entry point, exercised through one assertion site.
+    const ownerOnly = [
+      ["pause", (a, signer) => a.connect(signer).pause()],
+      ["setTreasury", (a, signer) => a.connect(signer).setTreasury(signer.address)],
+      ["setUsdcToken", (a, signer) => a.connect(signer).setUsdcToken(signer.address)],
+      ["setTierCost", (a, signer) => a.connect(signer).setTierCost(Tier.Basic, 100)],
+      ["withdrawUSDC", (a, signer) => a.connect(signer).withdrawUSDC()],
+      ["migrateAsset", (a, signer) =>
+        a.connect(signer).migrateAsset(701, signer.address, "ipfs://x", ethers.ZeroHash, 1, "")],
+    ];
+
+    it("reverts every owner-only call for a non-owner, and the owner can pause", async () => {
+      for (const [name, call] of ownerOnly) {
+        await expect(call(asset, user), name)
+          .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
+          .withArgs(user.address);
+      }
       await asset.connect(owner).pause();
       expect(await asset.paused()).to.be.true;
       await asset.connect(owner).unpause();
@@ -243,31 +258,17 @@ describe("ArbeskAsset (Merkle)", function () {
         .to.be.revertedWithCustomError(asset, "ZeroAddress");
     });
 
-    it("setTreasury reverts for non-owner", async () => {
-      await expect(asset.connect(user).setTreasury(user.address))
-        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
-        .withArgs(user.address);
-    });
-
-    it("setTreasury updates wallet and emits TreasuryUpdated", async () => {
-      await expect(asset.setTreasury(editor.address))
-        .to.emit(asset, "TreasuryUpdated")
-        .withArgs(treasury.address, editor.address);
-      expect(await asset.developerTreasuryWallet()).to.equal(editor.address);
-    });
-
-    it("setUsdcToken reverts for non-owner", async () => {
-      await expect(asset.connect(user).setUsdcToken(await usdc.getAddress()))
-        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
-        .withArgs(user.address);
-    });
-
     it("setUsdcToken reverts on zero address", async () => {
       await expect(asset.setUsdcToken(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(asset, "ZeroAddress");
     });
 
-    it("setUsdcToken updates token and emits UsdcTokenUpdated", async () => {
+    it("updates treasury, USDC token and tier cost, emitting each event", async () => {
+      await expect(asset.setTreasury(editor.address))
+        .to.emit(asset, "TreasuryUpdated")
+        .withArgs(treasury.address, editor.address);
+      expect(await asset.developerTreasuryWallet()).to.equal(editor.address);
+
       const MockUSDC = await ethers.getContractFactory("MockUSDC");
       const newUsdc = await MockUSDC.deploy();
       await newUsdc.waitForDeployment();
@@ -276,24 +277,16 @@ describe("ArbeskAsset (Merkle)", function () {
         .to.emit(asset, "UsdcTokenUpdated")
         .withArgs(oldToken, await newUsdc.getAddress());
       expect(await asset.usdcToken()).to.equal(await newUsdc.getAddress());
+
+      await expect(asset.setTierCost(Tier.Standard, 999))
+        .to.emit(asset, "TierCostUpdated")
+        .withArgs(Tier.Standard, TIER_COSTS.Standard, 999n);
+      expect(await asset.tierCosts(Tier.Standard)).to.equal(999n);
     });
 
     it("setTierCost reverts on zero cost", async () => {
       await expect(asset.setTierCost(Tier.Basic, 0))
         .to.be.revertedWithCustomError(asset, "InvalidCost");
-    });
-
-    it("setTierCost reverts for non-owner", async () => {
-      await expect(asset.connect(user).setTierCost(Tier.Basic, 100))
-        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
-        .withArgs(user.address);
-    });
-
-    it("setTierCost updates price and emits TierCostUpdated", async () => {
-      await expect(asset.setTierCost(Tier.Standard, 999))
-        .to.emit(asset, "TierCostUpdated")
-        .withArgs(Tier.Standard, TIER_COSTS.Standard, 999n);
-      expect(await asset.tierCosts(Tier.Standard)).to.equal(999n);
     });
 
     it("withdrawUSDC reverts when USDC token not set", async () => {
@@ -327,12 +320,6 @@ describe("ArbeskAsset (Merkle)", function () {
       expect(await usdc.balanceOf(await asset.getAddress())).to.equal(0n);
       expect(await usdc.balanceOf(treasury.address)).to.equal(before + amount);
     });
-
-    it("withdrawUSDC reverts for non-owner", async () => {
-      await expect(asset.connect(user).withdrawUSDC())
-        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
-        .withArgs(user.address);
-    });
   });
 
   // ════════════════════════════════════════════════════════════════════
@@ -340,30 +327,22 @@ describe("ArbeskAsset (Merkle)", function () {
   // ════════════════════════════════════════════════════════════════════
 
   describe("Governance (Ownable2Step)", function () {
-    it("transferOwnership starts a two-step transfer", async () => {
+    it("transfers ownership in two steps, old owner in control until the accept", async () => {
       await expect(asset.transferOwnership(editor.address))
         .to.emit(asset, "OwnershipTransferStarted")
         .withArgs(owner.address, editor.address);
       expect(await asset.pendingOwner()).to.equal(editor.address);
       // owner() is unchanged until the pending owner accepts.
       expect(await asset.owner()).to.equal(owner.address);
-    });
 
-    it("old owner still controls until the transfer is accepted", async () => {
-      await asset.transferOwnership(editor.address);
+      // The old owner still controls while the transfer is pending.
       await asset.pause();
       await asset.unpause();
-    });
 
-    it("non-pending-owner cannot accept", async () => {
-      await asset.transferOwnership(editor.address);
       await expect(asset.connect(user).acceptOwnership())
         .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
         .withArgs(user.address);
-    });
 
-    it("pending owner accepts and becomes the new owner", async () => {
-      await asset.transferOwnership(editor.address);
       await asset.connect(editor).acceptOwnership();
       expect(await asset.owner()).to.equal(editor.address);
 
@@ -460,14 +439,6 @@ describe("ArbeskAsset (Merkle)", function () {
       expect(await asset.editorListURI(tokenId)).to.equal("ipfs://list");
     });
 
-    it("migrateAsset reverts for non-owner", async () => {
-      await expect(
-        asset.connect(user).migrateAsset(701, user.address, "ipfs://x", ethers.ZeroHash, 1, "")
-      )
-        .to.be.revertedWithCustomError(asset, "OwnableUnauthorizedAccount")
-        .withArgs(user.address);
-    });
-
     it("migrateAsset reverts on duplicate tokenId", async () => {
       const tokenId = 702;
       const editors = [{ address: user.address, role: CollaboratorRole.Editor }];
@@ -523,31 +494,23 @@ describe("ArbeskAsset (Merkle)", function () {
   // ════════════════════════════════════════════════════════════════════
 
   describe("publishAsset", function () {
-    it("mints to caller and stores tokenURI", async () => {
+    it("mints to caller, stores tokenURI/root/version and supports multiple editors", async () => {
       const tokenId = 1;
       const uri = "ipfs://bafy-test";
       const editorList = [
         { address: user.address, role: CollaboratorRole.Editor },
+        { address: editor.address, role: CollaboratorRole.Editor },
       ];
       const root = computeRoot(editorList, tokenId, 1);
 
+      expect(await asset.balanceOf(user.address)).to.equal(0n);
       await asset.connect(user).publishAsset(uri, tokenId, root, "");
 
       expect(await asset.ownerOf(tokenId)).to.equal(user.address);
       expect(await asset.tokenURI(tokenId)).to.equal(uri);
-    });
-
-    it("stores the Merkle root and sets version to 1", async () => {
-      const tokenId = 2;
-      const editorList = [
-        { address: user.address, role: CollaboratorRole.Editor },
-      ];
-      const root = computeRoot(editorList, tokenId, 1);
-
-      await asset.connect(user).publishAsset("ipfs://test", tokenId, root, "");
-
       expect(await asset.editorRoot(tokenId)).to.equal(root);
       expect(await asset.editorSetVersion(tokenId)).to.equal(1n);
+      expect(await asset.balanceOf(user.address)).to.equal(1n);
     });
 
     it("emits AssetPublished and EditorSetChanged", async () => {
@@ -582,31 +545,6 @@ describe("ArbeskAsset (Merkle)", function () {
       await expect(
         asset.connect(user).publishAsset("ipfs://zero-root", 6, ethers.ZeroHash, "")
       ).to.be.revertedWithCustomError(asset, "ZeroEditorRoot");
-    });
-
-    it("supports multiple initial editors", async () => {
-      const tokenId = 5;
-      const editors = [
-        { address: user.address, role: CollaboratorRole.Editor },
-        { address: editor.address, role: CollaboratorRole.Editor },
-      ];
-      const root = computeRoot(editors, tokenId, 1);
-
-      await asset.connect(user).publishAsset("ipfs://multi", tokenId, root, "");
-
-      expect(await asset.editorRoot(tokenId)).to.equal(root);
-      expect(await asset.ownerOf(tokenId)).to.equal(user.address);
-    });
-
-    it("balanceOf increments", async () => {
-      expect(await asset.balanceOf(user.address)).to.equal(0n);
-      const root = computeRoot(
-        [{ address: user.address, role: CollaboratorRole.Editor }],
-        10,
-        1
-      );
-      await asset.connect(user).publishAsset("ipfs://x", 10, root, "");
-      expect(await asset.balanceOf(user.address)).to.equal(1n);
     });
   });
 
@@ -863,37 +801,26 @@ describe("ArbeskAsset (Merkle)", function () {
   // ════════════════════════════════════════════════════════════════════
 
   describe("burn", function () {
-    it("Editor with valid proof can burn", async () => {
+    it("Editor with valid proof can burn, in one call that emits and decrements balance", async () => {
       const tokenId = 600;
       await publishAsEditor(user, tokenId);
+      expect(await asset.balanceOf(user.address)).to.equal(1n);
 
       const editors = [
         { address: user.address, role: CollaboratorRole.Editor },
       ];
       const { proof } = getProof(editors, user.address, tokenId, 1);
 
-      await asset.connect(user).burn(tokenId, proof);
-
-      // Token no longer exists
-      await expect(asset.ownerOf(tokenId)).to.be.reverted;
-      // Merkle state cleaned up
-      expect(await asset.editorRoot(tokenId)).to.equal(ethers.ZeroHash);
-      expect(await asset.editorSetVersion(tokenId)).to.equal(0n);
-    });
-
-    it("emits AssetBurned", async () => {
-      const tokenId = 601;
-      await publishAsEditor(user, tokenId);
-      const { proof } = getProof(
-        [{ address: user.address, role: CollaboratorRole.Editor }],
-        user.address,
-        tokenId,
-        1
-      );
-
       await expect(asset.connect(user).burn(tokenId, proof))
         .to.emit(asset, "AssetBurned")
         .withArgs(tokenId, user.address);
+
+      // Token no longer exists and the owner's balance is back to zero.
+      await expect(asset.ownerOf(tokenId)).to.be.reverted;
+      expect(await asset.balanceOf(user.address)).to.equal(0n);
+      // Merkle state cleaned up
+      expect(await asset.editorRoot(tokenId)).to.equal(ethers.ZeroHash);
+      expect(await asset.editorSetVersion(tokenId)).to.equal(0n);
     });
 
     it("non-editor cannot burn", async () => {
@@ -909,21 +836,6 @@ describe("ArbeskAsset (Merkle)", function () {
       await expect(
         asset.connect(user).burn(9999, [])
       ).to.be.revertedWithCustomError(asset, "NonexistentToken");
-    });
-
-    it("burning decrements owner balance", async () => {
-      const tokenId = 603;
-      await publishAsEditor(user, tokenId);
-      expect(await asset.balanceOf(user.address)).to.equal(1n);
-
-      const { proof } = getProof(
-        [{ address: user.address, role: CollaboratorRole.Editor }],
-        user.address,
-        tokenId,
-        1
-      );
-      await asset.connect(user).burn(tokenId, proof);
-      expect(await asset.balanceOf(user.address)).to.equal(0n);
     });
 
     it("cannot burn twice", async () => {
@@ -952,10 +864,6 @@ describe("ArbeskAsset (Merkle)", function () {
       freeAsset = await upgrades.deployProxy(FreeFactory, [], {
         initializer: "initialize",
       });
-    });
-
-    it("has MAX_EDITORS_PER_TOKEN = 5000", async () => {
-      expect(await freeAsset.MAX_EDITORS_PER_TOKEN()).to.equal(5000n);
     });
 
     it("publishes with Merkle root", async () => {

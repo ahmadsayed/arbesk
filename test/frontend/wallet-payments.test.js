@@ -92,43 +92,33 @@ beforeEach(() => {
 });
 
 describe("recordGeneration gas handling", () => {
-  test("CDP smart account: skips estimateGas and sends with the flat sponsored gas limit", async () => {
+  test("CDP skips estimation; EOA estimates and pads, falling back when estimation fails", async () => {
+    // CDP smart account: sponsored UserOperation, no estimateGas.
     _connectionSource = "cdp";
-    const { recordGeneration } = await loadModule();
-
-    const txHash = await recordGeneration("node-1", "a prompt");
-
-    expect(txHash).toBe(TX_HASH);
+    let { recordGeneration } = await loadModule();
+    expect(await recordGeneration("node-1", "a prompt")).toBe(TX_HASH);
     expect(_estimateGas).not.toHaveBeenCalled();
     expect(_signerSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: CONTRACT_ADDRESS,
-        gas: 2_000_000n,
-      })
+      expect.objectContaining({ to: CONTRACT_ADDRESS, gas: 2_000_000n })
     );
-  });
 
-  test("EOA wallet: estimates gas and pads by 20%", async () => {
-    const { recordGeneration } = await loadModule();
-
-    const txHash = await recordGeneration("node-1", "a prompt");
-
-    expect(txHash).toBe(TX_HASH);
+    // EOA wallet: estimate and pad by 20% (100000n → 120000n).
+    resetModules();
+    _connectionSource = "injected";
+    ({ recordGeneration } = await loadModule());
+    expect(await recordGeneration("node-1", "a prompt")).toBe(TX_HASH);
     expect(_estimateGas).toHaveBeenCalledWith(
       expect.objectContaining({ account: WALLET })
     );
     expect(_signerSend).toHaveBeenCalledWith(
       expect.objectContaining({ gas: 120000n })
     );
-  });
 
-  test("EOA wallet: falls back to the padded default when estimation fails", async () => {
-    const { recordGeneration } = await loadModule();
+    // EOA fallback: estimation failure uses the padded 144000n default.
+    resetModules();
+    ({ recordGeneration } = await loadModule());
     _estimateGas.mockRejectedValue(new Error("revert"));
-
-    const txHash = await recordGeneration("node-1", "a prompt");
-
-    expect(txHash).toBe(TX_HASH);
+    expect(await recordGeneration("node-1", "a prompt")).toBe(TX_HASH);
     expect(_signerSend).toHaveBeenCalledWith(
       expect.objectContaining({ gas: 144000n })
     );

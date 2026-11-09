@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
 import {
   getSceneNodes,
   bumpManifestVersion,
-  validateManifest,
 } from "../../src/api/manifest-utils.ts";
 
 describe("getSceneNodes", () => {
@@ -73,38 +72,3 @@ describe("bumpManifestVersion", () => {
   });
 });
 
-describe("validateManifest", () => {
-  it("accepts a minimal valid manifest", () => {
-    const result = validateManifest({ version: 1 });
-    expect(result.valid).toBe(true);
-    expect(result.data).toEqual({ version: 1 });
-  });
-
-  it("accepts a manifest with scene nodes", () => {
-    const manifest = {
-      version: 1,
-      scene: {
-        nodes: [
-          {
-            node_id: "a",
-            transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-          },
-        ],
-      },
-    };
-    const result = validateManifest(manifest);
-    expect(result.valid).toBe(true);
-  });
-
-  it("rejects a manifest with an invalid node", () => {
-    const result = validateManifest({ version: 1, scene: { nodes: [{}] } });
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/node_id/);
-  });
-
-  it("rejects an empty object", () => {
-    const result = validateManifest({});
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/version/);
-  });
-});

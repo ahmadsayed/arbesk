@@ -1,17 +1,12 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   connectLibrary,
-  ensureLibraryConnected,
-  ensureStudioConnected,
   seedDefaultCollection,
-  generateSaveAndPublish,
   libraryCollectionLocator,
   libraryAssetLocator,
   openLibraryCollection,
   openLibraryAssetInStudio,
-  uniqueAssetName,
 } from "../helpers/flows.mjs";
 import { HARDHAT_ACCOUNTS } from "../fixtures/multi-wallet.mjs";
 
@@ -35,11 +30,15 @@ function addressToBase58(address) {
 const OWNER_BASE58 = addressToBase58(HARDHAT_ACCOUNTS[0].address);
 const SEED_ASSET_NAME = "Public Profile Seed Asset";
 
-// The profile subject's default collection is seeded in beforeAll so the spec
-// runs in isolation. The visitor page itself never connects a wallet.
+// The profile subject's default collection is seeded once in beforeAll so the
+// spec runs in isolation and never pays for repeated publish cycles. The
+// visitor page itself never connects a wallet.
 test.describe.serial("Public profile (anonymous visitor)", () => {
+  /** @type {string | null} */
+  let seededTokenIdHex = null;
+
   test.beforeAll(async ({ browser }) => {
-    await seedDefaultCollection(browser, SEED_ASSET_NAME);
+    seededTokenIdHex = await seedDefaultCollection(browser, SEED_ASSET_NAME);
   });
 
   test("anonymous visitor browses a public library read-only", async ({
@@ -75,7 +74,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
     await expect(page.locator(SELECTORS.libraryMain)).toBeHidden();
   });
 
-  test("connecting a wallet scopes a bare view URL to the wallet's profile", async ({
+  test("connecting scopes the bare URL to the wallet's profile and My Library returns to it", async ({
     page,
   }) => {
     await connectLibrary(page);
@@ -90,12 +89,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
       page.locator(SELECTORS.libraryCreateCollectionBtn),
     ).toBeVisible();
     await expect(libraryCollectionLocator(page, "Default")).toBeVisible();
-  });
 
-  test("a signed-in visitor can go back to their own library", async ({
-    page,
-  }) => {
-    await connectLibrary(page);
     // Browse someone else's (empty) public library while signed in.
     const otherBase58 = addressToBase58(HARDHAT_ACCOUNTS[1].address);
     await page.goto(`/library/${otherBase58}`);
@@ -131,20 +125,13 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
     browser,
     page,
   }) => {
-    // Create a real published asset as the connected owner.
-    const assetName = uniqueAssetName("Anonymous Studio Asset");
-    await injectHardhatProvider(page);
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    const tokenIdHex = await generateSaveAndPublish(page, assetName);
-    const tokenIdDec = BigInt(tokenIdHex).toString();
+    const tokenIdDec = BigInt(seededTokenIdHex).toString();
 
     // Resolve the asset's id within the collection from its library card
     // (data-id="asset-<tokenId>-<assetId>").
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
+    await connectLibrary(page);
     await openLibraryCollection(page, "Default");
-    const card = libraryAssetLocator(page, assetName).first();
+    const card = libraryAssetLocator(page, SEED_ASSET_NAME).first();
     await expect(card).toBeVisible();
     const cardId = await card.getAttribute("data-id");
     const assetId = cardId.replace(`asset-${tokenIdDec}-`, "");
@@ -157,7 +144,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
       );
       // The tokenURI read and manifest load work without a wallet.
       await expect(anon.locator(SELECTORS.assetStatusName)).toContainText(
-        assetName,
+        SEED_ASSET_NAME,
         { timeout: 30000 },
       );
       // View-only: save/publish stay hidden without a wallet.
@@ -170,15 +157,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
 
   test("anonymous studio profile loads the sidebar gallery (no sign-in prompt)", async ({
     browser,
-    page,
   }) => {
-    // Publish a real asset as the owner so the profile has gallery content.
-    const assetName = uniqueAssetName("Anonymous Gallery Asset");
-    await injectHardhatProvider(page);
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await generateSaveAndPublish(page, assetName);
-
     // Fresh anonymous page on the bare studio profile URL — no wallet.
     const anon = await browser.newPage();
     try {
@@ -188,7 +167,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
       await anon.click(SELECTORS.gallerySwitcherBtn);
       const card = anon
         .locator(SELECTORS.assetCard)
-        .filter({ hasText: assetName })
+        .filter({ hasText: SEED_ASSET_NAME })
         .first();
       await expect(card).toBeVisible({ timeout: 30000 });
       await expect(anon.locator("#galleryConnectBtn")).toHaveCount(0);
@@ -206,7 +185,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
       // (regression: that race used to revert the open to "No asset open").
       await card.click();
       await expect(anon.locator(SELECTORS.assetStatusName)).toContainText(
-        assetName,
+        SEED_ASSET_NAME,
       );
     } finally {
       await anon.close();

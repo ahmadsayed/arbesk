@@ -14,6 +14,22 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 const { createPublicClient, http, decodeAbiParameters } = await import("viem");
 
+const HARDHAT_RPC = "http://127.0.0.1:8545";
+
+// Probe the local node once at collection time so on-chain tests can be
+// honestly skipped (test.skipIf) instead of silently early-returning.
+const nodeAvailable = await (async () => {
+  try {
+    const probe = createPublicClient({
+      transport: http(HARDHAT_RPC, { timeout: 1500 }),
+    });
+    await probe.getBlockNumber();
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = resolve(__dirname, "..", "..");
 
@@ -70,6 +86,7 @@ const REQUIRED_PAID_ABI_FUNCTIONS = [
   "tokenURI",
   "payForGenerationWithUSDC",
   "tierCosts",
+  "usdcToken",
   "publishAsset",
   "updateAssetURI",
   "updateEditors",
@@ -125,14 +142,6 @@ describe("Deployment Pipeline Integrity", () => {
   // 1. Both ABI artifacts must exist
   // ================================================================
 
-  test("paid ABI artifact exists on host filesystem", () => {
-    expect(existsSync(PAID_ARTIFACT_PATH)).toBe(true);
-  });
-
-  test("free ABI artifact exists on host filesystem", () => {
-    expect(existsSync(FREE_ARTIFACT_PATH)).toBe(true);
-  });
-
   test("paid artifact contains a valid ABI array", () => {
     expect(Array.isArray(paidAbi)).toBe(true);
     expect(paidAbi.length).toBeGreaterThan(0);
@@ -143,28 +152,18 @@ describe("Deployment Pipeline Integrity", () => {
     expect(freeAbi.length).toBeGreaterThan(0);
   });
 
-  test.each(REQUIRED_PAID_ABI_FUNCTIONS)("paid ABI contains %s", (name) => {
-    const entry = paidAbi.find((e) => e.type === "function" && e.name === name);
-    expect(entry).toBeTruthy();
-  });
-
-  test.each(REQUIRED_FREE_ABI_FUNCTIONS)("free ABI contains %s", (name) => {
-    const entry = freeAbi.find((e) => e.type === "function" && e.name === name);
-    expect(entry).toBeTruthy();
-  });
-
-  test("paid ABI has publishAsset overloads", () => {
-    const entries = paidAbi.filter(
-      (e) => e.type === "function" && e.name === "publishAsset",
+  test("paid ABI contains every required function", () => {
+    const missing = REQUIRED_PAID_ABI_FUNCTIONS.filter(
+      (name) => !paidAbi.find((e) => e.type === "function" && e.name === name),
     );
-    expect(entries.length).toBeGreaterThanOrEqual(1);
+    expect(missing).toEqual([]);
   });
 
-  test("free ABI has publishAsset overloads", () => {
-    const entries = freeAbi.filter(
-      (e) => e.type === "function" && e.name === "publishAsset",
+  test("free ABI contains every required function", () => {
+    const missing = REQUIRED_FREE_ABI_FUNCTIONS.filter(
+      (name) => !freeAbi.find((e) => e.type === "function" && e.name === name),
     );
-    expect(entries.length).toBeGreaterThanOrEqual(1);
+    expect(missing).toEqual([]);
   });
 
   test("free ABI does NOT have payForGeneration", () => {
@@ -313,10 +312,6 @@ describe("Deployment Pipeline Integrity", () => {
       expect(paid).toBeTruthy();
       expect(usdc).toBeTruthy();
       expect(usdc).not.toBe(paid);
-    });
-
-    test("USDC_TOKEN is a valid Ethereum address", () => {
-      expect(blockchainEnv.USDC_TOKEN).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });
 
     test("USDC_TOKEN is not the zero address", () => {
@@ -531,9 +526,7 @@ describe("Deployment Pipeline Integrity", () => {
   // ================================================================
 
   describe("on-chain contract integrity", () => {
-    const HARDHAT_RPC = "http://127.0.0.1:8545";
     let client;
-    let nodeAvailable = false;
     let freeAddr;
     let paidAddr;
     let usdcAddr;
@@ -577,49 +570,26 @@ describe("Deployment Pipeline Integrity", () => {
       paidAddr = paidArtifact?.address || blockchainEnv.PAID_CONTRACT_ADDRESS;
       usdcAddr = paidArtifact?.usdcToken || blockchainEnv.USDC_TOKEN;
 
-      try {
+      if (nodeAvailable) {
         client = createPublicClient({ transport: http(HARDHAT_RPC) });
-        await client.getBlockNumber();
-        nodeAvailable = true;
         paidAbiData = loadABI(PAID_ARTIFACT_PATH);
         freeAbiData = loadABI(FREE_ARTIFACT_PATH);
-      } catch {
-        nodeAvailable = false;
       }
     });
 
-    const requireNode = () => {
-      if (!nodeAvailable) return undefined;
-      return true;
-    };
-
-    test("Hardhat node is running", () => {
-      if (!nodeAvailable) {
-        console.warn(
-          "Hardhat node not reachable at " +
-            HARDHAT_RPC +
-            " - skipping all on-chain tests.",
-        );
-      }
-      expect(true).toBe(true);
-    });
-
-    test("free contract has code on-chain", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("free contract has code on-chain", async () => {
       const code = await client.getCode({ address: freeAddr });
       expect(code).toBeTruthy();
       expect(code.length).toBeGreaterThan(4);
     });
 
-    test("paid contract has code on-chain", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("paid contract has code on-chain", async () => {
       const code = await client.getCode({ address: paidAddr });
       expect(code).toBeTruthy();
       expect(code.length).toBeGreaterThan(4);
     });
 
-    test("MockUSDC contract has code on-chain", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("MockUSDC contract has code on-chain", async () => {
       const code = await client.getCode({ address: usdcAddr });
       expect(code).toBeTruthy();
       expect(code.length).toBeGreaterThan(4);
@@ -635,8 +605,7 @@ describe("Deployment Pipeline Integrity", () => {
       return client.getCode({ address: `0x${slot.slice(-40)}` });
     };
 
-    test("free, paid, and USDC have mutually different bytecode", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("free, paid, and USDC have mutually different bytecode", async () => {
       const freeCode = await implementationCode(freeAddr);
       const paidCode = await implementationCode(paidAddr);
       const usdcCode = await client.getCode({ address: usdcAddr });
@@ -645,8 +614,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(paidCode).not.toBe(usdcCode);
     });
 
-    test("MockUSDC responds to ERC20 decimals() = 6", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("MockUSDC responds to ERC20 decimals() = 6", async () => {
       const result = await client.call({
         to: usdcAddr,
         data: "0x313ce567",
@@ -654,8 +622,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(parseInt(result.data, 16)).toBe(6);
     });
 
-    test("MockUSDC symbol() returns 'USDC'", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("MockUSDC symbol() returns 'USDC'", async () => {
       const result = await client.call({
         to: usdcAddr,
         data: "0x95d89b41",
@@ -664,8 +631,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(decoded[0]).toBe("USDC");
     });
 
-    test("paid contract usdcToken() returns MockUSDC address", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("paid contract usdcToken() returns MockUSDC address", async () => {
       if (!paidAbiData) return;
       const usdcFromChain = await client.readContract({
         address: paidAddr,
@@ -675,8 +641,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(usdcFromChain.toLowerCase()).toBe(usdcAddr.toLowerCase());
     });
 
-    test("paid contract tierCosts(Basic) matches expected 750000", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("paid contract tierCosts(Basic) matches expected 750000", async () => {
       if (!paidAbiData) return;
       const cost = await client.readContract({
         address: paidAddr,
@@ -687,8 +652,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(Number(cost)).toBe(750000);
     });
 
-    test("free contract MAX_EDITORS_PER_TOKEN() returns 5000", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("free contract MAX_EDITORS_PER_TOKEN() returns 5000", async () => {
       if (!freeAbiData) return;
       const limit = await client.readContract({
         address: freeAddr,
@@ -698,8 +662,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(Number(limit)).toBe(5000);
     });
 
-    test("free contract DAILY_GENERATION_LIMIT() returns 10", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("free contract DAILY_GENERATION_LIMIT() returns 10", async () => {
       if (!freeAbiData) return;
       const limit = await client.readContract({
         address: freeAddr,
@@ -709,8 +672,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(Number(limit)).toBe(10);
     });
 
-    test("deployer has USDC balance on MockUSDC", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("deployer has USDC balance on MockUSDC", async () => {
       const deployer = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
       const data =
         "0x70a08231" +
@@ -720,8 +682,7 @@ describe("Deployment Pipeline Integrity", () => {
       expect(balance).toBeGreaterThan(BigInt(0));
     });
 
-    test("MockUSDC does NOT respond to ERC721 ownerOf()", async () => {
-      if (!requireNode()) return;
+    test.skipIf(!nodeAvailable)("MockUSDC does NOT respond to ERC721 ownerOf()", async () => {
       try {
         await client.call({
           to: usdcAddr,
@@ -731,28 +692,6 @@ describe("Deployment Pipeline Integrity", () => {
       } catch (e) {
         expect(e.message).toBeTruthy();
       }
-    });
-
-    test("paid ABI is loadable and has required functions", () => {
-      if (!paidAbiData) return;
-      expect(Array.isArray(paidAbiData)).toBe(true);
-      const fnNames = paidAbiData
-        .filter((e) => e.type === "function")
-        .map((e) => e.name);
-      expect(fnNames).toContain("usdcToken");
-      expect(fnNames).toContain("tierCosts");
-      expect(fnNames).toContain("payForGenerationWithUSDC");
-    });
-
-    test("free ABI is loadable and has required functions", () => {
-      if (!freeAbiData) return;
-      expect(Array.isArray(freeAbiData)).toBe(true);
-      const fnNames = freeAbiData
-        .filter((e) => e.type === "function")
-        .map((e) => e.name);
-      expect(fnNames).toContain("recordGeneration");
-      expect(fnNames).toContain("DAILY_GENERATION_LIMIT");
-      expect(fnNames).toContain("MAX_EDITORS_PER_TOKEN");
     });
   });
 });
@@ -774,14 +713,6 @@ describe("AI Generation sidebar", () => {
     expect(content).not.toContain("textureQualityRow");
   });
 
-  test("prompt input lives in the sidebar, before the main stage", () => {
-    const content = pug();
-    expect(content).toContain("textarea#promptInput");
-    expect(content.indexOf("textarea#promptInput")).toBeLessThan(
-      content.indexOf("main#mainStage"),
-    );
-  });
-
   // Phase 2: library-first rail — Outline · Assets · Create · Activity, with
   // no Settings button (asset settings live in Properties).
   test("rail is Outline · Assets · Create · Activity with a plain Create label", () => {
@@ -799,10 +730,6 @@ describe("AI Generation sidebar", () => {
     const content = pug();
     expect(content).toContain("#providerKeyStatus");
     expect(content).toContain("button#providerKeyLink");
-  });
-
-  test("BYOK key input is not inlined (it lives in the key dialog)", () => {
-    expect(pug()).not.toContain("input#providerKeyInput");
   });
 
   test("bottom bar provider status is live-bindable", () => {

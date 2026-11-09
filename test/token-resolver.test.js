@@ -1,210 +1,41 @@
 /**
  * Token Resolver Unit Tests
  *
- * Tests for token URI normalization and child_ref validation.
- *
- * normalizeTokenURI is tested inline to avoid Jest ESM resolution
- * issues with the frontend directory. The canonical implementation
- * lives at frontend/src/js/blockchain/uri-utils.js.
+ * normalizeTokenURI is a pure helper, so test the real module
+ * (frontend/src/js/blockchain/uri-utils.ts) rather than an inline copy.
  */
 
-/**
- * Inline copy of normalizeTokenURI from frontend/src/js/blockchain/uri-utils.js
- */
 import { describe, expect, it } from "bun:test";
-function normalizeTokenURI(uri) {
-  if (!uri || typeof uri !== "string") return "";
+import { normalizeTokenURI } from "../frontend/src/js/blockchain/uri-utils.ts";
 
-  let normalized = uri.trim();
-
-  if (normalized.startsWith("ipfs://")) {
-    normalized = normalized.slice(7);
-  }
-
-  const ipfsPathMatch = normalized.match(/\/ipfs\/([A-Za-z0-9]{46,})/);
-  if (ipfsPathMatch) {
-    normalized = ipfsPathMatch[1];
-  }
-
-  const cidMatch = normalized.match(/^([A-Za-z0-9]{46,})/);
-  if (cidMatch) {
-    normalized = cidMatch[1];
-  }
-
-  return normalized;
-}
+const CID = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
 
 describe("Token Resolver - normalizeTokenURI", () => {
-  it("returns empty string for empty input", () => {
+  it("returns an empty string for empty or non-string input", () => {
     expect(normalizeTokenURI("")).toBe("");
     expect(normalizeTokenURI(null)).toBe("");
     expect(normalizeTokenURI(undefined)).toBe("");
   });
 
-  it("returns plain CID unchanged", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(cid)).toBe(cid);
+  it("normalizes IPFS prefixes, gateways, paths and query strings to a bare CID", () => {
+    const cases = [
+      CID,
+      `ipfs://${CID}`,
+      `ipfs://${CID}/manifest.json`,
+      `ipfs://${CID}/`,
+      `http://127.0.0.1:8080/ipfs/${CID}`,
+      `https://ipfs.io/ipfs/${CID}`,
+      `  ${CID}  `,
+      `${CID}?filename=test.glb`,
+    ];
+    for (const input of cases) {
+      expect(normalizeTokenURI(input)).toBe(CID);
+    }
   });
 
-  it("strips ipfs:// prefix", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`ipfs://${cid}`)).toBe(cid);
-  });
-
-  it("strips ipfs:// prefix with path", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`ipfs://${cid}/manifest.json`)).toBe(cid);
-  });
-
-  it("strips HTTP gateway prefix", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`http://127.0.0.1:8080/ipfs/${cid}`)).toBe(cid);
-  });
-
-  it("strips HTTPS gateway prefix", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`https://ipfs.io/ipfs/${cid}`)).toBe(cid);
-  });
-
-  it("handles trailing whitespace", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`  ${cid}  `)).toBe(cid);
-  });
-
-  it("handles base58 CIDv1", () => {
-    const cidv1 = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`ipfs://${cidv1}`)).toBe(cidv1);
-  });
-
-  it("handles ipfs:// with trailing slash", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`ipfs://${cid}/`)).toBe(cid);
-  });
-
-  it("handles data URI gracefully (returns as-is)", () => {
+  it("passes through values that are not IPFS CIDs", () => {
     const dataUri = "data:application/json;base64,eyJrZXkiOiJ2YWx1ZSJ9";
-    // Data URIs pass through unchanged since they're not IPFS CIDs
     expect(normalizeTokenURI(dataUri)).toBe(dataUri);
-  });
-
-  it("handles bare CID with query params", () => {
-    const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
-    expect(normalizeTokenURI(`${cid}?filename=test.glb`)).toBe(cid);
-  });
-});
-
-describe("Token Resolver - child_ref validation", () => {
-  it("valid child_ref has correct structure", () => {
-    const validRef = {
-      type: "token",
-      chainId: 314159,
-      contractAddress: "0x1234567890abcdef1234567890abcdef12345678",
-      tokenId: "42",
-      standard: "ERC721",
-      resolution: "latest",
-    };
-
-    expect(validRef.type).toBe("token");
-    expect(validRef.chainId).toBe(314159);
-    expect(validRef.contractAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
-    expect(validRef.tokenId).toBe("42");
-    expect(validRef.standard).toBe("ERC721");
-    expect(validRef.resolution).toBe("latest");
-  });
-
-  it("child_ref node_id follows naming convention", () => {
-    const chainId = 314159;
-    const shortAddr = "12345678";
-    const tokenId = "42";
-    const nodeId = `child_token_${chainId}_${shortAddr}_${tokenId}`;
-
-    expect(nodeId).toBe("child_token_314159_12345678_42");
-    expect(nodeId).toMatch(/^child_token_\d+_[a-f0-9]+_\d+$/);
-  });
-
-  it("child_ref without source and history is valid", () => {
-    const nodeEntry = {
-      node_id: "child_token_314159_abc123_42",
-      transform_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-      child_ref: {
-        type: "token",
-        chainId: 314159,
-        contractAddress: "0x1234567890abcdef1234567890abcdef12345678",
-        tokenId: "42",
-        standard: "ERC721",
-        resolution: "latest",
-      },
-    };
-
-    // Token child nodes must not have source or history
-    expect(nodeEntry.source).toBeUndefined();
-    expect(nodeEntry.history).toBeUndefined();
-    expect(nodeEntry.child_ref).toBeDefined();
-    expect(nodeEntry.transform_matrix).toHaveLength(16);
-  });
-
-  it("MAX_CHILD_ASSET_DEPTH is correctly defined", () => {
-    // This constant must be 5 per the specification
-    const MAX_CHILD_ASSET_DEPTH = 5;
-    expect(MAX_CHILD_ASSET_DEPTH).toBe(5);
-  });
-});
-
-describe("Token Resolver - resolveAssetIdFromCollection", () => {
-  /**
-   * Inline copy of resolveAssetIdFromCollection from
-   * frontend/src/js/blockchain/token-resolver.js
-   */
-  function resolveAssetIdFromCollection(assetsMap, assetID) {
-    if (!assetsMap || typeof assetsMap !== "object") {
-      return { kind: "missing", value: null };
-    }
-    const entry = assetsMap[assetID];
-    if (entry === undefined || entry === null) {
-      return { kind: "missing", value: null };
-    }
-    if (typeof entry === "string") {
-      return { kind: "cid", value: entry };
-    }
-    if (
-      typeof entry === "object" &&
-      entry.tokenId !== undefined &&
-      entry.contractAddress
-    ) {
-      return { kind: "collection", value: entry };
-    }
-    return { kind: "missing", value: null };
-  }
-
-  it("resolves a string entry as a direct CID", () => {
-    const result = resolveAssetIdFromCollection(
-      { "chair-01": "bafyChairCid" },
-      "chair-01",
-    );
-    expect(result).toEqual({ kind: "cid", value: "bafyChairCid" });
-  });
-
-  it("resolves an object entry as a nested collection reference", () => {
-    const tokenRef = { chainId: 6343, contractAddress: "0xabc", tokenId: "42" };
-    const result = resolveAssetIdFromCollection(
-      { "garden-01": tokenRef },
-      "garden-01",
-    );
-    expect(result).toEqual({ kind: "collection", value: tokenRef });
-  });
-
-  it("returns missing for an unknown assetID", () => {
-    const result = resolveAssetIdFromCollection(
-      { "chair-01": "bafyChairCid" },
-      "table-99",
-    );
-    expect(result).toEqual({ kind: "missing", value: null });
-  });
-
-  it("returns missing when assetsMap is null", () => {
-    expect(resolveAssetIdFromCollection(null, "chair-01")).toEqual({
-      kind: "missing",
-      value: null,
-    });
+    expect(normalizeTokenURI("short")).toBe("short");
   });
 });

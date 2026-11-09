@@ -306,31 +306,7 @@ describe("stageUploadSource", () => {
     });
   });
 
-  test("keeps the raw source when decompose fails", async () => {
-    _decomposeForSave = jest.fn().mockRejectedValue(new Error("boom"));
-    const { stageUploadSource } = await loadModule();
-
-    const file = new File(["binary"], "model.glb", { type: "model/gltf-binary" });
-    const source = await stageUploadSource(file);
-
-    expect(source).toEqual({
-      cid: "bafySource",
-      path: "model.glb",
-      format: "glb",
-    });
-  });
-
-  test("rejects unsupported extensions", async () => {
-    const { stageUploadSource } = await loadModule();
-    const file = new File(["text"], "notes.txt", { type: "text/plain" });
-    await expect(stageUploadSource(file)).rejects.toThrow("Unsupported file type");
-    expect(_writeToIPFS).not.toHaveBeenCalled();
-  });
-
-  test("rejects files over the size cap", async () => {
-    const { stageUploadSource } = await loadModule();
-    const file = new File([new ArrayBuffer(101 * 1024 * 1024)], "huge.glb", { type: "model/gltf-binary" });
-    await expect(stageUploadSource(file)).rejects.toThrow("too large");
-    expect(_writeToIPFS).not.toHaveBeenCalled();
-  });
+  // The shared validation paths (decompose failure, unsupported extension,
+  // size cap) are exercised once by the uploadFileToCollection tests above;
+  // stageUploadSource delegates to the same helpers.
 });

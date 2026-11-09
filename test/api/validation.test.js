@@ -12,29 +12,20 @@ import { validateManifest } from "@arbesk/asset-core/manifest/utils.js";
 
 describe("API schemas", () => {
   describe("cidSchema", () => {
-    it("accepts a non-empty alphanumeric CID", () => {
+    it("accepts a valid CID and rejects empty or whitespace", () => {
       expect(cidSchema.safeParse("bafyTest123").success).toBe(true);
-    });
-
-    it("rejects an empty string", () => {
       expect(cidSchema.safeParse("").success).toBe(false);
-    });
-
-    it("rejects whitespace", () => {
       expect(cidSchema.safeParse("bafy Test").success).toBe(false);
     });
   });
 
   describe("ethereumAddressSchema", () => {
-    it("accepts a checksummed address", () => {
+    it("accepts checksummed and lowercase addresses", () => {
       expect(
         ethereumAddressSchema.safeParse(
           "0x5FbDB2315678afecb367f032d93F642f64180aa3",
         ).success,
       ).toBe(true);
-    });
-
-    it("accepts a lowercase address", () => {
       expect(
         ethereumAddressSchema.safeParse(
           "0x5fbdb2315678afecb367f032d93f642f64180aa3",
@@ -42,11 +33,8 @@ describe("API schemas", () => {
       ).toBe(true);
     });
 
-    it("rejects a short address", () => {
+    it("rejects short addresses and missing 0x prefix", () => {
       expect(ethereumAddressSchema.safeParse("0x1234").success).toBe(false);
-    });
-
-    it("rejects a missing 0x prefix", () => {
       expect(
         ethereumAddressSchema.safeParse("5fbdb2315678afecb367f032d93f642f64180aa3")
           .success,
@@ -164,7 +152,7 @@ describe("API schemas", () => {
       view: v,
     });
 
-    it("accepts a valid 2-view multiview payload without a prompt", () => {
+    it("accepts valid 2-view and 4-view multiview payloads without a prompt", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
@@ -172,9 +160,6 @@ describe("API schemas", () => {
           images: [view("front"), view("left")],
         }).success,
       ).toBe(true);
-    });
-
-    it("accepts a valid 4-view multiview payload", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
@@ -196,25 +181,19 @@ describe("API schemas", () => {
       }
     });
 
-    it("rejects duplicate views in multiview images", () => {
+    it("rejects duplicate views and invalid view counts", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
           images: [view("front"), view("front")],
         }).success,
       ).toBe(false);
-    });
-
-    it("rejects a single multiview image", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
           images: [view("front")],
         }).success,
       ).toBe(false);
-    });
-
-    it("rejects more than 4 multiview images", () => {
       expect(
         generateAssetSchema.safeParse({
           nodeId: "n1",
@@ -429,17 +408,11 @@ describe("API schemas", () => {
   });
 
   describe("unpinSchema", () => {
-    it("requires a non-empty CID", () => {
+    it("requires a non-empty CID and a decimal tokenId", () => {
       expect(unpinSchema.safeParse({ cid: "", tokenId: "1" }).success).toBe(
         false,
       );
-    });
-
-    it("requires tokenId", () => {
       expect(unpinSchema.safeParse({ cid: "bafyTest" }).success).toBe(false);
-    });
-
-    it("rejects a non-decimal tokenId", () => {
       expect(
         unpinSchema.safeParse({ cid: "bafyTest", tokenId: "0x12" }).success,
       ).toBe(false);
@@ -448,13 +421,10 @@ describe("API schemas", () => {
       ).toBe(false);
     });
 
-    it("accepts a valid CID and tokenId", () => {
+    it("accepts a valid CID, tokenId, and optional fields", () => {
       expect(
         unpinSchema.safeParse({ cid: "bafyTest", tokenId: "123" }).success,
       ).toBe(true);
-    });
-
-    it("accepts optional chainId, contractAddress, and proof", () => {
       const result = unpinSchema.safeParse({
         cid: "bafyTest",
         tokenId: "123",
@@ -493,18 +463,11 @@ describe("API schemas", () => {
   });
 
   describe("gcSchema", () => {
-    it("defaults dryRun to true", () => {
-      const result = gcSchema.safeParse({});
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.dryRun).toBe(true);
-      }
-    });
-
-    it("coerces string chainId to number", () => {
+    it("defaults dryRun to true and coerces string chainId", () => {
       const result = gcSchema.safeParse({ chainId: "31337" });
       expect(result.success).toBe(true);
       if (result.success) {
+        expect(result.data.dryRun).toBe(true);
         expect(result.data.chainId).toBe(31337);
       }
     });
@@ -516,9 +479,9 @@ describe("API schemas", () => {
 });
 
 describe("validateManifest", () => {
-  it("accepts a minimal valid manifest", () => {
-    const result = validateManifest({ version: 1 });
-    expect(result.valid).toBe(true);
+  it("accepts a minimal valid manifest and rejects an empty object", () => {
+    expect(validateManifest({ version: 1 }).valid).toBe(true);
+    expect(validateManifest({}).valid).toBe(false);
   });
 
   it("accepts a manifest with a child_ref node", () => {

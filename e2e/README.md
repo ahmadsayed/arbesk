@@ -106,6 +106,8 @@ docker compose -p $(./scripts/start-dev.sh --print-project 2>/dev/null || echo a
 
 ## What the tests cover
 
+`e2e/specs/` currently holds **29 spec files / 40 tests**. The default GPU run (4 workers, 4 isolated stacks) takes roughly 1.5–2 minutes including global setup.
+
 ### 1. Wallet connection (`e2e/specs/01-connect-wallet.spec.js`)
 
 Validates the full wallet-discovery and authentication path:
@@ -121,10 +123,9 @@ Validates the full wallet-discovery and authentication path:
 
 Validates free-tier mock generation end-to-end:
 
-- Types `cowboy` into the prompt input and clicks **Generate asset**.
-- Confirms the result lands as an asset chat bubble (live 3D preview canvas + **Show in Studio** button) and that the Studio URL/scene stay untouched.
-- Clicks **Show in Studio**, then confirms the chat history shows `Model carved via mock` and the bubble collapses to its sent state (snapshot preview, button stays live as the restore path).
-- Verifies multiple pending generations keep independent send buttons.
+- Types `cowboy` into the prompt input and clicks **Generate asset**, then starts a second pending generation (`second robot`).
+- Confirms each result lands as its own asset chat bubble with a live 3D preview canvas and an independent **Show in Studio** button, and that the Studio URL/scene stay untouched.
+- Clicks the first **Show in Studio**, then confirms the chat history shows `Model carved via mock`, only that bubble collapses to its sent state (snapshot preview, button stays live as the restore path), and the second bubble remains actionable.
 - Extracts the manifest CID from `?manifest=baf...` in the URL. The exact CIDv1 prefix depends on the IPFS backend (e.g. `bafy...` for dag-pb, `bafkrei...` for raw JSON).
 - Fetches the manifest from the local IPFS gateway.
 - Validates the manifest structure (asset_id, version, timestamp, one `source_asset` node, source CID/format, 16-element transform matrix, node name contains the prompt).
@@ -135,18 +136,15 @@ Validates free-tier mock generation end-to-end:
 
 Validates the full draft-save → publish → on-chain token lifecycle:
 
-1. Generates `cowboy` (same as Spec 2).
-2. Clicks **Save draft** and waits for the URL to flip to a new manifest CID.
-3. Extracts the new manifest CID from the URL and asserts it is different from the generation CID.
-4. Validates the saved manifest is version `2` and links back to the generation CID via `prev_asset_manifest_cid`.
-5. Clicks **Publish**, fills the **Name Your Asset** dialog with `Cowboy Test`, and confirms.
-6. Waits for the URL to show `?asset=0x...`.
-7. Extracts the hex token ID from the URL.
-8. Resolves the on-chain `tokenURI` through the contract and walks the collection manifest to the first asset.
-9. Asserts the published asset manifest name is `Cowboy Test` and validates its structure.
-10. Opens the Assets tab, asserts the open asset's own card is listed as current (disabled), starts a scratch empty asset, then opens the published card (decimal token id) by clicking it.
-
-**Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, collection manifests, and gallery rendering. UI changes to any of those controls or changes to the manifest schema/versioning logic can break it.
+1. Generates `cowboy` — **Show in Studio** auto-saves the draft (a manual Save is a no-op).
+2. Extracts the auto-saved manifest CID from the URL and its `prev_asset_manifest_cid` (the generation CID).
+3. Validates the generation manifest and the saved manifest (version `2`, links back to the generation CID).
+4. Clicks **Publish**, fills the **Name Your Asset** dialog with `Cowboy Test`, and confirms.
+5. Waits for the URL to show `?asset=0x...`.
+6. Extracts the hex token ID from the URL.
+7. Resolves the on-chain `tokenURI` through the contract and walks the collection manifest to the first asset.
+8. Asserts the published asset manifest name is `Cowboy Test` and validates its structure.
+**Why it matters:** This is the most complex spec. It touches the save button, publish button, name dialog, parametric versioning, thumbnail capture, ERC-721 minting, collection manifests, and gallery rendering. Gallery card open/current-state assertions live in Spec 7.
 
 ### 4. Parametric versioning + time-travel (`e2e/specs/04-parametric-version.spec.js`)
 
@@ -161,6 +159,8 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 
 **Why it matters:** Colour/scale edits are first-class versions, and the timeline strip plus the per-node model clock are the app's version-control surfaces. Changes to `parametric-preview.ts`, `version-history-store.ts`, `version-timeline.ts`, `model-clock-gizmo.ts`, the outliner selection path, or version-chain logic can break it.
 
+> **Note:** the clock's camera-billboard orientation math is covered by `test/frontend/model-clock-gizmo.test.js`; this spec keeps the badge/version stepping assertions.
+
 ### 5. Republish existing token (`e2e/specs/05-republish.spec.js`)
 
 Validates the edit → **republish** branch (no new mint):
@@ -174,14 +174,17 @@ Validates the edit → **republish** branch (no new mint):
 
 ### 6. Nesting / linked child assets (`e2e/specs/06-nesting.spec.js`)
 
-Validates the "dollhouse architecture" — linking a token as a child asset and navigating depth:
+Validates the "dollhouse architecture" — linking a token as a child asset, navigating depth, and unlinking:
 
-1. Publishes a world to use as the child reference.
+1. Publishes a world to use as the child reference (unique name on the shared chain).
 2. Starts a fresh parent (**New asset** → name), generates the parent's own content.
 3. Clicks the Insert card (a live link, no dialog) to link the child token into the parent.
 4. **Save**s and asserts the parent manifest gains a `child_ref` node with a 16-element identity `transform_matrix` and **no** local `history`.
 5. Selects the child node and **dives** (`#inspectorDiveBtn`) — asserts the back button reveals and the `nesting:didDive` event fires at depth 1.
 6. **Ascends** via the back button — asserts it hides and `nesting:didAscend` fires at depth 0.
+7. Removes the child via the outliner **[-]** button, saves again, and asserts the new manifest no longer contains a `child_ref` (the removal is staged, then persisted).
+
+The publish/generation setup is shared once; the dive/ascend and unlink flows run on the same parent instead of paying for a second child publish.
 
 **Why it matters:** Token child nodes (`child_ref`, `transform_matrix`, depth gating) are the core fractal-nesting data model. Changes to `nesting.ts`, `scene-graph.ts` linked-asset handling, the token resolver, or the child-node manifest shape can break it.
 
@@ -192,11 +195,11 @@ Validates the "dollhouse architecture" — linking a token as a child asset and 
 Validates that every ERC-721 token is a collection manifest containing one or more asset manifests:
 
 1. Publishes a first asset and asserts the on-chain `tokenURI` resolves to a collection manifest with at least one entry.
-2. Publishes a second asset and asserts it lands in the **same** default collection token without disturbing the first asset.
-3. Opens the published token in the gallery, opens an asset card via its ⋯ → **Open <name>** menu, and asserts the Studio viewport loads the asset name.
-4. Uses **New Asset** to clear the scene while preserving the selected collection context, then publishes again into the same collection.
-5. Reloads `?asset=TOKENID` and asserts the viewport restores the first asset.
-6. Asserts the collection selector populates on wallet connect with the wallet-derived default collection ID.
+2. Uses **New Asset** to clear the scene while preserving the selected collection context, publishes a second asset, and asserts it lands in the **same** default collection token without disturbing the first asset.
+3. Opens the published token in the gallery, opens an asset card, and asserts the Studio viewport loads the asset name.
+4. Reloads `?asset=TOKENID&assetId=ASSETID` and asserts the viewport restores the first asset.
+
+The two publishes, the New Asset context check, and the deep-link reload share one token; collection-selector population is covered by the collections unit tests and the public-profile connect flow.
 
 **Why it matters:** This is the only spec that exercises the collection manifest shape end-to-end, the `activeAssetId` → collection `assets` map, and the gallery asset-card deep-link into the Studio. Changes to `asset-save.ts`, `collection-publish.ts`, the collection selector, or the gallery card rendering can break it.
 
@@ -214,10 +217,13 @@ Regression coverage for issue #25 lives in `test/frontend/material-editor.test.j
 
 Validates the two ways to reuse another collection's asset inside a parent scene:
 
-1. Publishes a child asset.
-2. Starts a fresh parent draft and uses the Assets card's ⋯ menu: **Insert as live link** inserts a live reference, **Insert a copy** inserts a fork (no dialog either way).
-3. **Fork (copy)** (⋯ → Insert a copy) — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`.
-4. **Live reference** (card click) — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
+1. Publishes one child asset and verifies its collection manifest.
+2. Starts a fresh parent draft and uses the Assets card's ⋯ menu: **Insert as a copy** inserts a fork (no dialog).
+3. **Fork (copy)** — asserts the parent manifest stores a `source` node with a frozen CID, no `child_ref`, and no local `history`; the frozen source/post-processor/transform equal the child model node.
+4. Starts a second parent draft and inserts the same child as a live link (**Insert as live link**).
+5. **Live reference** — asserts the parent manifest stores a `child_ref` node pointing at the child's collection/token/assetID, with a 16-element `transform_matrix` and no `source` or `history`.
+
+One child publish feeds both parent variants, halving the on-chain setup.
 
 **Why it matters:** Fork/live-ref is the core fractal-reuse mechanism. Changes to `nesting.ts`, the gallery card actions, the fork/live-ref dialog, or the `child_ref` schema can break it.
 
@@ -225,12 +231,12 @@ Validates the two ways to reuse another collection's asset inside a parent scene
 
 Validates the Nautilus-style collection browser on `/library`:
 
-1. Confirms the wallet gate appears before connection and connects via the Sign in picker.
-2. Asserts the wallet-derived default collection is labeled **Default**.
-3. Publishes an asset in Studio and verifies it appears inside **Default** in the library.
-4. Tests breadcrumb navigation and the **Up** button to return to the collection list.
-5. Tests search filtering (matching and empty states).
-6. Tests grid/list view toggle and sort-by-name.
+1. Connects once via the Sign in picker and asserts the wallet-derived default collection is labeled **Default** (seeded in `beforeAll`).
+2. Tests breadcrumb navigation and the **Up** button to return to the collection list.
+3. Tests search filtering (matching and empty states).
+4. Tests the grid/list view toggle (list table rows and grid children).
+
+The wallet gate before connection is covered by the public-profile spec, and sort-by-name is unit-level; both were removed from this spec.
 
 **Why it matters:** The library is a view inside the unified SPA (`app.html` served at `/library`) with its own state and selection model. Changes to `app-init.ts`, `library-controller.ts`, `library-grid.ts`, `library-toolbar.ts`, or the wallet gate can break this.
 
@@ -239,9 +245,10 @@ Validates the Nautilus-style collection browser on `/library`:
 Validates the context-menu actions available on library assets:
 
 1. **Rename** — opens the GNOME dialog, changes the asset name, and asserts the grid updates.
-2. **Delete** — confirms deletion and asserts the asset is removed from the collection (NFT is not burned).
-3. **Open in Studio** — navigates to `/studio?asset=TOKEN&assetId=ID` and asserts the asset loads.
-4. **Send to Collection…** — with only the default collection present, asserts a warning toast explains that another collection is required.
+2. **Send to Collection…** on the renamed asset — with only the default collection present, asserts a warning toast explains that another collection is required.
+3. **Delete** — confirms deletion and asserts the asset is removed from the collection (NFT is not burned).
+
+Opening an asset from the library is covered by the round-trip spec (11), so the duplicate context-menu open path was removed.
 
 **Why it matters:** These actions exercise `library-context-menu.ts`, `services/asset-delete.ts`, collection manifest updates, and the Studio deep-link handling.
 
@@ -249,8 +256,8 @@ Validates the context-menu actions available on library assets:
 
 Validates the publish-in-Studio / browse-in-Library / open-in-Studio loop:
 
-1. Publishes an asset in Studio, then asserts it appears in the library and in the on-chain collection manifest.
-2. Opens the asset from the library and asserts the Studio URL contains both `asset` and `assetId`, and the asset name appears in the status bar.
+1. Publishes an asset once in `beforeAll`, then asserts it appears in the library and in the on-chain collection manifest.
+2. Opens the same asset from the library and asserts the Studio URL contains both `asset` and `assetId`, and the asset name appears in the status bar.
 
 **Why it matters:** This verifies the library is not just a read-only gallery but a true entry point back into the Studio editor. Parametric republish flows are covered in Spec 5.
 
@@ -258,15 +265,12 @@ Validates the publish-in-Studio / browse-in-Library / open-in-Studio loop:
 
 Validates the new Library toolbar flows for collection creation and desktop file upload:
 
-1. Clicks **New Collection**, names it, and confirms.
-2. Asserts the new collection is minted and appears in the collections list.
-3. Opens the new collection.
-4. Uses the **Upload** button to select `mock-gltf-assets/howdy.glb` from disk.
-5. Asserts the uploaded file appears as an asset named `howdy` inside the collection.
-6. Resolves the on-chain collection manifest and asserts the uploaded asset manifest's source was **decomposed at upload** to `composite.gltf` / `format: "gltf"` — the canonical stored form a Studio save produces.
-7. Opens the uploaded asset in Studio and asserts it loads.
-8. Repeats the flow with `mock-gltf-assets/box.3mf`: asserts the asset manifest's source was decomposed to `composite.3mf.json` / `format: "3mf"`, and that it opens in Studio (compose-on-load).
-9. Asserts clicking **Upload** at the collection root shows a warning toast instead of opening the file picker.
+1. Clicks **New Collection**, names it, and confirms; asserts the new collection is minted and appears in the collections list.
+2. Opens the new collection and uses the **Upload** button to select `mock-gltf-assets/howdy.glb` from disk; asserts the card appears and the manifest's source was **decomposed at upload** to `composite.gltf` / `format: "gltf"` — the canonical stored form a Studio save produces.
+3. Opens the uploaded asset in Studio and asserts it loads.
+4. Drag-drops a second GLB (`mock-gltf-assets/suka.glb`) into the same collection — asserts the drop overlay activates, the card appears, and its manifest is decomposed the same way.
+5. Back at the collection root, clicks **Upload** and asserts a warning toast instead of the file picker.
+6. Repeats the upload flow with `mock-gltf-assets/box.3mf`: asserts the asset manifest's source was decomposed to `composite.3mf.json` / `format: "3mf"`, and that it opens in Studio (compose-on-load).
 
 **Why it matters:** These flows exercise `library-toolbar.ts`, `library-ops.ts`, browser-side IPFS writes, `publishAsset` for named collections, `updateAssetURI` for adding assets, and the file input wiring. They are the only automated coverage for desktop file uploads, and they pin the decompose-at-upload guarantee: every upload (GLB/glTF/3MF) lands in the collection in the same canonical decomposed stored form a Studio save would produce.
 
@@ -329,14 +333,17 @@ Validates the undo/redo stack for parametric edits:
 
 ### 18. Chat provenance (`e2e/specs/18-chat-provenance.spec.js`)
 
-Validates that AI prompts are recorded as version-scoped provenance in the manifest chain:
+Validates that AI prompts are recorded as version-scoped provenance in the manifest chain, and that older version bubbles remain live restore paths:
 
 1. Generates two assets, each auto-saved by **Show in Studio** (the "Saved" pill is the durable signal the auto-save and URL flip completed).
 2. Asserts each saved version's `metadata.chat` records exactly the prompt accepted since the previous save, with `provider: "mock"`, `task: "model"`, and a numeric timestamp.
 3. Asserts the chain-root generation manifest carries **no** chat records — provenance is anchored by saves.
-4. Asserts the chat history renders live after each save (header + prompts + divider) and again after a cold reload, where boot's `loadFromParams()` walks the chain to reconstruct the conversation.
+4. Asserts the chat history renders live after each save (header + prompts + divider).
+5. Re-clicks the first bubble's **Show in Studio** — the Studio restores that older version (the URL flips to a different manifest) and the send tail runs again, while auto-save stays idempotent on the bubble (still 2 saved pills).
+6. Asserts chain continuity: the restore auto-save chains onto the **pre-restore tip**, not a fork at the restored older version (`prev_asset_manifest_cid` of the new tip is the second save's CID).
+7. Cold-reloads and asserts the same tip URL, the reconstructed 4-bubble history, and both prompts.
 
-**Why it matters:** `metadata.chat` is the on-IPFS record of the AI conversation that produced an asset. Changes to the auto-save path, the provenance writer, or the chain-walk history renderer can break it.
+**Why it matters:** `metadata.chat` is the on-IPFS record of the AI conversation that produced an asset, and chat bubbles are the user's time-travel surface. A restore that forks the chain or fails to re-run the send tail silently corrupts version history. Changes to the auto-save path, the provenance writer, `chat-preview.ts`, the bubble send handler, or the chain-walk history renderer can break it.
 
 ### 19. Animation preview (`e2e/specs/19-animation-preview.spec.js`)
 
@@ -359,24 +366,16 @@ Validates that the **+ New** flow shows the typed name in the header:
 
 ### 21. Computed asset metadata (`e2e/specs/21-metadata-computed.spec.js`)
 
-Validates that saving bakes deterministic computed facts into the manifest:
+Validates that saving bakes deterministic computed facts into the manifest and that typed metadata fields persist:
 
 1. Generates `cowboy` and clicks **Show in Studio** (auto-saves the draft and bakes metadata).
 2. Asserts the saved manifest carries `metadata.computed` with `format: "gltf"` for the glTF root.
 3. Reloads the page and asserts boot re-reads `?manifest=` with the same CID — the metadata survives a cold reopen.
+4. Edits the licence (`CC-BY-4.0`) and units (`mm`) in the Inspector, saves, reloads, and asserts both fields come back from the saved manifest.
+
+The status-bar fact readout and the non-watertight printability badge are unit-tested (`test/frontend/bottombar-info.test.js`, `test/frontend/printability-ui.test.js`); the positive CAD mm-units/print-ready browser path lives in Spec 29.
 
 **Why it matters:** `metadata.computed` gives consumers (like the public profile and tooling) deterministic facts about an asset without parsing its payloads. Changes to the metadata baking on save or the boot reload path can break it.
-
-### 22. Live scene update (`e2e/specs/22-live-scene-update.spec.js`)
-
-Validates that republishing a live-referenced child reloads it inside an open parent scene:
-
-1. Publishes a child, then builds a parent with a **live reference** to it and saves.
-2. Subscribes to the live-update bus events (`ASSET_URI_CHANGED`, `ASSET_URI_UPDATED`).
-3. Dives into the child, edits a node colour, and republishes (same token, new version).
-4. Asserts the live-update path fires: the local publish event, then the reload trigger.
-
-**Why it matters:** Live references are supposed to track future edits — this spec pins the same-window reload trigger. Changes to the publish event emission, the live-update bus, or the dive-republish path can break it.
 
 ### 23. Cross-window live update (`e2e/specs/23-cross-window-live-update.spec.js`)
 
@@ -402,14 +401,14 @@ Validates cross-window live updates through three levels of nesting:
 
 ### 25. Public profile (`e2e/specs/25-public-profile.spec.js`)
 
-Validates anonymous, read-only access to a wallet's public profile (the profile id is the base58 encoding of the EVM address; the subject's default collection is seeded in `beforeAll`):
+Validates anonymous, read-only access to a wallet's public profile (the profile id is the base58 encoding of the EVM address; the subject's default collection + seed asset are published once in `beforeAll`):
 
 1. An anonymous visitor browses `/library/<base58>` with no sign-in gate — the subject's collections render, create/upload buttons are hidden, and a visitor badge identifies the profile.
 2. Bare `/library` without a wallet still shows the sign-in gate.
-3. Connecting a wallet rewrites a bare `/library` URL (via `replaceState`) to the wallet's public profile URL, with owner chrome instead of visitor chrome.
+3. Connecting a wallet rewrites a bare `/library` URL (via `replaceState`) to the wallet's public profile URL, with owner chrome instead of visitor chrome; browsing another wallet's profile and clicking **My Library** returns to the connected wallet's profile.
 4. Opening an asset from the library scopes the Studio URL to `/studio/<base58>?asset=…&assetId=…`.
-5. An anonymous page (no injected wallet, no session) opens a published asset in Studio read-only — the tokenURI read and manifest load work without a wallet, and save/publish stay hidden.
-6. The anonymous studio profile loads the sidebar gallery (visitor badge, no sign-in prompt, no **New** button), and clicking a card opens the asset in the viewport.
+5. An anonymous page (no injected wallet, no session) opens the seeded asset in Studio read-only — the tokenURI read and manifest load work without a wallet, and save/publish stay hidden.
+6. The anonymous studio profile loads the sidebar gallery (visitor badge, no sign-in prompt, no **New** button), and clicking the seeded card opens the asset in the viewport.
 
 **Why it matters:** Public profiles are the platform's anonymous sharing surface. Changes to the profile URL routing, visitor-mode chrome, the read-only save/publish gating, or the base58 id format can break it.
 
@@ -453,21 +452,12 @@ Validates typed follow-ups on a Parametric CAD part (the e2e backend spawns with
 Validates the Inspector's **Parameters** section on the mock CAD box (40 × 30 × 20 mm, parameters `width`/`depth`/`height`):
 
 1. Generates a Parametric CAD part and sends it to the Studio; selecting it shows `#cadParamsSection` with `#cadParam-width|depth|height`, disabled in View mode.
-2. In Edit, sets width to 60 and leaves the field — `#cadParamsStatus` reaches `Preview up to date · not saved` after the local worker render.
-3. **Save draft** writes a new version whose root `source.cid` changed and whose `metadata.cad.stats` box is 60 mm wide; the status bar shows 60 and the status returns to `Saved values`.
-4. After a reload the width field reads 60 (the value came back from the saved 3MF's design sidecar).
+2. The first saved manifest/status bar carry mm units end-to-end: the status bar shows `mm ·`, `metadata.annotations.units` and `metadata.computed.dimensions.unit` are `mm`, the Inspector units field reads `mm`, and the printability check reports **Print-ready**.
+3. In Edit, sets width to 60 and leaves the field — `#cadParamsStatus` reaches `Preview up to date · not saved` after the local worker render.
+4. **Save draft** writes a new version whose root `source.cid` changed and whose `metadata.cad.stats` box is 60 mm wide; the status bar shows 60 and the status returns to `Saved values`.
+5. After a reload the width field reads 60 (the value came back from the saved 3MF's design sidecar).
 
-**Why it matters:** This is the only E2E coverage of client-side parameter edits: the panel, the worker preview swap and the save step that rebuilds the 3MF. Changes to `cad-params-panel.ts`, `cad-param-preview.ts`, `cad-param-save.ts`, the 3MF handler's in-memory load or `withDesign` can break it.
-
-### Chat version restore (`e2e/specs/chat-version-restore.spec.js`)
-
-Validates that a version-card bubble's **Show in Studio** button stays a live restore path:
-
-1. Generates two assets; each **Show in Studio** auto-saves a draft and annotates its bubble with a "Saved" pill (the mock provider hides the Tripo3D-only refine indicator).
-2. Re-clicks the first bubble's **Show in Studio** — the Studio restores that older version (the URL flips to a different manifest) and the send tail runs again, while auto-save stays idempotent on the bubble (still 2 saved pills).
-3. Asserts chain continuity: the restore auto-save chains onto the **pre-restore tip**, not a fork at the restored older version (`prev_asset_manifest_cid` of the new tip is the second save's CID).
-
-**Why it matters:** Chat bubbles are the user's time-travel surface for generation versions. A restore that forks the chain or fails to re-run the send tail silently corrupts version history. Changes to `chat-preview.ts`, the bubble send handler, or the auto-save chaining can break it.
+**Why it matters:** This is the only E2E coverage of client-side parameter edits (plus the positive CAD mm-units/print-ready path, folded in from the old metadata spec): the panel, the worker preview swap and the save step that rebuilds the 3MF. Changes to `cad-params-panel.ts`, `cad-param-preview.ts`, `cad-param-save.ts`, the 3MF handler's in-memory load or `withDesign` can break it.
 
 ### 99. Viewport resize regression (`e2e/specs/99-resize-regression.spec.js`)
 

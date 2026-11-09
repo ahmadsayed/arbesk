@@ -331,68 +331,49 @@ describe("chat-proxy", () => {
     expect(closeArgs).toBeDefined();
   });
 
-  it("terminates client after ping/pong timeout", async () => {
+  it("ties ping/pong liveness to OPEN sockets", async () => {
     jest.useFakeTimers();
-    let ws;
+    const sockets = [];
     try {
-      ({ ws } = await connect({
+      // No pong: terminate after the 30s ping + 10s grace.
+      const { ws: dead } = await connect({
         token: "session-token",
         tokenId: "1",
         assetId: "asset-1",
-      }));
-      expect(ws.terminate).not.toHaveBeenCalled();
-
-      // Trigger the 30s ping interval.
+      });
+      sockets.push(dead);
+      expect(dead.terminate).not.toHaveBeenCalled();
       jest.advanceTimersByTime(30000);
-      expect(ws.ping).toHaveBeenCalled();
-
-      // Pong timeout fires after 10s without a pong response.
+      expect(dead.ping).toHaveBeenCalled();
       jest.advanceTimersByTime(10000);
-      expect(ws.terminate).toHaveBeenCalled();
-    } finally {
-      if (ws) ws.emit("close", 1000, "test cleanup");
-      jest.useRealTimers();
-    }
-  });
+      expect(dead.terminate).toHaveBeenCalled();
 
-  it("keeps the connection alive when the client responds to ping with pong", async () => {
-    jest.useFakeTimers();
-    let ws;
-    try {
-      ({ ws } = await connect({
+      // Pong: stay alive.
+      const { ws: alive } = await connect({
         token: "session-token",
         tokenId: "1",
         assetId: "asset-1",
-      }));
-
+      });
+      sockets.push(alive);
       jest.advanceTimersByTime(30000);
-      expect(ws.ping).toHaveBeenCalled();
-
-      ws.emit("pong");
+      expect(alive.ping).toHaveBeenCalled();
+      alive.emit("pong");
       jest.advanceTimersByTime(10000);
-      expect(ws.terminate).not.toHaveBeenCalled();
-    } finally {
-      if (ws) ws.emit("close", 1000, "test cleanup");
-      jest.useRealTimers();
-    }
-  });
+      expect(alive.terminate).not.toHaveBeenCalled();
 
-  it("does not send pings once the socket leaves OPEN state", async () => {
-    jest.useFakeTimers();
-    let ws;
-    try {
-      ({ ws } = await connect({
+      // Leaving OPEN stops pings.
+      const { ws: closing } = await connect({
         token: "session-token",
         tokenId: "1",
         assetId: "asset-1",
-      }));
-
-      ws.readyState = WebSocket.CLOSING;
-      ws.ping.mockClear();
+      });
+      sockets.push(closing);
+      closing.readyState = WebSocket.CLOSING;
+      closing.ping.mockClear();
       jest.advanceTimersByTime(30000);
-      expect(ws.ping).not.toHaveBeenCalled();
+      expect(closing.ping).not.toHaveBeenCalled();
     } finally {
-      if (ws) ws.emit("close", 1000, "test cleanup");
+      for (const ws of sockets) ws.emit("close", 1000, "test cleanup");
       jest.useRealTimers();
     }
   });

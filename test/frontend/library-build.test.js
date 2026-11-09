@@ -80,23 +80,6 @@ describe("Library view build (app.html)", () => {
     expect(html).not.toMatch(/Notes for the AI/);
   });
 
-  test("app.html loads app.js as the single module entry", () => {
-    const html = readDist("app.html");
-    expect(html).toMatch(
-      /<script[^>]+type="module"[^>]+src="\/js\/app\.js"/
-    );
-  });
-
-  test("app.html has a page-switcher with SPA route links for both views", () => {
-    const html = readDist("app.html");
-    expect(html).toMatch(/class="page-switcher"/);
-    expect(html).toMatch(/href="\/library"/);
-    expect(html).toMatch(/href="\/studio"/);
-  });
-
-  test("app.html contains both the Studio and Library view containers", () => {
-    const html = readDist("app.html");
-    expect(html).toMatch(/id="studioView"/);
-    expect(html).toMatch(/id="libraryView"/);
-  });
+  // Single app.js entry, SPA route links, and both view containers are covered
+  // by build.test.js ("app.html SPA shell").
 });
