@@ -108,7 +108,12 @@ function applyColor(
 }
 
 /**
- * Apply scale to meshes.
+ * Applies a post_processor scale to each node root, on top of the root's
+ * imported scaling.
+ * @remarks Multiplies rather than replaces: a glTF root (`__root__`) carries
+ *   the loader's right- to left-handed flip, scaling (1, 1, -1), and
+ *   overwriting it mirrors the model (#138). A missing or zero component
+ *   keeps the imported value.
  */
 function applyScale(
   meshes: BABYLON.AbstractMesh[],
@@ -117,9 +122,9 @@ function applyScale(
   if (!scale) return;
   const s = new BABYLON.Vector3(scale.x || 1, scale.y || 1, scale.z || 1);
   for (const mesh of meshes) {
-    if (mesh.metadata?.isNodeRoot) {
-      mesh.scaling = s;
-    }
+    if (!mesh.metadata?.isNodeRoot) continue;
+    mesh.metadata.baseScaling ??= mesh.scaling.clone();
+    mesh.scaling = mesh.metadata.baseScaling.multiply(s);
   }
 }
 
