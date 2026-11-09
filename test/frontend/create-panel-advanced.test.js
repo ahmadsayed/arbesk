@@ -6,7 +6,6 @@
 
 import { beforeEach, expect, jest, mock, test } from "bun:test";
 import { resetModules } from "../helpers/module-registry.js";
-const ADDRESS = "0x1111111111111111111111111111111111111111";
 
 // ─── Mock handles ───
 
@@ -44,7 +43,7 @@ const mockOnSaveAssetDraft = jest.fn();
 const mockSelectCollection = jest.fn();
 
 // Deployment config returned by the app-config mock; mutated per test.
-let configValue = { cadGeneration: true };
+const configValue = { cadGeneration: true };
 const mockGetConfig = jest.fn(async () => configValue);
 
 // domain/asset.js state, controllable per test
@@ -158,8 +157,6 @@ const FRAGMENT = `
   <select id="tierSelect"><option value="0" selected>Free</option></select>
   <select id="collectionSelect"><option value="">Default</option></select>
   <span id="bottomBarProvider"></span>`;
-
-const realLocation = globalThis.location;
 
 /** Fresh module graph against a DOM fragment, on the given host. */
 async function load({ hostname = "localhost", stored = {}, search = "" } = {}) {
