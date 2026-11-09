@@ -21,7 +21,24 @@ test.describe("CAD parameters (Inspector)", () => {
     const before = await fetchManifest(firstCid);
     const beforeSource = before.scene.nodes[0].source.cid;
 
+    // The saved 3MF root carries kernel stats → mm dimensions in the status
+    // bar, and the mm units default lands in the annotations.
+    const info = page.locator(SELECTORS.bottomBarAssetInfo);
+    await expect(info).toBeVisible();
+    await expect(info).toContainText("mm ·");
+    expect(before.metadata?.annotations?.units).toBe("mm");
+    expect(before.metadata?.computed?.dimensions?.unit).toBe("mm");
+
     await openInspector(page);
+    await expect(page.locator(SELECTORS.metaUnits)).toHaveValue("mm");
+
+    // Kernel output is guaranteed watertight — the positive print-ready case.
+    await page
+      .locator(".metadata-section summary", { hasText: "Auto-detected" })
+      .click();
+    await page.locator(SELECTORS.printCheckBtn).click();
+    await expect(page.locator(SELECTORS.printBadge)).toHaveText("Print-ready");
+
     await page.click(SELECTORS.outlinerSwitcherBtn);
     await page.locator(SELECTORS.outlinerNode).first().click();
     const section = page.locator(SELECTORS.cadParamsSection);

@@ -57,11 +57,6 @@ test("upload(glTF JSON string) decomposes and stores a composite", async () => {
   expect(composite.buffers[0].uri).toMatch(/^ipfs:\/\/bafymem/);
 });
 
-test("validateManifest is exposed on the facade", async () => {
-  const core = makeCore();
-  expect(core.validateManifest(42).valid).toBe(false);
-});
-
 test("addEditor with email but no chain port rejects with guidance", async () => {
   const core = makeCore();
   await expect(

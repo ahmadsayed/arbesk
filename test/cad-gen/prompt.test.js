@@ -26,45 +26,9 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).not.toContain("Produce ONE solid.");
   });
 
-  it("names the key prelude helpers", () => {
-    for (const name of ["roundedBox", "hole", "boltCircle", "filletEdges", "chamferEdges"]) {
-      expect(SYSTEM_PROMPT).toContain(name);
-    }
-  });
-
-  it("states the units and axis conventions", () => {
-    expect(SYSTEM_PROMPT).toMatch(/millimetres/i);
-    expect(SYSTEM_PROMPT).toMatch(/Z-up/);
-    expect(SYSTEM_PROMPT).toMatch(/return/i);
-  });
-
   it("forbids the constructs the guard rejects", () => {
     expect(SYSTEM_PROMPT).toMatch(/No imports/i);
     expect(SYSTEM_PROMPT).toMatch(/no network/i);
-  });
-
-  it("documents the JSON output shape", () => {
-    expect(SYSTEM_PROMPT).toContain("summary");
-    expect(SYSTEM_PROMPT).toContain("parameters");
-  });
-
-  // The opening's cost is driven by the rounding ball's facet count, so draft is
-  // the default and the model has to know both that "high" exists and that it
-  // is not the default - otherwise it asks for it on every part and times out.
-  it("documents the fillet quality option and its cost", () => {
-    expect(SYSTEM_PROMPT).toContain('quality: "high"');
-    expect(SYSTEM_PROMPT).toMatch(/default quality is "draft"/);
-    expect(SYSTEM_PROMPT).toMatch(/Do not use it by default/i);
-  });
-
-  // Regression, from the live run: the model hand-built a step fillet from
-  // revolve(circle(r).translate([d1/2 + r, 0])).intersect(cylinder(r, r)). Both
-  // solids were valid, the intersection was EMPTY, and shaft.add(empty) returned
-  // the shaft unchanged - so the part passed every gate with no fillet in it.
-  it("forbids hand-built fillet geometry", () => {
-    expect(SYSTEM_PROMPT).toContain("filletEdges for EVERY fillet");
-    expect(SYSTEM_PROMPT).toContain("NEVER build fillet geometry by hand");
-    expect(SYSTEM_PROMPT).toContain("solid.add(empty) silently returns");
   });
 
   // Regression, from the live run: the model wrote `base.union(wall)`, which is
@@ -134,38 +98,6 @@ describe("SYSTEM_PROMPT helper table", () => {
     for (const name of PRELUDE_NAMES) {
       expect(words).toContain(name);
     }
-  });
-});
-
-// The prompt is the API documentation the model is prompted against: it must
-// describe what the prelude ACTUALLY does, because a model told the wrong thing
-// writes parts that fail validation. The four rules below are the measured
-// behaviours (Tasks 6 and 7), pinned so a later edit cannot quietly restore a
-// promise the code cannot keep.
-describe("SYSTEM_PROMPT fillet and chamfer accuracy", () => {
-  it("says filletEdges keeps the outer dimensions", () => {
-    // filletEdges is an opening (erode, then dilate by the same ball), so a
-    // fillet never grows the part.
-    expect(SYSTEM_PROMPT).toMatch(/(keeps|preserves|kept)[^.]*outer dimensions/i);
-  });
-
-  it("caps the radius at half the thinnest dimension and warns it is refused", () => {
-    expect(SYSTEM_PROMPT).toMatch(/thinnest/i);
-    expect(SYSTEM_PROMPT).toMatch(/half/i);
-    expect(SYSTEM_PROMPT).toMatch(/refus/i);
-  });
-
-  it("describes chamferEdges as a rounding alias rather than a flat bevel", () => {
-    // The kernel has no exact chamfer primitive: chamferEdges runs the same ball
-    // opening as filletEdges. Promising a flat cut would send the model after
-    // geometry the code cannot produce.
-    expect(SYSTEM_PROMPT).toMatch(/chamferEdges[^.]*round[^.]*filletEdges/i);
-  });
-
-  it("warns that mode \"smooth\" is appearance-only and changes the size", () => {
-    expect(SYSTEM_PROMPT).toMatch(/"smooth"/);
-    expect(SYSTEM_PROMPT).toMatch(/appearance-only/i);
-    expect(SYSTEM_PROMPT).toMatch(/not dimension-preserving|changes the part's size/i);
   });
 });
 

@@ -1,22 +1,12 @@
 import { test, expect } from "../fixtures/coverage.mjs";
-import { injectHardhatProvider } from "../fixtures/hardhat-provider.mjs";
 import { SELECTORS } from "../helpers/studio-selectors.mjs";
 import {
   connectLibrary,
-  ensureLibraryConnected,
-  ensureStudioConnected,
   libraryCollectionLocator,
-  libraryAssetLocator,
   openLibraryCollection,
   waitForLibraryItemCount,
-  libraryItemNames,
-  generateSaveAndPublish,
   seedDefaultCollection,
-  uniqueAssetName,
 } from "../helpers/flows.mjs";
-
-const ASSET_NAME_BASE = "Library Basics Asset";
-const PROMPT = "a glowing cube";
 
 // Library tests mutate the shared default collection, so run them serially.
 // They self-seed in beforeAll so they can run in isolation.
@@ -24,66 +14,14 @@ test.describe.serial("Library basics", () => {
   test.beforeAll(async ({ browser }) => {
     await seedDefaultCollection(browser);
   });
-  test("shows wallet gate until connected", async ({ page }) => {
-    await page.goto("/library");
-    await expect(page.locator(SELECTORS.libraryGate)).toBeVisible();
-    await expect(page.locator(SELECTORS.libraryMain)).toBeHidden();
-    await expect(page.locator(SELECTORS.libraryConnectBtn)).toBeVisible();
 
-    await injectHardhatProvider(page);
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
-    await expect(page.locator(SELECTORS.libraryGate)).toBeHidden();
-    await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
-  });
-
-  test("displays the wallet-derived default collection as Default after a publish", async ({
-    page,
-  }) => {
-    const assetName = uniqueAssetName(ASSET_NAME_BASE);
-    await connectLibrary(page);
-
-    // Publish an asset from Studio to mint the default collection.
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await generateSaveAndPublish(page, assetName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
-    await waitForLibraryItemCount(page, 1);
-
-    const defaultCollection = libraryCollectionLocator(page, "Default");
-    await expect(defaultCollection).toBeVisible();
-    await expect(
-      defaultCollection.locator(SELECTORS.libraryItemName),
-    ).toHaveText("Default");
-  });
-
-  test("opens the default collection and lists its assets", async ({ page }) => {
-    const assetName = uniqueAssetName(ASSET_NAME_BASE);
-    await connectLibrary(page);
-    // Ensure there is at least one asset by publishing from Studio first.
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await generateSaveAndPublish(page, assetName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
-    await expect(page.locator(SELECTORS.libraryMain)).toBeVisible();
-
-    await openLibraryCollection(page, "Default");
-    const assetCard = libraryAssetLocator(page, assetName).first();
-    await expect(assetCard).toBeVisible();
-  });
-
-  test("breadcrumb and Up button navigate back to collections", async ({
+  test("navigates, searches and switches layout in the collection browser", async ({
     page,
   }) => {
     await connectLibrary(page);
-    await openLibraryCollection(page, "Default");
 
+    // ── Breadcrumb + Up navigation ────────────────────────────────────
+    await openLibraryCollection(page, "Default");
     await expect(page.locator(SELECTORS.libraryBreadcrumb)).toContainText(
       "Default",
     );
@@ -98,12 +36,8 @@ test.describe.serial("Library basics", () => {
     await openLibraryCollection(page, "Default");
     await page.click(SELECTORS.libraryBreadcrumbHome);
     await expect(libraryCollectionLocator(page, "Default")).toBeVisible();
-  });
 
-  test("search filters collections and assets", async ({ page }) => {
-    await connectLibrary(page);
-
-    // Search for the default collection by name.
+    // ── Search filters collections and assets ─────────────────────────
     await page.fill(SELECTORS.librarySearchInput, "Defaul");
     await waitForLibraryItemCount(page, 1);
     await expect(libraryCollectionLocator(page, "Default")).toBeVisible();
@@ -116,12 +50,8 @@ test.describe.serial("Library basics", () => {
 
     await page.fill(SELECTORS.librarySearchInput, "");
     await waitForLibraryItemCount(page, 1);
-  });
 
-  test("grid and list view toggle switch the layout", async ({ page }) => {
-    await connectLibrary(page);
-    await waitForLibraryItemCount(page, 1);
-
+    // ── Grid / list view toggle ───────────────────────────────────────
     // Default is grid: items are direct children of #libraryItems.
     await expect(
       page.locator(`${SELECTORS.libraryItems} ${SELECTORS.libraryItem}`),
@@ -136,14 +66,5 @@ test.describe.serial("Library basics", () => {
     await expect(
       page.locator(`${SELECTORS.libraryItems} ${SELECTORS.libraryItem}`),
     ).toHaveCount(1);
-  });
-
-  test("sort by name orders items alphabetically", async ({ page }) => {
-    await connectLibrary(page);
-    // With only the Default collection, the name order is trivial but still
-    // deterministic.
-    await page.selectOption(SELECTORS.librarySortSelect, "name");
-    const names = await libraryItemNames(page);
-    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
   });
 });

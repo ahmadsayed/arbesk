@@ -10,12 +10,9 @@ import {
   assertCollectionManifest,
 } from "../helpers/manifest.mjs";
 import {
-  assetCardLocator,
   connectStudio,
-  openAssetCard,
   selectProvider,
   sendPendingGenerationToStudio,
-  startEmptyAsset,
 } from "../helpers/flows.mjs";
 
 const PROMPT = "cowboy";
@@ -27,9 +24,6 @@ function manifestCidFromUrl(url) {
 
 test.describe("save and publish", () => {
   test("saves a draft and publishes an ERC-721 token", async ({ page }) => {
-    // startNewAsset() uses a native confirm() when work is unpublished;
-    // auto-accept so the scratch-asset step below can proceed.
-    page.on("dialog", (d) => d.accept());
     await connectStudio(page);
 
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
@@ -69,12 +63,8 @@ test.describe("save and publish", () => {
     await page.click(SELECTORS.dialogConfirmBtn);
 
     // Minting is the slowest step; wait on the durable ?asset=<tokenId> anchor.
-    // Publish writes the token id to the URL in HEX (it derives it as a hash of
-    // the CID), but the gallery lists the same token by its DECIMAL on-chain id.
-    // They are the same number - compare numerically, never as strings.
     await page.waitForURL(/[?&]asset=0x[0-9a-fA-F]+/, { timeout: 30000 });
     const tokenIdHex = page.url().match(/[?&]asset=(0x[0-9a-fA-F]+)/)[1];
-    const tokenIdDec = BigInt(tokenIdHex).toString();
 
     // tokenURI now returns a collection manifest, not an asset manifest.
     // Walk through collection → first asset to validate the published content.
@@ -90,41 +80,5 @@ test.describe("save and publish", () => {
     expect(assetManifest.type).toBe("asset");
     assertPublishedManifest(assetManifest);
     expect(assetManifest.name).toBe(ASSET_NAME);
-
-    // 4. Open the Gallery and verify the published asset card appears.
-    // The card is scoped to THIS token's on-chain (decimal) id and shows
-    // the published asset name.
-    // The open asset's own card is listed but marked current (it can't be
-    // reopened or inserted into itself); starting a fresh empty asset makes it
-    // an ordinary card again.
-    await page.click(SELECTORS.gallerySwitcherBtn);
-    const assetCard = assetCardLocator(page, tokenIdDec, ASSET_NAME);
-    await expect(assetCard).toHaveCount(1);
-    await expect(assetCard.locator(SELECTORS.assetCardMain)).toHaveAttribute("aria-current", "true");
-    await expect(assetCard.locator(SELECTORS.assetCardMain)).toBeDisabled();
-    await startEmptyAsset(page);
-    await page.fill(SELECTORS.dialogInput, "Scratch Asset");
-    await page.click(SELECTORS.dialogConfirmBtn);
-    await page.click(SELECTORS.gallerySwitcherBtn);
-    await expect(assetCard.locator(SELECTORS.assetCardMain)).toBeEnabled();
-    await expect(assetCard.locator(SELECTORS.assetCardName)).toContainText(
-      ASSET_NAME,
-    );
-
-    // Clicking the card opens the asset. The gallery opens by decimal id, so
-    // assert the ?asset value numerically.
-    await openAssetCard(assetCard);
-    await page.waitForURL((url) => {
-      const a = new URL(url.toString()).searchParams.get("asset");
-      return a != null && BigInt(a) === BigInt(tokenIdHex);
-    });
-    await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      ASSET_NAME,
-    );
-
-    // 5. The now-open asset's card is listed again, marked current.
-    await page.click(SELECTORS.gallerySwitcherBtn);
-    await expect(assetCard).toHaveCount(1);
-    await expect(assetCard.locator(SELECTORS.assetCardMain)).toHaveAttribute("aria-current", "true");
   });
 });

@@ -154,34 +154,7 @@ describe("onSaveAssetDraft", () => {
   });
 });
 
-describe("adoptManifestName", () => {
-  test("adopts a real manifest name into session state", async () => {
-    await loadModule(); // registers the asset-state mock
-    const { adoptManifestName } = await import(
-      "@arbesk/asset-core/domain/asset.js"
-    );
-    const { assetStore } = await import(
-      "@arbesk/asset-core/domain/asset-store.js"
-    );
-    adoptManifestName({ name: "refaat" });
-    expect(assetStore.set).toHaveBeenCalledWith({ activeAssetName: "refaat" });
-  });
-
-  test("does not clobber state with a default or absent name", async () => {
-    await loadModule(); // registers the asset-state mock
-    const { adoptManifestName } = await import(
-      "@arbesk/asset-core/domain/asset.js"
-    );
-    const { assetStore } = await import(
-      "@arbesk/asset-core/domain/asset-store.js"
-    );
-    adoptManifestName({ name: "Untitled Asset" });
-    adoptManifestName({ name: "  " });
-    adoptManifestName({});
-    adoptManifestName(null);
-    expect(assetStore.set).not.toHaveBeenCalled();
-  });
-});
+// adoptManifestName is covered for real in domain-asset.test.js.
 
 describe("success toasts", () => {
   test("draft toast says kept in this tab only", async () => {

@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { CONTRACT_VERSION, PRELUDE_VERSION } from "@arbesk/cad-gen";
+import { CadDesignError } from "@arbesk/cad-gen/errors.js";
+import { PRELUDE_NAMES } from "@arbesk/cad-gen/core/prelude.js";
 import { runValidation } from "@arbesk/cad-gen/backend/validate-runner.js";
 
 // These assert the prelude's GEOMETRY PRECISION, so they run at delivery
@@ -64,12 +67,6 @@ describe("prelude geometry", () => {
     expect(round.stats.volumeMm3).toBeLessThan(sharp.stats.volumeMm3);
     expect(round.stats.volumeMm3).toBeGreaterThan(sharp.stats.volumeMm3 * 0.85);
     expect(round.stats.filletMode).toBe("exact");
-  }, 30000);
-
-  it("filletEdges reports the strategy it used", async () => {
-    const r = await run("const b = box(20, 20, 20);\nreturn filletEdges(b, 1.5, { mode: 'minkowski' });");
-    expect(r.ok).toBe(true);
-    expect(r.stats.filletMode).toBe("minkowski");
   }, 30000);
 
   // A fillet rounds the edges that are already there. Plain Minkowski dilation
@@ -189,12 +186,6 @@ describe("gridfinityBaseplate", () => {
     expect(r.error).toBeUndefined();
     expect(r.ok).toBe(true);
   }, 40000);
-
-  it("refuses fractional or missing cells", async () => {
-    const r = await run("return gridfinityBaseplate({ unitsX: 1.5, unitsY: 2 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("whole unitsX and unitsY");
-  }, 40000);
 });
 
 describe("gridfinityBase", () => {
@@ -241,12 +232,6 @@ describe("gridfinityBase", () => {
     expect(stacked.ok).toBe(true);
     expect(stacked.stats.bboxMm.min[2]).toBeCloseTo(0, 4);
     expect(stacked.stats.bboxMm.max[2]).toBeCloseTo(14.749, 3); // 4.75 base + 10 wall, less the 1 um joint overlap
-  }, 40000);
-
-  it("refuses a fractional cell count", async () => {
-    const r = await run("return gridfinityBase({ unitsX: 0, unitsY: 1 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/at least 1/);
   }, 40000);
 });
 
@@ -316,11 +301,6 @@ describe("stack", () => {
     expect(r.stats.bboxMm.max[2]).toBeCloseTo(0.78575 + 19.05, 2);
   }, 40000);
 
-  it("refuses an empty list", async () => {
-    const r = await run("return stack([]);");
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/non-empty list of solids/);
-  }, 40000);
 });
 
 // A gear is only correct if its geometry is: the tip circle is pitch + module,
@@ -357,11 +337,6 @@ describe("rack", () => {
     expect(touch.ok ? touch.stats.volumeMm3 : 0).toBeLessThan(5);
   }, 40000);
 
-  it("refuses an impossible rack instead of drawing one", async () => {
-    const r = await run("return rack({ module: 2, teeth: 0, thickness: 8 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/whole number of teeth/);
-  }, 40000);
 });
 
 // Helical and herringbone follow BOSL2's construction (transverse section,
@@ -387,11 +362,6 @@ describe("spurGear helical and herringbone", () => {
     expect(r.ok ? r.stats.volumeMm3 : 0).toBeLessThan(1);
   }, 40000);
 
-  it("refuses a helix of 90 degrees or more", async () => {
-    const r = await run("return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 90 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/helical angle between -90 and 90/);
-  }, 40000);
 });
 
 // Verified against OpenSCAD's render of BOSL2's ring_gear() (cad-reference
@@ -470,21 +440,6 @@ describe("bevelGear", () => {
     expect(clash.stats.volumeMm3).toBeGreaterThan(50);
   }, 40000);
 
-  it("refuses specs it cannot build, naming each one", async () => {
-    const cases = [
-      ["bevelGear({ module: 0, teeth: 16, mateTeeth: 28 })", /positive module/],
-      ["bevelGear({ module: 2, teeth: 2, mateTeeth: 28 })", /whole number of teeth/],
-      ["bevelGear({ module: 2, teeth: 16 })", /whole number of mateTeeth/],
-      ["bevelGear({ module: 2, teeth: 16, mateTeeth: 28, shaftAngle: 180 })", /shaftAngle strictly between/],
-      ["bevelGear({ module: 2, teeth: 16, mateTeeth: 28, spiral: 90 })", /spiral angle/],
-      ["bevelGear({ module: 2, teeth: 30, mateTeeth: 10, shaftAngle: 150 })", /crown or internal bevel gear/],
-    ];
-    for (const [call, message] of cases) {
-      const r = await run("return " + call + ";");
-      expect(r.ok).toBe(false);
-      expect(r.error).toMatch(message);
-    }
-  }, 40000);
 });
 
 // gearDistance is pure maths - there is no geometry to compare against an
@@ -570,25 +525,6 @@ describe("worm and wormGear", () => {
     expect(r.stats.triangles).toBeLessThan(150000);
   }, 40000);
 
-  it("refuses specs it cannot build, naming each one", async () => {
-    const cases = [
-      ["worm({ module: 0, diameter: 20, length: 30 })", /worm needs a positive module/],
-      ["worm({ module: 2, length: 30 })", /positive diameter/],
-      ["worm({ module: 2, diameter: 20 })", /positive length/],
-      ["worm({ module: 2, diameter: 20, length: 30, starts: 1.5 })", /whole number of starts/],
-      ["worm({ module: 2, diameter: 6, length: 30, starts: 4 })", /do not fit a 6 mm worm/],
-      ["worm({ module: 2, diameter: 20, length: 30, bore: 16 })", /does not fit inside the root diameter/],
-      ["wormGear({ module: 2, teeth: 12, wormDiameter: 20 })", /at least 18/],
-      ["wormGear({ module: 2, teeth: 30 })", /wormDiameter/],
-      ["wormGear({ module: 2, teeth: 30, wormDiameter: 20, wormArc: 120 })", /wormArc/],
-      ["wormDistance({ module: 2, wormDiameter: 20 })", /whole number of teeth/],
-    ];
-    for (const [call, message] of cases) {
-      const r = await run("return " + call + ";");
-      expect(r.ok).toBe(false);
-      expect(r.error).toMatch(message);
-    }
-  }, 60000);
 });
 
 describe("gearDistance", () => {
@@ -653,34 +589,10 @@ describe("gearDistance", () => {
     expect(buried.stats.volumeMm3).toBeGreaterThan(100);
   }, 40000);
 
-  it("refuses specs the formula cannot answer, naming each one", async () => {
-    const noModule = await run("return box(gearDistance({ module: 0, teeth1: 16, teeth2: 24 }), 10, 10);");
-    expect(noModule.ok).toBe(false);
-    expect(noModule.error).toMatch(/gearDistance needs a positive module/);
-
-    const fewTeeth = await run("return box(gearDistance({ module: 2, teeth1: 3, teeth2: 24 }), 10, 10);");
-    expect(fewTeeth.ok).toBe(false);
-    expect(fewTeeth.error).toMatch(/gearDistance needs a whole number of teeth1, at least 4/);
-
-    const fractional = await run("return box(gearDistance({ module: 2, teeth1: 16.5, teeth2: 24 }), 10, 10);");
-    expect(fractional.ok).toBe(false);
-    expect(fractional.error).toMatch(/whole number of teeth1/);
-
-    const badHelix = await run("return box(gearDistance({ module: 2, teeth1: 16, teeth2: 24, helical: 90 }), 10, 10);");
-    expect(badHelix.ok).toBe(false);
-    expect(badHelix.error).toMatch(/helical angle between -90 and 90/);
-
-    const inverted = await run("return box(gearDistance({ module: 2, teeth1: 12, teeth2: 40, internal: true }), 10, 10);");
-    expect(inverted.ok).toBe(false);
-    expect(inverted.error).toMatch(/gearDistance needs teeth1 > teeth2/);
-  }, 40000);
 });
 
 describe("spurGear", () => {
   it("puts the tip circle at pitch radius plus the module", async () => {
-    const r = await run("return spurGear({ module: P.m, teeth: P.z, thickness: 10 });");
-    // The default parameters are { s: 10 }, so drive this through a literal.
-    void r;
     const a = await run("return spurGear({ module: 2, teeth: 20, thickness: 10 });");
     expect(a.ok).toBe(true);
     expect(a.stats.bboxMm.max[0]).toBeCloseTo(22, 4); // 2 x 20 / 2 + 2
@@ -710,19 +622,6 @@ describe("spurGear", () => {
     expect(solid.stats.volumeMm3 - bored.stats.volumeMm3).toBeCloseTo(Math.PI * 16 * 10, -1);
   }, 40000);
 
-  it("refuses a spec it cannot build", async () => {
-    const noTeeth = await run("return spurGear({ module: 2, teeth: 2, thickness: 10 });");
-    expect(noTeeth.ok).toBe(false);
-    expect(noTeeth.error).toMatch(/at least 3 teeth/);
-
-    const noModule = await run("return spurGear({ module: 0, teeth: 20, thickness: 10 });");
-    expect(noModule.ok).toBe(false);
-    expect(noModule.error).toMatch(/positive module/);
-
-    const badBore = await run("return spurGear({ module: 2, teeth: 20, thickness: 10, bore: 40 });");
-    expect(badBore.ok).toBe(false);
-    expect(badBore.error).toMatch(/does not fit inside the root diameter/);
-  }, 40000);
 });
 
 // GT2 pulley: built from the published Gates PowerGrip GT dimensions (2mm
@@ -764,19 +663,6 @@ describe("gt2Pulley", () => {
       .toBeCloseTo(Math.PI * (16 - 6.25) * 8, -1);
   }, 40000);
 
-  it("refuses a spec it cannot build", async () => {
-    const big = await run("return gt2Pulley({ teeth: 20, bore: 12 });");
-    expect(big.ok).toBe(false);
-    expect(big.error).toMatch(/leaves no hub/);
-
-    const few = await run("return gt2Pulley({ teeth: 6 });");
-    expect(few.ok).toBe(false);
-    expect(few.error).toMatch(/at least 8 teeth/);
-
-    const badScrew = await run("return gt2Pulley({ teeth: 20, setScrew: 'M5' });");
-    expect(badScrew.ok).toBe(false);
-    expect(badScrew.error).toMatch(/"none", "M3" or "M4"/);
-  }, 40000);
 });
 
 // Regression, from the live timing pulley: the model assembled the teeth from
@@ -821,11 +707,6 @@ describe("polygon", () => {
     expect(r.stats.bboxMm.max[0]).toBeCloseTo(15, 1);
   });
 
-  it("refuses a contour with fewer than three points", async () => {
-    const r = await run("return extrude(polygon([[0,0],[10,0]]), 5);");
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/at least 3 points/);
-  });
 });
 
 // The validation pass deliberately runs coarse. What it must still get right is
@@ -922,15 +803,6 @@ describe("boardCase cutouts", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("refuses a port placed past the end of its wall", async () => {
-    // attempt#1 rpi4-case: HDMI at 75 and power at 90 on the 56 mm x+ wall
-    // were silently cut into thin air - a valid case with no HDMI opening.
-    const r = await run("P.s; return boardCase({ " + PI +
-      ", cutouts: [{ wall: 'x+', at: 75, width: 15, height: 12, z: 5 }] });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("56");
-    expect(r.error).toContain("x+");
-  });
 });
 
 // The numbers below are OpenSCAD's render of BOSL2's own examples (see
@@ -953,21 +825,9 @@ describe("ported BOSL2 hinges", () => {
     expect(Math.abs(r.stats.volumeMm3 - 227.0) / 227.0).toBeLessThan(0.005);
   });
 
-  it("refuses an offset smaller than the knuckle radius", async () => {
-    const r = await run("P.s; return knuckleHinge({ length: 20, segs: 3, offset: 1 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("knuckle radius");
-  });
 });
 
 describe("printInPlaceHinge refusals", () => {
-  it("refuses segments too short to hold their pins, naming a count that works", async () => {
-    // attempt#5 door-hinge: 32 segs over 50mm came out as 16 loose pieces.
-    const r = await run("P.s; return printInPlaceHinge({ length: 50, segs: 32, knuckleDiam: 8 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/at most \d+ segs/);
-  });
-
   it("scales the default offset with the knuckle so the leaves stay apart", async () => {
     // A 6mm knuckle at BOSL2's literal offset 3.1 fuses the leaves into one body.
     const r = await run("P.s; return printInPlaceHinge({ knuckleDiam: 6 });");
@@ -1010,11 +870,6 @@ describe("ported spool holder", () => {
     });
   }
 
-  it("refuses a bore bigger than the spool, with the SCAD's own message", async () => {
-    const r = await run("P.s; return spoolHolder({ spoolMaxDiameter: 60, spoolMaxBoreDiameter: 58 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("4 mm of spool flange");
-  });
 });
 
 // OpenSCAD's render of vector76's gridfinity_basic_cup.scad (MIT) with these
@@ -1035,13 +890,6 @@ describe("ported Gridfinity bin", () => {
       expect(r.stats.bodies.count).toBe(1);
     });
   }
-
-  it("refuses a label style that is not a string, saying how to pass one", async () => {
-    // attempt#14: labelMap[P.idx] missed, and the port crashed on startsWith.
-    const r = await run("P.s; return gridfinityCup({ withLabel: undefined, chambers: 2 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("write the string literally");
-  });
 
   it("refuses a fractional depth the port does not support", async () => {
     const r = await run("P.s; return gridfinityCup({ depth: 1.5 });");
@@ -1096,11 +944,6 @@ describe("extrusionSpoolArm", () => {
     expect(r.stats.volumeMm3).toBeCloseTo(1, 1);
   });
 
-  it("refuses a hole spacing that buries a screw head under the rod", async () => {
-    const r = await run("P.s; return extrusionSpoolArm({ holeSpacing: 30 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("use at least");
-  });
 });
 
 // First-party, from ISO fastener sizes - see packages/cad-gen/src/core/library/pipe-clamp.ts.
@@ -1156,18 +999,6 @@ describe("pipeClamp", () => {
     // Bore 16.2 + counterbore 5.2 + 1.2 -> spacing ceil(45.2) = 46, ear to 23 + 5.2 + 2.5.
     expect(r.stats.bboxMm.max[0]).toBeCloseTo(30.7, 1);
   });
-
-  it("refuses a bolt spacing that breaks into the bore, naming one that works", async () => {
-    const r = await run("P.s; return pipeClamp({ boltSpacing: 30 });");
-    expect(r.ok).toBe(false);
-    expect(r.error).toContain("into the 25.4mm bore; use at least 38mm");
-  });
-
-  it("refuses an unknown bolt, a fused layout and a width the head will not fit", async () => {
-    expect((await run("P.s; return pipeClamp({ bolt: 'M7' });")).error).toContain("not one of M3, M4, M5");
-    expect((await run("P.s; return pipeClamp({ gap: 0 });")).error).toContain("gap must be at least 1mm");
-    expect((await run("P.s; return pipeClamp({ width: 8 });")).error).toContain("use at least 13mm");
-  });
 });
 
 // A live Uno case built its lid with box() over boardCase's corner-origin frame
@@ -1212,9 +1043,142 @@ describe("zero-volume flakes", () => {
   });
 });
 
+// Refusals are the prelude's contract with the model: an impossible spec must
+// fail loudly, naming the fix, not hand back a plausible-looking wrong solid.
+// The tables below keep every (code, /error/) pair while sharing one assertion
+// site; the multi-spec families keep a labelled row apiece.
+const BOARD_CASE = "boardLength: 85, boardWidth: 56, holes: [[3.5,3.5],[3.5,52.5],[61.5,52.5],[61.5,3.5]]";
+
+const singleRefusals = [
+  ["gridfinityBaseplate: fractional or missing cells",
+    "return gridfinityBaseplate({ unitsX: 1.5, unitsY: 2 });", "whole unitsX and unitsY"],
+  ["gridfinityBase: fractional cell count",
+    "return gridfinityBase({ unitsX: 0, unitsY: 1 });", /at least 1/],
+  ["stack: empty list",
+    "return stack([]);", /non-empty list of solids/],
+  ["rack: impossible tooth count",
+    "return rack({ module: 2, teeth: 0, thickness: 8 });", /whole number of teeth/],
+  ["spurGear: a helix of 90 degrees or more",
+    "return spurGear({ module: 2, teeth: 16, thickness: 8, helical: 90 });",
+    /helical angle between -90 and 90/],
+  ["polygon: fewer than three points",
+    "return extrude(polygon([[0,0],[10,0]]), 5);", /at least 3 points/],
+  // attempt#1 rpi4-case: HDMI at 75 and power at 90 on the 56 mm x+ wall were
+  // silently cut into thin air - a valid case with no HDMI opening.
+  ["boardCase: a port past the end of its wall",
+    "P.s; return boardCase({ " + BOARD_CASE +
+      ", cutouts: [{ wall: 'x+', at: 75, width: 15, height: 12, z: 5 }] });",
+    [/56/, /x\+/]],
+  ["knuckleHinge: an offset smaller than the knuckle radius",
+    "P.s; return knuckleHinge({ length: 20, segs: 3, offset: 1 });", "knuckle radius"],
+  // attempt#5 door-hinge: 32 segs over 50mm came out as 16 loose pieces.
+  ["printInPlaceHinge: segments too short to hold their pins",
+    "P.s; return printInPlaceHinge({ length: 50, segs: 32, knuckleDiam: 8 });", /at most \d+ segs/],
+  ["spoolHolder: a bore bigger than the spool",
+    "P.s; return spoolHolder({ spoolMaxDiameter: 60, spoolMaxBoreDiameter: 58 });",
+    "4 mm of spool flange"],
+  // attempt#14: labelMap[P.idx] missed, and the port crashed on startsWith.
+  ["gridfinityCup: a label style that is not a string",
+    "P.s; return gridfinityCup({ withLabel: undefined, chambers: 2 });",
+    "write the string literally"],
+  ["extrusionSpoolArm: a hole spacing that buries a screw head under the rod",
+    "P.s; return extrusionSpoolArm({ holeSpacing: 30 });", "use at least"],
+  ["pipeClamp: a bolt spacing that breaks into the bore",
+    "P.s; return pipeClamp({ boltSpacing: 30 });",
+    "into the 25.4mm bore; use at least 38mm"],
+];
+
+const bevelRefusals = [
+  ["bevelGear: impossible specs", [
+    ["bevelGear({ module: 0, teeth: 16, mateTeeth: 28 })", /positive module/],
+    ["bevelGear({ module: 2, teeth: 2, mateTeeth: 28 })", /whole number of teeth/],
+    ["bevelGear({ module: 2, teeth: 16 })", /whole number of mateTeeth/],
+    ["bevelGear({ module: 2, teeth: 16, mateTeeth: 28, shaftAngle: 180 })", /shaftAngle strictly between/],
+    ["bevelGear({ module: 2, teeth: 16, mateTeeth: 28, spiral: 90 })", /spiral angle/],
+    ["bevelGear({ module: 2, teeth: 30, mateTeeth: 10, shaftAngle: 150 })", /crown or internal bevel gear/],
+  ]],
+];
+
+const wormRefusals = [
+  ["worm and wormGear: impossible specs", [
+    ["worm({ module: 0, diameter: 20, length: 30 })", /worm needs a positive module/],
+    ["worm({ module: 2, length: 30 })", /positive diameter/],
+    ["worm({ module: 2, diameter: 20 })", /positive length/],
+    ["worm({ module: 2, diameter: 20, length: 30, starts: 1.5 })", /whole number of starts/],
+    ["worm({ module: 2, diameter: 6, length: 30, starts: 4 })", /do not fit a 6 mm worm/],
+    ["worm({ module: 2, diameter: 20, length: 30, bore: 16 })", /does not fit inside the root diameter/],
+    ["wormGear({ module: 2, teeth: 12, wormDiameter: 20 })", /at least 18/],
+    ["wormGear({ module: 2, teeth: 30 })", /wormDiameter/],
+    ["wormGear({ module: 2, teeth: 30, wormDiameter: 20, wormArc: 120 })", /wormArc/],
+    ["wormDistance({ module: 2, wormDiameter: 20 })", /whole number of teeth/],
+  ]],
+];
+
+const gearDistanceRefusals = [
+  ["gearDistance: specs the formula cannot answer", [
+    ["box(gearDistance({ module: 0, teeth1: 16, teeth2: 24 }), 10, 10)", /gearDistance needs a positive module/],
+    ["box(gearDistance({ module: 2, teeth1: 3, teeth2: 24 }), 10, 10)", /gearDistance needs a whole number of teeth1, at least 4/],
+    ["box(gearDistance({ module: 2, teeth1: 16.5, teeth2: 24 }), 10, 10)", /whole number of teeth1/],
+    ["box(gearDistance({ module: 2, teeth1: 16, teeth2: 24, helical: 90 }), 10, 10)", /helical angle between -90 and 90/],
+    ["box(gearDistance({ module: 2, teeth1: 12, teeth2: 40, internal: true }), 10, 10)", /gearDistance needs teeth1 > teeth2/],
+  ]],
+];
+
+const gearSpecRefusals = [
+  ["spurGear: impossible specs", [
+    ["spurGear({ module: 2, teeth: 2, thickness: 10 })", /at least 3 teeth/],
+    ["spurGear({ module: 0, teeth: 20, thickness: 10 })", /positive module/],
+    ["spurGear({ module: 2, teeth: 20, thickness: 10, bore: 40 })", /does not fit inside the root diameter/],
+  ]],
+  ["gt2Pulley: impossible specs", [
+    ["gt2Pulley({ teeth: 20, bore: 12 })", /leaves no hub/],
+    ["gt2Pulley({ teeth: 6 })", /at least 8 teeth/],
+    ["gt2Pulley({ teeth: 20, setScrew: 'M5' })", /"none", "M3" or "M4"/],
+  ]],
+  ["pipeClamp: unknown bolt, fused layout and a too-narrow width", [
+    ["pipeClamp({ bolt: 'M7' })", "not one of M3, M4, M5"],
+    ["pipeClamp({ gap: 0 })", "gap must be at least 1mm"],
+    ["pipeClamp({ width: 8 })", "use at least 13mm"],
+  ]],
+];
+
+/** Asserts a script is refused with every expected error pattern. */
+const expectRefused = async (code, error) => {
+  const r = await run(code);
+  expect(r.ok).toBe(false);
+  for (const pattern of [error].flat()) expect(r.error).toMatch(pattern);
+};
+
+describe("prelude refusals", () => {
+  it.each(singleRefusals)("%s", async (_label, code, error) => {
+    await expectRefused(code, error);
+  }, 60000);
+
+  it.each(bevelRefusals)("%s", async (_label, cases) => {
+    for (const [call, error] of cases) await expectRefused("return " + call + ";", error);
+  }, 60000);
+
+  it.each(wormRefusals)("%s", async (_label, cases) => {
+    for (const [call, error] of cases) await expectRefused("return " + call + ";", error);
+  }, 60000);
+
+  it.each(gearDistanceRefusals)("%s", async (_label, cases) => {
+    for (const [call, error] of cases) await expectRefused("return " + call + ";", error);
+  }, 60000);
+
+  it.each(gearSpecRefusals)("%s", async (_label, cases) => {
+    for (const [call, error] of cases) await expectRefused("return " + call + ";", error);
+  }, 60000);
+});
+
 describe("prelude surface", () => {
-  it("PRELUDE_NAMES includes color", async () => {
-    const { PRELUDE_NAMES } = await import("@arbesk/cad-gen/core/prelude.js");
+  it("exposes the contract, prelude, error hierarchy and the color helper", () => {
+    expect(CONTRACT_VERSION).toBe(2);
+    expect(typeof PRELUDE_VERSION).toBe("string");
+    expect(PRELUDE_VERSION.length).toBeGreaterThan(0);
+    const err = new CadDesignError("bad");
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("CadDesignError");
     expect(PRELUDE_NAMES).toContain("color");
   });
 });

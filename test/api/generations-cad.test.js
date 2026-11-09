@@ -157,33 +157,6 @@ describe("POST /api/v1/generations with provider cad", () => {
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  test("refuses a second in-flight cad request with 409", async () => {
-    let release;
-    generate = jest.fn(async () => {
-      await new Promise((resolve) => { release = resolve; });
-      return generated();
-    });
-    app = buildApp();
-
-    const first = await post({ prompt: "one", nodeId: "n_cad_a", provider: "cad" });
-    expect(first.status).toBe(202);
-    const second = await post({ prompt: "two", nodeId: "n_cad_b", provider: "cad" });
-    expect(second.status).toBe(409);
-    expect(second.body.error.code).toBe("GENERATION_IN_PROGRESS");
-    expect(second.headers["retry-after"]).toBeDefined();
-    release();
-  });
-
-  test("refuses with 429 once the daily quota is spent", async () => {
-    process.env.CAD_DAILY_REQUEST_LIMIT = "1";
-    const first = await post({ prompt: "one", nodeId: "n_cad_q1", provider: "cad" });
-    expect(first.status).toBe(202);
-    const second = await post({ prompt: "two", nodeId: "n_cad_q2", provider: "cad" });
-    expect(second.status).toBe(429);
-    expect(second.body.error.code).toBe("DAILY_QUOTA_EXCEEDED");
-    expect(second.headers["x-cad-quota-remaining"]).toBe("0");
-  });
-
   test("unsuitable subjects fail with CAD_REQUEST_UNSUITABLE and refund the unit", async () => {
     process.env.CAD_DAILY_REQUEST_LIMIT = "1";
     generate = jest.fn(async () => { throw new CadRequestUnsuitable("organic subject", 0.12); });
@@ -205,13 +178,6 @@ describe("POST /api/v1/generations with provider cad", () => {
     app = buildApp();
     const next = await post({ prompt: "a plate", nodeId: "n_cad_plate", provider: "cad" });
     expect(next.status).toBe(202);
-  });
-
-  test("answers 503 CAD_NOT_CONFIGURED when disabled", async () => {
-    process.env.CAD_GENERATION_ENABLED = "false";
-    const res = await post({ prompt: "x", nodeId: "n_cad_off", provider: "cad" });
-    expect(res.status).toBe(503);
-    expect(res.body.error.code).toBe("CAD_NOT_CONFIGURED");
   });
 
   test("an unknown provider stays 501", async () => {

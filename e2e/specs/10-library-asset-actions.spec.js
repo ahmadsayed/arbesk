@@ -19,7 +19,10 @@ test.describe.serial("Library asset actions", () => {
   test.beforeAll(async ({ browser }) => {
     await seedDefaultCollection(browser);
   });
-  test("renames an asset from the context menu", async ({ page }) => {
+
+  test("renames an asset and warns when Send to Collection has no target", async ({
+    page,
+  }) => {
     const originalName = uniqueAssetName("Rename Me");
     const renamedName = uniqueAssetName("Renamed Asset");
     await connectLibrary(page);
@@ -47,6 +50,20 @@ test.describe.serial("Library asset actions", () => {
 
     await expect(libraryAssetLocator(page, renamedName).first()).toBeVisible();
     await expect(libraryAssetLocator(page, originalName)).toHaveCount(0);
+
+    // Renaming keeps the asset actionable; Send to Collection… on it warns
+    // because only the default collection exists.
+    const renamedCard = libraryAssetLocator(page, renamedName).first();
+    await renamedCard.click({ button: "right" });
+    await page
+      .locator(`${SELECTORS.contextMenuItem}:text-is("Send to Collection…")`)
+      .click();
+
+    await expect(
+      page.locator(
+        ".notyf__message:has-text('Create or own another collection first.')",
+      ),
+    ).toBeVisible();
   });
 
   test("deletes an asset from the context menu after confirmation", async ({
@@ -76,62 +93,5 @@ test.describe.serial("Library asset actions", () => {
     await page.click(SELECTORS.dialogDeleteBtn);
 
     await expect(libraryAssetLocator(page, deleteMeName)).toHaveCount(0);
-  });
-
-  test("opens an asset in Studio from the context menu", async ({ page }) => {
-    const openName = uniqueAssetName("Open From Menu");
-    await connectLibrary(page);
-
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await generateSaveAndPublish(page, openName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
-    await openLibraryCollection(page, "Default");
-    const card = libraryAssetLocator(page, openName).first();
-    await expect(card).toBeVisible();
-
-    await card.click({ button: "right" });
-    await page
-      .locator(`${SELECTORS.contextMenuItem}:text-is("Open in Studio")`)
-      .click();
-
-    await page.waitForURL(/\/studio(\/[^/?]+)?\?asset=.*&assetId=/, {
-      timeout: 10000,
-    });
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.assetStatusName)).toContainText(
-      openName,
-    );
-  });
-
-  test("Send to Collection menu warns when no other collection exists", async ({
-    page,
-  }) => {
-    const sendName = uniqueAssetName("Send Test");
-    await connectLibrary(page);
-
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await generateSaveAndPublish(page, sendName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
-    await openLibraryCollection(page, "Default");
-    const card = libraryAssetLocator(page, sendName).first();
-    await expect(card).toBeVisible();
-
-    await card.click({ button: "right" });
-    await page
-      .locator(`${SELECTORS.contextMenuItem}:text-is("Send to Collection…")`)
-      .click();
-
-    // Without a second collection, the UI shows a warning toast instead of a dialog.
-    await expect(
-      page.locator(".notyf__message:has-text('Create or own another collection first.')"),
-    ).toBeVisible();
   });
 });

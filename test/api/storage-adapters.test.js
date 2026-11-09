@@ -295,92 +295,98 @@ describe("pinata adapter", () => {
     expect(p.gateways.public.get).toHaveBeenCalledWith("bafyText");
   });
 
-  it("cat() propagates authenticated gateway errors", async () => {
-    const p = fakePinata();
-    p.gateways.public.get = jest.fn(async () => {
-      throw new Error("pinata gateway 504");
-    });
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
-    });
-    await expect(a.cat("bafyFail")).rejects.toThrow("pinata gateway 504");
-  });
-
-  it("catBytes() propagates authenticated gateway errors", async () => {
-    const p = fakePinata();
-    p.gateways.public.get = jest.fn(async () => {
-      throw new Error("pinata gateway 503");
-    });
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
-    });
-    await expect(a.catBytes("bafyFail")).rejects.toThrow("pinata gateway 503");
-  });
-
-  it("add() propagates upload errors", async () => {
-    const p = fakePinata();
-    p.upload.public.file = jest.fn(async () => {
-      throw new Error("pinata upload refused");
-    });
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
-    });
-    await expect(a.add("payload")).rejects.toThrow("pinata upload refused");
-  });
-
-  it("addDirectory() propagates upload errors", async () => {
-    const p = fakePinata();
-    p.upload.public.fileArray = jest.fn(async () => {
-      throw new Error("pinata directory upload refused");
-    });
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
-    });
-    await expect(
-      a.addDirectory([{ name: "x.bin", data: "x" }]),
-    ).rejects.toThrow("pinata directory upload refused");
-  });
-
-  it("mintUploadCredential() propagates signed URL errors", async () => {
-    const p = fakePinata();
-    p.upload.public.createSignedURL = jest.fn(async () => {
-      throw new Error("signing failed");
-    });
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
-    });
-    await expect(a.mintUploadCredential()).rejects.toThrow("signing failed");
-  });
-
-  it("unpin() propagates list errors", async () => {
-    const p = fakePinata();
-    p.files.public.list = jest.fn(() => ({
-      cid: async () => {
-        throw new Error("list failed");
+  it.each([
+    [
+      "cat()",
+      (p) => {
+        p.gateways.public.get = jest.fn(async () => {
+          throw new Error("pinata gateway 504");
+        });
       },
-    }));
+      (a) => a.cat("bafyFail"),
+      "pinata gateway 504",
+    ],
+    [
+      "catBytes()",
+      (p) => {
+        p.gateways.public.get = jest.fn(async () => {
+          throw new Error("pinata gateway 503");
+        });
+      },
+      (a) => a.catBytes("bafyFail"),
+      "pinata gateway 503",
+    ],
+  ])("%s propagates authenticated gateway errors", async (_name, configure, call, message) => {
+    const p = fakePinata();
+    configure(p);
     const a = createPinataAdapter(p, {
       gatewayBase: "https://gw.mypinata.cloud/ipfs/",
       uploadTtl: 60,
     });
-    await expect(a.unpin("bafyFail")).rejects.toThrow("list failed");
+    await expect(call(a)).rejects.toThrow(message);
   });
 
-  it("unpin() propagates delete errors", async () => {
+  it.each([
+    [
+      "add()",
+      (p) => {
+        p.upload.public.file = jest.fn(async () => {
+          throw new Error("pinata upload refused");
+        });
+      },
+      (a) => a.add("payload"),
+      "pinata upload refused",
+    ],
+    [
+      "addDirectory()",
+      (p) => {
+        p.upload.public.fileArray = jest.fn(async () => {
+          throw new Error("pinata directory upload refused");
+        });
+      },
+      (a) => a.addDirectory([{ name: "x.bin", data: "x" }]),
+      "pinata directory upload refused",
+    ],
+    [
+      "mintUploadCredential()",
+      (p) => {
+        p.upload.public.createSignedURL = jest.fn(async () => {
+          throw new Error("signing failed");
+        });
+      },
+      (a) => a.mintUploadCredential(),
+      "signing failed",
+    ],
+    [
+      "unpin() list",
+      (p) => {
+        p.files.public.list = jest.fn(() => ({
+          cid: async () => {
+            throw new Error("list failed");
+          },
+        }));
+      },
+      (a) => a.unpin("bafyFail"),
+      "list failed",
+    ],
+    [
+      "unpin() delete",
+      (p) => {
+        p.files.public.delete = jest.fn(async () => {
+          throw new Error("delete failed");
+        });
+      },
+      (a) => a.unpin("bafyFakeCid"),
+      "delete failed",
+    ],
+  ])("%s propagates write/pin errors", async (_name, configure, call, message) => {
     const p = fakePinata();
-    p.files.public.delete = jest.fn(async () => {
-      throw new Error("delete failed");
-    });
+    configure(p);
     const a = createPinataAdapter(p, {
       gatewayBase: "https://gw.mypinata.cloud/ipfs/",
       uploadTtl: 60,
     });
-    await expect(a.unpin("bafyFakeCid")).rejects.toThrow("delete failed");
+    await expect(call(a)).rejects.toThrow(message);
   });
 
   it("listPinned() paginates through files and respects maxPages", async () => {
@@ -473,81 +479,58 @@ describe("pinata adapter", () => {
       globalThis.fetch = originalFetch;
     });
 
-    it("logs a dispatched + OK line for a /files/sign call, passes other URLs through untouched", async () => {
-      const rawFetch = jest.fn(async (url) => {
-        if (String(url).includes("/files/sign")) {
-          return { ok: true, status: 200 };
-        }
-        return { ok: true, status: 200, other: true };
-      });
+    it("instruments /files/sign calls and passes other URLs through untouched", async () => {
+      const rawFetch = jest.fn(async () => ({ ok: true, status: 200 }));
       globalThis.fetch = rawFetch;
       const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
       createPinataAdapter(fakePinata(), {
         gatewayBase: "https://gw.mypinata.cloud/ipfs/",
         uploadTtl: 60,
       });
 
+      // Non-sign URLs pass straight through to the raw fetch.
+      rawFetch.mockResolvedValueOnce({ ok: true, status: 200, other: true });
       const otherResult = await globalThis.fetch("https://example.com/other");
       expect(otherResult.other).toBe(true);
       expect(rawFetch).toHaveBeenCalledWith("https://example.com/other", undefined);
 
+      // Successful sign call logs dispatched + OK.
       const signResult = await globalThis.fetch(
         "https://uploads.pinata.cloud/v3/files/sign",
         { method: "POST" },
       );
       expect(signResult.status).toBe(200);
+      const logMessages = logSpy.mock.calls.map((c) => c[0]);
+      expect(
+        logMessages.some((m) => m.includes("pinata sign") && m.includes("dispatched")),
+      ).toBe(true);
+      expect(
+        logMessages.some((m) => m.includes("pinata sign") && m.includes("→ OK")),
+      ).toBe(true);
 
-      const messages = logSpy.mock.calls.map((c) => c[0]);
-      expect(messages.some((m) => m.includes("pinata sign") && m.includes("dispatched"))).toBe(true);
-      expect(messages.some((m) => m.includes("pinata sign") && m.includes("→ OK"))).toBe(true);
-
-      logSpy.mockRestore();
-    });
-
-    it("logs an ERROR line with the failure message and rethrows on a failed sign attempt", async () => {
-      const rawFetch = jest.fn(async () => {
-        throw new Error("network down");
-      });
-      globalThis.fetch = rawFetch;
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
-
-      createPinataAdapter(fakePinata(), {
-        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-        uploadTtl: 60,
-      });
-
+      // Thrown failures are logged and rethrown.
+      rawFetch.mockRejectedValueOnce(new Error("network down"));
       await expect(
         globalThis.fetch("https://uploads.pinata.cloud/v3/files/sign", {
           method: "POST",
         }),
       ).rejects.toThrow("network down");
-
-      const messages = warnSpy.mock.calls.map((c) => c[0]);
+      let warnMessages = warnSpy.mock.calls.map((c) => c[0]);
       expect(
-        messages.some((m) => m.includes("ERROR") && m.includes("network down")),
+        warnMessages.some((m) => m.includes("ERROR") && m.includes("network down")),
       ).toBe(true);
 
-      warnSpy.mockRestore();
-    });
-
-    it("logs a warning with the HTTP status on a non-OK sign response", async () => {
-      const rawFetch = jest.fn(async () => ({ ok: false, status: 503 }));
-      globalThis.fetch = rawFetch;
-      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
-
-      createPinataAdapter(fakePinata(), {
-        gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-        uploadTtl: 60,
-      });
-
+      // Non-OK responses log the HTTP status.
+      rawFetch.mockResolvedValueOnce({ ok: false, status: 503 });
       await globalThis.fetch("https://uploads.pinata.cloud/v3/files/sign", {
         method: "POST",
       });
+      warnMessages = warnSpy.mock.calls.map((c) => c[0]);
+      expect(warnMessages.some((m) => m.includes("HTTP 503"))).toBe(true);
 
-      const messages = warnSpy.mock.calls.map((c) => c[0]);
-      expect(messages.some((m) => m.includes("HTTP 503"))).toBe(true);
-
+      logSpy.mockRestore();
       warnSpy.mockRestore();
     });
 

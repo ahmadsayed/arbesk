@@ -19,12 +19,11 @@ import {
 
 const PROMPT = "cowboy";
 const CHILD_NAME = uniqueAssetName("Fork Child");
-const LIVE_CHILD_NAME = uniqueAssetName("Live Child");
-const PARENT_NAME_FORK = "Fork Parent";
-const PARENT_NAME_LIVE = "Live Parent";
+const PARENT_NAME_FORK = uniqueAssetName("Fork Parent");
+const PARENT_NAME_LIVE = uniqueAssetName("Live Parent");
 
 test.describe("fork vs live-reference", () => {
-  test("forking another collection's asset freezes its CID", async ({
+  test("forks freeze a CID while live references create a child_ref", async ({
     page,
   }) => {
     // startNewAsset() uses a native confirm(); auto-accept native dialogs.
@@ -40,28 +39,33 @@ test.describe("fork vs live-reference", () => {
     );
     const childTokenDec = BigInt(childTokenHex).toString();
 
-    // 2. Start a fresh parent draft.
+    // Verify the published token's collection manifest is valid.
+    const childCollection = await fetchTokenManifest(childTokenHex);
+    assertCollectionManifest(childCollection);
+    const firstAssetId = Object.keys(childCollection.assets)[0];
+    expect(firstAssetId).toBeTruthy();
+
+    // ── Fork parent: the copy freezes the child's model, no child_ref ──
     await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, PARENT_NAME_FORK);
     await page.click(SELECTORS.dialogConfirmBtn);
 
-    // 3. Generate the parent's own content.
-    const parentGenCid = await generate(page, PROMPT);
+    const forkGenCid = await generate(page, PROMPT);
 
-    // 4. Open gallery, find the child's card, insert it from the ⋯ menu.
+    // Open gallery, find the child's card, insert it from the ⋯ menu.
     await page.click(SELECTORS.gallerySwitcherBtn);
     const childCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
     await expect(childCard).toHaveCount(1, { timeout: 5000 });
     await insertAssetCard(childCard, "fork");
 
-    // 6. Save the draft. The forked child is baked into the manifest as a
-    //    source node with a frozen CID (no child_ref).
-    const parentCid = await saveDraft(page, parentGenCid);
-    const parentManifest = await fetchManifest(parentCid);
+    // Save the draft. The forked child is baked into the manifest as a
+    // source node with a frozen CID (no child_ref).
+    const forkParentCid = await saveDraft(page, forkGenCid);
+    const forkParentManifest = await fetchManifest(forkParentCid);
 
     // The "other" node (not the generated root node) should be the forked one.
-    const forkNode = parentManifest.scene.nodes.find(
+    const forkNode = forkParentManifest.scene.nodes.find(
       (n) => n.node_id && n.node_id.startsWith("linked_"),
     );
     expect(forkNode).toBeTruthy();
@@ -75,7 +79,6 @@ test.describe("fork vs live-reference", () => {
     // The copy freezes the child's MODEL file (not its manifest CID) and
     // carries the model node's post_processor (scale compensation / colour)
     // and transform.
-    const childCollection = await fetchTokenManifest(childTokenHex);
     const childAssetCid = await findAssetCidByName(childCollection, CHILD_NAME);
     expect(childAssetCid).toBeTruthy();
     const childModelNode = (await fetchManifest(childAssetCid)).scene.nodes[0];
@@ -84,50 +87,26 @@ test.describe("fork vs live-reference", () => {
     expect(childModelNode.post_processor?.scale).toBeTruthy();
     expect(forkNode.post_processor).toEqual(childModelNode.post_processor);
     expect(forkNode.transform_matrix).toEqual(childModelNode.transform_matrix);
-  });
 
-  test("live-referencing another collection's asset creates a child_ref", async ({
-    page,
-  }) => {
-    page.on("dialog", (d) => d.accept());
-
-    await connectStudio(page);
-
-    // 1. Publish the reference world.
-    const childTokenHex = await generateSaveAndPublish(
-      page,
-      LIVE_CHILD_NAME,
-      PROMPT,
-    );
-    const childTokenDec = BigInt(childTokenHex).toString();
-
-    // Verify the published token's collection manifest is valid.
-    const childManifest = await fetchTokenManifest(childTokenHex);
-    assertCollectionManifest(childManifest);
-    const firstAssetId = Object.keys(childManifest.assets)[0];
-    expect(firstAssetId).toBeTruthy();
-
-    // 2. Start a fresh parent draft.
+    // ── Live-ref parent: points at the collection, no frozen CID ───────
     await startEmptyAsset(page);
     await expect(page.locator(SELECTORS.dialogInput)).toBeVisible();
     await page.fill(SELECTORS.dialogInput, PARENT_NAME_LIVE);
     await page.click(SELECTORS.dialogConfirmBtn);
 
-    // 3. Generate the parent's own content.
-    const parentGenCid = await generate(page, PROMPT);
+    const liveGenCid = await generate(page, PROMPT);
 
-    // 4. Open gallery, find the child's card, insert it from the ⋯ menu.
     await page.click(SELECTORS.gallerySwitcherBtn);
-    const childCard = assetCardLocator(page, childTokenDec, LIVE_CHILD_NAME);
-    await expect(childCard).toHaveCount(1, { timeout: 5000 });
-    await insertAssetCard(childCard);
+    const liveChildCard = assetCardLocator(page, childTokenDec, CHILD_NAME);
+    await expect(liveChildCard).toHaveCount(1, { timeout: 5000 });
+    await insertAssetCard(liveChildCard);
 
-    // 6. Save the draft. The live-ref child is baked into the manifest as a
-    //    child_ref node (points at the collection, no frozen CID).
-    const parentCid = await saveDraft(page, parentGenCid);
-    const parentManifest = await fetchManifest(parentCid);
+    // Save the draft. The live-ref child is baked into the manifest as a
+    // child_ref node (points at the collection, no frozen CID).
+    const liveParentCid = await saveDraft(page, liveGenCid);
+    const liveParentManifest = await fetchManifest(liveParentCid);
 
-    const refNode = parentManifest.scene.nodes.find(
+    const refNode = liveParentManifest.scene.nodes.find(
       (n) => n.node_id && n.node_id.startsWith("linked_"),
     );
     expect(refNode).toBeTruthy();

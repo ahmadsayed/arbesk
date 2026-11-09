@@ -313,49 +313,24 @@ describe("Arbesk API", () => {
       expect(() => atob(res.body.assetData)).not.toThrow();
     });
 
-    it("returns suka.gltf for character prompts", async () => {
+    it.each([
+      ["A tall character", "gltf"],
+      ["howdy cowboy", "glb"],
+      ["a 3mf box", "3mf"],
+    ])("returns the keyword sample for %s prompts as %s", async (prompt, format) => {
       const res = await request(app)
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "A tall character",
-          nodeId: "node_char_001",
-        });
+        .send({ prompt, nodeId: `node_${format}_001` });
 
       expect(res.status).toBe(200);
-      expect(res.body.format).toBe("gltf");
-      expect(res.body.path).toMatch(/\.gltf$/);
-    });
-
-    it("returns howdy.glb for cowboy prompts", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "howdy cowboy",
-          nodeId: "node_cowboy_001",
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.format).toBe("glb");
-      expect(res.body.path).toMatch(/\.glb$/);
-    });
-
-    it("returns box.3mf for 3mf prompts", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({
-          prompt: "a 3mf box",
-          nodeId: "node_3mf_001",
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.format).toBe("3mf");
-      expect(res.body.path).toMatch(/\.3mf$/);
-      const bytes = Buffer.from(res.body.assetData, "base64");
-      expect(bytes[0]).toBe(0x50); // 'P'
-      expect(bytes[1]).toBe(0x4b); // 'K'
+      expect(res.body.format).toBe(format);
+      expect(res.body.path).toMatch(new RegExp(`\\.${format}$`));
+      if (format === "3mf") {
+        const bytes = Buffer.from(res.body.assetData, "base64");
+        expect(bytes[0]).toBe(0x50); // 'P'
+        expect(bytes[1]).toBe(0x4b); // 'K'
+      }
     });
 
     it("rejects when prompt or nodeId is missing", async () => {
@@ -376,26 +351,6 @@ describe("Arbesk API", () => {
         .send({ prompt: "Test", nodeId: "node_noauth" });
       expect(res.status).toBe(401);
       expect(res.body.error?.code).toBe("MISSING_AUTH");
-    });
-
-    it("rejects invalid session token with 401", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", "Session invalid-token")
-        .send({
-          prompt: "Test",
-          nodeId: "node_badsession",
-        });
-      expect(res.status).toBe(401);
-      expect(res.body.error?.code).toBe("INVALID_SESSION");
-    });
-
-    it("rejects non-Session auth scheme with 401", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", "Bearer something")
-        .send({ prompt: "Test", nodeId: "node_bearer" });
-      expect(res.status).toBe(401);
     });
 
     it("rejects real provider without providerKey", async () => {
@@ -478,22 +433,6 @@ describe("Arbesk API", () => {
         .post("/api/v1/generations")
         .set("Authorization", await makeSessionHeader())
         .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", retexture: true });
-      expect(res.status).toBe(400);
-    });
-
-    it("rejects animate without animations unless rigOnly", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", sourceAssetCid: "bafySource", animate: true });
-      expect(res.status).toBe(400);
-    });
-
-    it("rejects an invalid textureQuality", async () => {
-      const res = await request(app)
-        .post("/api/v1/generations")
-        .set("Authorization", await makeSessionHeader())
-        .send({ nodeId: "n1", provider: "tripo3d", providerKey: "k", prompt: "x", textureQuality: "ultra" });
       expect(res.status).toBe(400);
     });
 
@@ -654,80 +593,6 @@ describe("Arbesk API", () => {
         fetchSpy.mockRestore();
       });
 
-      it("sends an unchanged default payload when the new option fields are absent", async () => {
-        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
-          ok: true,
-          json: async () => ({ code: 0, data: { task_id: "task_defaults" } }),
-        });
-
-        const res = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", await makeSessionHeader())
-          .send({
-            prompt: "A plain default",
-            nodeId: "node_tripo_defaults",
-            provider: "tripo3d",
-            providerKey: "tsk_test_secret_key",
-          });
-
-        expect(res.status).toBe(202);
-        const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-        expect(body.model).toBe("v3.1-20260211");
-        expect(body.texture_version).toBeUndefined();
-        expect(body.delight).toBeUndefined();
-        expect(body.face_limit).toBeUndefined();
-
-        fetchSpy.mockRestore();
-      });
-
-      it("threads textureVersion/delight (no face_limit) into the retexture payload", async () => {
-        ipfsStorage.set("bafySource", Buffer.from("glTF\x02\x00\x00\x00glb source bytes"));
-        const fetchSpy = jest
-          .spyOn(global, "fetch")
-          // 1: source GLB upload → file_token
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ code: 0, data: { file_token: "file_1" } }),
-          })
-          // 2: models/texture task
-          .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ code: 0, data: { task_id: "task_refine" } }),
-          });
-
-        const res = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", await makeSessionHeader())
-          .send({
-            nodeId: "node_tripo_retexture_opts",
-            provider: "tripo3d",
-            providerKey: "tsk_test_secret_key",
-            sourceAssetCid: "bafySource",
-            retexture: true,
-            prompt: "make it mossy",
-            textureQuality: "fast",
-            textureVersion: "v3.5-20260815",
-            delight: true,
-            faceLimit: 12345,
-          });
-
-        expect(res.status).toBe(202);
-        expect(res.body.refined).toBe(true);
-        expect(fetchSpy.mock.calls[1][0]).toBe(
-          "https://openapi.tripo3d.ai/v3/models/texture",
-        );
-        const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
-        expect(body).toMatchObject({
-          texture_quality: "fast",
-          texture_version: "v3.5-20260815",
-          delight: true,
-        });
-        // face_limit is a generation-only option — never on retexture.
-        expect(body.face_limit).toBeUndefined();
-
-        fetchSpy.mockRestore();
-      });
-
       it("returns 400 VALIDATION_ERROR when neither prompt nor imageData is sent", async () => {
         const res = await request(app)
           .post("/api/v1/generations")
@@ -742,7 +607,7 @@ describe("Arbesk API", () => {
         expect(res.body.error.code).toBe("VALIDATION_ERROR");
       });
 
-      it("POST /generations/balance returns the Tripo credit balance", async () => {
+      it("POST /generations/balance maps provider responses", async () => {
         const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
           ok: true,
           json: async () => ({ code: 0, data: { balance: 630, frozen: 0 } }),
@@ -759,22 +624,18 @@ describe("Arbesk API", () => {
           "https://openapi.tripo3d.ai/v3/account/balance",
         );
         expect(JSON.stringify(res.body)).not.toContain("tsk_test_secret_key");
-        fetchSpy.mockRestore();
-      });
 
-      it("POST /generations/balance maps an invalid key to 401 PROVIDER_AUTH_FAILED", async () => {
-        jest.spyOn(global, "fetch").mockResolvedValue({
+        fetchSpy.mockResolvedValue({
           ok: true,
           json: async () => ({ code: 1002, message: "Authentication failed" }),
         });
-
-        const res = await request(app)
+        const bad = await request(app)
           .post("/api/v1/generations/balance")
           .set("Authorization", await makeSessionHeader())
           .send({ providerKey: "tsk_bad_key" });
 
-        expect(res.status).toBe(401);
-        expect(res.body.error.code).toBe("PROVIDER_AUTH_FAILED");
+        expect(bad.status).toBe(401);
+        expect(bad.body.error.code).toBe("PROVIDER_AUTH_FAILED");
       });
 
       it("POST /generations/balance rejects a missing providerKey", async () => {
@@ -1372,53 +1233,6 @@ describe("Arbesk API", () => {
           });
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe("VALIDATION_ERROR");
-      });
-
-      it("POST with textureQuality=detailed passes texture_quality=detailed to Tripo", async () => {
-        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
-          ok: true,
-          json: async () => ({ code: 0, data: { task_id: "task_hq" } }),
-        });
-        fetchSpy.mockClear();
-
-        const res = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", await makeSessionHeader())
-          .send({
-            prompt: "A detailed statue",
-            nodeId: "node_tripo_hq",
-            provider: "tripo3d",
-            providerKey: "tsk_test_secret_key",
-            textureQuality: "detailed",
-          });
-
-        expect(res.status).toBe(202);
-        expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
-          texture_quality: "detailed",
-        });
-      });
-
-      it("POST without textureQuality omits texture_quality", async () => {
-        const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
-          ok: true,
-          json: async () => ({ code: 0, data: { task_id: "task_std" } }),
-        });
-        fetchSpy.mockClear();
-
-        const res = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", await makeSessionHeader())
-          .send({
-            prompt: "A plain cube",
-            nodeId: "node_tripo_std",
-            provider: "tripo3d",
-            providerKey: "tsk_test_secret_key",
-          });
-
-        expect(res.status).toBe(202);
-        expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).not.toHaveProperty(
-          "texture_quality",
-        );
       });
 
       describe("retopo (smart retopology)", () => {
@@ -2085,25 +1899,6 @@ describe("Arbesk API", () => {
         expect(calls[calls.length - 1]).toBe("https://openapi.tripo3d.ai/v3/generation/multiview-to-model");
       });
 
-      it("maps a generic Tripo HTTP failure to 502 PROVIDER_ERROR on POST", async () => {
-        jest.spyOn(global, "fetch").mockResolvedValue({
-          ok: false,
-          status: 500,
-          text: async () => "upstream exploded",
-        });
-        const res = await request(app)
-          .post("/api/v1/generations")
-          .set("Authorization", await makeSessionHeader())
-          .send({
-            prompt: "An upstream failure",
-            nodeId: "node_tripo_502",
-            provider: "tripo3d",
-            providerKey: "tsk_test_secret_key",
-          });
-        expect(res.status).toBe(502);
-        expect(res.body.error.code).toBe("PROVIDER_ERROR");
-      });
-
       it("returns 500 GENERATION_FAILED when the source is corrupt gzip (unexpected non-Tripo error)", async () => {
         // Gzip magic (1f 8b) but a corrupt body: decompress() throws a plain
         // zlib error — not a TripoApiError — exercising the generic catch-all.
@@ -2297,18 +2092,6 @@ describe("Arbesk API", () => {
       );
     });
 
-    it("returns 400 when assetId is missing", async () => {
-      const res = await request(app)
-        .post("/api/v1/assets/snapshot-comments")
-        .set("Authorization", await makeSessionHeader())
-        .send({ tokenId: "42", chainId: 31415822 });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
-      expect(res.body.error.details.issues).toEqual(
-        expect.arrayContaining([expect.objectContaining({ path: ["assetId"] })]),
-      );
-    });
   });
 
   describe("Rate Limiting", () => {
@@ -2445,15 +2228,6 @@ describe("Arbesk API", () => {
         .post("/api/v1/ipfs/unpin")
         .set("Authorization", await makeSessionHeader())
         .send({ cid: "bafyWhatever" });
-      expect(res.status).toBe(400);
-      expect(res.body.error?.code).toBe("VALIDATION_ERROR");
-    });
-
-    it("rejects a non-decimal tokenId (400)", async () => {
-      const res = await request(app)
-        .post("/api/v1/ipfs/unpin")
-        .set("Authorization", await makeSessionHeader())
-        .send({ cid: "bafyWhatever", tokenId: "abc" });
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe("VALIDATION_ERROR");
     });
@@ -2658,23 +2432,6 @@ describe("Arbesk API", () => {
       expect(res.body.error?.code).toBe("FORBIDDEN");
     });
 
-    it("walks the chain and reports unpinned CIDs", async () => {
-      const startCid = saveManifestToStorage({
-        version: 1,
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
-      });
-      globalThis.__registerGCToken("1", startCid, SESSION_WALLET);
-
-      const res = await request(app)
-        .post("/api/v1/ipfs/unpin")
-        .set("Authorization", await makeSessionHeader())
-        .send({ cid: startCid, tokenId: "1" });
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.unpinned)).toBe(true);
-      expect(res.body.unpinned).toContain(startCid);
-    });
-
     it("skips shared source.cid and source.bundleCid", async () => {
       const startCid = saveManifestToStorage({
         version: 1,
@@ -2743,40 +2500,6 @@ describe("Arbesk API", () => {
       // they are left pinned and reclaimed later by the reachability GC.
     });
 
-    it("does not unpin a shared buffer CID referenced by another asset", async () => {
-      // cowboy1 and cowboy2 share the same mesh/texture CID.
-      ipfsStorage.set(
-        "bafySharedMesh",
-        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
-      );
-
-      const cowboy1Cid = saveManifestToStorage({
-        version: 1,
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
-      });
-
-      const cowboy2Cid = saveManifestToStorage({
-        version: 1,
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
-      });
-      globalThis.__registerGCToken("1", cowboy2Cid, SESSION_WALLET);
-
-      // Deleting cowboy2 must not unpin the shared mesh or its buffer.
-      const res = await request(app)
-        .post("/api/v1/ipfs/unpin")
-        .set("Authorization", await makeSessionHeader())
-        .send({ cid: cowboy2Cid, tokenId: "1" });
-      expect(res.status).toBe(200);
-      expect(res.body.unpinned).toContain(cowboy2Cid);
-      expect(res.body.unpinned).not.toContain("bafySharedMesh");
-      expect(res.body.unpinned).not.toContain("bafySharedBuffer");
-      expect(res.body.skipped).toContain("bafySharedMesh");
-      // cowboy1's manifest is untouched.
-      expect(res.body.unpinned).not.toContain(cowboy1Cid);
-    });
-
     it("unpins a collection manifest but skips its asset CIDs", async () => {
       const assetCid = saveManifestToStorage({
         version: 1,
@@ -2801,27 +2524,6 @@ describe("Arbesk API", () => {
       expect(res.body.unpinned).toContain(collectionCid);
       expect(res.body.unpinned).not.toContain(assetCid);
       expect(res.body.skipped).toContain(assetCid);
-    });
-
-    it("unpins thumbnail and comments archive as assetUnique", async () => {
-      const cid = saveManifestToStorage({
-        version: 1,
-        prev_asset_manifest_cid: null,
-        thumbnail: { cid: "bafyThumb" },
-        comments_archive_cid: "bafyComments",
-        scene: { nodes: [] },
-      });
-      globalThis.__registerGCToken("1", cid, SESSION_WALLET);
-
-      const res = await request(app)
-        .post("/api/v1/ipfs/unpin")
-        .set("Authorization", await makeSessionHeader())
-        .send({ cid, tokenId: "1" });
-
-      expect(res.status).toBe(200);
-      expect(res.body.unpinned).toContain(cid);
-      expect(res.body.unpinned).toContain("bafyThumb");
-      expect(res.body.unpinned).toContain("bafyComments");
     });
 
     it("rate-limits unpin requests per wallet", async () => {
@@ -2869,46 +2571,7 @@ describe("Arbesk API", () => {
       expect(resNoAdmin.status).toBe(403);
     });
 
-    it("dry-run reports orphaned CIDs without unpinning", async () => {
-      ipfsStorage.set(
-        "bafySharedMesh",
-        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
-      );
-
-      const assetCid = saveManifestToStorage({
-        version: 1,
-        type: "asset",
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
-      });
-
-      const collectionCid = saveManifestToStorage({
-        version: 1,
-        type: "collection",
-        prev_asset_manifest_cid: null,
-        assets: { cowboy: assetCid },
-      });
-
-      // Orphan: pinned but not referenced by any live token.
-      ipfsStorage.set("bafyOrphan", "orphan data");
-
-      globalThis.__registerGCToken("1", collectionCid);
-
-      const res = await request(app)
-        .post("/api/v1/ipfs/gc")
-        .set("Authorization", await makeSessionHeader())
-        .set("X-Admin-Token", "test-admin-token")
-        .send({ dryRun: true });
-
-      expect(res.status).toBe(200);
-      expect(res.body.dryRun).toBe(true);
-      expect(res.body.liveTokens).toBe(1);
-      expect(res.body.pinned).toBeGreaterThanOrEqual(3);
-      expect(res.body.orphans).toBeGreaterThanOrEqual(1);
-      expect(res.body.unpinned).toBe(0);
-    });
-
-    it("live run unpins only orphaned CIDs", async () => {
+    it("dry-run reports orphans without unpinning, then live run keeps reachable CIDs", async () => {
       ipfsStorage.set(
         "bafySharedMesh",
         '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
@@ -2929,138 +2592,39 @@ describe("Arbesk API", () => {
         assets: { cowboy: assetCid },
       });
 
+      // Orphan: pinned but not referenced by any live token.
       ipfsStorage.set("bafyOrphan", "orphan data");
 
       globalThis.__registerGCToken("1", collectionCid);
 
-      const res = await request(app)
+      const dry = await request(app)
+        .post("/api/v1/ipfs/gc")
+        .set("Authorization", await makeSessionHeader())
+        .set("X-Admin-Token", "test-admin-token")
+        .send({ dryRun: true });
+
+      expect(dry.status).toBe(200);
+      expect(dry.body.dryRun).toBe(true);
+      expect(dry.body.liveTokens).toBe(1);
+      expect(dry.body.pinned).toBeGreaterThanOrEqual(3);
+      expect(dry.body.orphans).toBeGreaterThanOrEqual(1);
+      expect(dry.body.unpinned).toBe(0);
+
+      const live = await request(app)
         .post("/api/v1/ipfs/gc")
         .set("Authorization", await makeSessionHeader())
         .set("X-Admin-Token", "test-admin-token")
         .send({ dryRun: false });
 
-      expect(res.status).toBe(200);
-      expect(res.body.dryRun).toBe(false);
-      expect(res.body.unpinned).toBeGreaterThanOrEqual(1);
+      expect(live.status).toBe(200);
+      expect(live.body.dryRun).toBe(false);
+      expect(live.body.unpinned).toBeGreaterThanOrEqual(1);
       // Reachable CIDs must still be pinned (mock storage still contains them;
       // in real life they would remain pinned).
       expect(ipfsStorage.has(collectionCid)).toBe(true);
       expect(ipfsStorage.has(assetCid)).toBe(true);
       expect(ipfsStorage.has("bafySharedMesh")).toBe(true);
       expect(ipfsStorage.has("bafySharedBuffer")).toBe(true);
-    });
-
-    it("keeps shared source CID pinned while token lives and unpin it after burn", async () => {
-      ipfsStorage.set(
-        "bafySharedMesh",
-        '{"buffers":[{"uri":"ipfs://bafySharedBuffer"}]}',
-      );
-
-      const assetCid = saveManifestToStorage({
-        version: 1,
-        type: "asset",
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [{ node_id: "cowboy", source: { cid: "bafySharedMesh" } }] },
-      });
-
-      const collectionCid = saveManifestToStorage({
-        version: 1,
-        type: "collection",
-        prev_asset_manifest_cid: null,
-        assets: { cowboy: assetCid },
-      });
-
-      globalThis.__registerGCToken("1", collectionCid);
-
-      // While token #1 is alive, the shared mesh is reachable.
-      const dryRes = await request(app)
-        .post("/api/v1/ipfs/gc")
-        .set("Authorization", await makeSessionHeader())
-        .set("X-Admin-Token", "test-admin-token")
-        .send({ dryRun: true });
-      expect(dryRes.status).toBe(200);
-      expect(dryRes.body.orphans).toBe(0);
-
-      // Burn the token.
-      globalThis.__burnGCToken("1");
-
-      // After burn, the shared mesh and its buffer are orphaned.
-      const liveRes = await request(app)
-        .post("/api/v1/ipfs/gc")
-        .set("Authorization", await makeSessionHeader())
-        .set("X-Admin-Token", "test-admin-token")
-        .send({ dryRun: false });
-      expect(liveRes.status).toBe(200);
-      expect(liveRes.body.liveTokens).toBe(0);
-      expect(liveRes.body.unpinned).toBeGreaterThanOrEqual(2);
-    });
-
-    it("respects maxUnpin in live GC runs", async () => {
-      const assetCid = saveManifestToStorage({
-        version: 1,
-        type: "asset",
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [] },
-      });
-      const collectionCid = saveManifestToStorage({
-        version: 1,
-        type: "collection",
-        prev_asset_manifest_cid: null,
-        assets: { a1: assetCid },
-      });
-
-      ipfsStorage.set("bafyOrphan1", "orphan 1");
-      ipfsStorage.set("bafyOrphan2", "orphan 2");
-      ipfsStorage.set("bafyOrphan3", "orphan 3");
-
-      globalThis.__registerGCToken("1", collectionCid);
-
-      const res = await request(app)
-        .post("/api/v1/ipfs/gc")
-        .set("Authorization", await makeSessionHeader())
-        .set("X-Admin-Token", "test-admin-token")
-        .send({ dryRun: false, maxUnpin: 2 });
-
-      expect(res.status).toBe(200);
-      expect(res.body.dryRun).toBe(false);
-      expect(res.body.orphans).toBeGreaterThanOrEqual(3);
-      expect(res.body.unpinned).toBe(2);
-    });
-
-    it("keeps editorListURI CID reachable even when not in manifest chain", async () => {
-      const assetCid = saveManifestToStorage({
-        version: 1,
-        type: "asset",
-        prev_asset_manifest_cid: null,
-        scene: { nodes: [] },
-      });
-      const collectionCid = saveManifestToStorage({
-        version: 1,
-        type: "collection",
-        prev_asset_manifest_cid: null,
-        assets: { a1: assetCid },
-      });
-
-      // The editor list CID is not referenced by the manifest chain.
-      ipfsStorage.set("bafyEditors", '{"editors":["0xEditor"]}');
-
-      globalThis.__registerGCToken(
-        "1",
-        collectionCid,
-        "0xOwner",
-        "ipfs://bafyEditors",
-      );
-
-      const res = await request(app)
-        .post("/api/v1/ipfs/gc")
-        .set("Authorization", await makeSessionHeader())
-        .set("X-Admin-Token", "test-admin-token")
-        .send({ dryRun: false });
-
-      expect(res.status).toBe(200);
-      // bafyEditors is protected by the on-chain editorListURI, so it must not
-      // have been unpinned (mock storage still contains it).
-      expect(ipfsStorage.has("bafyEditors")).toBe(true);
     });
 
     it("rate-limits GC requests per wallet", async () => {

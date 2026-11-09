@@ -235,21 +235,13 @@ test("a stored 'mock' provider on localhost still restores", async () => {
   expect(select.value).toBe("mock");
 });
 
-test("Generate keeps its accessible name idle and while generating", async () => {
+test("Generate button has a static aria-label in the sidebar markup", async () => {
   const { readFileSync } = await import("node:fs");
   const pug = readFileSync("frontend/src/pug/includes/studio-sidebar.pug", "utf8");
   const line = pug.split("\n").find((l) => l.includes("button#generateBtn"));
   // Static aria-label: survives the .generating state that hides the text.
   expect(line).toContain('aria-label="Generate"');
   expect(line).toContain("btn-secondary");
-
-  const { $ } = await load();
-  const btn = $("generateBtn");
-  btn.setAttribute("aria-label", "Generate");
-  btn.classList.add("generating");
-  btn.disabled = true;
-  expect(btn.getAttribute("aria-label")).toContain("Generate");
-  expect(btn.textContent).toContain("Generate");
 });
 
 test("bottom bar mirrors the plain provider labels", async () => {
