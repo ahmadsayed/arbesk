@@ -210,6 +210,9 @@ async function loadActivities(): Promise<void> {
         }))
       )
     );
+    // A slower walk from the previously open asset must not overwrite the
+    // feed after the user has already switched to another one.
+    if (getActiveAssetManifestCid() !== cid) return;
     const chain = manifestResults
       .filter((r) => r.status === "fulfilled")
       .map((r) => (r as PromiseFulfilledResult<any>).value);

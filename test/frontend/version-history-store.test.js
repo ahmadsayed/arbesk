@@ -102,4 +102,124 @@ describe("version-history-store", () => {
     expect(store.getState().activeCid).toBe("cid-v3");
     expect(store.getState().isLoading).toBe(false);
   });
+
+  test("SCENE_CLEARED drops the previous asset's chain", async () => {
+    assetStore.set({ activeAssetManifestCid: "cid-v3" });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
+    await flush();
+    expect(store.getState().entries).toHaveLength(3);
+
+    emit(EVENTS.SCENE_CLEARED);
+
+    expect(store.getState().entries).toHaveLength(0);
+    expect(store.getState().activeCid).toBeNull();
+    expect(store.getState().publishedCid).toBeNull();
+  });
+
+  test("a slower refresh from an older root cannot overwrite the newer chain", async () => {
+    const resolvers = new Map();
+    store._deps.walkChain = jest.fn(
+      (cid) =>
+        new Promise((resolve) => {
+          resolvers.set(cid, resolve);
+        })
+    );
+
+    // The deep link first advertises a collection manifest, then the real
+    // asset resolves and re-roots the store.
+    assetStore.set({ activeAssetManifestCid: "cid-collection" });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-collection", manifest: {} });
+    assetStore.set({ activeAssetManifestCid: "cid-asset" });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-asset", manifest: {} });
+
+    // The newer walk lands first…
+    resolvers.get("cid-asset")?.([{ cid: "cid-asset" }]);
+    await flush();
+    // …and the older collection walk must be discarded, not applied last.
+    resolvers.get("cid-collection")?.([{ cid: "cid-collection" }]);
+    await flush();
+
+    expect(store.getState().entries.map((e) => e.cid)).toEqual([
+      "cid-asset",
+    ]);
+  });
+
+  test("history navigation keeps the chain when the scene clear fires", async () => {
+    assetStore.set({ activeAssetManifestCid: "cid-v3" });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
+    await flush();
+
+    let release;
+    store._deps.loadAssetManifest = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        })
+    );
+    const loading = store.loadVersion("cid-v1");
+    // Let loadVersion's clearScene() settle so it is now awaiting the version
+    // load; the engine's clearScene emits SCENE_CLEARED mid-navigation.
+    await flush();
+    emit(EVENTS.SCENE_CLEARED);
+    expect(store.getState().entries).toHaveLength(3);
+
+    release();
+    await loading;
+
+    expect(store.getState().entries).toHaveLength(3);
+    expect(store.getState().activeCid).toBe("cid-v1");
+  });
+
+  test("wallet reconnect re-checks the loaded root, not a foreign active CID", async () => {
+    assetStore.set({ activeAssetManifestCid: "cid-v3", activeAssetTokenId: 1 });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
+    await flush();
+
+    store._deps.walkChain = jest.fn(async () => ENTRIES);
+    // A ?asset= deep link can leave the COLLECTION manifest CID in the active
+    // slot while the asset is still resolving. WALLET_CONNECTED must not walk
+    // that collection chain.
+    assetStore.set({ activeAssetManifestCid: "cid-collection" });
+    emit(EVENTS.WALLET_CONNECTED, {});
+
+    await flush();
+
+    expect(store._deps.walkChain).toHaveBeenCalledTimes(1);
+    expect(store._deps.walkChain.mock.calls[0][0]).toBe("cid-v3");
+    expect(store.getState().entries).toHaveLength(3);
+  });
+
+  test("draft save re-roots the chain at the new tip while scrubbing", async () => {
+    assetStore.set({ activeAssetManifestCid: "cid-v3", activeAssetTokenId: 1 });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
+    await flush();
+
+    store._deps.walkChain = jest.fn(async () => ENTRIES);
+    assetStore.set({
+      activeAssetManifestCid: "cid-v1",
+      latestAssetManifestCid: "cid-v4",
+    });
+    emit(EVENTS.ASSET_DRAFT_SAVED, { cid: "cid-v4" });
+
+    await flush();
+
+    expect(store._deps.walkChain.mock.calls[0][0]).toBe("cid-v4");
+  });
+
+  test("publish re-roots at the newly saved tip, not the old chain root", async () => {
+    assetStore.set({ activeAssetManifestCid: "cid-v3", activeAssetTokenId: 1 });
+    emit(EVENTS.SCENE_READY, { manifestCid: "cid-v3" });
+    await flush();
+
+    store._deps.walkChain = jest.fn(async () => ENTRIES);
+    // Publishing saves a new version first; the chain root must follow it.
+    assetStore.set({ latestAssetManifestCid: "cid-v4" });
+    jest.useFakeTimers();
+    emit(EVENTS.ASSET_PUBLISHED, {});
+    jest.advanceTimersByTime(500);
+    jest.useRealTimers();
+    await flush();
+
+    expect(store._deps.walkChain.mock.calls[0][0]).toBe("cid-v4");
+  });
 });

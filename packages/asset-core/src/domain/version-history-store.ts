@@ -53,12 +53,29 @@ let activeCid: string | null = null; // currently loaded manifest CID
 let publishedCid: string | null = null; // CID currently anchored on-chain
 let isLoading = false;
 let isHistoryNavigation = false;
+// Monotonic refresh generation. A walk that resolves after a newer one (or
+// after the scene was cleared) must not publish its stale result.
+let _refreshSeq = 0;
 
 const _subscribers: Set<(snapshot: VersionHistoryState) => void> = new Set();
 
 function _notify() {
   const snapshot = getState();
   for (const fn of _subscribers) fn(snapshot);
+}
+
+/**
+ * Drops all chain state and cancels any in-flight refresh.
+ * @remarks Used by SCENE_EMPTY / SCENE_CLEARED so a freshly cleared Studio
+ *   never keeps showing the previous asset's version strip.
+ */
+function _reset() {
+  _refreshSeq++;
+  entries = [];
+  chainRootCid = null;
+  activeCid = null;
+  publishedCid = null;
+  _notify();
 }
 
 // ─── Public API ───
@@ -131,30 +148,30 @@ export async function loadVersion(cid: string) {
 
 // ─── Refresh ───
 
-async function _refresh() {
-  const manifestCid = getActiveAssetManifestCid();
-  if (!manifestCid) {
-    entries = [];
-    chainRootCid = null;
-    activeCid = null;
-    publishedCid = null;
-    _notify();
+async function _refresh(rootCid: string | null = getActiveAssetManifestCid()) {
+  if (!rootCid) {
+    _reset();
     return;
   }
 
   // On history navigation, keep the chain root — just track the active CID.
   if (isHistoryNavigation) {
-    activeCid = manifestCid;
+    activeCid = getActiveAssetManifestCid();
     _notify();
     return;
   }
 
-  chainRootCid = manifestCid;
-  activeCid = manifestCid;
+  // Only the newest refresh may publish its result. A deep link can adopt a
+  // collection manifest (whose own version chain is NOT asset history) before
+  // the real asset CID resolves; without this guard that slower walk can land
+  // after the asset's and leave foreign versions in the strip.
+  const seq = ++_refreshSeq;
+  chainRootCid = rootCid;
+  activeCid = rootCid;
 
   const tokenId = getActiveAssetTokenId();
   const [chain, pubCid] = await Promise.all([
-    _deps.walkChain(chainRootCid).catch((err) => {
+    _deps.walkChain(rootCid).catch((err) => {
       console.error("History chain fetch failed:", err);
       return [];
     }),
@@ -162,6 +179,8 @@ async function _refresh() {
       ? _deps.fetchPublishedCid(tokenId).catch(() => null)
       : Promise.resolve(null),
   ]);
+
+  if (seq !== _refreshSeq) return; // superseded by a newer root or a reset
 
   entries = chain;
   publishedCid = pubCid;
@@ -183,35 +202,48 @@ on(EVENTS.SCENE_READY, (e) => {
   chainRootCid = manifestCid;
   activeCid = manifestCid;
   setLatestManifestCid(manifestCid);
-  _refresh();
+  void _refresh(manifestCid);
 });
 
 on(EVENTS.WALLET_CONNECTED, () => {
-  if (getActiveAssetManifestCid() && !isHistoryNavigation) {
-    _refresh();
+  // Re-check the published marker now that the token is known. Never re-root
+  // at getActiveAssetManifestCid(): a ?asset= deep link can have adopted the
+  // COLLECTION manifest CID there, and walking a collection's chain would
+  // fill the asset version strip with versions of other files.
+  if (chainRootCid && !isHistoryNavigation) {
+    void _refresh(chainRootCid);
   }
 });
 
 on(EVENTS.ASSET_PUBLISHED, () => {
-  // Re-check published CID after mint/update.
-  setTimeout(_refresh, 500);
+  // Re-check published CID after mint/update. Publishing saves a new version
+  // first, so follow the tip (like a draft save) rather than the old chain root.
+  setTimeout(() => {
+    const tip = getLatestAssetManifestCid() || chainRootCid;
+    if (tip && !isHistoryNavigation) void _refresh(tip);
+  }, 500);
 });
 
 on(EVENTS.ASSET_DRAFT_SAVED, () => {
-  _refresh();
+  // A save appends a new tip; re-root at the tip (not the active CID, which
+  // may still point at an older version while the user scrubs history).
+  const tip = getLatestAssetManifestCid() || chainRootCid;
+  if (tip && !isHistoryNavigation) void _refresh(tip);
 });
 
-on(EVENTS.SCENE_EMPTY, () => {
-  entries = [];
-  chainRootCid = null;
-  activeCid = null;
-  publishedCid = null;
-  _notify();
+on(EVENTS.SCENE_CLEARED, () => {
+  // Entering an asset switch clears the scene before the new manifest loads.
+  // Drop the old strip now so its ticks (and header version number) cannot
+  // leak into the new asset. History navigation also clears the scene, so
+  // keep the chain while scrubbing.
+  if (!isHistoryNavigation) _reset();
 });
+
+on(EVENTS.SCENE_EMPTY, _reset);
 
 // ─── Module-load bootstrap ───
 // If the store is imported after SCENE_READY already fired, seed the clock
 // from the current asset state exactly like the retired asset-history.js did.
 if (getActiveAssetManifestCid() && !isHistoryNavigation) {
-  _refresh();
+  void _refresh(getActiveAssetManifestCid());
 }

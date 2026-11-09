@@ -32,9 +32,13 @@ export function assetCidFromTokenUriManifest(
 async function resolvePublishedAssetCid(
   tokenUriCid: string
 ): Promise<string | null> {
+  // Capture the asset id BEFORE the gateway read: the open asset can change
+  // while the manifest is in flight, and reading it afterwards would mark
+  // another asset's CID as this token's published version.
+  const assetId = getActiveAssetId();
   try {
     const manifest = await getFromRemoteIPFS(tokenUriCid);
-    return assetCidFromTokenUriManifest(manifest, tokenUriCid, getActiveAssetId());
+    return assetCidFromTokenUriManifest(manifest, tokenUriCid, assetId);
   } catch {
     return tokenUriCid;
   }

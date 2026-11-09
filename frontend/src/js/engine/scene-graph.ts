@@ -726,7 +726,11 @@ export async function loadFromParams() {
         BigInt(assetTokenId),
       ]);
       if (cid) {
-        adoptOpenedAsset(cid, { tokenId: String(assetTokenId) });
+        // Do NOT adopt the tokenURI CID as the active asset manifest: for
+        // collection tokens it is the COLLECTION manifest, whose own version
+        // chain (adds/removes of other assets) is not this asset's history.
+        // openAssetByTokenId() expands the collection and adopts the real
+        // asset manifest CID once it resolves.
         adoptOpenedCollection(String(assetTokenId), { clearSelectedCollection: true });
         emit(EVENTS.ASSET_OPEN_BY_TOKEN_ID, {
           tokenId: assetTokenId,
