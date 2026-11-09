@@ -106,7 +106,7 @@ docker compose -p $(./scripts/start-dev.sh --print-project 2>/dev/null || echo a
 
 ## What the tests cover
 
-`e2e/specs/` currently holds **29 spec files / 40 tests**. The default GPU run (4 workers, 4 isolated stacks) takes roughly 1.5–2 minutes including global setup.
+`e2e/specs/` currently holds **28 spec files / 34 tests**. The default GPU run (4 workers, 4 isolated stacks) takes roughly 1.2–1.7 minutes including global setup.
 
 ### 1. Wallet connection (`e2e/specs/01-connect-wallet.spec.js`)
 
@@ -196,8 +196,7 @@ Validates that every ERC-721 token is a collection manifest containing one or mo
 
 1. Publishes a first asset and asserts the on-chain `tokenURI` resolves to a collection manifest with at least one entry.
 2. Uses **New Asset** to clear the scene while preserving the selected collection context, publishes a second asset, and asserts it lands in the **same** default collection token without disturbing the first asset.
-3. Opens the published token in the gallery, opens an asset card, and asserts the Studio viewport loads the asset name.
-4. Reloads `?asset=TOKENID&assetId=ASSETID` and asserts the viewport restores the first asset.
+3. Opens the published token in the gallery, opens an asset card, and asserts the Studio viewport loads the asset name; the same test then reloads `?asset=TOKENID&assetId=ASSETID` and asserts the viewport restores the first asset.
 
 The two publishes, the New Asset context check, and the deep-link reload share one token; collection-selector population is covered by the collections unit tests and the public-profile connect flow.
 
@@ -242,11 +241,11 @@ The wallet gate before connection is covered by the public-profile spec, and sor
 
 ### 10. Library asset actions (`e2e/specs/10-library-asset-actions.spec.js`)
 
-Validates the context-menu actions available on library assets:
+Validates the context-menu actions available on library assets in one flow that reuses a single published asset:
 
 1. **Rename** — opens the GNOME dialog, changes the asset name, and asserts the grid updates.
 2. **Send to Collection…** on the renamed asset — with only the default collection present, asserts a warning toast explains that another collection is required.
-3. **Delete** — confirms deletion and asserts the asset is removed from the collection (NFT is not burned).
+3. **Delete** the same renamed asset — confirms deletion and asserts it is removed from the collection (NFT is not burned).
 
 Opening an asset from the library is covered by the round-trip spec (11), so the duplicate context-menu open path was removed.
 
@@ -287,27 +286,20 @@ Validates the Merkle-editor authorization flow across three wallets:
 
 ### 14. Collaborative comments (`e2e/specs/14-collaborative-comments.spec.js`)
 
-Validates live asset-level comments across an owner and an editor:
+Validates live asset-level comments across an owner and an editor, and that the thread stays scoped to its asset:
 
 1. **Owner** publishes an asset.
 2. **Owner** adds a second wallet as an editor via the collaborators panel.
 3. **Owner** posts a comment on the asset.
 4. **Editor** opens the shared asset and sees the owner's comment.
 5. **Editor** replies; the owner's session sees the reply live.
+6. The owner publishes a sibling asset in the same collection; switching to it shows no comments (count `0`), and switching back restores the full thread.
 
-**Why it matters:** This is the only multi-wallet coverage for the Nostr chat proxy and comment thread state. Changes to `comment-thread.ts`, `comments-panel.ts`, `chat-proxy.ts`, Merkle editor proof wiring in comments, or the comments archive snapshot can break it.
+**Why it matters:** This is the only multi-wallet coverage for the Nostr chat proxy and comment thread state, and it pins asset-level isolation (`assetTag`, archive `assetId`). Changes to `comment-thread.ts`, `comments-panel.ts`, `chat-proxy.ts`, Merkle editor proof wiring in comments, or the comments archive snapshot can break it.
 
-### 15. Asset-level comment isolation (`e2e/specs/15-asset-level-comments.spec.js`)
+### 15. Asset-level comment isolation (folded into spec 14)
 
-Validates that comments do not leak between assets in the same collection:
-
-1. Publishes two assets (`A` and `B`) in the same default collection.
-2. Resolves both `assetId`s from the on-chain collection manifest.
-3. Posts a comment on asset `A`.
-4. Switches to asset `B` and asserts the comment is not present and the count is `0`.
-5. Switches back to asset `A` and asserts the comment is still present.
-
-**Why it matters:** Comments are keyed by asset, not by collection or token. Any regression in `comment-thread.ts` context reset, the chat proxy `assetTag`, or the archive snapshot `assetId` would cause cross-asset leakage.
+The cross-asset isolation assertions (publish A + B, comment on A, verify B is clean, return to A) now run at the end of spec 14 so both comment scenarios share one wallet/editor setup. The standalone `15-asset-level-comments.spec.js` was removed.
 
 ### 16. 3MF generation (`e2e/specs/16-3mf-generation.spec.js`)
 
@@ -404,11 +396,9 @@ Validates cross-window live updates through three levels of nesting:
 Validates anonymous, read-only access to a wallet's public profile (the profile id is the base58 encoding of the EVM address; the subject's default collection + seed asset are published once in `beforeAll`):
 
 1. An anonymous visitor browses `/library/<base58>` with no sign-in gate — the subject's collections render, create/upload buttons are hidden, and a visitor badge identifies the profile.
-2. Bare `/library` without a wallet still shows the sign-in gate.
-3. Connecting a wallet rewrites a bare `/library` URL (via `replaceState`) to the wallet's public profile URL, with owner chrome instead of visitor chrome; browsing another wallet's profile and clicking **My Library** returns to the connected wallet's profile.
-4. Opening an asset from the library scopes the Studio URL to `/studio/<base58>?asset=…&assetId=…`.
-5. An anonymous page (no injected wallet, no session) opens the seeded asset in Studio read-only — the tokenURI read and manifest load work without a wallet, and save/publish stay hidden.
-6. The anonymous studio profile loads the sidebar gallery (visitor badge, no sign-in prompt, no **New** button), and clicking the seeded card opens the asset in the viewport.
+2. Connecting a wallet rewrites a bare `/library` URL (via `replaceState`) to the wallet's public profile URL, with owner chrome instead of visitor chrome; browsing another wallet's profile and clicking **My Library** returns to the connected wallet's profile, and opening an asset scopes the Studio URL to `/studio/<base58>?asset=…&assetId=…`.
+3. An anonymous page (no injected wallet, no session) opens the seeded asset in Studio read-only — the tokenURI read and manifest load work without a wallet, and save/publish stay hidden.
+4. The anonymous studio profile loads the sidebar gallery (visitor badge, no sign-in prompt, no **New** button), and clicking the seeded card opens the asset in the viewport.
 
 **Why it matters:** Public profiles are the platform's anonymous sharing surface. Changes to the profile URL routing, visitor-mode chrome, the read-only save/publish gating, or the base58 id format can break it.
 
@@ -419,7 +409,8 @@ Validates the Parametric CAD provider end-to-end (the e2e backend spawns with `C
 1. Selects **Parametric CAD** in the composer, generates `a 40 by 30 by 20 mm box`, and waits for the version-card bubble — the worker-rendered 3MF loads a live orbitable preview through the same format-handler pipeline as the Studio.
 2. Clicks **Show in Studio** — the chat reports `Model carved via cad`, the URL flips to the auto-saved manifest CID, and the bubble collapses (snapshot or the `3MF` format chip) with a **Saved** pill.
 3. Asserts the manifest chain: the generation manifest is a raw `asset.3mf` source node with `metadata.cad.summary`; the saved manifest decomposed it and carries `metadata.computed.format === "3mf"`.
-4. Generates `a dragon figurine` — the mock's `CadRequestUnsuitable` refusal surfaces as a choice bubble offering **Retry with Tripo 3D**; picking it flips `#providerSelect` to `tripo3d` and re-dispatches, which posts the BYOK key message (platform link + **Add API key** chip, since the e2e stack has no Tripo key); the chip opens the key dialog.
+
+The unsuitable-prompt retry UX (`CAD_REQUEST_UNSUITABLE` → **Retry with Tripo 3D** → provider switch/key dialog) is covered in `test/frontend/create-panel-cad.test.js`; the E2E spec keeps the generation/storage path only.
 
 **Why it matters:** This is the only E2E coverage of the design-on-the-wire path: the `/generations` cad task, the `cad-worker` WASM render, the 3MF staging flow, the CAD provenance metadata, and the unsuitable-rejection UX. Changes to `generation-providers.ts`, `cad-render.ts`, the 3MF format handler, or the retry wiring can break it.
 

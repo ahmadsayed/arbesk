@@ -10,7 +10,6 @@ import {
 import { connectStudio, selectProvider } from "../helpers/flows.mjs";
 
 const PROMPT = "a 40 by 30 by 20 mm box";
-const DRAGON_PROMPT = "a dragon figurine";
 
 // The e2e backend spawns with CAD_MOCK_GENERATION + CAD_MOCK_UNSUITABLE
 // (e2e/global-setup.mjs): the canned parametric box settles every prompt, and
@@ -85,35 +84,5 @@ test.describe("CAD generation (parametric, client-rendered)", () => {
     const savedNode = savedManifest.scene.nodes[0];
     expect(savedNode.source.format).toBe("3mf");
     expect(savedManifest.metadata?.computed?.format).toBe("3mf");
-  });
-
-  test("unsuitable request offers a Tripo 3D retry", async ({ page }) => {
-    await connectStudio(page);
-    await selectProvider(page, "cad");
-
-    await page.fill(SELECTORS.promptInput, DRAGON_PROMPT);
-    await page.click(SELECTORS.generateBtn);
-
-    // The mock cad generator refuses organic subjects exactly like the real
-    // facade (CadRequestUnsuitable before any model call); the UI turns that
-    // into a choice bubble instead of a dead-end error.
-    const choice = page.locator(SELECTORS.choiceBubble);
-    await expect(choice).toBeVisible({ timeout: 30_000 });
-    await expect(choice).toContainText(
-      "Parametric CAD can't model this request",
-    );
-    const retry = page.locator(SELECTORS.choiceButton("Retry with Tripo 3D"));
-    await expect(retry).toBeVisible();
-    await retry.click();
-
-    // Picking the retry flips the provider select to Tripo 3D and
-    // re-dispatches the prompt — which, with no BYOK key configured in the
-    // e2e stack, opens the on-demand key dialog instead of dispatching.
-    await expect(page.locator(SELECTORS.providerSelect)).toHaveValue(
-      "tripo3d",
-    );
-    await expect(
-      page.locator("#appDialogHost .dialog-title"),
-    ).toHaveText("This model needs an AI generator");
   });
 });
