@@ -168,10 +168,10 @@ test.describe.serial("Collection/asset model", () => {
     };
   });
 
-  test("opening a published token renders the first asset in the viewport", async ({
+  test("opening a published token renders it, and a deep-link reload restores it", async ({
     page,
   }) => {
-    const { tokenIdHex, tokenIdDec, firstAssetName } = published;
+    const { tokenIdHex, tokenIdDec, firstAssetId, firstAssetName } = published;
     await connectStudio(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
@@ -197,23 +197,13 @@ test.describe.serial("Collection/asset model", () => {
       firstAssetName,
     );
 
-    const urlTokenHex = tokenIdHexFromUrl(page.url());
+    let urlTokenHex = tokenIdHexFromUrl(page.url());
     expect(BigInt(urlTokenHex)).toBe(BigInt(tokenIdHex));
-  });
-
-  test("page reload with ?asset=TOKENID restores the viewport", async ({
-    page,
-  }) => {
-    const { tokenIdHex, firstAssetId, firstAssetName } = published;
-    await connectStudio(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
 
     // A bare ?asset=<collectionTokenId> opens the collection in the Gallery
     // sidebar with an empty viewport. To restore the viewport we must include
     // an explicit assetId. Reuse the first asset published above.
-    await page.goto(
-      `/studio?asset=${tokenIdHex}&assetId=${firstAssetId}`,
-    );
+    await page.goto(`/studio?asset=${tokenIdHex}&assetId=${firstAssetId}`);
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden({
       timeout: 5000,
@@ -228,7 +218,7 @@ test.describe.serial("Collection/asset model", () => {
       { timeout: 30000 },
     );
 
-    const urlTokenHex = tokenIdHexFromUrl(page.url());
+    urlTokenHex = tokenIdHexFromUrl(page.url());
     expect(BigInt(urlTokenHex)).toBe(BigInt(tokenIdHex));
   });
 });

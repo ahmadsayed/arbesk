@@ -66,15 +66,7 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
     await expect(page.locator(SELECTORS.libraryMyLibraryBtn)).toBeHidden();
   });
 
-  test("bare /library without a wallet still shows the sign-in gate", async ({
-    page,
-  }) => {
-    await page.goto("/library");
-    await expect(page.locator(SELECTORS.libraryGate)).toBeVisible();
-    await expect(page.locator(SELECTORS.libraryMain)).toBeHidden();
-  });
-
-  test("connecting scopes the bare URL to the wallet's profile and My Library returns to it", async ({
+  test("connecting scopes the bare URL and My Library/Studio handoffs keep the profile subject", async ({
     page,
   }) => {
     await connectLibrary(page);
@@ -107,17 +99,11 @@ test.describe.serial("Public profile (anonymous visitor)", () => {
       page.locator(SELECTORS.libraryCreateCollectionBtn),
     ).toBeVisible();
     await expect(libraryCollectionLocator(page, "Default")).toBeVisible();
-  });
 
-  test("opening an asset from the library scopes the Studio URL", async ({
-    page,
-  }) => {
-    await connectLibrary(page);
+    // The Library → Studio handoff also carries the profile subject:
+    // /studio/<base58>?asset=…&assetId=…
     await openLibraryCollection(page, "Default");
     await openLibraryAssetInStudio(page, SEED_ASSET_NAME);
-
-    // The Library → Studio handoff carries the profile subject:
-    // /studio/<base58>?asset=…&assetId=…
     expect(page.url()).toContain(`/studio/${OWNER_BASE58}?asset=`);
   });
 

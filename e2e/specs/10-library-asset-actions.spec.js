@@ -20,14 +20,14 @@ test.describe.serial("Library asset actions", () => {
     await seedDefaultCollection(browser);
   });
 
-  test("renames an asset and warns when Send to Collection has no target", async ({
+  test("renames, warns on Send to Collection, then deletes from the context menu", async ({
     page,
   }) => {
     const originalName = uniqueAssetName("Rename Me");
     const renamedName = uniqueAssetName("Renamed Asset");
     await connectLibrary(page);
 
-    // Publish a target asset from Studio.
+    // Publish one target asset; rename and delete both act on it.
     await page.goto("/studio");
     await ensureStudioConnected(page);
     await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
@@ -64,34 +64,16 @@ test.describe.serial("Library asset actions", () => {
         ".notyf__message:has-text('Create or own another collection first.')",
       ),
     ).toBeVisible();
-  });
 
-  test("deletes an asset from the context menu after confirmation", async ({
-    page,
-  }) => {
-    const deleteMeName = uniqueAssetName("Delete Me");
-    await connectLibrary(page);
-
-    await page.goto("/studio");
-    await ensureStudioConnected(page);
-    await expect(page.locator(SELECTORS.connectWalletBtn)).toBeHidden();
-    await generateSaveAndPublish(page, deleteMeName, PROMPT);
-
-    await page.goto("/library");
-    await ensureLibraryConnected(page);
-    await openLibraryCollection(page, "Default");
-    const card = libraryAssetLocator(page, deleteMeName).first();
-    await expect(card).toBeVisible();
-
-    await card.click({ button: "right" });
+    // Delete the same renamed asset after confirming in the GNOME dialog.
+    await renamedCard.click({ button: "right" });
     await page
       .locator(`${SELECTORS.contextMenuItem}:text-is("Delete")`)
       .click();
 
-    // Confirm deletion in the GNOME dialog.
     await expect(page.locator(SELECTORS.dialogDeleteBtn)).toBeVisible();
     await page.click(SELECTORS.dialogDeleteBtn);
 
-    await expect(libraryAssetLocator(page, deleteMeName)).toHaveCount(0);
+    await expect(libraryAssetLocator(page, renamedName)).toHaveCount(0);
   });
 });
