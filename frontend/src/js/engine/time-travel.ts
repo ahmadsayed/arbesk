@@ -114,6 +114,15 @@ function applyColor(
  *   the loader's right- to left-handed flip, scaling (1, 1, -1), and
  *   overwriting it mirrors the model (#138). A missing or zero component
  *   keeps the imported value.
+ *
+ *   The root's position is scaled too. centerImportedAsset set it to minus
+ *   the geometry centre, measured at the imported scale; scaling the model
+ *   moves that centre by the same per-axis factor (the root's rotation is a
+ *   180° turn about Y, which only flips axes), so the model stays centred on
+ *   its anchor. Exact for uniform scales, which is all the app writes; a
+ *   non-uniform scale on a multi-mesh model under an anchor rotated off the
+ *   90° grid can drift a little, because centerImportedAsset centres a
+ *   world-aligned box.
  */
 function applyScale(
   meshes: BABYLON.AbstractMesh[],
@@ -123,8 +132,11 @@ function applyScale(
   const s = new BABYLON.Vector3(scale.x || 1, scale.y || 1, scale.z || 1);
   for (const mesh of meshes) {
     if (!mesh.metadata?.isNodeRoot) continue;
-    mesh.metadata.baseScaling ??= mesh.scaling.clone();
-    mesh.scaling = mesh.metadata.baseScaling.multiply(s);
+    const meta = mesh.metadata;
+    meta.baseScaling ??= mesh.scaling.clone();
+    meta.basePosition ??= mesh.position.clone();
+    mesh.scaling = meta.baseScaling.multiply(s);
+    mesh.position = meta.basePosition.multiply(s);
   }
 }
 
