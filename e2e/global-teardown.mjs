@@ -1,4 +1,4 @@
-import { log, run, sleep, readState, clearState } from "./lib/infra.mjs";
+import { log, run, sleep, readState, clearState, restorePatchedFiles } from "./lib/infra.mjs";
 
 function isAlive(pid) {
   if (!pid) return false;
@@ -78,6 +78,7 @@ export default async function globalTeardown() {
     }),
   );
 
+  restorePatchedFiles();
   clearState();
   log("Teardown complete");
 }

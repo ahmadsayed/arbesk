@@ -12,6 +12,8 @@ import {
   rpc,
   run,
   writeState,
+  writePatchedFile,
+  restorePatchedFiles,
 } from "./lib/infra.mjs";
 
 function readEnvVar(envPath, key) {
@@ -42,7 +44,7 @@ function patchConfigFile(configPath, freeAddress, paidAddress, usdcAddress, hard
       `$1"${hardhatRpc}"`,
     );
   }
-  fs.writeFileSync(configPath, config);
+  writePatchedFile(configPath, config);
 }
 
 function syncNetworkConfigWithDeployedAddresses(hardhatRpc) {
@@ -372,6 +374,8 @@ async function startBackend(i) {
 }
 
 export default async function globalSetup() {
+  // A run that died before teardown leaves its config patches behind.
+  restorePatchedFiles();
   log(`Starting infrastructure for ${E2E_WORKERS} E2E worker(s)...`);
 
   // Step 1: start all Docker stacks in parallel.
