@@ -97,6 +97,72 @@ const computedMetadataSchema = z.object({
   bone_count: z.number().int().nonnegative().optional(),
 });
 
+/** Most representations one asset manifest may hold. */
+export const MAX_REPRESENTATIONS = 32;
+/** Largest file (decoded bytes) one representation may record: 256 MB. */
+export const MAX_REPRESENTATION_BYTES = 256 * 1024 * 1024;
+/** The reserved id of the asset's own model (`scene.nodes[0].source`). */
+export const PRIMARY_REF = "primary";
+
+const REPRESENTATION_ID = /^[a-z0-9-]{1,64}$/;
+const MAX_DETAIL_KEYS = 32;
+
+// tool / profile / stats: small free-form maps of strings and numbers.
+const representationDetailSchema = z
+  .record(z.union([z.string(), z.number()]))
+  .refine((detail) => Object.keys(detail).length <= MAX_DETAIL_KEYS, {
+    message: `at most ${MAX_DETAIL_KEYS} keys`,
+  });
+
+/**
+ * One other file of the same asset (a `.blend` to edit, an STL to share, the
+ * G-code a slicer made). Passthrough so a client that parses a manifest keeps
+ * fields a newer client added to an entry.
+ */
+export const representationSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(REPRESENTATION_ID, "id must be 1-64 of [a-z0-9-]")
+      .refine((id) => id !== PRIMARY_REF, { message: `"${PRIMARY_REF}" is reserved` }),
+    role: z.enum(["source", "mesh", "view", "machine", "other"]),
+    format: z.string().regex(/^[a-z0-9]{1,16}$/, "format is the lower-case extension without a dot"),
+    name: z.string().min(1).max(255),
+    cid: z.string().min(1),
+    bytes: z.number().int().nonnegative().max(MAX_REPRESENTATION_BYTES),
+    encoding: z.enum(["raw", "brotli"]),
+    derived_from: z
+      .object({
+        ref: z.union([z.literal(PRIMARY_REF), z.string().regex(REPRESENTATION_ID)]),
+        cid: z.string().min(1),
+      })
+      .optional(),
+    tool: representationDetailSchema.optional(),
+    profile: representationDetailSchema.optional(),
+    stats: representationDetailSchema.optional(),
+    created_at: z.number(),
+  })
+  .passthrough();
+
+export type Representation = z.infer<typeof representationSchema>;
+
+const representationsSchema = z
+  .array(representationSchema)
+  .max(MAX_REPRESENTATIONS)
+  .superRefine((reps, ctx) => {
+    const seen = new Set<string>();
+    reps.forEach((rep, index) => {
+      if (seen.has(rep.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, "id"],
+          message: `duplicate representation id "${rep.id}"`,
+        });
+      }
+      seen.add(rep.id);
+    });
+  });
+
 export const manifestSchema = z.object({
   version: z.union([z.string().min(1), z.number()]),
   type: z.enum(["asset", "scene", "collection", "world"]).optional(),
@@ -113,6 +179,9 @@ export const manifestSchema = z.object({
   prev_asset_manifest_cid: z.union([z.string().min(1), z.null()]).optional(),
   thumbnail: thumbnailSchema.optional(),
   comments_archive_cid: z.string().min(1).optional(),
+  // Other files of the same asset (manifest/representations.ts). In the
+  // canonical schema so a parsed copy never drops them on the next save.
+  representations: representationsSchema.optional(),
   metadata: z
     .object({
       chat: z.array(chatProvenanceEntrySchema).optional(),

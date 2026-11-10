@@ -188,6 +188,27 @@ All methods are on the object returned by `createArbeskCore`.
 (`onProgress` is accepted for interface stability; the pipeline does not
 report progress yet.)
 
+### Representations (other files of one asset)
+
+Pure helpers over an asset manifest's `representations` list (format:
+`docs/ARCHITECTURE.md` §4.1), exported from the package root and from
+`@arbesk/asset-core/manifest/representations.js`. None touches IPFS or bumps
+the version: the caller uploads the bytes, then writes the next manifest
+(version + 1, `prev_asset_manifest_cid` → the current one) and the collection.
+
+| Export | Signature | Notes |
+|--------|-----------|-------|
+| `representationSchema` | zod schema | One entry; passthrough, so a parse keeps fields a newer client added. `manifestSchema` holds the list (≤ 32, unique ids). |
+| `listRepresentations` | `(manifest) → Representation[]` | Valid entries in stored order; an invalid one is left out. |
+| `isStale` | `(manifest, rep) → boolean` | `derived_from.cid` ≠ the current CID of its ref (`primary` = `scene.nodes[0].source.cid`, or another entry). No `derived_from` → never stale; a ref that names nothing → stale. |
+| `currentCidOf` | `(manifest, ref) → string \| null` | The CID `derived_from` should record for `ref` now. |
+| `withRepresentation` | `(manifest, rep) → manifest` | Adds, or replaces by `id`; validates; refuses a 33rd entry. |
+| `withoutRepresentation` | `(manifest, id) → manifest` | Removes; drops the field when empty; throws on an unknown id. |
+| `encodeRepresentation` | `(bytes, format) → Promise<{ bytes, encoding }>` | Brotli frame for text formats (`encodingFor`), raw otherwise; refuses > 256 MB. Write the result with `compress: false`. |
+| `decodeRepresentation` | `(bytes, rep) → Promise<Uint8Array>` | Follows `rep.encoding` (never sniffs a raw file); read the stored bytes undecompressed (`getRawBytes`). |
+| `representationId` | `(role, format, profile?) → string` | Stable slug: `gcode-original-prusa-mk4-petg`; a source file is `source`. |
+| `defaultRole` | `(format) → role` | `blend`/`step` → `source`, `stl`/`obj`/`3mf` → `mesh`, `glb`/`gltf` → `view`, `gcode` → `machine`, else `other`. |
+
 ### What editor calls do — and don't do
 
 `addEditor`/`removeEditor` update the **off-chain** Merkle editor list (IPFS

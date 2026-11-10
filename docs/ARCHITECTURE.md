@@ -333,6 +333,28 @@ A manifest is a complete snapshot stored on IPFS. The system uses two manifest t
 
 **Manifest–asset boundary.** The asset manifest references content-addressed sources and is format-agnostic to the underlying 3D data. Each saved or published version is a complete snapshot, and the manifest chain (`prev_asset_manifest_cid`) provides asset-level history.
 
+**Representations (`representations`).** An optional top-level array of other files of the same asset: the `.blend` to edit, a 3MF to slice, an STL to share, the G-code a slicer made for one printer. The asset's own model (`scene.nodes[0].source`) stays where it is and is never in the list; entries refer to it as `primary`.
+
+```json
+"representations": [
+  { "id": "source", "role": "source", "format": "blend", "name": "Bracket.blend",
+    "cid": "bafy…", "bytes": 4812331, "encoding": "raw", "created_at": 1793900000000 },
+  { "id": "gcode-original-prusa-mk4-petg", "role": "machine", "format": "gcode",
+    "name": "Bracket_0.2mm_PETG_MK4.gcode", "cid": "bafy…", "bytes": 812331, "encoding": "brotli",
+    "derived_from": { "ref": "primary", "cid": "bafy…" },
+    "tool": { "name": "PrusaSlicer", "version": "2.9.2" },
+    "profile": { "printer": "Original Prusa MK4", "material": "PETG", "layer_mm": 0.2, "nozzle_mm": 0.4 },
+    "stats": { "print_time_s": 7420, "filament_g": 38.5 }, "created_at": 1793900000000 }
+]
+```
+
+- `id` — `[a-z0-9-]{1,64}`, unique in the asset, `primary` reserved. `role` — `source` · `mesh` · `view` · `machine` · `other`. `format` — the lower-case extension. `name` — the file name to write the bytes under. `bytes` — the file's own (decoded) size, at most 256 MB. At most 32 entries.
+- `encoding` — `brotli` (asset-core's `ARB\x01` frame; text formats such as G-code, glTF, OBJ, STEP) or `raw` (binary formats). `cid` names the stored (encoded) bytes.
+- `derived_from` — what the file was made from (`primary` or another entry's `id`) and that file's CID at the time. **Stale is computed, never stored:** an entry is stale when its `derived_from.cid` no longer equals the current CID of what it refers to (`isStale` in asset-core).
+- `tool`, `profile`, `stats` — optional, at most 32 string/number keys each.
+
+The field is part of the canonical `manifestSchema`, and every path that builds an asset's next manifest from its previous one carries it forward unchanged unless it is the path changing it (the Studio's save/publish carries the chain tip's list; `besk`'s writes; generation follow-ups). Attaching, replacing or removing one is a new version like any save, so an older version keeps its own list. Everything on IPFS is public: a `source` file can carry more than the model. Contracts, the indexer and the backend never read the field. Helpers: `packages/asset-core/src/manifest/representations.ts`; spec: `docs/superpowers/specs/2026-11-10-asset-representations-design.md`.
+
 **Chat provenance (`metadata.chat`).** Each manifest version produced by AI chat activity carries a top-level `metadata.chat` array holding the prompts consumed since the previous version: `{prompt, provider, task, taskId?, timestamp}`. Entries are version-scoped — the full conversation is reconstructed by walking `prev_asset_manifest_cid` and concatenating each version's array, oldest to newest. Records are written at save/publish time only (save-anchored); unaccepted generations stay ephemeral. `taskId` holds the provider-side task ID (e.g. Tripo) for future cross-session enhance flows. Versions with no AI activity omit the field.
 
 ### 4.2 Collection Manifest
