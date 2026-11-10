@@ -63,7 +63,7 @@ export async function setAssetMetadata(
   cid: string,
   patch: Record<string, unknown>,
 ): Promise<string> {
-  const { getManifest, writeManifest, updateCollection } = await import("./catalog.ts");
+  const { getManifest, writeManifest, updateCollection, replaceAssetEntry } = await import("./catalog.ts");
   const m = (await getManifest(cid)) as Record<string, any>;
   setAnnotations(m, patch);
   m.prev_asset_manifest_cid = cid;
@@ -71,7 +71,7 @@ export async function setAssetMetadata(
   m.timestamp = Date.now();
   const newCid = await writeManifest(m);
   await updateCollection(session, tokenId, (draft: Record<string, any>) => {
-    draft.assets[assetID] = newCid;
+    replaceAssetEntry(draft, assetID, cid, newCid);
   });
   return newCid;
 }
@@ -83,7 +83,7 @@ export async function unsetAssetMetadata(
   cid: string,
   keys: string[],
 ): Promise<string> {
-  const { getManifest, writeManifest, updateCollection } = await import("./catalog.ts");
+  const { getManifest, writeManifest, updateCollection, replaceAssetEntry } = await import("./catalog.ts");
   const m = (await getManifest(cid)) as Record<string, any>;
   unsetAnnotations(m, keys);
   m.prev_asset_manifest_cid = cid;
@@ -91,7 +91,7 @@ export async function unsetAssetMetadata(
   m.timestamp = Date.now();
   const newCid = await writeManifest(m);
   await updateCollection(session, tokenId, (draft: Record<string, any>) => {
-    draft.assets[assetID] = newCid;
+    replaceAssetEntry(draft, assetID, cid, newCid);
   });
   return newCid;
 }

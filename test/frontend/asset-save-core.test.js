@@ -46,6 +46,7 @@ async function load() {
   }));
   mock.module("../../frontend/src/js/services/token.js", () => ({
     getTokenURI: mocks.getTokenURI,
+    getCollectionManifest: jest.fn().mockResolvedValue(null),
   }));
   mock.module("../../frontend/src/js/engine/scene-graph.js", () => ({
     getPendingChildRefs: mocks.getPendingChildRefs,

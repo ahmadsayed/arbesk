@@ -16,6 +16,7 @@ import type { Session } from "./session.ts";
 
 let _core: ReturnType<typeof createArbeskCore> | null = null;
 let _ipfsWrite: ReturnType<typeof createIpfsWritePort> | null = null;
+let _ipfsRead: ReturnType<typeof createIpfsReadPort> | null = null;
 
 const CACHE_PATH =
   process.env.ARBESK_CACHE_PATH ||
@@ -60,8 +61,9 @@ export async function getCore() {
   const cfg = await getBackendConfig();
   debug("asset-core init: gateway " + cfg.ipfsGatewayUrl + ", chain " + CHAIN_ID);
   _ipfsWrite = createIpfsWritePort();
+  _ipfsRead = createIpfsReadPort(cfg.ipfsGatewayUrl);
   _core = createArbeskCore({
-    ipfsRead: createIpfsReadPort(cfg.ipfsGatewayUrl),
+    ipfsRead: _ipfsRead,
     ipfsWrite: _ipfsWrite,
     collection: createCollectionReadPort(),
     hash: createHashPort(),
@@ -81,6 +83,23 @@ export async function writeJSON(json: unknown): Promise<string> {
   const cid = await _ipfsWrite!.writeJSON(json as Record<string, any>);
   debug("ipfs write →", cid);
   return cid;
+}
+
+/**
+ * Write bytes to IPFS exactly as given (no compression): representation files
+ * arrive already encoded (asset-core encodeRepresentation).
+ */
+export async function writeRawBytes(bytes: Uint8Array, filename: string): Promise<string> {
+  await getCore();
+  const cid = await _ipfsWrite!.write(bytes, filename, null, { compress: false });
+  debug("ipfs write", filename, "→", cid);
+  return cid;
+}
+
+/** Read stored bytes with NO decompression (representations decode themselves). */
+export async function readRawBytes(cid: string): Promise<Uint8Array> {
+  await getCore();
+  return new Uint8Array(await _ipfsRead!.getRawBytes(cid));
 }
 
 export async function writeManifest(manifest: Record<string, unknown>): Promise<string> {
@@ -153,6 +172,31 @@ export async function uploadAsset(bytes: Uint8Array, assetName: string, assetId:
   const result = await (await getCore()).upload(bytes, { assetName, assetId });
   debug("upload composite →", result.compositeCid ?? result.rootCid);
   return { compositeCid: result.compositeCid ?? result.rootCid, assetId };
+}
+
+/**
+ * Point a collection entry at `newCid`, but only while it still names the CID
+ * the new version was built from (compare-and-swap inside an
+ * {@link updateCollection} mutator, which re-reads the collection). Another
+ * client's write in between (a Studio save, a second `besk`) would otherwise
+ * be replaced and its model edits or representations lost.
+ * @param expected - the entry the write read; undefined for a new asset.
+ * @throws `code: "CONFLICT"` when the entry moved since it was read.
+ */
+export function replaceAssetEntry(
+  draft: Record<string, any>,
+  assetID: string,
+  expected: string | undefined,
+  newCid: string,
+): void {
+  const current: string | undefined = draft.assets?.[assetID];
+  if (current !== expected) {
+    throw Object.assign(
+      new Error("The asset changed since it was read (another save landed); run the command again"),
+      { code: "CONFLICT" },
+    );
+  }
+  draft.assets[assetID] = newCid;
 }
 
 /**

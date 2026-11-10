@@ -7,8 +7,9 @@
 import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
-import { getManifest, getVersionHistory, listCollections, updateCollection, uploadAsset } from "./catalog.ts";
+import { getManifest, getVersionHistory, listCollections, replaceAssetEntry, updateCollection, uploadAsset } from "./catalog.ts";
 import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
+import { nextModelEntry } from "./representations.ts";
 import type { GeneratedModel } from "./generate.ts";
 import type { Session } from "./session.ts";
 
@@ -91,6 +92,27 @@ export function sanitizeFileName(name: string): string {
   return base || "asset";
 }
 
+/**
+ * Save model bytes into a collection as a (new version of an) asset. The
+ * entry is the stored composite, or the next asset version wrapping it when
+ * the replaced version holds representations (they are kept, spec R3).
+ * Returns the new entry's CID.
+ */
+export async function saveModelVersion(
+  s: Session,
+  tokenId: string,
+  bytes: Uint8Array,
+  name: string,
+  assetId: string,
+): Promise<string> {
+  const { compositeCid } = await uploadAsset(bytes, name, assetId);
+  const { entryCid, prevCid } = await nextModelEntry(tokenId, assetId, name, compositeCid);
+  await updateCollection(s, tokenId, (draft) => {
+    replaceAssetEntry(draft, assetId, prevCid, entryCid);
+  });
+  return entryCid;
+}
+
 /** Save a generated model into a collection as a (new version of an) asset. */
 export async function saveGenerated(
   s: Session,
@@ -99,8 +121,5 @@ export async function saveGenerated(
   name: string,
   assetId: string,
 ): Promise<void> {
-  const { compositeCid } = await uploadAsset(model.bytes, name, assetId);
-  await updateCollection(s, tokenId, (draft) => {
-    draft.assets[assetId] = compositeCid;
-  });
+  await saveModelVersion(s, tokenId, model.bytes, name, assetId);
 }

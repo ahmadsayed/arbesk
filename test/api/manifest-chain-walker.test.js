@@ -353,6 +353,36 @@ describe("walkManifestChain", () => {
     expect(allReachable.has("bafyRefSide")).toBe(true);
   });
 
+  it("marks representation files as shared and reachable, in every version of the chain", async () => {
+    const v1 = putManifest({
+      version: 1,
+      scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
+      representations: [
+        { id: "source", role: "source", format: "blend", name: "a.blend", cid: "bafyBlendOld", bytes: 1, encoding: "raw", created_at: 1 },
+      ],
+    });
+    const v2 = putManifest({
+      version: 2,
+      prev_asset_manifest_cid: v1,
+      scene: { nodes: [{ node_id: "n", source: { cid: "bafySource" } }] },
+      representations: [
+        { id: "source", role: "source", format: "blend", name: "a.blend", cid: "bafyBlend", bytes: 1, encoding: "raw", created_at: 2 },
+        { id: "gcode", role: "machine", format: "gcode", name: "a.gcode", cid: "bafyGcode", bytes: 1, encoding: "brotli", created_at: 2 },
+        { id: "bad", cid: 42 },
+        null,
+      ],
+    });
+    const collection = putManifest({ type: "collection", version: 1, assets: { a: v2 } });
+
+    const { shared, allReachable, assetUnique } = await walk(collection, { recurseIntoCollectionAssets: true });
+
+    for (const cid of ["bafyBlendOld", "bafyBlend", "bafyGcode"]) {
+      expect(shared.has(cid)).toBe(true);
+      expect(allReachable.has(cid)).toBe(true);
+      expect(assetUnique.has(cid)).toBe(false);
+    }
+  });
+
   it("gives each collection asset chain its own maxDepth budget", async () => {
     // Three assets, two versions each: 1 collection + 6 asset manifests.
     const assets = {};

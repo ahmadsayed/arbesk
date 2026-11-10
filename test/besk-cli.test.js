@@ -57,6 +57,12 @@ const mockSanitizeFileName = jest.fn((n) => n);
 const mockExtFor = jest.fn(() => ".glb");
 const mockReadImageFile = jest.fn();
 const mockSaveGenerated = jest.fn();
+const mockSaveModelVersion = jest.fn();
+const mockAttachRepresentation = jest.fn();
+const mockDetachRepresentation = jest.fn();
+const mockReadRepresentation = jest.fn();
+const mockDescribeRepresentations = jest.fn(() => []);
+const mockHistoryRepresentationChanges = jest.fn(async (entries) => entries.map(() => []));
 const mockLoadAssetSource = jest.fn();
 const mockResolveVersionCid = jest.fn();
 
@@ -81,10 +87,27 @@ mock.module("../packages/besk/src/catalog.ts", () => ({
   writeManifest: mockWriteManifest,
   clearCatalogCache: mockClearCatalogCache,
   updateCollection: mockUpdateCollection,
+  replaceAssetEntry: (draft, assetID, _expected, newCid) => {
+    draft.assets[assetID] = newCid;
+  },
   uploadAsset: mockUploadAsset,
   getVersionHistory: mockGetVersionHistory,
   downloadAsset: mockDownloadAsset,
   detectFormat: mockDetectFormat,
+}));
+mock.module("../packages/besk/src/representations.ts", () => ({
+  attachRepresentation: mockAttachRepresentation,
+  detachRepresentation: mockDetachRepresentation,
+  readRepresentation: mockReadRepresentation,
+  describeRepresentations: mockDescribeRepresentations,
+  historyRepresentationChanges: mockHistoryRepresentationChanges,
+  profileFrom: (o) => {
+    const p = {};
+    if (o.printer) p.printer = o.printer;
+    if (o.material) p.material = o.material;
+    if (o.layer !== undefined) p.layer_mm = Number(o.layer);
+    return Object.keys(p).length ? p : undefined;
+  },
 }));
 mock.module("../packages/besk/src/collections.ts", () => ({
   createCollection: mockCreateCollection,
@@ -115,6 +138,7 @@ mock.module("../packages/besk/src/helpers.ts", () => ({
   extFor: mockExtFor,
   readImageFile: mockReadImageFile,
   saveGenerated: mockSaveGenerated,
+  saveModelVersion: mockSaveModelVersion,
   loadAssetSource: mockLoadAssetSource,
   resolveVersionCid: mockResolveVersionCid,
 }));
@@ -422,4 +446,124 @@ test("link: default mode is live-ref", async () => {
   expect(mockLinkChildAsset.mock.calls[0][1].position).toBeUndefined();
   expect(mockLinkChildAsset.mock.calls[0][1].scale).toBeUndefined();
   expect(logs.join("\n")).toContain("Linked c into p (node node-1)");
+});
+
+// ─── representations: attach / detach / info / download --rep ───
+
+const HIT = { assetID: "asset_b", cid: "bafyB", name: "bracket" };
+
+test("attach: passes role, id, from and profile; prints the public warning for a source", async () => {
+  const fs = await import("fs");
+  const os = await import("os");
+  const path = await import("path");
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "besk-cli-attach-")), "b.blend");
+  fs.writeFileSync(file, "x");
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  const warnings = [];
+  jest.spyOn(console, "warn").mockImplementation((...a) => warnings.push(a.join(" ")));
+  mockAttachRepresentation.mockImplementation(async (_s, opts) => {
+    opts.onWarning("Everything on IPFS is public.");
+    return { cid: "bafyNew", replaced: false, representation: { id: "source", role: "source", name: "b.blend" } };
+  });
+
+  const { exitCode } = await runCli([
+    "attach", "bracket", file, "--role", "source", "--id", "source", "--from", "none",
+    "--printer", "MK4", "--material", "PETG", "--layer", "0.2",
+  ]);
+
+  expect(exitCode).toBeUndefined();
+  expect(mockAttachRepresentation).toHaveBeenCalledWith(SESSION, expect.objectContaining({
+    tokenId: "tok-default", assetID: "asset_b", cid: "bafyB", file,
+    role: "source", id: "source", from: "none",
+    profile: { printer: "MK4", material: "PETG", layer_mm: 0.2 },
+  }));
+  expect(warnings.join("\n")).toContain("Warning: Everything on IPFS is public.");
+  expect(logs.join("\n")).toContain("Attached source (source, b.blend) to bracket");
+});
+
+test("attach: a missing file exits 5, missing args exit 2", async () => {
+  expect((await runCli(["attach", "bracket"])).exitCode).toBe(2);
+  expect((await runCli(["attach", "bracket", "/no/such.gcode"])).exitCode).toBe(5);
+  expect(mockAttachRepresentation).not.toHaveBeenCalled();
+});
+
+test("detach: removes by id; missing id exits 2", async () => {
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  mockDetachRepresentation.mockResolvedValue({ cid: "bafyNew" });
+  await runCli(["detach", "bracket", "gcode"]);
+  expect(mockDetachRepresentation).toHaveBeenCalledWith(SESSION, expect.objectContaining({ assetID: "asset_b", cid: "bafyB", id: "gcode" }));
+  expect(logs.join("\n")).toContain("Detached gcode from bracket");
+  expect((await runCli(["detach", "bracket"])).exitCode).toBe(2);
+});
+
+test("info: lists representations with a stale marker", async () => {
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  mockLoadAssetSource.mockResolvedValue({ manifest: { name: "bracket", scene: { nodes: [] } }, source: {} });
+  mockDescribeRepresentations.mockReturnValue([
+    { id: "source", role: "source", name: "b.blend", bytes: 2048, derivedFrom: null, stale: false },
+    { id: "gcode", role: "machine", name: "b.gcode", bytes: 10, derivedFrom: "primary", stale: true },
+  ]);
+  await runCli(["info", "bracket"]);
+  const out = logs.join("\n");
+  expect(out).toContain("Representations:");
+  expect(out).toMatch(/source\s+source\s+b\.blend {2}2\.0 KB/);
+  expect(out).toMatch(/gcode\s+machine\s+b\.gcode {2}10 B {2}from primary \(stale\)/);
+});
+
+test("download --rep writes the representation; an unknown id exits 5", async () => {
+  const fs = await import("fs");
+  const os = await import("os");
+  const cwd = process.cwd();
+  process.chdir(fs.mkdtempSync(os.tmpdir() + "/besk-cli-rep-"));
+  try {
+    mockResolveAssetByName.mockResolvedValue(HIT);
+    mockGetManifest.mockResolvedValue({ representations: [] });
+    mockReadRepresentation.mockResolvedValue({ representation: { name: "b.gcode" }, bytes: new Uint8Array([71, 49]) });
+    await runCli(["download", "bracket", "--rep", "gcode"]);
+    expect(fs.readFileSync("b.gcode", "utf8")).toBe("G1");
+    expect(mockDownloadAsset).not.toHaveBeenCalled();
+
+    mockReadRepresentation.mockRejectedValue(Object.assign(new Error("No representation x"), { code: "NOT_FOUND" }));
+    const { exitCode } = await runCli(["download", "bracket", "--rep", "x"]);
+    expect(exitCode).toBe(5);
+    expect(errors.join("\n")).toContain("No representation x");
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test("upload: saves through saveModelVersion (keeps representations)", async () => {
+  const fs = await import("fs");
+  const os = await import("os");
+  const path = await import("path");
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "besk-cli-up-")), "bracket.glb");
+  fs.writeFileSync(file, "glb");
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  await runCli(["upload", file]);
+  expect(mockSaveModelVersion).toHaveBeenCalledWith(SESSION, "tok-default", expect.any(Uint8Array), "bracket", "asset_b");
+});
+
+test("detach: an unknown id exits 5 like download --rep", async () => {
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  mockDetachRepresentation.mockRejectedValue(
+    Object.assign(new Error("No representation x (has: gcode)"), { code: "NOT_FOUND" }),
+  );
+  const { exitCode } = await runCli(["detach", "bracket", "x"]);
+  expect(exitCode).toBe(5);
+  expect(errors.join("\n")).toContain("No representation x (has: gcode)");
+});
+
+test("history: prints each version's representation changes", async () => {
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  mockGetVersionHistory.mockResolvedValue([
+    { version: 2, cid: "bafyV2", name: "bracket", nodeCount: 1 },
+    { version: 1, cid: "bafyV1", name: "bracket", nodeCount: 1 },
+  ]);
+  mockHistoryRepresentationChanges.mockImplementation(async () => [
+    [],
+    [{ change: "added", id: "gcode", text: "Added G-code (Original Prusa MK4, PETG)" }],
+  ]);
+  await runCli(["history", "bracket"]);
+  const out = logs.join("\n");
+  expect(out).toMatch(/v2 \(current\)\n {2}bafyV2\n {2}bracket · 1 nodes\n {2}Added G-code \(Original Prusa MK4, PETG\)/);
 });

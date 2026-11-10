@@ -21,7 +21,7 @@ import {
   getManifest,
   writeManifest,
   updateCollection,
-  uploadAsset,
+  replaceAssetEntry,
   getVersionHistory,
   downloadAsset,
   detectFormat,
@@ -51,7 +51,17 @@ import {
   extFor,
   readImageFile,
   saveGenerated,
+  saveModelVersion,
 } from "./helpers.ts";
+import {
+  attachRepresentation,
+  describeRepresentations,
+  detachRepresentation,
+  historyRepresentationChanges,
+  profileFrom,
+  readRepresentation,
+  ROLES,
+} from "./representations.ts";
 import {
   getAssetMetadata,
   getCollectionMetadata,
@@ -210,6 +220,7 @@ async function hAssetInfo(s: Session, args: Args): Promise<unknown> {
     previous: m.prev_asset_manifest_cid ?? null,
     computed: m?.metadata?.computed ?? null,
     annotations: m?.metadata?.annotations ?? {},
+    representations: describeRepresentations(m),
   };
 }
 
@@ -267,12 +278,14 @@ async function hAssetHistory(s: Session, args: Args): Promise<unknown> {
   const chain = await getVersionHistory(hit.cid);
   // getVersionHistory walks newest → oldest; report oldest → newest.
   const ordered = [...chain].reverse();
+  const changes = await historyRepresentationChanges(ordered);
   return ordered.map((e, i) => ({
     version: e.version,
     cid: e.cid,
     name: e.name ?? "(unnamed)",
     nodeCount: e.nodeCount,
     current: i === ordered.length - 1,
+    ...(changes[i].length > 0 && { representationChanges: changes[i] }),
   }));
 }
 
@@ -285,10 +298,18 @@ async function hDownloadAsset(s: Session, args: Args): Promise<unknown> {
     if (!versionCid) throw new Error("Version " + version + " not found for " + hit.name);
     cid = versionCid;
   }
+  const dir = optionalString(args, "directory") ?? process.cwd();
+  const repId = optionalString(args, "representation");
+  if (repId) {
+    const m = (await getManifest(cid)) as Record<string, any>;
+    const { representation, bytes } = await readRepresentation(m, repId);
+    const outPath = path.join(dir, sanitizeFileName(representation.name));
+    fs.writeFileSync(outPath, bytes);
+    return { file: outPath, bytes: bytes.length, format: representation.format, version: m.version ?? 1, representation: repId };
+  }
   const { manifest: m, srcCid, source } = await loadAssetSource(cid);
   const format = detectFormat(source);
   const bytes = await downloadAsset(srcCid, format);
-  const dir = optionalString(args, "directory") ?? process.cwd();
   const outPath = path.join(dir, sanitizeFileName((m.name as string) ?? hit.name) + extFor(format));
   fs.writeFileSync(outPath, bytes);
   return { file: outPath, bytes: bytes.length, format, version: m.version ?? 1 };
@@ -306,11 +327,41 @@ async function hUploadAsset(s: Session, args: Args): Promise<unknown> {
   const existing = await resolveAssetByName(tokenId, name);
   const assetId = existing?.assetID ?? "asset_" + Date.now();
   const bytes = new Uint8Array(fs.readFileSync(file));
-  const { compositeCid } = await uploadAsset(bytes, name, assetId);
-  await updateCollection(s, tokenId, (draft) => {
-    draft.assets[assetId] = compositeCid;
+  const cid = await saveModelVersion(s, tokenId, bytes, name, assetId);
+  return { saved: name, assetId, cid, collection: tokenId };
+}
+
+async function hAttachRepresentation(s: Session, args: Args): Promise<unknown> {
+  const hit = await assetFor(s, args);
+  const warnings: string[] = [];
+  const result = await attachRepresentation(s, {
+    ...hit,
+    file: requireString(args, "file"),
+    role: optionalString(args, "role"),
+    id: optionalString(args, "id"),
+    from: optionalString(args, "from"),
+    profile: profileFrom({
+      printer: optionalString(args, "printer"),
+      material: optionalString(args, "material"),
+      layer: args.layer,
+      nozzle: args.nozzle,
+    }),
+    onWarning: (w) => warnings.push(w),
   });
-  return { saved: name, assetId, cid: compositeCid, collection: tokenId };
+  return {
+    attached: result.representation.id,
+    replaced: result.replaced,
+    representation: result.representation,
+    cid: result.cid,
+    ...(warnings.length > 0 && { warnings }),
+  };
+}
+
+async function hDetachRepresentation(s: Session, args: Args): Promise<unknown> {
+  const hit = await assetFor(s, args);
+  const id = requireString(args, "id");
+  const { cid } = await detachRepresentation(s, { ...hit, id });
+  return { detached: id, cid };
 }
 
 async function hDeleteAsset(s: Session, args: Args): Promise<unknown> {
@@ -328,7 +379,7 @@ async function hRenameAsset(s: Session, args: Args): Promise<unknown> {
   assetManifest.name = newName;
   const newAssetCid = await writeManifest(assetManifest);
   await updateCollection(s, hit.tokenId, (draft) => {
-    draft.assets[hit.assetID] = newAssetCid;
+    replaceAssetEntry(draft, hit.assetID, hit.cid, newAssetCid);
   });
   return { renamed: newName, cid: newAssetCid };
 }
@@ -609,7 +660,7 @@ const TOOLS: ToolEntry[] = [
   ),
   tool(
     "asset_info",
-    "Show an asset's identity card: id, version, format, CID, node count.",
+    "Show an asset's identity card: id, version, format, CID, node count, and its representations (attached files) with a stale marker.",
     { ...NAME, ...COLLECTION }, ["name"], hAssetInfo,
   ),
   tool(
@@ -619,8 +670,8 @@ const TOOLS: ToolEntry[] = [
   ),
   tool(
     "download_asset",
-    "Compose an asset (optionally a specific version) and write it to a local file.",
-    { ...NAME, version: S("Version number (default: latest)"), directory: S("Output directory (default: cwd)"), ...COLLECTION },
+    "Compose an asset (optionally a specific version) and write it to a local file; with representation, write that attached file instead of the model.",
+    { ...NAME, version: S("Version number (default: latest)"), directory: S("Output directory (default: cwd)"), representation: S("Representation id to write instead of the model (see asset_info)"), ...COLLECTION },
     ["name"], hDownloadAsset,
   ),
   tool(
@@ -628,6 +679,29 @@ const TOOLS: ToolEntry[] = [
     "Save a local model file (glTF/GLB/3MF) into a collection.",
     { file: S("Local model file path"), name: S("Asset name (default: file base name)"), ...COLLECTION },
     ["file"], hUploadAsset,
+  ),
+  tool(
+    "attach_representation",
+    "Attach a file of the same asset (a .blend to edit, an STL, a 3MF, the G-code a slicer made) as a representation: uploads it to IPFS (public) and writes a new asset version. An existing id is replaced.",
+    {
+      ...NAME,
+      file: S("Local file path; its extension is the format"),
+      role: { type: "string", enum: [...ROLES], description: "source | mesh | view | machine | other (default: from the format)" },
+      id: S("Representation id, [a-z0-9-]{1,64} (default: from role, format, printer and material)"),
+      from: S("What the file was made from: primary, another representation id, or none (default: primary for machine and mesh)"),
+      printer: S("Printer the file was sliced for"),
+      material: S("Material, e.g. PETG"),
+      layer: { type: "number", description: "Layer height, mm" },
+      nozzle: { type: "number", description: "Nozzle diameter, mm" },
+      ...COLLECTION,
+    },
+    ["name", "file"], hAttachRepresentation,
+  ),
+  tool(
+    "detach_representation",
+    "Remove a representation from an asset (writes a new asset version; older versions keep it).",
+    { ...NAME, id: S("Representation id"), ...COLLECTION },
+    ["name", "id"], hDetachRepresentation,
   ),
   tool(
     "delete_asset",

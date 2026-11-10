@@ -40,7 +40,7 @@ Arbesk combines a Babylon.js world studio, private IPFS storage, EVM PayGo payme
 Arbesk ships three client surfaces on top of the same backend and SDKs:
 
 - **Studio** — the full web SPA (`/studio` + `/library`): Babylon.js viewport, AI generation chat, collaboration, publishing.
-- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `delete`, `rename`, `send`, `link`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel` — and `mcp`, an MCP stdio server exposing the same surface to AI agents. `show <name>` opens an asset's Studio deep link in the browser (`--print` just prints the URL).
+- **`besk` CLI** (`./besk`, source in `packages/besk/`) — a terminal client for collection/asset management. It logs in with CDP email OTP, composes `@arbesk/asset-core` with Node adapters, and routes all on-chain writes through the backend wallet relay. Commands: `login`, `whoami`, `logout`, `collections`, `create`, `burn`, `use`, `list`, `info`, `history`, `download`, `upload`, `attach`, `detach`, `delete`, `rename`, `send`, `link`, plus AI generation: `generate` (text/image/multiview-to-3D), `retexture`, `retopo`, `rig`, `animate`, `balance`, `cancel` — and `mcp`, an MCP stdio server exposing the same surface to AI agents. `show <name>` opens an asset's Studio deep link in the browser (`--print` just prints the URL).
 - **`besk` MCP** (`besk mcp`) — the same features as MCP tools for AI agents. By the CLI↔MCP parity rule (skill: `arbesk-add-command`) the MCP column mirrors the CLI column: every ✅ ships as both a subcommand and a tool, and every TODO closes in both at once. `login` is the only exempt command (browser/OTP flow).
 
 Status legend: **✅** supported today (MCP cells name the tool) · **TODO** — feasible headless, not yet implemented · **Not doable** — inherently requires the Studio GUI / 3D viewer.
@@ -58,10 +58,13 @@ Status legend: **✅** supported today (MCP cells name the tool) · **TODO** —
 | | Burn collection + IPFS unpin | ✅ | ✅ | ✅ `burn_collection` | `burn <collection>` (typed-name confirmation; MCP: `confirm` arg; owner-only — `proof: []`; best-effort unpin before burn) |
 | | Rename collection | ✅ | TODO | TODO | CLI `rename` covers assets only |
 | **Assets** | List assets in a collection | ✅ | ✅ | ✅ `list_assets` | `list` |
-| | Asset details (ID, version, CID, nodes) | ✅ | ✅ | ✅ `asset_info` | `info` (Studio details pane also has a live 3D preview — Not doable) |
+| | Asset details (ID, version, CID, nodes, representations) | ✅ | ✅ | ✅ `asset_info` | `info` (lists representations with a stale marker; Studio details pane also has a live 3D preview — Not doable) |
 | | Upload glTF/GLB/3MF | ✅ | ✅ | ✅ `upload_asset` | `upload <file>` |
 | | Download / export (GLB, glTF, 3MF) | ✅ | ✅ | ✅ `download_asset` | `download <name>` |
 | | Download a specific historical version | ✅ | ✅ | ✅ `download_asset` | `download <name> <version>` (Studio restores via clocks/chat instead) |
+| | Attach a representation (other file of the asset: `.blend`, STL, 3MF, G-code) | TODO | ✅ | ✅ `attach_representation` | `attach <name> <file> [--role r] [--id id] [--from primary\|<id>\|none] [--printer p] [--material m] [--layer mm] [--nozzle mm]` (new version; ≤ 32 per asset, ≤ 256 MB; warns that a `source` file is public). Every Studio save keeps them |
+| | Remove a representation | TODO | ✅ | ✅ `detach_representation` | `detach <name> <id>` (new version; older versions keep it) |
+| | Download a representation | TODO | ✅ | ✅ `download_asset` (`representation`) | `download <name> [version] --rep <id>` |
 | | Rename asset | ✅ | ✅ | ✅ `rename_asset` | `rename <old> <new>` |
 | | Delete asset from collection (unpublish) | ✅ | ✅ | ✅ `delete_asset` | `delete` (always prompts; no `--yes` flag — TODO) |
 | | Send asset to another collection | ✅ | ✅ | ✅ `send_asset` | `send <asset> <collection> [fork\|live-ref]` (default fork; live-ref writes a child_ref wrapper) |
@@ -101,7 +104,7 @@ Status legend: **✅** supported today (MCP cells name the tool) · **TODO** —
 | | Dive/ascend navigation + breadcrumbs | ✅ | Not doable | Not doable | Requires 3D viewer |
 | | Unlink child asset | ✅ | TODO | TODO | Manifest edit; selection UX is the open question |
 | | Linked-token inspector | ✅ | Not doable | Not doable | Requires 3D viewer |
-| **Version history (4D)** | List version chain | ✅ | ✅ | ✅ `asset_history` | `history` |
+| **Version history (4D)** | List version chain | ✅ | ✅ | ✅ `asset_history` | `history` (names each version's representation changes: "Added G-code (Original Prusa MK4, PETG)") |
 | | Scene clock (whole-asset scrubbing) | ✅ | Not doable | Not doable | Requires 3D viewer |
 | | Model clock (per-node scrubbing) | ✅ | Not doable | Not doable | Requires 3D viewer |
 | | Restore a historical version as current | ✅ | TODO | TODO | CLI can download any version but never repoints the tip |
@@ -112,13 +115,13 @@ Status legend: **✅** supported today (MCP cells name the tool) · **TODO** —
 | | Viewer/Editor roles, email → wallet resolution | ✅ | TODO | TODO | |
 | | Asset comments (Nostr threads, @mentions) | ✅ | TODO | TODO | |
 | **Activity** | Activity ledger (Generation/Save/Publish/… feed) | ✅ | TODO | TODO | Derivable from the manifest chain |
-| **AI agents** | MCP server exposing the client surface to AI agents | — | ✅ | ✅ (this column) | `besk mcp` — stdio MCP server, 23 tools covering the full CLI surface |
+| **AI agents** | MCP server exposing the client surface to AI agents | — | ✅ | ✅ (this column) | `besk mcp` — stdio MCP server, 31 tools covering the full CLI surface |
 
 CLI-only capabilities (not in Studio): shell scriptability/pipelining, idempotent collection create, direct version-positional download, and MCP tool access for AI agents. Known CLI gaps beyond the table: no machine-readable (JSON) output mode. Global flag: `--verbose`/`-v` (or `ARBESK_VERBOSE=1`) — timestamped debug log of every backend/IPFS/relay action on stderr (the only switch available under `besk mcp`, where stdout is the JSON-RPC channel).
 
 ### AI agents: `besk mcp`
 
-`besk mcp` starts an [MCP](https://modelcontextprotocol.io) server on stdio exposing the full CLI surface as 23 tools (`list_collections`, `generate_model`, `link_asset`, `show_asset`, `burn_collection`, …) to any MCP-capable agent (Claude Code, Cursor, Kimi Code, …). It shares the session with the human CLI — run `besk login <email>` first. Non-interactive by design: `generate_model` takes an explicit `provider` (no picker), and `burn_collection` requires `confirm` to exactly equal the collection name. Register it in your agent's MCP config, e.g.:
+`besk mcp` starts an [MCP](https://modelcontextprotocol.io) server on stdio exposing the full CLI surface as 31 tools (`list_collections`, `generate_model`, `link_asset`, `show_asset`, `burn_collection`, …) to any MCP-capable agent (Claude Code, Cursor, Kimi Code, …). It shares the session with the human CLI — run `besk login <email>` first. Non-interactive by design: `generate_model` takes an explicit `provider` (no picker), and `burn_collection` requires `confirm` to exactly equal the collection name. Register it in your agent's MCP config, e.g.:
 
 ```json
 { "mcpServers": { "besk": { "command": "/path/to/repo/besk", "args": ["mcp"] } } }

@@ -17,7 +17,7 @@ import {
   writeManifest,
   clearCatalogCache,
   updateCollection,
-  uploadAsset,
+  replaceAssetEntry,
   getVersionHistory,
   downloadAsset,
   detectFormat,
@@ -44,7 +44,17 @@ import {
   extFor,
   readImageFile,
   saveGenerated,
+  saveModelVersion,
 } from "./helpers.ts";
+import {
+  attachRepresentation,
+  describeRepresentations,
+  detachRepresentation,
+  historyRepresentationChanges,
+  profileFrom,
+  readRepresentation,
+} from "./representations.ts";
+import type { RepresentationSummary } from "./representations.ts";
 import {
   getAssetMetadata, getCollectionMetadata,
   setAssetMetadata, unsetAssetMetadata,
@@ -101,8 +111,10 @@ function help(): void {
   console.log("  metadata unset <name> --key k [...]            remove asset annotations");
   console.log("  collection-meta get|set|unset                  active collection annotations");
   console.log("  history <name>    show an asset's version chain");
-  console.log("  download <name> [version]  pull a model to a local file");
+  console.log("  download <name> [version] [--rep <id>]  pull a model (or an attached file) to a local file");
   console.log("  upload <file>     save a local model to the current collection");
+  console.log("  attach <name> <file> [--role source|mesh|view|machine|other] [--id id] [--from primary|<id>|none] [--printer p] [--material m] [--layer mm] [--nozzle mm]  attach a file of the same asset (new version)");
+  console.log("  detach <name> <id>  remove an attached file (new version)");
   console.log("  delete <name>     remove from the collection (only confirmation)");
   console.log("  rename <old> <new>  rename an asset");
   console.log("  send <name> <collection> [fork|live-ref]  link an asset into another collection");
@@ -239,7 +251,7 @@ async function cmdRename(oldName?: string, newName?: string): Promise<void> {
   assetManifest.name = newName;
   const newAssetCid = await writeManifest(assetManifest);
   await updateCollection(s, tokenId, (draft) => {
-    draft.assets[hit.assetID] = newAssetCid;
+    replaceAssetEntry(draft, hit.assetID, hit.cid, newAssetCid);
   });
   console.log("Renamed " + oldName + " to " + newName);
 }
@@ -264,10 +276,7 @@ async function cmdUpload(file?: string): Promise<void> {
   const assetId = existing?.assetID ?? "asset_" + Date.now();
   const bytes = new Uint8Array(fs.readFileSync(file));
   console.log("Uploading " + file + "…");
-  const { compositeCid } = await uploadAsset(bytes, name, assetId);
-  await updateCollection(s, tokenId, (draft) => {
-    draft.assets[assetId] = compositeCid;
-  });
+  await saveModelVersion(s, tokenId, bytes, name, assetId);
   console.log("Saved as " + name);
 }
 
@@ -287,6 +296,26 @@ async function cmdInfo(name?: string): Promise<void> {
   if (m.timestamp) console.log("Created:   " + new Date(m.timestamp).toISOString());
   console.log("Nodes:     " + nodes.length);
   if (m.prev_asset_manifest_cid) console.log("Previous:  " + m.prev_asset_manifest_cid);
+  printRepresentations(m);
+}
+
+function printRepresentations(m: Record<string, any>): void {
+  const reps = describeRepresentations(m);
+  if (reps.length === 0) return;
+  console.log("Representations:");
+  for (const r of reps) console.log("  " + representationLine(r));
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+/** `gcode-mk4-petg  machine  Bracket.gcode  812.3 KB  from primary (stale)` */
+function representationLine(r: RepresentationSummary): string {
+  const from = r.derivedFrom ? "  from " + r.derivedFrom + (r.stale ? " (stale)" : "") : "";
+  return r.id.padEnd(24) + " " + r.role.padEnd(8) + " " + r.name + "  " + formatBytes(r.bytes) + from;
 }
 
 async function cmdHistory(name?: string): Promise<void> {
@@ -300,17 +329,21 @@ async function cmdHistory(name?: string): Promise<void> {
   }
   // getVersionHistory walks newest → oldest; print oldest → newest.
   const ordered = [...chain].reverse();
+  const changes = await historyRepresentationChanges(ordered);
   for (let i = 0; i < ordered.length; i++) {
     const e = ordered[i];
     const marker = i === ordered.length - 1 ? " (current)" : "";
     console.log("v" + e.version + marker);
     console.log("  " + e.cid);
     console.log("  " + (e.name ?? "(unnamed)") + " · " + e.nodeCount + " nodes");
+    for (const change of changes[i]) console.log("  " + change.text);
   }
 }
 
-async function cmdDownload(name?: string, version?: string): Promise<void> {
-  const ctx = await requireNamedAsset(name, "Usage: besk download <name> [version]");
+async function cmdDownload(argv: string[]): Promise<void> {
+  const { positional, flags } = parseFlags(argv);
+  const [name, version] = positional;
+  const ctx = await requireNamedAsset(name, "Usage: besk download <name> [version] [--rep <id>]");
   if (!ctx) return;
   const { hit } = ctx;
   let cid = hit.cid;
@@ -323,6 +356,11 @@ async function cmdDownload(name?: string, version?: string): Promise<void> {
     }
     cid = versionCid;
   }
+  const repId = flagValue(flags, "--rep");
+  if (repId) {
+    await downloadRepresentation(cid, repId);
+    return;
+  }
   const { manifest: m, srcCid, source } = await loadAssetSource(cid);
   const format = detectFormat(source);
   console.log("Downloading " + name + " (v" + (m.version ?? 1) + ", " + format + ")…");
@@ -330,6 +368,82 @@ async function cmdDownload(name?: string, version?: string): Promise<void> {
   const outName = sanitizeFileName((m.name as string) ?? name) + extFor(format);
   fs.writeFileSync(outName, bytes);
   console.log("Saved " + outName + " (" + bytes.length + " bytes)");
+}
+
+async function downloadRepresentation(cid: string, repId: string): Promise<void> {
+  const m = (await getManifest(cid)) as Record<string, any>;
+  let fetched;
+  try {
+    fetched = await readRepresentation(m, repId);
+  } catch (e) {
+    if ((e as { code?: string }).code !== "NOT_FOUND") throw e;
+    console.error((e as Error).message);
+    process.exitCode = 5;
+    return;
+  }
+  const outName = sanitizeFileName(fetched.representation.name);
+  fs.writeFileSync(outName, fetched.bytes);
+  console.log("Saved " + outName + " (" + fetched.bytes.length + " bytes)");
+}
+
+async function cmdAttach(argv: string[]): Promise<void> {
+  const usage = "Usage: besk attach <name> <file> [--role r] [--id id] [--from primary|<id>|none] [--printer p] [--material m] [--layer mm] [--nozzle mm]";
+  const { positional, flags } = parseFlags(argv);
+  const [name, file] = positional;
+  if (!file) {
+    console.error(usage);
+    process.exitCode = 2;
+    return;
+  }
+  if (!fs.existsSync(file)) {
+    console.error("File not found: " + file);
+    process.exitCode = 5;
+    return;
+  }
+  const ctx = await requireNamedAsset(name, usage);
+  if (!ctx) return;
+  const { s, tokenId, hit } = ctx;
+  console.log("Uploading " + file + "…");
+  const result = await attachRepresentation(s, {
+    tokenId,
+    assetID: hit.assetID,
+    cid: hit.cid,
+    name: name!,
+    file,
+    role: flagValue(flags, "--role"),
+    id: flagValue(flags, "--id"),
+    from: flagValue(flags, "--from"),
+    profile: profileFrom({
+      printer: flagValue(flags, "--printer"),
+      material: flagValue(flags, "--material"),
+      layer: flagValue(flags, "--layer"),
+      nozzle: flagValue(flags, "--nozzle"),
+    }),
+    onWarning: (w) => console.warn("Warning: " + w),
+  });
+  const r = result.representation;
+  console.log((result.replaced ? "Replaced " : "Attached ") + r.id + " (" + r.role + ", " + r.name + ") to " + name);
+}
+
+async function cmdDetach(name?: string, id?: string): Promise<void> {
+  const usage = "Usage: besk detach <name> <id>";
+  if (!id) {
+    console.error(usage);
+    process.exitCode = 2;
+    return;
+  }
+  const ctx = await requireNamedAsset(name, usage);
+  if (!ctx) return;
+  const { s, tokenId, hit } = ctx;
+  try {
+    await detachRepresentation(s, { tokenId, assetID: hit.assetID, cid: hit.cid, name: name!, id });
+  } catch (e) {
+    if ((e as { code?: string }).code !== "NOT_FOUND") throw e;
+    console.error((e as Error).message);
+    process.exitCode = 5;
+    return;
+  }
+  console.log("Detached " + id + " from " + name);
 }
 
 async function cmdCreate(name?: string): Promise<void> {
@@ -1068,8 +1182,10 @@ const COMMANDS: Record<string, () => void | Promise<void>> = {
   list: () => cmdList(),
   info: () => cmdInfo(args[1]),
   history: () => cmdHistory(args[1]),
-  download: () => cmdDownload(args[1], args[2]),
+  download: () => cmdDownload(args.slice(1)),
   upload: () => cmdUpload(args[1]),
+  attach: () => cmdAttach(args.slice(1)),
+  detach: () => cmdDetach(args[1], args[2]),
   delete: () => cmdDelete(args[1]),
   rename: () => cmdRename(args[1], args[2]),
   send: () => cmdSend(args[1], args[2], args[3]),

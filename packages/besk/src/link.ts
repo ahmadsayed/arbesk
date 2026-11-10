@@ -12,7 +12,7 @@
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 import { CHAIN_ID } from "./config.ts";
 import { getBackendConfig } from "./adapters.ts";
-import { getManifest, updateCollection, writeManifest } from "./catalog.ts";
+import { getManifest, replaceAssetEntry, updateCollection, writeManifest } from "./catalog.ts";
 import type { Session } from "./session.ts";
 
 export interface LinkChildOptions {
@@ -99,7 +99,7 @@ export async function linkChildAsset(
   };
   const newParentCid = await writeManifest(next);
   await updateCollection(session, opts.parentTokenId, (draft) => {
-    draft.assets[opts.parentAssetId] = newParentCid;
+    replaceAssetEntry(draft, opts.parentAssetId, opts.parentCid, newParentCid);
   });
   return { newParentCid, nodeId };
 }

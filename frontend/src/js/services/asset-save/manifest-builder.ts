@@ -8,7 +8,8 @@ import { computeAssetStats } from "./metadata-extract.ts";
 import { getPendingAnnotations, clearPendingAnnotations } from "./annotations.ts";
 import { writeJSONToIPFS } from "../../ipfs/write-to-ipfs.ts";
 import { snapshotCommentsArchive } from "../api.ts";
-import { getTokenURI } from "../token.ts";
+import { getCollectionManifest, getTokenURI } from "../token.ts";
+import { resolveChainTip } from "./chain-tip.ts";
 import { getPendingChildRefs } from "../../engine/scene-graph.ts";
 import { waitForPendingLinkedDrops } from "../../engine/scene-graph.ts";
 import { waitForPendingFileDrops } from "../asset-file-drop.ts";
@@ -39,6 +40,7 @@ import {
   getActiveAssetManifestCid,
   getLatestAssetManifestCid,
   getActiveAssetTokenId,
+  getActiveAssetId,
   getCurrentManifest,
 } from "@arbesk/asset-core/domain/asset.js";
 import {
@@ -219,15 +221,35 @@ export async function decomposeManifestNodes(
   return decomposed;
 }
 
+/** The open asset's collection entry CID, or null (no collection, no entry). */
+async function readCollectionEntryCid(tokenId: string, assetId: string): Promise<string | null> {
+  const collection: any = await getCollectionManifest(tokenId);
+  const cid = collection?.assets?.[assetId];
+  return typeof cid === "string" && cid ? cid : null;
+}
+
 /**
  * Resolve the canonical "latest" manifest CID for versioning.
- * @remarks Prefers the in-memory chain tip so saves append linearly, falling
+ * @remarks Prefers the in-memory chain tip so saves append linearly, unless
+ *   the asset's collection entry has moved past it since (another client
+ *   wrote a newer version, e.g. a `besk attach`: see chain-tip.ts). Falls
  *   back to the on-chain tokenURI (tokenized assets) or the currently loaded
  *   manifest (drafts).
  */
 export async function resolveLatestManifestCid() {
-  if (getLatestAssetManifestCid()) {
-    return getLatestAssetManifestCid();
+  const knownTip = getLatestAssetManifestCid();
+  if (knownTip) {
+    const tokenId = getActiveAssetTokenId();
+    const assetId = getActiveAssetId();
+    if (!tokenId || !assetId) return knownTip;
+    const tip = await resolveChainTip(knownTip, {
+      readEntryCid: () => readCollectionEntryCid(tokenId, assetId),
+      readManifest: (cid) => getFromRemoteIPFS(cid),
+    });
+    if (tip !== knownTip) {
+      log(`Save: collection entry ${tip} is newer than the in-memory tip ${knownTip}; appending to it`);
+    }
+    return tip;
   }
 
   const tokenId = getActiveAssetTokenId();
@@ -700,6 +722,41 @@ async function applyPostProcessorEdits(manifest: any, pendingPP: Map<string, any
 }
 
 /**
+ * Reads the chain tip a save appends to.
+ * @remarks Never falls back to the save base: the new version links to the
+ *   tip, so it must carry the tip's version number and representations, and a
+ *   base that predates them would silently drop them (spec R3).
+ * @throws when the tip cannot be read; the save is retried by the user.
+ */
+async function readChainTip(latestCid: string) {
+  let tip: any = null;
+  try {
+    tip = await getFromRemoteIPFS(latestCid);
+  } catch (err) {
+    warn(`Save: cannot read the latest version ${latestCid}:`, (err as Error).message);
+  }
+  if (!tip || typeof tip !== "object") {
+    throw new Error("Could not read the latest version of this asset. Check your connection and save again.");
+  }
+  return tip;
+}
+
+/**
+ * Carries the chain tip's representations into the next version.
+ * @remarks The Studio never edits representations (besk attaches them), so the
+ *   tip's list is authoritative: the save base can be an older version the
+ *   user stepped back to, or a cached copy from before a `besk attach`. A
+ *   model change keeps them too; they become stale (asset-core `isStale`).
+ */
+function carryRepresentations(manifest: any, tip: any) {
+  if (Array.isArray(tip.representations)) {
+    manifest.representations = JSON.parse(JSON.stringify(tip.representations));
+  } else {
+    delete manifest.representations;
+  }
+}
+
+/**
  * Finalizes versioning and chat provenance.
  */
 function finalizeVersionAndChat(
@@ -715,6 +772,7 @@ function finalizeVersionAndChat(
   if (prevManifest) {
     manifest.version = (prevManifest.version || 0) + 1;
     manifest.prev_asset_manifest_cid = latestCid;
+    carryRepresentations(manifest, prevManifest);
   } else if (latestCid) {
     advanceManifestVersion(manifest, latestCid);
   }
@@ -845,8 +903,7 @@ export async function prepareManifestForWrite(assetName: string) {
   // tip when it differs; otherwise clone the current manifest.
   const prevManifest =
     latestCid && latestCid !== activeCid
-      ? (await getFromRemoteIPFS(latestCid).catch(() => null)) ||
-        JSON.parse(JSON.stringify(baseManifest))
+      ? await readChainTip(latestCid)
       : JSON.parse(JSON.stringify(baseManifest));
 
   // Bake pending linked-child refs, then drop unlinked child assets.

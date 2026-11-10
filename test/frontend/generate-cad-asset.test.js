@@ -243,11 +243,36 @@ describe("generateCadAsset", () => {
     const { generateCadAsset } = await loadApi({ fetchMock });
     localStorage.setItem("arbesk_session", makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS));
     const prior = { code: "return box(1,1,1);", parameters: { s: { value: 1, unit: "mm" } }, summary: "cube", turn: 1 };
+    const { getFromRemoteIPFS } = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    getFromRemoteIPFS.mockResolvedValueOnce({ asset_id: "a", version: 1, scene: { nodes: [] } });
 
     await generateCadAsset({ prompt: "taller", nodeId: "n_2", priorDesign: prior, prevAssetManifestCid: "bafyPrev" });
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toMatchObject({ provider: "cad", prompt: "taller", nodeId: "n_2", priorDesign: prior });
+  });
+
+  // Representations (spec R3): the CAD edit's next version keeps them.
+  test("an edit keeps the previous version's representations", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(buildResponse({ status: 202, body: { taskId: "t3", provider: "cad", status: "running" } }))
+      .mockResolvedValueOnce(buildResponse({ body: CAD_SUCCESS }));
+    const { generateCadAsset } = await loadApi({ fetchMock });
+    localStorage.setItem("arbesk_session", makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS));
+    const representations = [
+      { id: "source", role: "source", format: "step", name: "a.step", cid: "bafyStep", bytes: 5, encoding: "brotli", created_at: 1 },
+    ];
+    const { getFromRemoteIPFS } = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    getFromRemoteIPFS.mockResolvedValueOnce({ asset_id: "a", version: 4, scene: { nodes: [] }, representations });
+
+    await generateCadAsset({ prompt: "taller", nodeId: "n_3", prevAssetManifestCid: "bafyPrev" });
+
+    const { writeJSONToIPFS } = await import("../../frontend/src/js/ipfs/write-to-ipfs.js");
+    const manifest = writeJSONToIPFS.mock.calls.at(-1)[0];
+    expect(manifest.version).toBe(5);
+    expect(manifest.representations).toEqual(representations);
+    expect(manifest.metadata.cad).toBeDefined();
   });
 
   test("a fresh generation sends no priorDesign", async () => {

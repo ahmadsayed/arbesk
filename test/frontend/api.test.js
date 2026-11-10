@@ -690,6 +690,39 @@ describe("generateAsset", () => {
     });
   });
 
+  // Representations (spec R3): a generation on an existing asset builds the
+  // next version from the previous manifest and keeps its representations.
+  test("keeps the previous version's representations on a follow-up", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      buildResponse({
+        body: { assetData: Buffer.from("hello").toString("base64"), format: "glb", path: "asset.glb" },
+      })
+    );
+    const { generateAsset } = await loadApi({ fetchMock });
+    localStorage.setItem("arbesk_session", makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS));
+    const representations = [
+      {
+        id: "source", role: "source", format: "blend", name: "a.blend",
+        cid: "bafyBlend", bytes: 3, encoding: "raw", created_at: 1,
+      },
+    ];
+    const { getFromRemoteIPFS } = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    getFromRemoteIPFS.mockResolvedValueOnce({
+      asset_id: "asset-1", version: 2, scene: { nodes: [] }, representations,
+    });
+
+    await generateAsset({
+      prompt: "a cube", nodeId: "cube-node", provider: "mock",
+      assetId: "asset-1", prevAssetManifestCid: "bafyPrev",
+    });
+
+    const { writeJSONToIPFS } = await import("../../frontend/src/js/ipfs/write-to-ipfs.js");
+    const manifest = writeJSONToIPFS.mock.calls[0][0];
+    expect(manifest.version).toBe(3);
+    expect(manifest.prev_asset_manifest_cid).toBe("bafyPrev");
+    expect(manifest.representations).toEqual(representations);
+  });
+
   test("re-authenticates on 401 and retries the generation", async () => {
     const fetchMock = jest
       .fn()
@@ -1465,7 +1498,7 @@ describe("generateAsset", () => {
     expect(manifest.asset_id).toBe("asset-1");
   }, 15_000);
 
-  test("falls back to a fresh manifest when the previous manifest cannot be read", async () => {
+  test("refuses to write a follow-up whose previous version cannot be read", async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(
       buildResponse({
         body: {
@@ -1486,16 +1519,18 @@ describe("generateAsset", () => {
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    await generateAsset({
-      prompt: "a refined cube",
-      nodeId: "cube-node",
-      provider: "mock",
-      prevAssetManifestCid: "bafyPrevManifest",
-    });
+    await expect(
+      generateAsset({
+        prompt: "a refined cube",
+        nodeId: "cube-node",
+        provider: "mock",
+        prevAssetManifestCid: "bafyPrevManifest",
+      })
+    ).rejects.toThrow(/previous version/);
 
-    const manifest = writeJSONToIPFS.mock.calls[0][0];
-    expect(manifest.version).toBe(1);
-    expect(manifest.prev_asset_manifest_cid).toBe("bafyPrevManifest");
+    // Retried, and no manifest claiming to follow it was written.
+    expect(remote.getFromRemoteIPFS).toHaveBeenCalledTimes(3);
+    expect(writeJSONToIPFS).not.toHaveBeenCalled();
   }, 15_000);
 
   test("passes animateInPlace and rigModel to the backend", async () => {

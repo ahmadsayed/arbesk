@@ -172,7 +172,7 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 | Smart contracts | Hardhat | `blockchain/test/*.js` |
 | E2E | Playwright | `e2e/specs/*.spec.js` |
 
-~3,100 unit tests / 309 files; E2E 28 specs / 34 tests; defaults to host-GPU WebGL + 4 parallel isolated stacks when a GPU is present (~1.2–1.7 min), else SwiftShader + 1 worker (~9–10 min) — override with `E2E_GPU=0|1` / `E2E_WORKERS=N` (e2e/README.md § Parallel workers). Coverage: `bun run test:coverage:js` (Bun lcov → Istanbul `coverage/js`), `bun run test:e2e:coverage`, `bun run test:coverage:all`.
+~3,100 unit tests / 309 files; E2E 29 specs / 35 tests; defaults to host-GPU WebGL + 4 parallel isolated stacks when a GPU is present (~1.2–1.7 min), else SwiftShader + 1 worker (~9–10 min) — override with `E2E_GPU=0|1` / `E2E_WORKERS=N` (e2e/README.md § Parallel workers). Coverage: `bun run test:coverage:js` (Bun lcov → Istanbul `coverage/js`), `bun run test:e2e:coverage`, `bun run test:coverage:all`.
 
 **Unit-test conventions (`bun test`)** — `scripts/run-tests.mjs` runs each file in its own `bun test` process, because `mock.module()` is process-global:
 - Import test APIs from `bun:test` (`describe`, `test`, `expect`, `jest`, `mock`, …); mock ESM modules with `mock.module(path, factory)`. `test/bun.setup.js` (bunfig preload) maps `@arbesk/*` to package sources, so no package build is needed.

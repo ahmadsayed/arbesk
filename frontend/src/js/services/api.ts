@@ -621,6 +621,34 @@ function buildGenerationNode(args: any) {
 /**
  * Build the asset manifest for this generation.
  */
+/** Reads of the previous version a follow-up makes before giving up. */
+const PREVIOUS_MANIFEST_ATTEMPTS = 3;
+
+/**
+ * Reads the version a follow-up generation builds on.
+ * @remarks Never falls back to a fresh manifest: the new version links to
+ *   this one, so it must carry its contents (representations, spec R3). A
+ *   fresh manifest linked to it would claim continuity and drop them.
+ * @throws after {@link PREVIOUS_MANIFEST_ATTEMPTS} failed reads; the
+ *   generated model is already on IPFS (its CID is in the message).
+ */
+async function readPreviousManifest(
+  cid: string,
+  getFromRemoteIPFS: (cid: string) => Promise<any>,
+): Promise<any> {
+  let lastError = "empty response";
+  for (let attempt = 1; attempt <= PREVIOUS_MANIFEST_ATTEMPTS; attempt++) {
+    try {
+      const manifest = await getFromRemoteIPFS(cid);
+      if (manifest && typeof manifest === "object") return manifest;
+    } catch (e) {
+      lastError = (e as Error).message;
+    }
+    warn(`[GEN] could not read previous manifest ${cid} (attempt ${attempt}): ${lastError}`);
+  }
+  throw new Error(`Could not read the previous version of this asset (${lastError}). Try again.`);
+}
+
 async function buildGenerationManifest(args: any): Promise<any> {
   const {
     prompt,
@@ -642,14 +670,8 @@ async function buildGenerationManifest(args: any): Promise<any> {
 
   let manifest: any = null;
   if (prevAssetManifestCid) {
-    try {
-      manifest = await getFromRemoteIPFS(prevAssetManifestCid);
-      log(`[GEN] previous manifest loaded - v${manifest.version}`);
-    } catch (e) {
-      warn(
-        `[GEN] could not read previous manifest ${prevAssetManifestCid}: ${(e as Error).message}`
-      );
-    }
+    manifest = await readPreviousManifest(prevAssetManifestCid, getFromRemoteIPFS);
+    log(`[GEN] previous manifest loaded - v${manifest.version}`);
   }
 
   if (!manifest) {
