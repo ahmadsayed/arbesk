@@ -114,6 +114,7 @@ const EXPECTED_TOOLS = [
   "whoami", "logout",
   "list_collections", "use_collection", "create_collection", "burn_collection",
   "list_assets", "asset_info", "asset_history", "download_asset", "upload_asset",
+  "attach_representation", "detach_representation",
   "delete_asset", "rename_asset", "send_asset", "link_asset", "show_asset",
   "generate_model", "retexture_model", "retopo_model", "rig_model", "animate_model",
   "get_asset_metadata", "get_collection_metadata",

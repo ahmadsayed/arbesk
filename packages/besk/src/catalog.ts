@@ -16,6 +16,7 @@ import type { Session } from "./session.ts";
 
 let _core: ReturnType<typeof createArbeskCore> | null = null;
 let _ipfsWrite: ReturnType<typeof createIpfsWritePort> | null = null;
+let _ipfsRead: ReturnType<typeof createIpfsReadPort> | null = null;
 
 const CACHE_PATH =
   process.env.ARBESK_CACHE_PATH ||
@@ -60,8 +61,9 @@ export async function getCore() {
   const cfg = await getBackendConfig();
   debug("asset-core init: gateway " + cfg.ipfsGatewayUrl + ", chain " + CHAIN_ID);
   _ipfsWrite = createIpfsWritePort();
+  _ipfsRead = createIpfsReadPort(cfg.ipfsGatewayUrl);
   _core = createArbeskCore({
-    ipfsRead: createIpfsReadPort(cfg.ipfsGatewayUrl),
+    ipfsRead: _ipfsRead,
     ipfsWrite: _ipfsWrite,
     collection: createCollectionReadPort(),
     hash: createHashPort(),
@@ -81,6 +83,23 @@ export async function writeJSON(json: unknown): Promise<string> {
   const cid = await _ipfsWrite!.writeJSON(json as Record<string, any>);
   debug("ipfs write →", cid);
   return cid;
+}
+
+/**
+ * Write bytes to IPFS exactly as given (no compression): representation files
+ * arrive already encoded (asset-core encodeRepresentation).
+ */
+export async function writeRawBytes(bytes: Uint8Array, filename: string): Promise<string> {
+  await getCore();
+  const cid = await _ipfsWrite!.write(bytes, filename, null, { compress: false });
+  debug("ipfs write", filename, "→", cid);
+  return cid;
+}
+
+/** Read stored bytes with NO decompression (representations decode themselves). */
+export async function readRawBytes(cid: string): Promise<Uint8Array> {
+  await getCore();
+  return new Uint8Array(await _ipfsRead!.getRawBytes(cid));
 }
 
 export async function writeManifest(manifest: Record<string, unknown>): Promise<string> {
