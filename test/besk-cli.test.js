@@ -62,6 +62,7 @@ const mockAttachRepresentation = jest.fn();
 const mockDetachRepresentation = jest.fn();
 const mockReadRepresentation = jest.fn();
 const mockDescribeRepresentations = jest.fn(() => []);
+const mockHistoryRepresentationChanges = jest.fn(async (entries) => entries.map(() => []));
 const mockLoadAssetSource = jest.fn();
 const mockResolveVersionCid = jest.fn();
 
@@ -86,6 +87,9 @@ mock.module("../packages/besk/src/catalog.ts", () => ({
   writeManifest: mockWriteManifest,
   clearCatalogCache: mockClearCatalogCache,
   updateCollection: mockUpdateCollection,
+  replaceAssetEntry: (draft, assetID, _expected, newCid) => {
+    draft.assets[assetID] = newCid;
+  },
   uploadAsset: mockUploadAsset,
   getVersionHistory: mockGetVersionHistory,
   downloadAsset: mockDownloadAsset,
@@ -96,6 +100,7 @@ mock.module("../packages/besk/src/representations.ts", () => ({
   detachRepresentation: mockDetachRepresentation,
   readRepresentation: mockReadRepresentation,
   describeRepresentations: mockDescribeRepresentations,
+  historyRepresentationChanges: mockHistoryRepresentationChanges,
   profileFrom: (o) => {
     const p = {};
     if (o.printer) p.printer = o.printer;
@@ -536,4 +541,29 @@ test("upload: saves through saveModelVersion (keeps representations)", async () 
   mockResolveAssetByName.mockResolvedValue(HIT);
   await runCli(["upload", file]);
   expect(mockSaveModelVersion).toHaveBeenCalledWith(SESSION, "tok-default", expect.any(Uint8Array), "bracket", "asset_b");
+});
+
+test("detach: an unknown id exits 5 like download --rep", async () => {
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  mockDetachRepresentation.mockRejectedValue(
+    Object.assign(new Error("No representation x (has: gcode)"), { code: "NOT_FOUND" }),
+  );
+  const { exitCode } = await runCli(["detach", "bracket", "x"]);
+  expect(exitCode).toBe(5);
+  expect(errors.join("\n")).toContain("No representation x (has: gcode)");
+});
+
+test("history: prints each version's representation changes", async () => {
+  mockResolveAssetByName.mockResolvedValue(HIT);
+  mockGetVersionHistory.mockResolvedValue([
+    { version: 2, cid: "bafyV2", name: "bracket", nodeCount: 1 },
+    { version: 1, cid: "bafyV1", name: "bracket", nodeCount: 1 },
+  ]);
+  mockHistoryRepresentationChanges.mockImplementation(async () => [
+    [],
+    [{ change: "added", id: "gcode", text: "Added G-code (Original Prusa MK4, PETG)" }],
+  ]);
+  await runCli(["history", "bracket"]);
+  const out = logs.join("\n");
+  expect(out).toMatch(/v2 \(current\)\n {2}bafyV2\n {2}bracket · 1 nodes\n {2}Added G-code \(Original Prusa MK4, PETG\)/);
 });

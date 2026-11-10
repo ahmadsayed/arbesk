@@ -13,14 +13,16 @@ import {
   isStale,
   withRepresentation,
   withoutRepresentation,
-  encodeRepresentation,
-  decodeRepresentation,
+  hasRoomFor,
+  derivedFromOf,
+  primaryTransformOf,
   representationId,
   defaultRole,
   encodingFor,
   MAX_REPRESENTATIONS,
   MAX_REPRESENTATION_BYTES,
 } from "@arbesk/asset-core/manifest/representations.js";
+import { encodeRepresentation, decodeRepresentation } from "@arbesk/asset-core/manifest/representation-codec.js";
 import { validateManifest } from "@arbesk/asset-core/manifest/utils.js";
 import { isBrotliFramed } from "@arbesk/asset-core/utils/compression.js";
 
@@ -153,6 +155,36 @@ describe("isStale", () => {
     expect(isStale(removed, stl)).toBe(true);
   });
 
+  // A rescale changes what a slicer prints without touching the source CID.
+  test("primary: stale once node 0's placement changes, when the entry recorded it", () => {
+    const m = manifest();
+    const derived = derivedFromOf(m, "primary");
+    expect(derived).toEqual({ ref: "primary", cid: "bafyModel", transform_matrix: primaryTransformOf(m) });
+    const placed = { ...gcode, derived_from: derived };
+    expect(representationSchema.safeParse(placed).success).toBe(true);
+    expect(isStale(m, placed)).toBe(false);
+    const scaled = manifest();
+    scaled.scene.nodes[0].transform_matrix = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1];
+    expect(isStale(scaled, placed)).toBe(true);
+    // An entry that recorded no placement compares the CID only.
+    expect(isStale(scaled, gcode)).toBe(false);
+  });
+
+  test("primary: other nodes and an identity placement written out do not make it stale", () => {
+    const m = manifest();
+    const placed = { ...gcode, derived_from: derivedFromOf(m, "primary") };
+    const more = manifest();
+    more.scene.nodes[0].transform_matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    more.scene.nodes.push({ node_id: "node_2", source: { cid: "bafyOther" } });
+    expect(isStale(more, placed)).toBe(false);
+  });
+
+  test("derivedFromOf records only ref and CID for another representation, null for nothing", () => {
+    const m = manifest({ representations: [source] });
+    expect(derivedFromOf(m, "source")).toEqual({ ref: "source", cid: "bafyBlend" });
+    expect(derivedFromOf(m, "missing")).toBe(null);
+  });
+
   test("currentCidOf names the primary model or another entry", () => {
     const m = manifest({ representations: [source] });
     expect(currentCidOf(m, "primary")).toBe("bafyModel");
@@ -187,6 +219,26 @@ describe("withRepresentation / withoutRepresentation", () => {
     const full = manifest({ representations: reps });
     expect(() => withRepresentation(full, { ...source, id: "one-more" })).toThrow("at most 32");
     expect(withRepresentation(full, { ...source, id: "r0", cid: "x" }).representations[0].cid).toBe("x");
+  });
+
+  // An entry this client cannot parse (a newer client's) is counted and
+  // carried as it is, so the pre-upload room check and the write agree.
+  test("counts and keeps entries that do not parse", () => {
+    const foreign = { id: "print-plan", role: "plan", format: "json", cid: "bafyPlan" };
+    const reps = [foreign, ...Array.from({ length: MAX_REPRESENTATIONS - 1 }, (_, i) => ({ ...source, id: "r" + i }))];
+    const full = manifest({ representations: reps });
+    expect(hasRoomFor(full, "one-more")).toBe(false);
+    expect(hasRoomFor(full, "r0")).toBe(true);
+    expect(() => withRepresentation(full, { ...source, id: "one-more" })).toThrow("at most 32");
+    const roomy = manifest({ representations: [foreign] });
+    expect(hasRoomFor(roomy, "x")).toBe(true);
+    expect(withRepresentation(roomy, source).representations).toEqual([foreign, source]);
+  });
+
+  test("replacing an id that is stored twice leaves one entry", () => {
+    const m = manifest({ representations: [source, gcode, { ...source, cid: "bafyDup" }] });
+    const next = withRepresentation(m, { ...source, cid: "bafyBlend2" });
+    expect(next.representations.map((r) => r.cid)).toEqual(["bafyBlend2", "bafyGcode"]);
   });
 
   test("removes by id, drops the field when empty, refuses an unknown id", () => {
@@ -265,5 +317,19 @@ describe("carry-forward through asset-core's manifest helpers (R3)", () => {
     bumpManifestVersion(m, "bafyPrev");
     expect(m.version).toBe(4);
     expect(m.representations).toEqual([source, gcode]);
+  });
+});
+
+// Module workers get no import map: the list/stale helpers must not pull the
+// codecs (fflate, brotli-wasm), which live in representation-codec.ts.
+describe("worker safety", () => {
+  test("manifest/representations.ts imports only the schema", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync(
+      new URL("../packages/asset-core/src/manifest/representations.ts", import.meta.url),
+      "utf8",
+    );
+    const imports = [...source.matchAll(/^import[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1]);
+    expect(imports).toEqual(["./schema.ts", "./schema.ts"]);
   });
 });

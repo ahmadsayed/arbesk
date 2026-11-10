@@ -17,6 +17,7 @@ import {
   writeManifest,
   clearCatalogCache,
   updateCollection,
+  replaceAssetEntry,
   getVersionHistory,
   downloadAsset,
   detectFormat,
@@ -49,6 +50,7 @@ import {
   attachRepresentation,
   describeRepresentations,
   detachRepresentation,
+  historyRepresentationChanges,
   profileFrom,
   readRepresentation,
 } from "./representations.ts";
@@ -249,7 +251,7 @@ async function cmdRename(oldName?: string, newName?: string): Promise<void> {
   assetManifest.name = newName;
   const newAssetCid = await writeManifest(assetManifest);
   await updateCollection(s, tokenId, (draft) => {
-    draft.assets[hit.assetID] = newAssetCid;
+    replaceAssetEntry(draft, hit.assetID, hit.cid, newAssetCid);
   });
   console.log("Renamed " + oldName + " to " + newName);
 }
@@ -327,12 +329,14 @@ async function cmdHistory(name?: string): Promise<void> {
   }
   // getVersionHistory walks newest → oldest; print oldest → newest.
   const ordered = [...chain].reverse();
+  const changes = await historyRepresentationChanges(ordered);
   for (let i = 0; i < ordered.length; i++) {
     const e = ordered[i];
     const marker = i === ordered.length - 1 ? " (current)" : "";
     console.log("v" + e.version + marker);
     console.log("  " + e.cid);
     console.log("  " + (e.name ?? "(unnamed)") + " · " + e.nodeCount + " nodes");
+    for (const change of changes[i]) console.log("  " + change.text);
   }
 }
 
@@ -431,7 +435,14 @@ async function cmdDetach(name?: string, id?: string): Promise<void> {
   const ctx = await requireNamedAsset(name, usage);
   if (!ctx) return;
   const { s, tokenId, hit } = ctx;
-  await detachRepresentation(s, { tokenId, assetID: hit.assetID, cid: hit.cid, name: name!, id });
+  try {
+    await detachRepresentation(s, { tokenId, assetID: hit.assetID, cid: hit.cid, name: name!, id });
+  } catch (e) {
+    if ((e as { code?: string }).code !== "NOT_FOUND") throw e;
+    console.error((e as Error).message);
+    process.exitCode = 5;
+    return;
+  }
   console.log("Detached " + id + " from " + name);
 }
 

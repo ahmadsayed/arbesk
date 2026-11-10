@@ -4,11 +4,14 @@
  * asset manifest's `representations` list.
  * @remarks Pure helpers; every client (Studio, besk, File Browser) reads and
  *   writes the list through these so the format is defined once. Staleness is
- *   computed from the manifest, never stored. Spec:
+ *   computed from the manifest, never stored. Encoding the bytes is
+ *   `representation-codec.ts`. Spec:
  *   docs/superpowers/specs/2026-11-10-asset-representations-design.md.
  */
 
-import { compressAuto, decompressAuto, isBrotliFramed } from "../utils/compression.ts";
+// Worker-safe: only zod (via schema.ts). The brotli codec lives in
+// representation-codec.ts, so a reader that only lists entries or computes
+// staleness never pulls fflate or brotli-wasm.
 import {
   MAX_REPRESENTATION_BYTES,
   MAX_REPRESENTATIONS,
@@ -17,11 +20,14 @@ import {
 } from "./schema.ts";
 import type { Representation } from "./schema.ts";
 
+type DerivedFrom = NonNullable<Representation["derived_from"]>;
+
 export { MAX_REPRESENTATION_BYTES, MAX_REPRESENTATIONS, PRIMARY_REF, representationSchema };
 export type { Representation };
 
 export type RepresentationRole = Representation["role"];
 export type RepresentationEncoding = Representation["encoding"];
+export type { DerivedFrom };
 
 /** A manifest as the helpers see it: only the fields they read. */
 type ManifestLike = Record<string, any>;
@@ -81,15 +87,69 @@ export function currentCidOf(manifest: ManifestLike | null | undefined, ref: str
   return listRepresentations(manifest).find((rep) => rep.id === ref)?.cid ?? null;
 }
 
+const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+/**
+ * The primary model's placement (`scene.nodes[0].transform_matrix`, identity
+ * when absent): a rescale changes what a slicer would print without changing
+ * the source CID.
+ */
+export function primaryTransformOf(manifest: ManifestLike | null | undefined): number[] | null {
+  const node = manifest?.scene?.nodes?.[0];
+  if (!node) return null;
+  const matrix = node.transform_matrix;
+  return Array.isArray(matrix) && matrix.length === 16 ? matrix.map(Number) : [...IDENTITY];
+}
+
+function sameMatrix(a: readonly number[] | null, b: readonly number[]): boolean {
+  return a !== null && a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+/**
+ * What a new representation derived from `ref` records: the ref, its current
+ * CID and, for `primary`, the model's placement.
+ * @returns null when the ref names nothing.
+ */
+export function derivedFromOf(manifest: ManifestLike | null | undefined, ref: string): DerivedFrom | null {
+  const cid = currentCidOf(manifest, ref);
+  if (!cid) return null;
+  if (ref !== PRIMARY_REF) return { ref, cid };
+  const transform = primaryTransformOf(manifest);
+  return transform ? { ref, cid, transform_matrix: transform } : { ref, cid };
+}
+
 /**
  * Whether a representation was made from something that has changed since.
  * @remarks Never stored: every client computes the same answer from the same
  *   manifest. A representation with no `derived_from` is never stale; one whose
- *   ref no longer exists is.
+ *   ref no longer exists is. `primary` means node 0 only: its source bytes
+ *   (`source.cid`) and, when the entry recorded it, its `transform_matrix`.
+ *   Other nodes and child_refs are not compared, a primary that is a live
+ *   child_ref has no CID to derive from, and the Studio's first save of a
+ *   monolithic generation output decomposes it to a new CID (the entry then
+ *   reads stale although the geometry is the same).
  */
 export function isStale(manifest: ManifestLike | null | undefined, rep: Representation): boolean {
-  if (!rep.derived_from) return false;
-  return currentCidOf(manifest, rep.derived_from.ref) !== rep.derived_from.cid;
+  const from = rep.derived_from;
+  if (!from) return false;
+  if (currentCidOf(manifest, from.ref) !== from.cid) return true;
+  if (from.ref !== PRIMARY_REF || !from.transform_matrix) return false;
+  return !sameMatrix(primaryTransformOf(manifest), from.transform_matrix);
+}
+
+/**
+ * Whether the manifest has room for an entry with this id: replacing one is
+ * always allowed, adding one only below {@link MAX_REPRESENTATIONS}.
+ * @remarks Counts the stored entries as they are, including ones this client
+ *   cannot parse (a newer client's), which every write carries unchanged.
+ */
+export function hasRoomFor(manifest: ManifestLike | null | undefined, id: string): boolean {
+  const current = storedEntries(manifest);
+  return current.some((entry) => entry?.id === id) || current.length < MAX_REPRESENTATIONS;
+}
+
+function storedEntries(manifest: ManifestLike | null | undefined): Array<Record<string, any>> {
+  return Array.isArray(manifest?.representations) ? manifest.representations : [];
 }
 
 /**
@@ -100,17 +160,15 @@ export function isStale(manifest: ManifestLike | null | undefined, rep: Represen
  */
 export function withRepresentation<M extends ManifestLike>(manifest: M, rep: Representation): M {
   const parsed = representationSchema.parse(rep);
-  const current = Array.isArray(manifest.representations) ? manifest.representations : [];
-  const index = current.findIndex((entry: { id?: string }) => entry?.id === parsed.id);
-  const next = [...current];
-  if (index >= 0) {
-    next[index] = parsed;
-  } else {
-    if (current.length >= MAX_REPRESENTATIONS) {
-      throw new Error(`An asset holds at most ${MAX_REPRESENTATIONS} representations`);
-    }
-    next.push(parsed);
+  if (!hasRoomFor(manifest, parsed.id)) {
+    throw new Error(`An asset holds at most ${MAX_REPRESENTATIONS} representations`);
   }
+  // Entries this client cannot parse stay as they are (a newer client's);
+  // every entry with the id is replaced by the one new entry.
+  const current = storedEntries(manifest);
+  const index = current.findIndex((entry) => entry?.id === parsed.id);
+  const next = current.filter((entry) => entry?.id !== parsed.id);
+  next.splice(index >= 0 ? index : next.length, 0, parsed);
   return { ...manifest, representations: next };
 }
 
@@ -121,47 +179,14 @@ export function withRepresentation<M extends ManifestLike>(manifest: M, rep: Rep
  * @throws when the manifest has no representation with that id.
  */
 export function withoutRepresentation<M extends ManifestLike>(manifest: M, id: string): M {
-  const current = Array.isArray(manifest.representations) ? manifest.representations : [];
-  const next = current.filter((entry: { id?: string }) => entry?.id !== id);
+  const current = storedEntries(manifest);
+  const next = current.filter((entry) => entry?.id !== id);
   if (next.length === current.length) {
     throw new Error(`No representation with id "${id}"`);
   }
   const copy: ManifestLike = { ...manifest, representations: next };
   if (next.length === 0) delete copy.representations;
   return copy as M;
-}
-
-/**
- * Encode a file for storage: brotli-framed for text formats, raw otherwise.
- * @throws when the file exceeds {@link MAX_REPRESENTATION_BYTES}.
- */
-export async function encodeRepresentation(
-  bytes: Uint8Array,
-  format: string,
-): Promise<{ bytes: Uint8Array; encoding: RepresentationEncoding }> {
-  if (bytes.byteLength > MAX_REPRESENTATION_BYTES) {
-    throw new Error("A representation is at most 256 MB");
-  }
-  const encoding = encodingFor(format);
-  if (encoding === "raw") return { bytes, encoding };
-  // q5 ("binary" hint): q11 takes minutes on a long print's G-code.
-  return { bytes: await compressAuto(bytes, { codec: "brotli", hint: "binary" }), encoding };
-}
-
-/**
- * Decode stored bytes back to the file, following the entry's `encoding`
- * (never sniffing a raw file, whose first bytes could look like a frame).
- * @throws when a `brotli` entry's bytes are not brotli-framed.
- */
-export async function decodeRepresentation(
-  bytes: Uint8Array,
-  rep: Pick<Representation, "encoding">,
-): Promise<Uint8Array> {
-  if (rep.encoding === "raw") return bytes;
-  if (!isBrotliFramed(bytes)) {
-    throw new Error("Representation bytes are not brotli-framed");
-  }
-  return decompressAuto(bytes);
 }
 
 function slug(value: string | number): string {

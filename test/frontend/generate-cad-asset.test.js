@@ -243,6 +243,8 @@ describe("generateCadAsset", () => {
     const { generateCadAsset } = await loadApi({ fetchMock });
     localStorage.setItem("arbesk_session", makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS));
     const prior = { code: "return box(1,1,1);", parameters: { s: { value: 1, unit: "mm" } }, summary: "cube", turn: 1 };
+    const { getFromRemoteIPFS } = await import("../../frontend/src/js/ipfs/remote-ipfs.js");
+    getFromRemoteIPFS.mockResolvedValueOnce({ asset_id: "a", version: 1, scene: { nodes: [] } });
 
     await generateCadAsset({ prompt: "taller", nodeId: "n_2", priorDesign: prior, prevAssetManifestCid: "bafyPrev" });
 

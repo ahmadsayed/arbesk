@@ -2,7 +2,8 @@
  * Walks fractal manifest chains and classifies the CIDs they reference.
  * @remarks `assetUnique` CIDs (manifest chain, thumbnails, comments archives)
  *   are safe to unpin when the chain is removed; `shared` CIDs (source glTFs,
- *   bundle dirs, embedded buffers/images, collection-referenced manifests) may
+ *   bundle dirs, embedded buffers/images, representation files,
+ *   collection-referenced manifests) may
  *   be referenced by other live tokens and must not be unpinned on
  *   delete/burn.
  * Used by the ipfs/unpin and ipfs/gc routes.
@@ -164,6 +165,24 @@ async function processAssetManifest(
   for (const node of nodes) {
     await addNodeSource(node, ctx, storage);
     addReferenceImages(node, ctx);
+  }
+  addRepresentations(manifest, ctx);
+}
+
+/**
+ * Collects the files an asset's `representations` list records (a .blend,
+ * an STL, a G-code).
+ * @remarks Shared, not asset-unique: `send` forks share the manifest's list,
+ *   and a re-attach of the same bytes dedups to the same CID. GC keeps them
+ *   while any live chain lists them and reclaims them once none does.
+ */
+function addRepresentations(manifest: any, ctx: WalkContext): void {
+  const list = Array.isArray(manifest?.representations) ? manifest.representations : [];
+  for (const rep of list) {
+    if (rep?.cid && typeof rep.cid === "string") {
+      ctx.shared.add(rep.cid);
+      ctx.allReachable.add(rep.cid);
+    }
   }
 }
 

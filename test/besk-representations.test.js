@@ -17,6 +17,14 @@ const manifests = {};
 const blobs = {};
 const written = [];
 const tokenURIs = {};
+/**
+ * Another client's save landing mid-command: runs at an IPFS write (the JSON
+ * written, or null for bytes) until it returns true.
+ */
+let onWrite = null;
+function fireOnWrite(json) {
+  if (onWrite?.(json)) onWrite = null;
+}
 
 const relayMock = jest.fn(async (_s, action, tokenId, params) => {
   if (action === "updateUri") tokenURIs[String(tokenId)] = params.newUri;
@@ -63,6 +71,7 @@ mock.module("../packages/besk/src/adapters.ts", () => ({
   })),
   createIpfsWritePort: jest.fn(() => ({
     write: jest.fn(async (data, filename, _cred, options) => {
+      fireOnWrite(null);
       const cid = "bafyBlob" + (Object.keys(blobs).length + 1);
       blobs[cid] = new Uint8Array(data);
       blobs[cid].filename = filename;
@@ -70,6 +79,7 @@ mock.module("../packages/besk/src/adapters.ts", () => ({
       return cid;
     }),
     writeJSON: jest.fn(async (json) => {
+      fireOnWrite(json);
       written.push(json);
       const cid = "bafyWritten" + written.length;
       manifests[cid] = structuredClone(json);
@@ -87,6 +97,7 @@ const { linkChildAsset } = await import("../packages/besk/src/link.ts");
 const { sendAssetToCollection } = await import("../packages/besk/src/send.ts");
 const { saveGenerated } = await import("../packages/besk/src/helpers.ts");
 const { MAX_REPRESENTATIONS } = await import("@arbesk/asset-core/manifest/representations.js");
+const { representationChanges } = await import("../packages/besk/src/representations.ts");
 
 const SESSION = {
   token: "t", expiresAt: Date.now() + 3600_000, address: "0xabc",
@@ -138,6 +149,7 @@ beforeEach(() => {
   resetStore();
   written.length = 0;
   relayMock.mockClear();
+  onWrite = null;
   runGenerationMock.mockReset();
   clearCatalogCache();
 });
@@ -226,12 +238,56 @@ describe("attach_representation", () => {
     expect(written).toHaveLength(0);
   });
 
+  test("records node 0's placement, so a rescale makes a G-code stale", async () => {
+    await callTool("attach_representation", { name: "bracket", file: tmpFile("b.gcode", "G1") });
+    expect(current("asset_bracket").representations[0].derived_from).toEqual({
+      ref: "primary", cid: "bafyModel", transform_matrix: IDENTITY,
+    });
+  });
+
+  test("refuses a format the schema rejects before uploading anything", async () => {
+    for (const name of ["part.my-ext", "x.verylongextension17"]) {
+      await expect(
+        callTool("attach_representation", { name: "bracket", file: tmpFile(name, "x") }),
+      ).rejects.toThrow("Cannot attach: format");
+    }
+    expect(Object.keys(blobs)).toHaveLength(0);
+    expect(written).toHaveLength(0);
+  });
+
+  test("counts an entry it cannot parse, refusing before the upload, and carries it", async () => {
+    const foreign = { id: "plan", role: "plan", format: "json", cid: "bafyPlan" };
+    withRepresentations([foreign, ...Array.from({ length: MAX_REPRESENTATIONS - 1 }, (_, i) => ({ ...BLEND, id: "r" + i }))]);
+    await expect(
+      callTool("attach_representation", { name: "bracket", file: tmpFile("x.stl", "solid") }),
+    ).rejects.toThrow("at most 32");
+    expect(Object.keys(blobs)).toHaveLength(0);
+
+    withRepresentations([foreign]);
+    await callTool("attach_representation", { name: "bracket", file: tmpFile("x.stl", "solid") });
+    expect(current("asset_bracket").representations.map((r) => r.id)).toEqual(["plan", "stl"]);
+  });
+
+  // A Studio save lands while the file uploads: the attach must not replace it.
+  test("refuses to replace an entry that moved while it was uploading", async () => {
+    onWrite = () => {
+      manifests.bafyStudio = { ...manifests.bafyBracket, version: 3, prev_asset_manifest_cid: "bafyBracket" };
+      manifests.bafyCol1b = { ...manifests.bafyCol1, assets: { ...manifests.bafyCol1.assets, asset_bracket: "bafyStudio" } };
+      tokenURIs[1] = "bafyCol1b";
+      return true;
+    };
+    const err = await callTool("attach_representation", { name: "bracket", file: tmpFile("b.stl", "solid") }).then(() => null, (e) => e);
+    expect(err.code).toBe("CONFLICT");
+    expect(current("asset_bracket")).toBe(manifests.bafyStudio);
+    expect(relayMock).not.toHaveBeenCalled();
+  });
+
   test("an asset stored as a bare composite is wrapped in an asset manifest first", async () => {
     await callTool("attach_representation", { name: "raw", file: tmpFile("raw.stl", "solid") });
     const m = current("asset_raw");
     expect(m).toMatchObject({ type: "asset", name: "raw", asset_id: "asset_raw", version: 2, prev_asset_manifest_cid: "bafyRaw" });
     expect(m.scene.nodes[0].source).toEqual({ cid: "bafyRaw", format: "gltf", path: "composite.gltf" });
-    expect(m.representations[0].derived_from).toEqual({ ref: "primary", cid: "bafyRaw" });
+    expect(m.representations[0].derived_from).toEqual({ ref: "primary", cid: "bafyRaw", transform_matrix: IDENTITY });
   });
 });
 
@@ -247,7 +303,10 @@ describe("detach_representation", () => {
   });
 
   test("refuses an unknown id", async () => {
-    await expect(callTool("detach_representation", { name: "bracket", id: "nope" })).rejects.toThrow('No representation with id "nope"');
+    const err = await callTool("detach_representation", { name: "bracket", id: "nope" }).then(() => null, (e) => e);
+    expect(err.message).toContain("No representation nope (the asset has none)");
+    expect(err.code).toBe("NOT_FOUND");
+    expect(written).toHaveLength(0);
   });
 });
 
@@ -331,6 +390,21 @@ describe("carry-forward through besk's writes", () => {
     expect(current("asset_bracket").scene).toBeUndefined();
   });
 
+  test("a model save refuses to replace an entry that moved after it was read", async () => {
+    // nextModelEntry reads the entry, then writes the wrapper: move it then.
+    onWrite = (json) => {
+      if (!json?.representations) return false;
+      manifests.bafyCol1b = { ...manifests.bafyCol1, assets: { ...manifests.bafyCol1.assets, asset_bracket: "bafyOther" } };
+      tokenURIs[1] = "bafyCol1b";
+      return true;
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify({ asset: { version: "2.0" } }));
+    const err = await saveGenerated(currentSession, "1", { bytes, format: "gltf" }, "bracket", "asset_bracket")
+      .then(() => null, (e) => e);
+    expect(err?.code).toBe("CONFLICT");
+    expect(manifests[tokenURIs[1]].assets.asset_bracket).toBe("bafyOther");
+  });
+
   test("a saved generation (generate / retexture / retopo / rig / animate) keeps them", async () => {
     const bytes = new TextEncoder().encode(JSON.stringify({ asset: { version: "2.0" } }));
     await saveGenerated(currentSession, "1", { bytes, format: "gltf" }, "bracket", "asset_bracket");
@@ -345,5 +419,37 @@ describe("carry-forward through besk's writes", () => {
     await saveGenerated(currentSession, "1", { bytes, format: "gltf" }, "bracket", "asset_bracket");
     const info = await callTool("asset_info", { name: "bracket" });
     expect(info.representations.map((r) => [r.id, r.stale])).toEqual([["source", false], ["stl", true]]);
+  });
+});
+
+describe("history (spec R4)", () => {
+  test("representationChanges names added, replaced and removed entries", () => {
+    const gcode = {
+      ...BLEND, id: "gcode-mk4", role: "machine", format: "gcode", name: "a.gcode", cid: "bafyG1",
+      profile: { printer: "Original Prusa MK4", material: "PETG" },
+    };
+    expect(representationChanges(null, { representations: [gcode] }).map((c) => c.text)).toEqual([
+      "Added G-code (Original Prusa MK4, PETG)",
+    ]);
+    const changes = representationChanges(
+      { representations: [BLEND, gcode] },
+      { representations: [{ ...gcode, cid: "bafyG2" }] },
+    );
+    expect(changes).toEqual([
+      { change: "replaced", id: "gcode-mk4", text: "Replaced G-code (Original Prusa MK4, PETG)" },
+      { change: "removed", id: "source", text: "Removed Blender file" },
+    ]);
+    expect(representationChanges({ representations: [BLEND] }, { representations: [BLEND] })).toEqual([]);
+  });
+
+  test("asset_history reports what each attach and detach changed", async () => {
+    await callTool("attach_representation", { name: "bracket", file: tmpFile("b.gcode", "G1"), printer: "MK4" });
+    await callTool("detach_representation", { name: "bracket", id: "gcode-mk4" });
+    const history = await callTool("asset_history", { name: "bracket" });
+    expect(history.map((v) => v.representationChanges?.map((c) => c.text))).toEqual([
+      undefined,
+      ["Added G-code (MK4)"],
+      ["Removed G-code (MK4)"],
+    ]);
   });
 });

@@ -104,7 +104,7 @@ Status legend: **✅** supported today (MCP cells name the tool) · **TODO** —
 | | Dive/ascend navigation + breadcrumbs | ✅ | Not doable | Not doable | Requires 3D viewer |
 | | Unlink child asset | ✅ | TODO | TODO | Manifest edit; selection UX is the open question |
 | | Linked-token inspector | ✅ | Not doable | Not doable | Requires 3D viewer |
-| **Version history (4D)** | List version chain | ✅ | ✅ | ✅ `asset_history` | `history` |
+| **Version history (4D)** | List version chain | ✅ | ✅ | ✅ `asset_history` | `history` (names each version's representation changes: "Added G-code (Original Prusa MK4, PETG)") |
 | | Scene clock (whole-asset scrubbing) | ✅ | Not doable | Not doable | Requires 3D viewer |
 | | Model clock (per-node scrubbing) | ✅ | Not doable | Not doable | Requires 3D viewer |
 | | Restore a historical version as current | ✅ | TODO | TODO | CLI can download any version but never repoints the tip |

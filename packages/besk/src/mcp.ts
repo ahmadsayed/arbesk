@@ -21,6 +21,7 @@ import {
   getManifest,
   writeManifest,
   updateCollection,
+  replaceAssetEntry,
   getVersionHistory,
   downloadAsset,
   detectFormat,
@@ -56,6 +57,7 @@ import {
   attachRepresentation,
   describeRepresentations,
   detachRepresentation,
+  historyRepresentationChanges,
   profileFrom,
   readRepresentation,
   ROLES,
@@ -276,12 +278,14 @@ async function hAssetHistory(s: Session, args: Args): Promise<unknown> {
   const chain = await getVersionHistory(hit.cid);
   // getVersionHistory walks newest → oldest; report oldest → newest.
   const ordered = [...chain].reverse();
+  const changes = await historyRepresentationChanges(ordered);
   return ordered.map((e, i) => ({
     version: e.version,
     cid: e.cid,
     name: e.name ?? "(unnamed)",
     nodeCount: e.nodeCount,
     current: i === ordered.length - 1,
+    ...(changes[i].length > 0 && { representationChanges: changes[i] }),
   }));
 }
 
@@ -375,7 +379,7 @@ async function hRenameAsset(s: Session, args: Args): Promise<unknown> {
   assetManifest.name = newName;
   const newAssetCid = await writeManifest(assetManifest);
   await updateCollection(s, hit.tokenId, (draft) => {
-    draft.assets[hit.assetID] = newAssetCid;
+    replaceAssetEntry(draft, hit.assetID, hit.cid, newAssetCid);
   });
   return { renamed: newName, cid: newAssetCid };
 }

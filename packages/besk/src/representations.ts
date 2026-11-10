@@ -12,10 +12,10 @@
 import fs from "fs";
 import path from "path";
 import {
-  currentCidOf,
-  decodeRepresentation,
   defaultRole,
-  encodeRepresentation,
+  derivedFromOf,
+  encodingFor,
+  hasRoomFor,
   isStale,
   listRepresentations,
   MAX_REPRESENTATION_BYTES,
@@ -26,6 +26,7 @@ import {
   withoutRepresentation,
   withRepresentation,
 } from "@arbesk/asset-core/manifest/representations.js";
+import { decodeRepresentation, encodeRepresentation } from "@arbesk/asset-core/manifest/representation-codec.js";
 import type { Representation, RepresentationRole } from "@arbesk/asset-core/manifest/representations.js";
 import { identityMatrix } from "@arbesk/asset-core/utils/collections.js";
 import {
@@ -33,6 +34,7 @@ import {
   getCollectionManifest,
   getManifest,
   readRawBytes,
+  replaceAssetEntry,
   updateCollection,
   writeManifest,
   writeRawBytes,
@@ -114,7 +116,7 @@ function nextVersion(manifest: Manifest, prevCid: string): Manifest {
 async function writeVersion(session: Session, target: AssetTarget, next: Manifest): Promise<string> {
   const newCid = await writeManifest(next);
   await updateCollection(session, target.tokenId, (draft) => {
-    draft.assets[target.assetID] = newCid;
+    replaceAssetEntry(draft, target.assetID, target.cid, newCid);
   });
   return newCid;
 }
@@ -165,8 +167,8 @@ function derivedFrom(manifest: Manifest, role: RepresentationRole, from: string 
   if (from === "none") return undefined;
   const ref = from ?? (role === "machine" || role === "mesh" ? PRIMARY_REF : undefined);
   if (!ref) return undefined;
-  const cid = currentCidOf(manifest, ref);
-  if (cid) return { ref, cid };
+  const derived = derivedFromOf(manifest, ref);
+  if (derived) return derived;
   // The default is a convenience: an asset whose model is a live reference
   // has no source CID to record.
   if (from === undefined) return undefined;
@@ -189,10 +191,21 @@ function checkSize(file: string): number {
 }
 
 function checkRoom(manifest: Manifest, id: string): void {
-  const list = listRepresentations(manifest);
-  if (!list.some((rep) => rep.id === id) && list.length >= MAX_REPRESENTATIONS) {
+  if (!hasRoomFor(manifest, id)) {
     throw new Error("An asset holds at most " + MAX_REPRESENTATIONS + " representations");
   }
+}
+
+/**
+ * Validate the entry as it will be recorded, before anything is uploaded
+ * (the CID is the one field not known yet): a bad format or a name over 255
+ * characters must not leave a public orphan upload behind.
+ */
+function checkEntry(entry: Omit<Representation, "cid">): void {
+  const parsed = representationSchema.safeParse({ ...entry, cid: "pending" });
+  if (parsed.success) return;
+  const issue = parsed.error.issues[0];
+  throw new Error("Cannot attach: " + issue.path.join(".") + " " + issue.message);
 }
 
 /**
@@ -204,7 +217,7 @@ export async function attachRepresentation(
   session: Session,
   opts: AttachOptions,
 ): Promise<{ cid: string; representation: Representation; replaced: boolean }> {
-  checkSize(opts.file);
+  const size = checkSize(opts.file);
   const format = formatOf(opts.file);
   const role = roleOf(opts.role, format);
   const base = asAssetManifest((await getManifest(opts.cid)) as Manifest, opts);
@@ -213,24 +226,31 @@ export async function attachRepresentation(
   if (!idCheck.success) throw new Error("Invalid id " + JSON.stringify(id) + ": " + idCheck.error.issues[0].message);
   checkRoom(base, id);
   const derived = derivedFrom(base, role, opts.from);
-  if (role === "source") opts.onWarning?.(PUBLIC_SOURCE_WARNING);
 
   const name = path.basename(opts.file);
-  const raw = new Uint8Array(fs.readFileSync(opts.file));
-  const encoded = await encodeRepresentation(raw, format);
-  const representation: Representation = {
+  const entry: Omit<Representation, "cid"> = {
     id,
     role,
     format,
     name,
-    cid: await writeRawBytes(encoded.bytes, name),
-    bytes: raw.byteLength,
-    encoding: encoded.encoding,
+    bytes: size,
+    encoding: encodingFor(format),
     ...(derived && { derived_from: derived }),
     ...(opts.profile && Object.keys(opts.profile).length > 0 && { profile: opts.profile }),
     created_at: Date.now(),
   };
-  const replaced = listRepresentations(base).some((rep) => rep.id === id);
+  checkEntry(entry);
+  if (role === "source") opts.onWarning?.(PUBLIC_SOURCE_WARNING);
+
+  const raw = new Uint8Array(fs.readFileSync(opts.file));
+  const encoded = await encodeRepresentation(raw, format);
+  const representation: Representation = {
+    ...entry,
+    bytes: raw.byteLength,
+    encoding: encoded.encoding,
+    cid: await writeRawBytes(encoded.bytes, name),
+  };
+  const replaced = Array.isArray(base.representations) && base.representations.some((rep: { id?: string }) => rep?.id === id);
   const next = withRepresentation(nextVersion(base, opts.cid), representation);
   return { cid: await writeVersion(session, opts, next), representation, replaced };
 }
@@ -243,6 +263,7 @@ export async function detachRepresentation(
   target: AssetTarget & { id: string },
 ): Promise<{ cid: string }> {
   const current = (await getManifest(target.cid)) as Manifest;
+  findRepresentation(current, target.id);
   const next = nextVersion(withoutRepresentation(current, target.id), target.cid);
   return { cid: await writeVersion(session, target, next) };
 }
@@ -278,20 +299,27 @@ export function describeRepresentations(manifest: Manifest): RepresentationSumma
   }));
 }
 
+/**
+ * The manifest's representation `id`.
+ * @throws `code: "NOT_FOUND"` naming the ids the asset has.
+ */
+function findRepresentation(manifest: Manifest, id: string): Representation {
+  const list = listRepresentations(manifest);
+  const representation = list.find((rep) => rep.id === id);
+  if (representation) return representation;
+  const known = list.map((rep) => rep.id);
+  throw Object.assign(
+    new Error("No representation " + id + (known.length ? " (has: " + known.join(", ") + ")" : " (the asset has none)")),
+    { code: "NOT_FOUND" },
+  );
+}
+
 /** Fetch one representation's file, decoded. */
 export async function readRepresentation(
   manifest: Manifest,
   id: string,
 ): Promise<{ representation: Representation; bytes: Uint8Array }> {
-  const list = listRepresentations(manifest);
-  const representation = list.find((rep) => rep.id === id);
-  if (!representation) {
-    const known = list.map((rep) => rep.id);
-    throw Object.assign(
-      new Error("No representation " + id + (known.length ? " (has: " + known.join(", ") + ")" : " (the asset has none)")),
-      { code: "NOT_FOUND" },
-    );
-  }
+  const representation = findRepresentation(manifest, id);
   const bytes = await decodeRepresentation(await readRawBytes(representation.cid), representation);
   return { representation, bytes };
 }
@@ -303,19 +331,78 @@ export async function readRepresentation(
  * generations store the bare composite; when the version they replace holds
  * representations, the entry is instead the next asset version wrapping that
  * composite, so the list is kept (and becomes stale against the new model).
+ * @returns the entry and the CID it replaces (`prevCid`, undefined for a new
+ *   asset), which the collection write must still find there.
  */
 export async function nextModelEntry(
   tokenId: string,
   assetID: string,
   name: string,
   compositeCid: string,
-): Promise<string> {
+): Promise<{ entryCid: string; prevCid: string | undefined }> {
   const { manifest: collection } = await getCollectionManifest(tokenId);
   const prevCid: string | undefined = collection?.assets?.[assetID];
-  if (!prevCid) return compositeCid;
+  if (!prevCid) return { entryCid: compositeCid, prevCid };
   const prev = (await getManifest(prevCid)) as Manifest;
-  if (!Array.isArray(prev?.representations) || prev.representations.length === 0) return compositeCid;
+  if (!Array.isArray(prev?.representations) || prev.representations.length === 0) {
+    return { entryCid: compositeCid, prevCid };
+  }
   const format = detectFormat(await getManifest(compositeCid));
   const next = compositeWrapper(compositeCid, format, name, assetID, versionOf(prev));
-  return writeManifest({ ...nextVersion(next, prevCid), representations: prev.representations });
+  const entryCid = await writeManifest({ ...nextVersion(next, prevCid), representations: prev.representations });
+  return { entryCid, prevCid };
+}
+
+/* ---- history (spec R4) ---- */
+
+export interface RepresentationChange {
+  change: "added" | "replaced" | "removed";
+  id: string;
+  /** e.g. "Added G-code (Original Prusa MK4, PETG)". */
+  text: string;
+}
+
+const FORMAT_LABELS: Record<string, string> = {
+  gcode: "G-code", bgcode: "binary G-code", blend: "Blender file", stl: "STL",
+  obj: "OBJ", "3mf": "3MF", step: "STEP", stp: "STEP", glb: "GLB", gltf: "glTF",
+  usdz: "USDZ", f3d: "Fusion file", fcstd: "FreeCAD file", scad: "OpenSCAD file",
+};
+
+function changeText(change: RepresentationChange["change"], rep: Representation): string {
+  const verb = { added: "Added", replaced: "Replaced", removed: "Removed" }[change];
+  const label = FORMAT_LABELS[rep.format] ?? rep.format.toUpperCase();
+  const details = [rep.profile?.printer, rep.profile?.material].filter((part) => part !== undefined && part !== "");
+  return verb + " " + label + (details.length ? " (" + details.join(", ") + ")" : "");
+}
+
+/**
+ * What changed in the representation list between two versions: entries
+ * added, replaced (same id, other file) and removed, in that order.
+ */
+export function representationChanges(prev: Manifest | null, next: Manifest): RepresentationChange[] {
+  const before = new Map(listRepresentations(prev).map((rep) => [rep.id, rep]));
+  const after = listRepresentations(next);
+  const changes: RepresentationChange[] = [];
+  for (const rep of after) {
+    const old = before.get(rep.id);
+    if (!old) changes.push({ change: "added", id: rep.id, text: changeText("added", rep) });
+    else if (old.cid !== rep.cid) changes.push({ change: "replaced", id: rep.id, text: changeText("replaced", rep) });
+  }
+  const kept = new Set(after.map((rep) => rep.id));
+  for (const rep of before.values()) {
+    if (!kept.has(rep.id)) changes.push({ change: "removed", id: rep.id, text: changeText("removed", rep) });
+  }
+  return changes;
+}
+
+/**
+ * The representation changes each version made, for a history ordered oldest
+ * → newest. The oldest version is compared with nothing (its list is "added"
+ * only when it has one). A version that cannot be read reports no change.
+ */
+export async function historyRepresentationChanges(entries: ReadonlyArray<{ cid: string }>): Promise<RepresentationChange[][]> {
+  const manifests = await Promise.all(
+    entries.map((entry) => (getManifest(entry.cid) as Promise<Manifest>).catch(() => null)),
+  );
+  return manifests.map((manifest, i) => (manifest ? representationChanges(i > 0 ? manifests[i - 1] : null, manifest) : []));
 }

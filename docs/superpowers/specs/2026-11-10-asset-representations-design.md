@@ -77,6 +77,14 @@ primary model's `scene.nodes[0].source.cid`, or the other representation's
 `cid`). Every client computes the same answer from the same manifest;
 asset-core exports `isStale(manifest, rep)`.
 
+*Amended after review:* a rescale changes what a slicer prints without
+changing the source CID, so an entry derived from `primary` also records node
+0's `transform_matrix` (`derived_from.transform_matrix`, optional) and is
+stale when it differs. `primary` is node 0 only: other nodes, child_refs and
+their order are not compared, a live child_ref primary has no CID, and the
+Studio's first save of a monolithic generation output decomposes it to a new
+CID (a false "stale", the safe direction).
+
 **R3. Every save carries the list forward.** Zod strips unknown keys, and
 today's save paths build the next manifest from a parsed copy, so a field
 that only one client knows would disappear on the next Studio save. So the
@@ -93,6 +101,18 @@ A test per path saves an asset with representations and asserts the next
 manifest still has them. A model change does not drop them either: they
 become stale (R2), which is the point.
 
+*Amended after review:* carrying the list needs the real previous version.
+The Studio's save takes the collection entry as the chain tip when it
+descends from the version the Studio opened (a `besk attach` made while the
+Studio was open), and refuses to save when the tip cannot be read rather than
+fall back to its base. A generation follow-up refuses to build on a previous
+version it cannot read. Library Rename writes the next version (version + 1,
+prev link) from the current entry. Every write replaces the collection entry
+only while it still names the CID it built from (compare-and-swap in the
+collection mutator); otherwise it fails and asks to retry. Older clients
+(before this release) drop the field; the version before keeps it, so it is
+recoverable by re-attaching.
+
 **R4. Adding one is a new version.** Attaching, replacing or removing a
 representation writes the next asset manifest (version + 1,
 `prev_asset_manifest_cid` → the current one) and updates the collection, like
@@ -108,6 +128,9 @@ by `id`, returns a new manifest), `withoutRepresentation(manifest, id)`,
 `encodeRepresentation(bytes, format)` / `decodeRepresentation(bytes, rep)`
 (brotli frame or raw), and `representationId(role, format, profile?)` (a
 stable slug, e.g. `gcode-original-prusa-mk4-petg`). Each is pure and tested.
+The encode/decode pair lives in `manifest/representation-codec.ts`, so the
+rest stays worker-safe (no fflate or brotli-wasm); `hasRoomFor` and
+`derivedFromOf` were added for the pre-upload checks.
 
 **R6. `besk` can attach and fetch them.** Following the CLI↔MCP parity
 rule:
@@ -118,6 +141,8 @@ rule:
   `derived_from` the current CID of `--from` (default `primary` for `machine`
   and `mesh`, none for `source`), writes the next version.
 - `besk detach <asset> <id>` (MCP `detach_representation`).
+- `besk history` and MCP `asset_history` name each version's
+  representation changes (added, replaced, removed).
 - `besk info` lists representations with a stale marker; `besk download
   <asset> --rep <id>` (MCP `download_asset` gains `representation`) writes
   that file instead of the model.
@@ -129,7 +154,13 @@ can carry more than the model (other scenes, embedded images).
 
 **R8. No contract or backend route change.** Representations are uploaded
 with the existing upload URLs and saved with the existing collection update;
-the indexer and the backend never read them.
+the indexer never reads them.
+
+*Amended after review:* the backend's IPFS GC must. It unpins every pinned
+CID its chain walker does not reach once the grace period ends, so the walker
+(`src/api/manifest-chain-walker.ts`) counts each listed `cid` as reachable
+and shared: a live asset's files stay pinned, a burned one's are reclaimed by
+GC once no live chain lists them.
 
 ## Testing
 

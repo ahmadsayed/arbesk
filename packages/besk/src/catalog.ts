@@ -175,6 +175,31 @@ export async function uploadAsset(bytes: Uint8Array, assetName: string, assetId:
 }
 
 /**
+ * Point a collection entry at `newCid`, but only while it still names the CID
+ * the new version was built from (compare-and-swap inside an
+ * {@link updateCollection} mutator, which re-reads the collection). Another
+ * client's write in between (a Studio save, a second `besk`) would otherwise
+ * be replaced and its model edits or representations lost.
+ * @param expected - the entry the write read; undefined for a new asset.
+ * @throws `code: "CONFLICT"` when the entry moved since it was read.
+ */
+export function replaceAssetEntry(
+  draft: Record<string, any>,
+  assetID: string,
+  expected: string | undefined,
+  newCid: string,
+): void {
+  const current: string | undefined = draft.assets?.[assetID];
+  if (current !== expected) {
+    throw Object.assign(
+      new Error("The asset changed since it was read (another save landed); run the command again"),
+      { code: "CONFLICT" },
+    );
+  }
+  draft.assets[assetID] = newCid;
+}
+
+/**
  * The one CLI collection-write path: read → mutate (with version bump + prev
  * link, via the canonical asset-core helper) → write → relay updateUri →
  * invalidate the catalog cache. Returns the new collection CID.

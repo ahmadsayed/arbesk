@@ -1498,7 +1498,7 @@ describe("generateAsset", () => {
     expect(manifest.asset_id).toBe("asset-1");
   }, 15_000);
 
-  test("falls back to a fresh manifest when the previous manifest cannot be read", async () => {
+  test("refuses to write a follow-up whose previous version cannot be read", async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(
       buildResponse({
         body: {
@@ -1519,16 +1519,18 @@ describe("generateAsset", () => {
       makeSession(TEST_TOKEN, Date.now() + 60_000, TEST_ADDRESS)
     );
 
-    await generateAsset({
-      prompt: "a refined cube",
-      nodeId: "cube-node",
-      provider: "mock",
-      prevAssetManifestCid: "bafyPrevManifest",
-    });
+    await expect(
+      generateAsset({
+        prompt: "a refined cube",
+        nodeId: "cube-node",
+        provider: "mock",
+        prevAssetManifestCid: "bafyPrevManifest",
+      })
+    ).rejects.toThrow(/previous version/);
 
-    const manifest = writeJSONToIPFS.mock.calls[0][0];
-    expect(manifest.version).toBe(1);
-    expect(manifest.prev_asset_manifest_cid).toBe("bafyPrevManifest");
+    // Retried, and no manifest claiming to follow it was written.
+    expect(remote.getFromRemoteIPFS).toHaveBeenCalledTimes(3);
+    expect(writeJSONToIPFS).not.toHaveBeenCalled();
   }, 15_000);
 
   test("passes animateInPlace and rigModel to the backend", async () => {

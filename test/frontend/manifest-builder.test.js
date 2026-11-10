@@ -13,7 +13,18 @@ function defaultCadSave() {
   };
 }
 
+/** The token.ts stand-in: no chain, no collection unless a test sets one. */
+const tokenMock = {
+  getTokenURI: jest.fn(async () => null),
+  getOwnerOf: jest.fn(async () => null),
+  tokenExists: jest.fn(async () => false),
+  getAssetName: jest.fn(async () => null),
+  getCollectionManifest: jest.fn(async () => null),
+};
+
 async function load() {
+  tokenMock.getCollectionManifest.mockReset();
+  tokenMock.getCollectionManifest.mockImplementation(async () => null);
   resetModules();
   const cadSaveMock = cadSave ?? defaultCadSave();
   cadSave = null;
@@ -82,6 +93,7 @@ async function load() {
       },
     })
   );
+  mock.module("../../frontend/src/js/services/token.js", () => tokenMock);
   mock.module("../../frontend/src/js/utils/log.js", () => ({
     log: jest.fn(),
     warn: jest.fn(),
@@ -399,6 +411,72 @@ describe("prepareManifestForWrite", () => {
     expect(result.manifest.prev_asset_manifest_cid).toBe("bafyV3");
     expect(result.manifest.representations).toEqual(REPS);
     expect(result.manifest.representations).not.toBe(result.prevManifest.representations);
+  });
+
+  // A `besk attach` lands while the Studio has the asset open: the in-memory
+  // tip still names the version the Studio opened, the collection entry the
+  // attach version. The save must append to the attach and keep its list.
+  it("appends to a newer collection entry than the in-memory tip and keeps its representations", async () => {
+    const opened = makeManifest([makeNode({ cid: "bafyCached" })]);
+    const attached = {
+      ...makeManifest([makeNode({ cid: "bafyCached" })]),
+      version: 2,
+      prev_asset_manifest_cid: "bafyV1",
+      representations: REPS,
+    };
+    assetStore.set({
+      activeAssetManifestCid: "bafyV1",
+      latestAssetManifestCid: "bafyV1",
+      activeAssetTokenId: "7",
+      activeAssetId: "asset_1",
+      currentManifest: { ...opened, _manifestCid: "bafyV1" },
+    });
+    tokenMock.getCollectionManifest.mockImplementation(async () => ({ assets: { asset_1: "bafyV2" } }));
+    ctx.remote.getFromRemoteIPFS.mockImplementation(async (cid) =>
+      cid === "bafyV2" ? structuredClone(attached) : cid === "bafyV1" ? structuredClone(opened) : null,
+    );
+
+    const result = await ctx.mod.prepareManifestForWrite("Bracket");
+
+    expect(tokenMock.getCollectionManifest).toHaveBeenCalledWith("7");
+    expect(result.prevCid).toBe("bafyV2");
+    expect(result.manifest.prev_asset_manifest_cid).toBe("bafyV2");
+    expect(result.manifest.version).toBe(3);
+    expect(result.manifest.representations).toEqual(REPS);
+  });
+
+  it("keeps the in-memory tip when the collection entry is an older published version", async () => {
+    const draft = { ...makeManifest([makeNode({ cid: "bafyCached" })]), version: 5 };
+    assetStore.set({
+      activeAssetManifestCid: "bafyDraft",
+      latestAssetManifestCid: "bafyDraft",
+      activeAssetTokenId: "7",
+      activeAssetId: "asset_1",
+      currentManifest: { ...draft, _manifestCid: "bafyDraft" },
+    });
+    tokenMock.getCollectionManifest.mockImplementation(async () => ({ assets: { asset_1: "bafyPublished" } }));
+    ctx.remote.getFromRemoteIPFS.mockImplementation(async (cid) =>
+      cid === "bafyPublished" ? { ...makeManifest([]), version: 4 } : cid === "bafyDraft" ? structuredClone(draft) : null,
+    );
+
+    const result = await ctx.mod.prepareManifestForWrite("Bracket");
+
+    expect(result.prevCid).toBe("bafyDraft");
+    expect(result.manifest.version).toBe(6);
+  });
+
+  it("refuses to save when the chain tip cannot be read, instead of dropping its representations", async () => {
+    const base = makeManifest([makeNode({ cid: "bafyCached" })]);
+    assetStore.set({
+      activeAssetManifestCid: "bafyV1",
+      latestAssetManifestCid: "bafyV3",
+      currentManifest: { ...base, _manifestCid: "bafyV1" },
+    });
+    ctx.remote.getFromRemoteIPFS.mockImplementation(async () => {
+      throw new Error("gateway timeout");
+    });
+
+    await expect(ctx.mod.prepareManifestForWrite("Bracket")).rejects.toThrow(/latest version/);
   });
 
   it("records sent pending generations as version-scoped metadata.chat", async () => {

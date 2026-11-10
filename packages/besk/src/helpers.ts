@@ -7,7 +7,7 @@
 import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
-import { getManifest, getVersionHistory, listCollections, updateCollection, uploadAsset } from "./catalog.ts";
+import { getManifest, getVersionHistory, listCollections, replaceAssetEntry, updateCollection, uploadAsset } from "./catalog.ts";
 import { resolveCompositeSourceCid } from "@arbesk/asset-core/catalog/index.js";
 import { nextModelEntry } from "./representations.ts";
 import type { GeneratedModel } from "./generate.ts";
@@ -106,9 +106,9 @@ export async function saveModelVersion(
   assetId: string,
 ): Promise<string> {
   const { compositeCid } = await uploadAsset(bytes, name, assetId);
-  const entryCid = await nextModelEntry(tokenId, assetId, name, compositeCid);
+  const { entryCid, prevCid } = await nextModelEntry(tokenId, assetId, name, compositeCid);
   await updateCollection(s, tokenId, (draft) => {
-    draft.assets[assetId] = entryCid;
+    replaceAssetEntry(draft, assetId, prevCid, entryCid);
   });
   return entryCid;
 }

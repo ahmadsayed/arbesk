@@ -135,6 +135,9 @@ export const representationSchema = z
       .object({
         ref: z.union([z.literal(PRIMARY_REF), z.string().regex(REPRESENTATION_ID)]),
         cid: z.string().min(1),
+        // For `primary`: node 0's placement when this file was made, so a
+        // rescale marks it stale although the source CID is unchanged.
+        transform_matrix: z.array(z.number()).length(16).optional(),
       })
       .optional(),
     tool: representationDetailSchema.optional(),

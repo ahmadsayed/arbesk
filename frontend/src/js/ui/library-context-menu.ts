@@ -377,6 +377,24 @@ function showMetadataEditor(
   });
 }
 
+/**
+ * The asset's next manifest with a new name.
+ * @remarks An asset manifest gets the next version linked to `baseCid`, like
+ *   any save, so the renamed entry keeps the chain (and the representations
+ *   it carries). A bare composite (a `besk upload` entry) has no chain and is
+ *   only renamed.
+ */
+export function renamedVersion(manifest: any, name: string, baseCid: string): any {
+  if (!Array.isArray(manifest?.scene?.nodes)) return { ...manifest, name };
+  return {
+    ...manifest,
+    name,
+    version: (typeof manifest.version === "number" ? manifest.version : 1) + 1,
+    prev_asset_manifest_cid: baseCid,
+    timestamp: Date.now(),
+  };
+}
+
 export async function requestRename(id: string): Promise<void> {
   const item = getItem(id);
   if (!item) return;
@@ -405,8 +423,13 @@ export async function requestRename(id: string): Promise<void> {
       const asset = item as LibraryAssetItem;
       const { getFromRemoteIPFS } = await ipfsOps();
       const { writeJSONToIPFS } = await ipfsWriteOps();
-      const manifest = await getFromRemoteIPFS(asset.manifestCid);
-      const updated = { ...manifest, name };
+      const { getCollectionManifest } = await tokenOps();
+      // Rename the asset as it is now, not as the Library listed it: another
+      // client (a Studio save, `besk attach`) may have written since.
+      const collection: any = await getCollectionManifest(asset.tokenId);
+      const baseCid: string = collection?.assets?.[asset.assetId] ?? asset.manifestCid;
+      const manifest = await getFromRemoteIPFS(baseCid);
+      const updated = renamedVersion(manifest, name, baseCid);
       const newCid = await writeJSONToIPFS(updated, null, {
         type: "asset",
         assetId: asset.assetId,
@@ -414,6 +437,12 @@ export async function requestRename(id: string): Promise<void> {
       await updateCollectionManifest(
         asset.tokenId,
         (col: any) => {
+          // Compare-and-swap: the mutator sees the collection as it is at
+          // write time; an entry that moved since baseCid was read is
+          // another client's newer version, which this rename must not replace.
+          if (col.assets?.[asset.assetId] !== baseCid) {
+            throw new Error("This asset changed since it was read. Try renaming it again.");
+          }
           col.assets = { ...col.assets };
           col.assets[asset.assetId] = newCid;
           return col;

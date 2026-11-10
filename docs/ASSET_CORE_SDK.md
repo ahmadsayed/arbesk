@@ -192,22 +192,36 @@ report progress yet.)
 
 Pure helpers over an asset manifest's `representations` list (format:
 `docs/ARCHITECTURE.md` §4.1), exported from the package root and from
-`@arbesk/asset-core/manifest/representations.js`. None touches IPFS or bumps
-the version: the caller uploads the bytes, then writes the next manifest
-(version + 1, `prev_asset_manifest_cid` → the current one) and the collection.
+`@arbesk/asset-core/manifest/representations.js` (worker-safe: imports only
+the schema) and `@arbesk/asset-core/manifest/representation-codec.js` (the
+encode/decode pair, which pulls fflate and brotli-wasm). None touches IPFS or
+bumps the version: the caller uploads the bytes, then writes the next manifest
+(version + 1, `prev_asset_manifest_cid` → the current one) and the collection,
+replacing the collection entry only if it still names the CID it built from.
 
 | Export | Signature | Notes |
 |--------|-----------|-------|
 | `representationSchema` | zod schema | One entry; passthrough, so a parse keeps fields a newer client added. `manifestSchema` holds the list (≤ 32, unique ids). |
 | `listRepresentations` | `(manifest) → Representation[]` | Valid entries in stored order; an invalid one is left out. |
-| `isStale` | `(manifest, rep) → boolean` | `derived_from.cid` ≠ the current CID of its ref (`primary` = `scene.nodes[0].source.cid`, or another entry). No `derived_from` → never stale; a ref that names nothing → stale. |
-| `currentCidOf` | `(manifest, ref) → string \| null` | The CID `derived_from` should record for `ref` now. |
-| `withRepresentation` | `(manifest, rep) → manifest` | Adds, or replaces by `id`; validates; refuses a 33rd entry. |
+| `isStale` | `(manifest, rep) → boolean` | `derived_from.cid` ≠ the current CID of its ref (`primary` = `scene.nodes[0].source.cid`, or another entry), or, for `primary` with a recorded `transform_matrix`, node 0's placement changed. No `derived_from` → never stale; a ref that names nothing → stale. `primary` is node 0 only: other nodes, child_refs and reordering are not compared, and the Studio's first save of a monolithic generation output (decomposed to a new CID) reads as stale. |
+| `currentCidOf` | `(manifest, ref) → string \| null` | The current CID of `ref`. |
+| `derivedFromOf` | `(manifest, ref) → derived_from \| null` | What a new entry made from `ref` records: the ref, its CID and, for `primary`, node 0's `transform_matrix`. |
+| `hasRoomFor` | `(manifest, id) → boolean` | Below 32 stored entries (counting ones this client cannot parse), or replacing `id`. Check before uploading. |
+| `withRepresentation` | `(manifest, rep) → manifest` | Adds, or replaces every entry with its `id`; validates; refuses a 33rd entry; carries entries it cannot parse unchanged. |
 | `withoutRepresentation` | `(manifest, id) → manifest` | Removes; drops the field when empty; throws on an unknown id. |
-| `encodeRepresentation` | `(bytes, format) → Promise<{ bytes, encoding }>` | Brotli frame for text formats (`encodingFor`), raw otherwise; refuses > 256 MB. Write the result with `compress: false`. |
-| `decodeRepresentation` | `(bytes, rep) → Promise<Uint8Array>` | Follows `rep.encoding` (never sniffs a raw file); read the stored bytes undecompressed (`getRawBytes`). |
+| `encodeRepresentation` (codec) | `(bytes, format) → Promise<{ bytes, encoding }>` | Brotli frame for text formats (`encodingFor`), raw otherwise; refuses > 256 MB. Write the result with `compress: false`. |
+| `decodeRepresentation` (codec) | `(bytes, rep) → Promise<Uint8Array>` | Follows `rep.encoding` (never sniffs a raw file); read the stored bytes undecompressed (`getRawBytes`). |
 | `representationId` | `(role, format, profile?) → string` | Stable slug: `gcode-original-prusa-mk4-petg`; a source file is `source`. |
 | `defaultRole` | `(format) → role` | `blend`/`step` → `source`, `stl`/`obj`/`3mf` → `mesh`, `glb`/`gltf` → `view`, `gcode` → `machine`, else `other`. |
+
+**Older clients drop the field.** Representations are kept by asset-core,
+`besk` and the Studio from the release that added them (this branch,
+`feat/asset-representations`) on. An earlier `besk upload`/generation stores
+a bare composite as the collection entry, an earlier Studio saves its base
+without the chain tip's list, and a client parsing with an earlier
+`manifestSchema` strips the key (zod's default). Nothing is deleted: the
+version before keeps its list in history, and re-attaching from it (or
+`besk download <name> <version> --rep <id>` then `besk attach`) restores it.
 
 ### What editor calls do — and don't do
 

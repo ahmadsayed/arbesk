@@ -30,8 +30,9 @@ export {
   isStale,
   withRepresentation,
   withoutRepresentation,
-  encodeRepresentation,
-  decodeRepresentation,
+  hasRoomFor,
+  derivedFromOf,
+  primaryTransformOf,
   representationId,
   defaultRole,
   encodingFor,
@@ -43,4 +44,6 @@ export type {
   Representation,
   RepresentationRole,
   RepresentationEncoding,
+  DerivedFrom,
 } from "./manifest/representations.ts";
+export { encodeRepresentation, decodeRepresentation } from "./manifest/representation-codec.ts";
