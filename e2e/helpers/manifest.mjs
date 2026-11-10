@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { createPublicClient, http } from "viem";
-import { BACKEND_URL, HARDHAT_RPC, IPFS_GATEWAY } from "../lib/infra.mjs";
+import { BACKEND_URL, HARDHAT_RPC, IPFS_API, IPFS_GATEWAY } from "../lib/infra.mjs";
 
 const IPFS_GATEWAY_URL = `${IPFS_GATEWAY}/ipfs`;
 
@@ -64,6 +64,23 @@ export async function fetchManifest(cid) {
   if (!res.ok)
     throw new Error(`Failed to fetch manifest ${cid}: ${res.status}`);
   return res.json();
+}
+
+/**
+ * Add bytes to the worker's IPFS node directly (Kubo API), the way a client
+ * outside the Studio (e.g. `besk`) writes. Returns the CID.
+ * @param {Uint8Array | string} data
+ * @param {string} [filename]
+ */
+export async function addToIpfs(data, filename = "blob") {
+  const form = new FormData();
+  form.append("file", new Blob([data]), filename);
+  const res = await fetch(`${IPFS_API}/api/v0/add?cid-version=1&pin=true`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error(`IPFS add failed: ${res.status}`);
+  return (await res.json()).Hash;
 }
 
 /**

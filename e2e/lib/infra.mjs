@@ -137,6 +137,7 @@ const CURRENT_WORKER_INDEX = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
 export const BACKEND_URL = portsForWorker(CURRENT_WORKER_INDEX).backendUrl;
 export const HARDHAT_RPC = portsForWorker(CURRENT_WORKER_INDEX).hardhatRpc;
 export const IPFS_GATEWAY = portsForWorker(CURRENT_WORKER_INDEX).ipfsGatewayUrl;
+export const IPFS_API = portsForWorker(CURRENT_WORKER_INDEX).ipfsApiUrl;
 export const NOSTR_URL = portsForWorker(CURRENT_WORKER_INDEX).nostrUrl;
 
 // Shared handoff between global setup and global teardown. Playwright loads the
