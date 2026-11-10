@@ -356,6 +356,51 @@ describe("prepareManifestForWrite", () => {
     ).toBe(false);
   });
 
+  // Representations (spec R3): every save carries the list forward.
+  const REPS = [
+    {
+      id: "gcode-mk4-petg", role: "machine", format: "gcode", name: "a.gcode",
+      cid: "bafyGcode", bytes: 10, encoding: "brotli", created_at: 1,
+      derived_from: { ref: "primary", cid: "bafyCached" },
+    },
+  ];
+
+  it("keeps the representations of the saved version", async () => {
+    const manifest = { ...makeManifest([makeNode({ cid: "bafyCached" })]), representations: REPS };
+    assetStore.set({
+      activeAssetManifestCid: "bafyManifest",
+      currentManifest: { ...manifest, _manifestCid: "bafyManifest" },
+    });
+    ctx.remote.getFromRemoteIPFS.mockResolvedValue(null);
+
+    const result = await ctx.mod.prepareManifestForWrite("Bracket");
+
+    expect(result.manifest.representations).toEqual(REPS);
+    expect(result.manifest.version).toBe(2);
+  });
+
+  it("takes the representations of the chain tip, not of an older save base", async () => {
+    // The user stepped back to v1 (no representations); v3 is the tip, where
+    // besk attached a G-code.
+    const base = makeManifest([makeNode({ cid: "bafyCached" })]);
+    const tip = { ...makeManifest([makeNode({ cid: "bafyCached" })]), version: 3, representations: REPS };
+    assetStore.set({
+      activeAssetManifestCid: "bafyV1",
+      latestAssetManifestCid: "bafyV3",
+      currentManifest: { ...base, _manifestCid: "bafyV1" },
+    });
+    ctx.remote.getFromRemoteIPFS.mockImplementation(async (cid) =>
+      cid === "bafyV3" ? structuredClone(tip) : null,
+    );
+
+    const result = await ctx.mod.prepareManifestForWrite("Bracket");
+
+    expect(result.manifest.version).toBe(4);
+    expect(result.manifest.prev_asset_manifest_cid).toBe("bafyV3");
+    expect(result.manifest.representations).toEqual(REPS);
+    expect(result.manifest.representations).not.toBe(result.prevManifest.representations);
+  });
+
   it("records sent pending generations as version-scoped metadata.chat", async () => {
     const pg = await import("../../frontend/src/js/state/pending-generations.js");
     pg._resetPendingGenerations();

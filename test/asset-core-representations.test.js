@@ -257,3 +257,13 @@ describe("representationId / defaultRole", () => {
     ]);
   });
 });
+
+describe("carry-forward through asset-core's manifest helpers (R3)", () => {
+  test("bumpManifestVersion keeps the representations", async () => {
+    const { bumpManifestVersion } = await import("@arbesk/asset-core/manifest/utils.js");
+    const m = manifest({ representations: [source, gcode] });
+    bumpManifestVersion(m, "bafyPrev");
+    expect(m.version).toBe(4);
+    expect(m.representations).toEqual([source, gcode]);
+  });
+});

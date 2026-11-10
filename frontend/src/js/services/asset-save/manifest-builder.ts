@@ -700,6 +700,21 @@ async function applyPostProcessorEdits(manifest: any, pendingPP: Map<string, any
 }
 
 /**
+ * Carries the chain tip's representations into the next version.
+ * @remarks The Studio never edits representations (besk attaches them), so the
+ *   tip's list is authoritative: the save base can be an older version the
+ *   user stepped back to, or a cached copy from before a `besk attach`. A
+ *   model change keeps them too; they become stale (asset-core `isStale`).
+ */
+function carryRepresentations(manifest: any, tip: any) {
+  if (Array.isArray(tip.representations)) {
+    manifest.representations = JSON.parse(JSON.stringify(tip.representations));
+  } else {
+    delete manifest.representations;
+  }
+}
+
+/**
  * Finalizes versioning and chat provenance.
  */
 function finalizeVersionAndChat(
@@ -715,6 +730,7 @@ function finalizeVersionAndChat(
   if (prevManifest) {
     manifest.version = (prevManifest.version || 0) + 1;
     manifest.prev_asset_manifest_cid = latestCid;
+    carryRepresentations(manifest, prevManifest);
   } else if (latestCid) {
     advanceManifestVersion(manifest, latestCid);
   }
