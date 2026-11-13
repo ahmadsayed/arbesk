@@ -33,6 +33,9 @@ mock.module(
 );
 
 await import("../../frontend/src/js/workers/gltf-worker.js");
+const { decompose: decomposeOnMainThread } = await import(
+  "@arbesk/asset-core/formats/gltf/glb-parser.js"
+);
 
 /** wrapWithTransfer returns a Transfer mock for results with binary entries. */
 function unwrap(result) {
@@ -302,6 +305,101 @@ describe("gltf-worker decomposeGlb", () => {
     );
     expect(images).toEqual([]);
     expect(composite.images[0].uri).toMatch(/^__.+/);
+  });
+
+  describe("embedded images", () => {
+    const GEO_A = [10, 11, 12, 13, 14, 15, 16, 17];
+    const GEO_B = [20, 21, 22, 23];
+
+    /** BIN layout: GEO_A, then a PNG, then GEO_B. */
+    function glbWithImageBetweenGeometry(images) {
+      return buildGlb(
+        {
+          asset: { version: "2.0" },
+          buffers: [{ byteLength: 24 }],
+          bufferViews: [
+            { buffer: 0, byteOffset: 0, byteLength: 8 },
+            { buffer: 0, byteOffset: 8, byteLength: 12 },
+            { buffer: 0, byteOffset: 20, byteLength: 4 },
+          ],
+          accessors: [{ bufferView: 0 }, { bufferView: 2 }],
+          images,
+        },
+        new Uint8Array([...GEO_A, ...PNG_BYTES, ...GEO_B]),
+      );
+    }
+
+    test("removes an extracted image from the buffer it was embedded in", async () => {
+      const { composite, buffers, images } = unwrap(
+        await registered.decomposeGlb({
+          arrayBuffer: glbWithImageBetweenGeometry([{ bufferView: 1 }]),
+        }),
+      );
+
+      expect([...images[0].bytes]).toEqual(PNG_BYTES);
+      expect([...buffers[0].bytes]).toEqual([...GEO_A, ...GEO_B]);
+      expect(composite.buffers[0].byteLength).toBe(12);
+      expect(composite.bufferViews).toEqual([
+        { buffer: 0, byteOffset: 0, byteLength: 8 },
+        { buffer: 0, byteOffset: 8, byteLength: 4 },
+      ]);
+      expect(composite.accessors).toEqual([{ bufferView: 0 }, { bufferView: 1 }]);
+      expect(composite.images[0]).toEqual({
+        uri: "__worker_image_0__",
+        mimeType: "image/png",
+      });
+    });
+
+    test("keeps the image bytes in the buffer when an accessor reads the same bufferView", async () => {
+      const glb = buildGlb(
+        {
+          asset: { version: "2.0" },
+          buffers: [{ byteLength: 12 }],
+          bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+          accessors: [{ bufferView: 0 }],
+          images: [{ bufferView: 0 }],
+        },
+        new Uint8Array(PNG_BYTES),
+      );
+
+      const { composite, buffers, images } = unwrap(
+        await registered.decomposeGlb({ arrayBuffer: glb }),
+      );
+
+      expect([...images[0].bytes]).toEqual(PNG_BYTES);
+      expect([...buffers[0].bytes]).toEqual(PNG_BYTES);
+      expect(composite.bufferViews).toHaveLength(1);
+      expect(composite.accessors).toEqual([{ bufferView: 0 }]);
+    });
+
+    test("stores the same geometry buffer as the main-thread parser for a textured model", async () => {
+      const file = readFileSync("mock-gltf-assets/howdy.glb");
+      const arrayBuffer = () =>
+        file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+
+      const written = new Map();
+      const { composite: parsed } = await decomposeOnMainThread(
+        arrayBuffer(),
+        async (bytes, filename) => {
+          written.set(filename, bytes);
+          return `cid-${written.size}`;
+        },
+        { assetName: "howdy", storeComposite: false },
+      );
+      const { composite, buffers, images } = unwrap(
+        await registered.decomposeGlb({ arrayBuffer: arrayBuffer() }),
+      );
+
+      const imageBytes = images.reduce((sum, img) => sum + img.bytes.length, 0);
+      expect(imageBytes).toBeGreaterThan(1_000_000);
+      expect(buffers).toHaveLength(1);
+      expect(buffers[0].bytes.length).toBeLessThan(file.length - imageBytes);
+      expect(Buffer.from(buffers[0].bytes).equals(Buffer.from(written.get("howdy_buffer_0.bin")))).toBe(true);
+      expect(composite.bufferViews).toEqual(parsed.bufferViews);
+      expect(composite.accessors).toEqual(parsed.accessors);
+      expect(composite.buffers[0].byteLength).toBe(parsed.buffers[0].byteLength);
+      expect(composite.images.some((img) => "bufferView" in img)).toBe(false);
+    });
   });
 
   test("throws when a buffer has no uri and the GLB carries no BIN chunk", async () => {
