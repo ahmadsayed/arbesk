@@ -86,7 +86,7 @@ The Kubo HTTP API's `/api/v0/add` endpoint has a `pin` query parameter that **de
 
 ### `ipfs.pin.rm()` unpins
 
-Content becomes **eligible for garbage collection** after unpinning. GC does not run immediately — it triggers when the node's storage usage exceeds the GC watermark (default: 90% of `StorageMax`).
+Content becomes **eligible for garbage collection** after unpinning. GC does not run immediately — the daemon runs with `--enable-gc` (`docker/entrypoint.sh`), which checks periodically and collects once the node's storage usage exceeds the GC watermark (default: 90% of `StorageMax`). Without that flag Kubo never collects on its own.
 
 ### GC Watermark
 

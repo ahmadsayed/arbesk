@@ -26,6 +26,14 @@ try {
   // blockchain/.env is optional outside the contracts workflow
 }
 
+// `arbesk-server gc [options]` runs the IPFS garbage collector and exits
+// instead of serving: the production image ships only this binary, and the
+// k3s CronJob (deploy/k8s/gc.yaml) runs it there.
+if (process.argv[2] === "gc") {
+  const { runGcCli } = await import("./api/ipfs-gc-cli.ts");
+  process.exit(await runGcCli(process.argv.slice(3)));
+}
+
 // Now safe to import - config.ts reads from process.env which is populated
 const { default: api } = await import("./api/index.ts");
 const { createChatProxy } = await import("./api/chat-proxy.ts");

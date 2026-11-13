@@ -1,0 +1,67 @@
+# Daily IPFS garbage collection: unpins content no live asset can reach any
+# more (deleted assets, burned collections). Nothing else prunes it - deleting
+# an asset unpins nothing, because a fork may share its history.
+# Runs the app image's own binary (`arbesk-server gc`): same code, same .env,
+# same contract ABIs as the app.
+# A CID is unpinned only once it has stayed unreachable for the grace period
+# (IPFS_GC_GRACE_HOURS, default 7 days), measured between runs: the first run
+# only records what it saw. That record is .data/ipfs-gc-state.json on the
+# arbesk-data volume, so the volume is mounted read-write.
+# A run that hits any error (RPC failure, unreadable manifest) unpins nothing
+# and the job fails; the next day's run tries again.
+# Single-node cluster: the job lands on the same node as the app pod, so the
+# ReadWriteOnce volume can be mounted alongside it.
+#
+# The pod carries no `app: arbesk` label on purpose: the Service selects on
+# it and would route traffic here.
+#
+# The image tag is stamped by `bun run deploy:k3s`, like deployment.yaml. Do
+# not apply this with an image older than the `gc` subcommand: such a binary
+# ignores the argument and starts a second server on the data volume.
+#
+# Run it now:   kubectl create job --from=cronjob/arbesk-ipfs-gc gc-manual
+# Last result:  kubectl logs job/<name>   (ends with the JSON summary)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arbesk-ipfs-gc
+  labels: { app: arbesk }
+spec:
+  schedule: "43 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: gc
+              image: ahmadsayed/arbesk:REPLACE_TAG
+              imagePullPolicy: IfNotPresent
+              command: ["./arbesk-server", "gc", "--live"]
+              env:
+                - name: ARBESK_ROOT
+                  value: /app
+                - name: NODE_ENV
+                  value: production
+              volumeMounts:
+                - name: env
+                  mountPath: /app/.env
+                  subPath: .env
+                  readOnly: true
+                - name: data
+                  mountPath: /app/.data
+          volumes:
+            - name: env
+              secret:
+                secretName: arbesk-env
+                items:
+                  - key: .env
+                    path: .env
+            - name: data
+              persistentVolumeClaim:
+                claimName: arbesk-data

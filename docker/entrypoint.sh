@@ -45,4 +45,7 @@ ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["*"]'
 ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["PUT","POST","GET"]'
 ipfs config --json Gateway.HTTPHeaders.Access-Control-Allow-Origin '["*"]'
 
-exec ipfs daemon --migrate=true
+# --enable-gc: without it Kubo never deletes unpinned blocks on its own. With
+# it, a periodic check frees them once the repo passes the GC watermark (90%
+# of Datastore.StorageMax).
+exec ipfs daemon --migrate=true --enable-gc
