@@ -117,6 +117,7 @@ describe("runIpfsGC", () => {
         graceMs: 0,
         statePath,
         indexerStatePath: path.join(path.dirname(statePath), "no-indexer-state.json"),
+        refCachePath: path.join(path.dirname(statePath), "ref-cache.json"),
         ...opts,
       },
       storage,
@@ -246,6 +247,103 @@ describe("runIpfsGC", () => {
     expect(pinned.size).toBe(0);
     expect(maxInFlight).toBeGreaterThan(1);
     expect(maxInFlight).toBeLessThanOrEqual(5);
+  });
+
+  describe("source reference cache", () => {
+    function liveTokenWithSource(sourceBody) {
+      putManifest("bafyLive", {
+        version: 1,
+        scene: { nodes: [{ node_id: "n", source: { cid: "bafySrc" } }] },
+      });
+      blobs.set("bafySrc", sourceBody);
+      pinned.add("bafySrc");
+      pinned.add("bafyBuf");
+      chain[FREE]["1"] = { uri: "bafyLive" };
+    }
+    const sourceReads = () => storage.catBytes.mock.calls.filter(([cid]) => cid === "bafySrc").length;
+    const gltfSource = JSON.stringify({ buffers: [{ uri: "ipfs://bafyBuf" }] });
+
+    it("reads a source once, then reuses the CIDs it references", async () => {
+      liveTokenWithSource(gltfSource);
+
+      await gc();
+      const second = await gc();
+
+      expect(sourceReads()).toBe(1);
+      expect(second.errors).toEqual([]);
+      expect(second.unpinned).toBe(0);
+      expect(pinned.has("bafyBuf")).toBe(true);
+    });
+
+    it("remembers that a binary source references nothing", async () => {
+      liveTokenWithSource("glTF\u0002binary mesh");
+
+      await gc();
+      await gc();
+
+      expect(sourceReads()).toBe(1);
+    });
+
+    it("reads a source again when its earlier read failed", async () => {
+      liveTokenWithSource(gltfSource);
+      blobs.delete("bafySrc");
+      const first = await gc();
+      blobs.set("bafySrc", gltfSource);
+
+      const second = await gc();
+
+      expect(first.aborted).toBe(true);
+      expect(second.errors).toEqual([]);
+      expect(sourceReads()).toBe(2);
+      expect(pinned.has("bafyBuf")).toBe(true);
+    });
+
+    describe("with a storage that can read a file's first bytes", () => {
+      beforeEach(() => {
+        storage.catHead = jest.fn(async (cid, length) =>
+          Buffer.from(blobs.get(cid), "utf-8").subarray(0, length),
+        );
+      });
+
+      it("does not download a source whose first bytes are binary", async () => {
+        liveTokenWithSource("glTF\u0002\u0000\u0000\u0000binary mesh");
+
+        const result = await gc();
+
+        expect(sourceReads()).toBe(0);
+        expect(result.errors).toEqual([]);
+        expect(pinned.has("bafySrc")).toBe(true);
+      });
+
+      it("downloads a JSON source in full", async () => {
+        liveTokenWithSource(gltfSource);
+
+        await gc();
+
+        expect(sourceReads()).toBe(1);
+        expect(pinned.has("bafyBuf")).toBe(true);
+      });
+
+      it("downloads the source in full when its first bytes cannot be read", async () => {
+        liveTokenWithSource(gltfSource);
+        storage.catHead.mockRejectedValue(new Error("gateway 502"));
+
+        const result = await gc();
+
+        expect(result.errors).toEqual([]);
+        expect(sourceReads()).toBe(1);
+        expect(pinned.has("bafyBuf")).toBe(true);
+      });
+    });
+
+    it("dry runs do not write the cache", async () => {
+      liveTokenWithSource(gltfSource);
+
+      await gc({ dryRun: true });
+      await gc({ dryRun: true });
+
+      expect(sourceReads()).toBe(2);
+    });
   });
 
   it("keeps reference images of live tokens", async () => {

@@ -18,6 +18,7 @@ import { isGetLogsRangeRejection, narrowGetLogsChunk } from "./get-logs-range.ts
 import { PROJECT_ROOT } from "./project-root.ts";
 import type { PinnedFile, StorageAdapter } from "./storage/index.ts";
 import { walkManifestChain } from "./manifest-chain-walker.ts";
+import { loadRefCache, type GCRefCache } from "./ipfs-gc-ref-cache.ts";
 import {
   BaseError,
   ContractFunctionRevertedError,
@@ -38,6 +39,7 @@ const HOUR_MS = 3600000;
 const DEFAULT_GRACE_HOURS = 168;
 const DATA_DIR = path.resolve(PROJECT_ROOT, ".data");
 const DEFAULT_STATE_PATH = path.join(DATA_DIR, "ipfs-gc-state.json");
+const DEFAULT_REF_CACHE_PATH = path.join(DATA_DIR, "ipfs-gc-ref-cache.json");
 
 /**
  * Persisted orphan first-seen times, per scan scope.
@@ -63,6 +65,19 @@ function saveGCState(file: string, state: GCState): void {
   const tmp = file + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
   fs.renameSync(tmp, file);
+}
+
+/**
+ * Saves what this run learned about sources.
+ * @remarks Losing the cache only costs re-reading sources next run, so a
+ *   failed save is a warning, not a GC error.
+ */
+function saveRefCache(cache: GCRefCache, reachable: Set<string>): void {
+  try {
+    cache.save(reachable);
+  } catch (e) {
+    console.warn(`[GC] source ref cache not saved: ${(e as Error).message}`);
+  }
 }
 
 function resolveGraceMs(graceMs: number | undefined): number {
@@ -329,6 +344,13 @@ function countingReads(storage: StorageAdapter) {
         if (count % WALK_HEARTBEAT_READS === 0) console.log(`[GC] walking ${label} | ${summary()}`);
         return data;
       },
+      ...(storage.catHead && {
+        async catHead(cid: string, length: number) {
+          const head = await storage.catHead!(cid, length);
+          bytes += head.length;
+          return head;
+        },
+      }),
     } as StorageAdapter,
     /** Starts counting afresh for the token named `next`. */
     reset(next: string) {
@@ -344,6 +366,7 @@ function countingReads(storage: StorageAdapter) {
 async function buildReachableSet(
   liveByContract: { entry: GCContractEntry; tokenIds: string[] }[],
   storage: StorageAdapter,
+  sourceRefCache: GCRefCache,
 ): Promise<{ reachable: Set<string>; errors: string[]; tokensProcessed: number }> {
   const reachable = new Set<string>();
   const errors: string[] = [];
@@ -381,6 +404,7 @@ async function buildReachableSet(
             recurseIntoSources: true,
             recurseIntoCollectionAssets: true,
             maxDepth: GC_MAX_CHAIN_DEPTH,
+            sourceRefCache,
           },
           reads.storage,
         );
@@ -439,6 +463,8 @@ export interface IpfsGCOptions {
   graceMs?: number;
   /** Orphan first-seen state file (default: .data/ipfs-gc-state.json). */
   statePath?: string;
+  /** Source reference cache file (default: .data/ipfs-gc-ref-cache.json). */
+  refCachePath?: string;
   /** Token indexer state file to seed the mint scan from (default:
    * .data/token-indexer-<chain id>.json). */
   indexerStatePath?: string;
@@ -708,15 +734,19 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
   );
 
   // 2. Build reachable CID set.
+  const refCache = loadRefCache(options.refCachePath ?? DEFAULT_REF_CACHE_PATH);
   const { reachable, errors: walkErrors, tokensProcessed } = await buildReachableSet(
     liveByContract,
     storage,
+    refCache,
   );
   if (walkErrors?.length) errors.push(...walkErrors);
 
   console.log(
-    `[GC] reachable set built | tokens=${tokensProcessed} cids=${reachable.size}`,
+    `[GC] reachable set built | tokens=${tokensProcessed} cids=${reachable.size} ` +
+      `| sources: ${refCache.hits} cached, ${refCache.learned} read`,
   );
+  if (!dryRun) saveRefCache(refCache, reachable);
 
   // 3. List currently pinned CIDs.
   let pinned: PinnedFile[] = [];

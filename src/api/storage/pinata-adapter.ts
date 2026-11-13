@@ -116,6 +116,22 @@ function collectPinnedPage(
   }
 }
 
+/** Reads at most `length` bytes of a response body, then cancels the rest. */
+async function readPrefix(res: Response, length: number): Promise<Buffer> {
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (size < length) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.length;
+  }
+  await reader.cancel();
+  return Buffer.concat(chunks).subarray(0, length);
+}
+
 /** One DELETE request for a Pinata file id, on the SDK's endpoint and JWT. */
 function sendPinataDelete(pinata: PinataSDK, id: string): Promise<Response> {
   const endpoint = pinata.config?.endpointUrl || "https://api.pinata.cloud/v3";
@@ -315,6 +331,21 @@ export function createPinataAdapter(
      * @remarks Uses the file ids the last `listPinned` saw for `cid`, else
      *   looks them up (one extra request).
      */
+    /**
+     * @remarks A Range request to the public gateway; reading stops at
+     *   `length` bytes even when the gateway ignores Range and sends it all.
+     */
+    async catHead(cid, length) {
+      const res = await fetch(`${gatewayBase}${cid}`, {
+        headers: { Range: `bytes=0-${length - 1}` },
+      });
+      if (!res.ok) {
+        await res.body?.cancel();
+        throw new Error(`gateway ${res.status} for ${cid}`);
+      }
+      return readPrefix(res, length);
+    },
+
     async unpin(cid) {
       let ids = fileIdsByCid.get(cid);
       if (!ids) {

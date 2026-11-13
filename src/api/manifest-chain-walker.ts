@@ -12,14 +12,55 @@
 import type { StorageAdapter } from "./storage/index.ts";
 import { maybeDecompress, extractIpfsCids } from "./ipfs-utils.ts";
 import { getSceneNodes, validateManifest } from "./manifest-utils.ts";
+import { sniffSourceKind } from "./source-sniff.ts";
+
+/** Bytes fetched to tell a binary source from a JSON one. */
+const SOURCE_SNIFF_BYTES = 1024;
+
+/**
+ * What earlier walks learned about source files: CID → the IPFS CIDs it
+ * references (empty for a binary GLB/3MF/image).
+ * @remarks Content-addressed, so an entry never goes stale. Lets a walk skip
+ *   downloading a source it has already read - the bulk of the bytes, since
+ *   binary sources are read only to find they hold no references.
+ */
+export interface SourceRefCache {
+  get(cid: string): string[] | undefined;
+  set(cid: string, refs: string[]): void;
+}
+
+/**
+ * True only when the source's first bytes show a binary (GLB, 3MF zip),
+ * which references no other CIDs, so the rest need not be downloaded.
+ * @remarks Any doubt - no catHead, a failed fetch, unrecognised bytes -
+ *   answers false, and the caller reads the source in full as before.
+ */
+async function isBinarySource(cid: string, storage: StorageAdapter): Promise<boolean> {
+  if (!storage.catHead) return false;
+  try {
+    return sniffSourceKind(await storage.catHead(cid, SOURCE_SNIFF_BYTES)) === "binary";
+  } catch {
+    return false;
+  }
+}
 
 async function collectEmbeddedIpfsCids(
   cid: string,
   cids: Set<string>,
   errors: string[],
   storage: StorageAdapter,
+  cache?: SourceRefCache,
 ): Promise<void> {
   if (!cid || cids.has(`__json_failed_${cid}`)) return;
+  const cached = cache?.get(cid);
+  if (cached) {
+    for (const ref of cached) cids.add(ref);
+    return;
+  }
+  if (await isBinarySource(cid, storage)) {
+    cache?.set(cid, []);
+    return;
+  }
   let text: string;
   try {
     text = await maybeDecompress(await storage.catBytes(cid));
@@ -34,9 +75,13 @@ async function collectEmbeddedIpfsCids(
     json = JSON.parse(text);
   } catch {
     // Not JSON (binary GLB, 3MF, image) - no embedded refs to collect.
+    cache?.set(cid, []);
     return;
   }
-  extractIpfsCids(json, cids);
+  const refs = new Set<string>();
+  extractIpfsCids(json, refs);
+  cache?.set(cid, [...refs]);
+  for (const ref of refs) cids.add(ref);
 }
 
 export interface WalkOptions {
@@ -52,6 +97,9 @@ export interface WalkOptions {
   /** Maximum manifests to walk per chain (each collection asset's chain
    * gets its own budget). Hitting it records an error. */
   maxDepth?: number;
+  /** With recurseIntoSources: source refs already known, consulted before
+   * downloading a source and filled with each one read. */
+  sourceRefCache?: SourceRefCache;
 }
 
 export interface WalkResult {
@@ -74,6 +122,7 @@ export async function walkManifestChain(
     recurseIntoSources = false,
     recurseIntoCollectionAssets = false,
     maxDepth = 100,
+    sourceRefCache,
   } = options;
 
   const visited = new Set<string>();
@@ -86,6 +135,7 @@ export async function walkManifestChain(
     recurseIntoSources,
     recurseIntoCollectionAssets,
     maxDepth,
+    sourceRefCache,
     visited,
     assetUnique,
     shared,
@@ -100,6 +150,7 @@ interface WalkContext {
   recurseIntoSources: boolean;
   recurseIntoCollectionAssets: boolean;
   maxDepth: number;
+  sourceRefCache?: SourceRefCache;
   visited: Set<string>;
   assetUnique: Set<string>;
   shared: Set<string>;
@@ -208,6 +259,7 @@ async function addNodeSource(
         ctx.allReachable,
         ctx.errors,
         storage,
+        ctx.sourceRefCache,
       );
     }
   }

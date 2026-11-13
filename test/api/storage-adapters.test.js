@@ -261,6 +261,46 @@ describe("pinata adapter", () => {
     expect(JSON.stringify(creds)).not.toMatch(/jwt|JWT|Bearer/);
   });
 
+  describe("catHead()", () => {
+    let fetchSpy;
+
+    beforeEach(() => {
+      fetchSpy = spyOn(globalThis, "fetch");
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    function adapter() {
+      return createPinataAdapter(fakePinata(), { gatewayBase: "https://gw.mypinata.cloud/ipfs/", uploadTtl: 60 });
+    }
+
+    it("asks the gateway for the first bytes only", async () => {
+      fetchSpy.mockImplementationOnce(async () => new Response("glTF", { status: 206 }));
+
+      const head = await adapter().catHead("bafyX", 1024);
+
+      expect(head.toString()).toBe("glTF");
+      expect(String(fetchSpy.mock.calls[0][0])).toBe("https://gw.mypinata.cloud/ipfs/bafyX");
+      expect(fetchSpy.mock.calls[0][1].headers.Range).toBe("bytes=0-1023");
+    });
+
+    it("stops reading at the limit when the gateway ignores Range", async () => {
+      fetchSpy.mockImplementationOnce(async () => new Response("x".repeat(100000), { status: 200 }));
+
+      const head = await adapter().catHead("bafyX", 1024);
+
+      expect(head.length).toBe(1024);
+    });
+
+    it("throws when the gateway refuses", async () => {
+      fetchSpy.mockImplementationOnce(async () => new Response("nope", { status: 403 }));
+
+      await expect(adapter().catHead("bafyX", 1024)).rejects.toThrow(/403/);
+    });
+  });
+
   describe("unpin() deletes", () => {
     let fetchSpy;
     const deleteUrls = () =>
