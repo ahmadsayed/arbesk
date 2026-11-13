@@ -33,6 +33,12 @@ metadata:
   labels: { app: arbesk }
 spec:
   schedule: "43 4 * * *"
+  # Paused 2026-11-13: unpublished Studio drafts are pinned but referenced
+  # only client-side, so the GC unpins them once IPFS_GC_GRACE_HOURS passes.
+  # Resume (false) once draft manifest CIDs are recorded where the GC can
+  # see them. `kubectl create job --from=cronjob/arbesk-ipfs-gc` still runs
+  # it by hand.
+  suspend: true
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
