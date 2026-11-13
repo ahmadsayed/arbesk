@@ -228,8 +228,12 @@ async function deployToStack(composeProject, writesSharedFiles) {
 
   // The deploy runs inside the container, so it targets the container's own
   // Hardhat node on port 8545 regardless of the host port mapping.
+  // --no-compile: globalSetup already compiled in every stack. Without it
+  // `hardhat run` recompiles first, and the concurrent deploys rewrite the
+  // shared blockchain/artifacts while the others read it
+  // ("OwnableUpgradeable.dbg.json: Unexpected end of JSON input").
   await run(
-    `docker compose -p "${composeProject}" exec -T ${envFlags}hardhat npx hardhat run scripts/deploy.js --network localhost`,
+    `docker compose -p "${composeProject}" exec -T ${envFlags}hardhat npx hardhat run --no-compile scripts/deploy.js --network localhost`,
   );
 }
 
@@ -384,13 +388,20 @@ export default async function globalSetup() {
   );
   log("All Docker stacks ready");
 
-  // Step 2: compile once. blockchain/artifacts is host-mounted and shared
-  // across all Hardhat containers.
+  // Step 2: compile in every stack, one stack at a time, before any deploy.
+  // blockchain/artifacts is host-mounted and shared, but each stack's
+  // compiler cache is its own volume, and the OpenZeppelin upgrades plugin
+  // reads its validations (cache/validations.json) from there - so every
+  // stack must compile. Doing it serially, and deploying with --no-compile
+  // afterwards, keeps any stack from rewriting artifacts/ while another reads
+  // it. A compile takes ~3 s.
   const ports0 = portsForWorker(0);
-  log("Compiling contracts once (shared artifacts)...");
-  await run(
-    `docker compose -p "${ports0.composeProject}" exec -T hardhat npx hardhat compile`,
-  );
+  for (let i = 0; i < E2E_WORKERS; i++) {
+    log(`Compiling contracts for worker ${i}...`);
+    await run(
+      `docker compose -p "${portsForWorker(i).composeProject}" exec -T hardhat npx hardhat compile`,
+    );
+  }
   log("Contracts compiled");
 
   const deployWorker = async (i) => {
