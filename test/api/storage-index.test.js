@@ -25,6 +25,18 @@ describe("createStorageAdapter (pinata)", () => {
     expect(poolSizeFor()).toBe(20);
   });
 
+  it("defaults leave pooled upload URLs time to be served", () => {
+    process.env.IPFS_BACKEND = "pinata";
+    process.env.PINATA_GATEWAY = "example.mypinata.cloud";
+    delete process.env.PINATA_UPLOAD_TTL;
+    delete process.env.PINATA_POOL_EXPIRY_MARGIN;
+    createStorageAdapter();
+    const { uploadTtl, poolExpiryMarginSeconds } = createPinataAdapter.mock.calls[0][1];
+    // A URL is discarded once older than uploadTtl - margin: that window
+    // must be real, not zero (k3s ran 60/60 and re-minted every URL).
+    expect(uploadTtl - poolExpiryMarginSeconds).toBeGreaterThanOrEqual(120);
+  });
+
   it("turns the upload pool off for read-only callers", () => {
     expect(poolSizeFor({ uploadPool: false })).toBe(0);
   });

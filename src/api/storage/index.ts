@@ -51,7 +51,9 @@ export function createStorageAdapter({
     });
     const adapter = createPinataAdapter(pinata, {
       gatewayBase: `https://${gateway}/ipfs/`,
-      uploadTtl: Number(process.env.PINATA_UPLOAD_TTL || 60),
+      // Must exceed PINATA_POOL_EXPIRY_MARGIN: a pooled URL is served only
+      // until uploadTtl - margin, so 60/60 discarded every URL as minted.
+      uploadTtl: Number(process.env.PINATA_UPLOAD_TTL || 300),
       poolSize: uploadPool ? Number(process.env.PINATA_POOL_SIZE || 20) : 0,
       poolExpiryMarginSeconds: Number(process.env.PINATA_POOL_EXPIRY_MARGIN || 60),
     });

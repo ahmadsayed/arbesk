@@ -214,7 +214,8 @@ sub-millisecond, verified live (0-5ms per pop against the real account).
 
 - **Config**: `PINATA_POOL_SIZE` (default 20, 0 disables pooling entirely -
   falls back to minting on demand, byte-for-byte the pre-pool behavior) and
-  `PINATA_POOL_EXPIRY_MARGIN` (default 60s) via `storage/index.ts`. A pooled
+  `PINATA_POOL_EXPIRY_MARGIN` (default 60s) via `storage/index.ts`, with
+  `PINATA_UPLOAD_TTL` defaulting to 300s (a 4-minute serving window). A pooled
   entry is discarded once `Date.now() - mintedAt > uploadTtl - margin` -
   don't hand the browser a URL that might expire mid-upload.
   **`PINATA_UPLOAD_TTL` must comfortably exceed the margin** or pooling does
