@@ -118,7 +118,13 @@ with **brotli** (via `brotli-wasm`, lazy singleton init) framed with a
 self-describing `ARB\x01` magic (`BROTLI_MAGIC`); `compress: "gzip"` forces the
 legacy fflate gzip, `false` stores raw. Reads (`decompressAuto`) sniff frame →
 gzip magic → raw passthrough, so all historical CIDs stay readable. Tiered
-quality: q11 for JSON/manifests, q5 for binary buffers. Environment notes:
+quality: q11 for JSON/manifests, q5 for binary buffers. **Textures in an
+already-compressed format (PNG, JPEG, WebP, GIF) are stored raw**
+(`isPrecompressedImage` in `formats/gltf/image-mime.ts`): brotli saves nothing
+on them. KTX2 and unrecognized images are still compressed. Readers must
+decide from the stored bytes, never from `_arbesk.compressed`: older textures
+are compressed, and a dedup hit can point new metadata at one of them.
+Environment notes:
 plain Node (the E2E harness) uses the package's CJS build via
 createRequire — its ESM web entry fetches the .wasm over file://, which Node
 rejects; the dev backend runs under Bun and takes the ESM branch; the browser bundles get the web build

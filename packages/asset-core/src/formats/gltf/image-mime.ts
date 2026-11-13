@@ -35,6 +35,22 @@ export function detectImageMimeType(bytes: Uint8Array): string | null {
   return null;
 }
 
+/** Formats whose pixel data is already compressed (KTX2 may not be). */
+const PRECOMPRESSED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+/**
+ * Reports whether the bytes are an image in an already-compressed format.
+ * @remarks Brotli saves nothing on these, so they are stored as they are:
+ *   no CPU spent on either side, and the stored file is a plain image.
+ *   Decided from the bytes, not a declared MIME type, so a mislabeled
+ *   payload is still compressed. Stored payloads are read by sniffing their
+ *   own bytes, so older compressed textures keep working.
+ */
+export function isPrecompressedImage(bytes: Uint8Array): boolean {
+  const mime = detectImageMimeType(bytes);
+  return mime !== null && PRECOMPRESSED_IMAGE_TYPES.has(mime);
+}
+
 /**
  * Get file extension from a MIME type.
  */

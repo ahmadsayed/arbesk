@@ -28,7 +28,7 @@ import {
   composeGltfJson,
   decomposeGltfJson,
 } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
-import { extFromMimeType } from "@arbesk/asset-core/formats/gltf/image-mime.js";
+import { extFromMimeType, isPrecompressedImage } from "@arbesk/asset-core/formats/gltf/image-mime.js";
 import { resolveGlbImageBytes } from "@arbesk/asset-core/formats/gltf/glb-image-resolve.js";
 import { imageRemovalFor, pruneBufferImageData } from "@arbesk/asset-core/formats/gltf/glb-image-prune.js";
 import type { ImageRemoval } from "@arbesk/asset-core/formats/gltf/glb-image-prune.js";
@@ -471,6 +471,63 @@ function rewritePlaceholderTargets(
   }
 }
 
+/** One extracted item queued for upload. */
+interface PendingUpload {
+  /** Stored filename; carries `.br` when the payload is brotli-compressed. */
+  name: string;
+  bytes: Uint8Array;
+  compressed: boolean;
+  placeholder: string;
+  meta: object;
+}
+
+/**
+ * Decides what to upload: hashes each item, points dedup hits at their
+ * existing CID, and queues the rest.
+ * @remarks `areImages` lets already-compressed image formats (PNG, JPEG,
+ *   WebP, GIF) be stored as they are: brotli saves nothing on them.
+ */
+function planUploads(
+  items: ExtractedImageEntry[],
+  targets: any,
+  dedupMap: Map<string, string> | null,
+  makePlaceholder: (i: number) => string,
+  areImages: boolean
+): PendingUpload[] {
+  const uploads: PendingUpload[] = [];
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    if (item.skip || !item.bytes) continue;
+
+    const compressed = !(areImages && isPrecompressedImage(item.bytes));
+    // Hash over the RAW bytes so the dedup/content-cache key matches the
+    // main-thread path regardless of which compressor produced the stored
+    // bytes (see packages/asset-core/src/gltf/dedup.ts).
+    const meta = {
+      hash: hashBytes(item.bytes),
+      hashAlgo: HASH_ALGORITHM,
+      compressed,
+      bytes: item.bytes.length,
+    };
+    const placeholder = makePlaceholder(idx);
+
+    const existingCid = dedupMap?.get(meta.hash);
+    if (existingCid) {
+      rewritePlaceholderTargets(targets, placeholder, existingCid, meta);
+      continue;
+    }
+
+    uploads.push({
+      name: compressed ? `${item.name}.br` : item.name,
+      bytes: item.bytes,
+      compressed,
+      placeholder,
+      meta,
+    });
+  }
+  return uploads;
+}
+
 /**
  * Uploads a list of extracted items and rewrites the matching placeholder
  * URIs in the composite target arrays.
@@ -480,58 +537,24 @@ async function uploadExtractedItems(
   targets: any,
   credential: UploadCredential,
   dedupMap: Map<string, string> | null,
-  makePlaceholder: (i: number) => string
+  makePlaceholder: (i: number) => string,
+  areImages: boolean
 ): Promise<void> {
-  const uploads: Array<{
-    name: string;
-    bytes: Uint8Array;
-    placeholder: string;
-    meta: object;
-  }> = [];
-
-  for (let idx = 0; idx < items.length; idx++) {
-    const item = items[idx];
-    if (item.skip || !item.bytes) continue;
-
-    // Hash over the RAW bytes so the dedup/content-cache key matches the
-    // main-thread path regardless of which compressor produced the stored
-    // bytes (see packages/asset-core/src/gltf/dedup.ts).
-    const meta = {
-      hash: hashBytes(item.bytes),
-      hashAlgo: HASH_ALGORITHM,
-      compressed: true,
-      bytes: item.bytes.length,
-    };
-    const placeholder = makePlaceholder(idx);
-
-    if (dedupMap?.has(meta.hash)) {
-      const cid = dedupMap.get(meta.hash) as string;
-      rewritePlaceholderTargets(targets, placeholder, cid, meta);
-      continue;
-    }
-
-    uploads.push({
-      name: item.name,
-      bytes: item.bytes,
-      placeholder,
-      meta,
-    });
-  }
-
+  const uploads = planUploads(items, targets, dedupMap, makePlaceholder, areImages);
   if (uploads.length === 0) return;
 
-  // Brotli-compress each component before upload. Keyed by the compressed
-  // filename so the batch response lines map back to the right placeholder.
+  // Keyed by the stored filename so the batch response lines map back to the
+  // right placeholder.
   const files = await Promise.all(
     uploads.map(async (u) => ({
-      name: `${u.name}.br`,
-      data: await compressBrotli(u.bytes),
+      name: u.name,
+      data: u.compressed ? await compressBrotli(u.bytes) : u.bytes,
     }))
   );
   const cidMap = await uploadBatchToIPFSWithCredential(files, credential);
 
   for (const u of uploads) {
-    const cid = cidMap.get(`${u.name}.br`);
+    const cid = cidMap.get(u.name);
     if (!cid) {
       throw new Error(`Worker upload missing CID for ${u.name}`);
     }
@@ -553,14 +576,16 @@ async function uploadBuffersAndImages(
       composite.buffers,
       credential,
       dedupMap,
-      WORKER_BUFFER_PLACEHOLDER
+      WORKER_BUFFER_PLACEHOLDER,
+      false
     ),
     uploadExtractedItems(
       images,
       composite.images,
       credential,
       dedupMap,
-      WORKER_IMAGE_PLACEHOLDER
+      WORKER_IMAGE_PLACEHOLDER,
+      true
     ),
   ]);
 }

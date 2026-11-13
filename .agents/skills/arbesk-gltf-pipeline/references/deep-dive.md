@@ -97,6 +97,7 @@ Composite glTF JSON (stored as CID_A)
 - **Not split** — a document with a bufferView extension (`EXT_meshopt_compression`), an unreferenced bufferView, or an accessor that cannot be measured keeps its buffers as they are.
 - **Embedded images** are removed from the buffer first (`glb-image-prune.ts`), together with the 1-3 padding bytes after each, so the geometry bytes do not depend on texture sizes.
 - **Older composites** have a single buffer and still load: compose resolves any number of buffers.
+- **Textures are stored uncompressed** when their format already is (PNG, JPEG, WebP, GIF); buffers and the composite JSON stay brotli-framed. Textures saved earlier are compressed and still load, because every reader sniffs the stored bytes.
 
 ---
 

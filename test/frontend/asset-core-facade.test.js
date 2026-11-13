@@ -43,6 +43,32 @@ test("upload(GLB) → download round-trips through memory IPFS", async () => {
   expect(blob.size).toBeGreaterThan(0);
 });
 
+test("upload stores JPEG textures as they are and compresses geometry buffers", async () => {
+  const mem = createMemoryIpfs();
+  const core = createArbeskCore({ ipfsRead: mem.read, ipfsWrite: mem.write });
+  const { rootCid } = await core.upload(new Uint8Array(readFileSync("mock-gltf-assets/howdy.glb")));
+
+  const composite = await core.getManifest(rootCid);
+  const stored = mem.dump();
+  const storedBytes = (entry) => stored.get(entry.uri.slice("ipfs://".length));
+
+  expect(composite.images).toHaveLength(2);
+  for (const image of composite.images) {
+    const bytes = storedBytes(image);
+    expect([...bytes.slice(0, 3)]).toEqual([0xff, 0xd8, 0xff]); // JPEG magic
+    expect(bytes.length).toBe(image._arbesk.bytes);
+    expect(image._arbesk.compressed).toBe(false);
+  }
+  for (const buffer of composite.buffers) {
+    expect([...storedBytes(buffer).slice(0, 4)]).toEqual([0x41, 0x52, 0x42, 0x01]); // brotli frame
+    expect(buffer._arbesk.compressed).toBe(true);
+  }
+
+  // And the asset still comes back whole.
+  const composed = JSON.parse(await (await core.download(rootCid)).text());
+  expect(composed.images.every((image) => image.uri.startsWith("data:image/jpeg;base64,/9j/"))).toBe(true);
+});
+
 test("upload(glTF JSON string) decomposes and stores a composite", async () => {
   const core = makeCore();
   const gltf = JSON.stringify({

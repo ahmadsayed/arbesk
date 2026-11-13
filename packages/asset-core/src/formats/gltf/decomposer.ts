@@ -9,7 +9,7 @@
 
 import { sanitizeFileName } from "../../utils/uri.ts";
 import { getRuntime } from "../../runtime-state.ts";
-import { uploadWithDedup } from "./dedup.ts";
+import { uploadWithDedup, imageCompression } from "./dedup.ts";
 import {
   isComposite,
   ipfsUriFromCid,
@@ -81,7 +81,7 @@ export async function decompose(
           extracted.bytes,
           filename,
           credential,
-          { compress },
+          { compress: imageCompression(extracted.bytes, compress) },
           dedupMap
         );
         stats.images++;

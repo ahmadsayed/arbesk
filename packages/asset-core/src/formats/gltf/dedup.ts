@@ -20,6 +20,7 @@ import {
   attachDedupMeta,
   stripDedupMeta,
 } from "./gltf-core.ts";
+import { isPrecompressedImage } from "./image-mime.ts";
 import type { UploadCredential } from "../../storage/ipfs/upload-with-credential.ts";
 
 // The pure helpers live in gltf-core.js (shared with the glTF worker);
@@ -39,6 +40,17 @@ export interface DedupUploadResult {
   cid: string;
   meta: DedupMeta;
   skipped: boolean;
+}
+
+/**
+ * Compression to use for an image: none for an already-compressed format
+ * (PNG, JPEG, WebP, GIF), the caller's choice otherwise.
+ */
+export function imageCompression(
+  bytes: Uint8Array,
+  compress: CompressOption | undefined
+): CompressOption | undefined {
+  return isPrecompressedImage(bytes) ? false : compress;
 }
 
 // Coalesce concurrent uploads of identical payloads so two parallel callers
