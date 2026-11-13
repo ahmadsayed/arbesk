@@ -17,7 +17,7 @@ import { getPublicClient, getContractAddress } from "../config.ts";
 import { isGetLogsRangeRejection, narrowGetLogsChunk } from "./get-logs-range.ts";
 import { PROJECT_ROOT } from "./project-root.ts";
 import type { PinnedFile, StorageAdapter } from "./storage/index.ts";
-import { walkManifestChain } from "./manifest-chain-walker.ts";
+import { walkManifestChain, type GCWalkRunState } from "./manifest-chain-walker.ts";
 import { loadRefCache, type GCRefCache } from "./ipfs-gc-ref-cache.ts";
 import {
   BaseError,
@@ -367,6 +367,7 @@ async function buildReachableSet(
   liveByContract: { entry: GCContractEntry; tokenIds: string[] }[],
   storage: StorageAdapter,
   sourceRefCache: GCRefCache,
+  pinnedCids: Set<string>,
 ): Promise<{ reachable: Set<string>; errors: string[]; tokensProcessed: number }> {
   const reachable = new Set<string>();
   const errors: string[] = [];
@@ -374,6 +375,7 @@ async function buildReachableSet(
   const total = liveByContract.reduce((n, { tokenIds }) => n + tokenIds.length, 0);
   let walked = 0;
   const reads = countingReads(storage);
+  const runState: GCWalkRunState = { followed: new Set(), sourcesRead: new Set() };
 
   for (const { entry, tokenIds } of liveByContract) {
     const { contract, name } = entry;
@@ -405,6 +407,8 @@ async function buildReachableSet(
             recurseIntoCollectionAssets: true,
             maxDepth: GC_MAX_CHAIN_DEPTH,
             sourceRefCache,
+            isPinned: (cid) => pinnedCids.has(cid),
+            runState,
           },
           reads.storage,
         );
@@ -733,22 +737,9 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     errors,
   );
 
-  // 2. Build reachable CID set.
-  const refCache = loadRefCache(options.refCachePath ?? DEFAULT_REF_CACHE_PATH);
-  const { reachable, errors: walkErrors, tokensProcessed } = await buildReachableSet(
-    liveByContract,
-    storage,
-    refCache,
-  );
-  if (walkErrors?.length) errors.push(...walkErrors);
-
-  console.log(
-    `[GC] reachable set built | tokens=${tokensProcessed} cids=${reachable.size} ` +
-      `| sources: ${refCache.hits} cached, ${refCache.learned} read`,
-  );
-  if (!dryRun) saveRefCache(refCache, reachable);
-
-  // 3. List currently pinned CIDs.
+  // 2. List currently pinned CIDs - before the walk, which needs to know
+  // whether an unreadable reference is one of ours (see WalkOptions.isPinned).
+  // A CID pinned while the walk runs is not listed, so it cannot be unpinned.
   let pinned: PinnedFile[] = [];
   try {
     pinned = await storage.listPinned();
@@ -760,8 +751,8 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     return {
       dryRun,
       aborted: !dryRun,
-      liveTokens: tokensProcessed,
-      reachable: reachable.size,
+      liveTokens: 0,
+      reachable: 0,
       pinned: 0,
       orphans: 0,
       eligible: 0,
@@ -773,6 +764,22 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
       errors,
     };
   }
+
+  // 3. Build reachable CID set.
+  const refCache = loadRefCache(options.refCachePath ?? DEFAULT_REF_CACHE_PATH);
+  const { reachable, errors: walkErrors, tokensProcessed } = await buildReachableSet(
+    liveByContract,
+    storage,
+    refCache,
+    new Set(pinned.map((pin) => pin.cid)),
+  );
+  if (walkErrors?.length) errors.push(...walkErrors);
+
+  console.log(
+    `[GC] reachable set built | tokens=${tokensProcessed} cids=${reachable.size} ` +
+      `| sources: ${refCache.hits} cached, ${refCache.learned} read`,
+  );
+  if (!dryRun) saveRefCache(refCache, reachable);
 
   // 4. Compute orphans.
   const orphans = pinned.map((pin) => pin.cid).filter((cid) => !reachable.has(cid));

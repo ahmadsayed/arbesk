@@ -20,13 +20,21 @@ export interface GCRefCache extends SourceRefCache {
   save(keep: Set<string>): void;
 }
 
-/** Loads the cache at `file`; a missing or corrupt file starts empty. */
+/**
+ * Bumped whenever what counts as a reference changes, so entries learned by
+ * an older walk are dropped. v2: bare CIDs too - v1 (unversioned) recorded []
+ * for every 3MF composite, whose parts are bare CIDs.
+ */
+const CACHE_VERSION = 2;
+
+/** Loads the cache at `file`; a missing, corrupt or older file starts empty. */
 export function loadRefCache(file: string): GCRefCache {
   const entries = new Map<string, string[]>();
   try {
     if (fs.existsSync(file)) {
       const parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
-      for (const [cid, refs] of Object.entries(parsed ?? {})) {
+      const saved = parsed?.version === CACHE_VERSION ? parsed.entries : {};
+      for (const [cid, refs] of Object.entries(saved ?? {})) {
         if (Array.isArray(refs)) entries.set(cid, refs.map(String));
       }
     }
@@ -57,7 +65,7 @@ export function loadRefCache(file: string): GCRefCache {
       for (const [cid, refs] of entries) if (keep.has(cid)) kept[cid] = refs;
       fs.mkdirSync(path.dirname(file), { recursive: true });
       const tmp = `${file}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(kept));
+      fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, entries: kept }));
       fs.renameSync(tmp, file);
     },
   };

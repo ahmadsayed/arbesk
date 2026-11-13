@@ -257,6 +257,7 @@ describe("runIpfsGC", () => {
       });
       blobs.set("bafySrc", sourceBody);
       pinned.add("bafySrc");
+      blobs.set("bafyBuf", "\u0000binary buffer");
       pinned.add("bafyBuf");
       chain[FREE]["1"] = { uri: "bafyLive" };
     }
@@ -326,7 +327,11 @@ describe("runIpfsGC", () => {
 
       it("downloads the source in full when its first bytes cannot be read", async () => {
         liveTokenWithSource(gltfSource);
-        storage.catHead.mockRejectedValue(new Error("gateway 502"));
+        const head = storage.catHead.getMockImplementation();
+        storage.catHead.mockImplementation(async (cid, length) => {
+          if (cid === "bafySrc") throw new Error("gateway 502");
+          return head(cid, length);
+        });
 
         const result = await gc();
 
@@ -449,6 +454,291 @@ describe("runIpfsGC", () => {
     expect(result.aborted).toBe(false);
     expect(result.orphans).toBe(2);
     expect(storage.unpin).not.toHaveBeenCalled();
+  });
+
+  describe("references in any form", () => {
+    /** A CID-shaped string, as the decomposers write them (bare, base32). */
+    const cidOf = (tag) => `bafkrei${tag.toLowerCase().replace(/[^a-z2-7]/g, "")}`.padEnd(59, "q");
+    const json = (value) => JSON.stringify(value);
+    function pin(cid, body) {
+      blobs.set(cid, body);
+      pinned.add(cid);
+      return cid;
+    }
+    const designCid = cidOf("design");
+    const textureCid = cidOf("texture");
+    const thumbCid = cidOf("thumb");
+    const composite3mf = () =>
+      json({
+        arbesk_format: "composite-3mf",
+        model: "<model/>",
+        parts: {
+          "Metadata/arbesk_cad.json": { cid: designCid, _arbesk: { hash: "ab12", compressed: false } },
+          "3D/Textures/t.png": { cid: textureCid, _arbesk: { hash: "cd34" } },
+        },
+      });
+
+    beforeEach(() => {
+      storage.catHead = jest.fn(async (cid, length) => {
+        if (!blobs.has(cid)) throw new Error(`gateway 403 for ${cid}`);
+        return Buffer.from(blobs.get(cid), "utf-8").subarray(0, length);
+      });
+    });
+
+    function assetWithSource(sourceCid) {
+      putManifest("bafyLive", {
+        version: 1,
+        thumbnail: { cid: thumbCid },
+        scene: { nodes: [{ node_id: "n", source: { cid: sourceCid, format: "3mf" } }] },
+      });
+      chain[FREE]["1"] = { uri: "bafyLive" };
+    }
+
+    it("keeps the parts a composite 3MF lists by bare CID, the CAD design included", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1, code: "return box()" }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(src);
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(result.unpinned).toBe(0);
+      expect(pinned.has(designCid)).toBe(true);
+      expect(pinned.has(textureCid)).toBe(true);
+    });
+
+    it("does not download images it follows in full", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1 }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(src);
+
+      await gc();
+
+      const fullReads = storage.catBytes.mock.calls.map(([cid]) => cid);
+      expect(fullReads).not.toContain(textureCid);
+      expect(fullReads).not.toContain(thumbCid);
+    });
+
+    it("ignores a source ref cache written before bare CIDs were followed", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1 }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(src);
+      const refCachePath = path.join(path.dirname(statePath), "old-ref-cache.json");
+      fs.writeFileSync(refCachePath, JSON.stringify({ [src]: [] }));
+
+      const result = await gc({ refCachePath });
+
+      expect(result.unpinned).toBe(0);
+      expect(pinned.has(designCid)).toBe(true);
+    });
+
+    it("keeps the buffers of a composite listed directly as a collection entry (besk upload)", async () => {
+      const bufCid = pin(cidOf("buffer"), "\u0000bin");
+      const composite = pin(cidOf("gltf"), json({ asset: { version: "2.0" }, buffers: [{ uri: `ipfs://${bufCid}` }] }));
+      putManifest("bafyCol", { version: 1, type: "collection", assets: { up: composite } });
+      chain[FREE]["1"] = { uri: "bafyCol" };
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(pinned.has(bufCid)).toBe(true);
+    });
+
+    it("keeps a forked child's model when the parent's source is the child's manifest (besk link --fork)", async () => {
+      const childSrc = pin(cidOf("childsrc"), "glTF\u0002binary");
+      const childThumb = pin(cidOf("childthumb"), "RIFF webp");
+      const childPrevSrc = pin(cidOf("childoldsrc"), "glTF\u0002binary");
+      const childV1 = pin(cidOf("childone"), json({ version: 1, scene: { nodes: [{ node_id: "c", source: { cid: childPrevSrc } }] } }));
+      const childV2 = pin(cidOf("childtwo"), json({
+        version: 2,
+        prev_asset_manifest_cid: childV1,
+        thumbnail: { cid: childThumb },
+        scene: { nodes: [{ node_id: "c", source: { cid: childSrc } }] },
+      }));
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(childV2);
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      for (const cid of [childV2, childSrc, childThumb]) expect(pinned.has(cid)).toBe(true);
+    });
+
+    it("does not keep a forked child's older versions through the parent", async () => {
+      const childPrevSrc = pin(cidOf("childoldsrc"), "glTF\u0002binary");
+      const childV1 = pin(cidOf("childone"), json({ version: 1, scene: { nodes: [{ node_id: "c", source: { cid: childPrevSrc } }] } }));
+      const childSrc = pin(cidOf("childsrc"), "glTF\u0002binary");
+      const childV2 = pin(cidOf("childtwo"), json({ version: 2, prev_asset_manifest_cid: childV1, scene: { nodes: [{ node_id: "c", source: { cid: childSrc } }] } }));
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(childV2);
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(pinned.has(childSrc)).toBe(true);
+      expect(pinned.has(childV1)).toBe(false);
+      expect(pinned.has(childPrevSrc)).toBe(false);
+    });
+
+    it("does not fail on a referenced file that is no longer pinned anywhere", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      // designCid was never pinned on this account: unreadable, and not ours.
+      assetWithSource(src);
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(result.aborted).toBe(false);
+    });
+
+    it("aborts when a pinned document it follows cannot be read", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pinned.add(designCid); // pinned, but every read fails
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      pinned.add(cidOf("orphan"));
+      assetWithSource(src);
+
+      const result = await gc();
+
+      expect(result.aborted).toBe(true);
+      expect(storage.unpin).not.toHaveBeenCalled();
+    });
+
+    // A: a flaky peek must not stop all unpinning.
+    it("downloads a followed file whose first bytes could not be peeked", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1 }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      pinned.add(cidOf("orphan"));
+      assetWithSource(src);
+      const head = storage.catHead.getMockImplementation();
+      storage.catHead.mockImplementation(async (cid, length) => {
+        if (cid === designCid) throw new Error("gateway 429");
+        return head(cid, length);
+      });
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(result.aborted).toBe(false);
+      expect(pinned.has(designCid)).toBe(true);
+    });
+
+    // B: leaf files are peeked once, not every night and not once per token.
+    it("remembers files that are not JSON across runs", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1 }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(src);
+      await gc();
+      storage.catHead.mockClear();
+
+      await gc();
+
+      expect(storage.catHead.mock.calls.map(([cid]) => cid)).not.toContain(textureCid);
+    });
+
+    it("peeks a file shared by two tokens once per run", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1 }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      assetWithSource(src);
+      chain[FREE]["2"] = { uri: "bafyLive" };
+
+      await gc();
+
+      expect(storage.catHead.mock.calls.filter(([cid]) => cid === textureCid).length).toBeLessThanOrEqual(1);
+    });
+
+    // C: a node source keeps its strict "unreadable = error" rule, however it was reached first.
+    it("aborts on an unreadable old node source even when a newer version names it in another field", async () => {
+      const bufCid = pin(cidOf("buffer"), "\u0000bin");
+      const oldSrc = cidOf("oldsource"); // its pin was lost: unreadable, not listed
+      const v1 = pin(cidOf("vone"), json({ version: 1, scene: { nodes: [{ node_id: "n", source: { cid: oldSrc } }] } }));
+      const newSrc = pin(cidOf("newsource"), "glTF\u0002binary");
+      const rep = pin(cidOf("rep"), "solid stl");
+      const v2 = pin(cidOf("vtwo"), json({
+        version: 2,
+        prev_asset_manifest_cid: v1,
+        representations: [{ cid: rep, derived_from: { ref: "primary", cid: oldSrc } }],
+        scene: { nodes: [{ node_id: "n", source: { cid: newSrc } }] },
+      }));
+      chain[FREE]["1"] = { uri: v2 };
+
+      const result = await gc();
+
+      expect(result.aborted).toBe(true);
+      expect(pinned.has(bufCid)).toBe(true);
+    });
+
+    // E: a CID pasted into free text keeps nothing.
+    it("does not follow a CID mentioned inside free text", async () => {
+      const deleted = pin(cidOf("deletedasset"), json({ version: 1, scene: { nodes: [] } }));
+      putManifest("bafyLive", {
+        version: 1,
+        metadata: { chat: [{ prompt: `make it like ${deleted} but red` }] },
+        scene: { nodes: [] },
+      });
+      chain[FREE]["1"] = { uri: "bafyLive" };
+
+      await gc();
+
+      expect(pinned.has(deleted)).toBe(false);
+    });
+
+    // E/F: leaf fields are kept without being opened.
+    it("keeps the comments archive and a bundle directory without opening them", async () => {
+      const archive = pin(cidOf("comments"), json({ events: [{ content: "nice" }] }));
+      const bundle = cidOf("bundledir");
+      pinned.add(bundle); // a UnixFS directory: cat fails on it
+      putManifest("bafyLive", {
+        version: 1,
+        comments_archive_cid: archive,
+        scene: { nodes: [{ node_id: "n", source: { cid: cidOf("glb"), bundleCid: bundle } }] },
+      });
+      pin(cidOf("glb"), "glTF\u0002binary");
+      chain[FREE]["1"] = { uri: "bafyLive" };
+      delete storage.catHead; // the Kubo backend has none
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(pinned.has(archive)).toBe(true);
+      expect(pinned.has(bundle)).toBe(true);
+      const opened = storage.catBytes.mock.calls.map(([cid]) => cid);
+      expect(opened).not.toContain(archive);
+      expect(opened).not.toContain(bundle);
+    });
+
+    it("still reclaims a deleted asset's 3MF parts", async () => {
+      const src = pin(cidOf("composite"), composite3mf());
+      pin(designCid, json({ arbesk_cad: 1 }));
+      pin(textureCid, "\u0089PNG binary");
+      pin(thumbCid, "RIFF webp");
+      const gone = pin(cidOf("goneasset"), json({ version: 1, thumbnail: { cid: thumbCid }, scene: { nodes: [{ node_id: "n", source: { cid: src } }] } }));
+      const kept = pin(cidOf("keptasset"), json({ version: 1, scene: { nodes: [] } }));
+      const col1 = pin(cidOf("colone"), json({ version: 1, type: "collection", assets: { gone, kept } }));
+      const col2 = pin(cidOf("coltwo"), json({ version: 2, type: "collection", assets: { kept }, prev_asset_manifest_cid: col1 }));
+      chain[FREE]["1"] = { uri: col2 };
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      for (const cid of [gone, src, designCid, textureCid, thumbCid]) expect(pinned.has(cid)).toBe(false);
+      for (const cid of [col2, col1, kept]) expect(pinned.has(cid)).toBe(true);
+    });
   });
 
   describe("asset deleted from a collection", () => {
