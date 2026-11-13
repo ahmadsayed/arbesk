@@ -34,11 +34,9 @@ metadata:
 spec:
   schedule: "43 4 * * *"
   # Unpublished drafts are kept IPFS_GC_DRAFT_RETENTION_DAYS (default 90)
-  # after the run that first saw them (ipfs-gc-drafts.ts). Paused 2026-11-13
-  # until that protection exists: resume (false) only in the commit that
-  # stamps an image containing ipfs-gc-drafts.ts, so an older binary never
-  # runs unpaused.
-  suspend: true
+  # after the run that first saw them (ipfs-gc-drafts.ts). Was paused
+  # 2026-11-13 until that protection shipped (image 11131503).
+  suspend: false
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -51,7 +49,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: gc
-              image: ahmadsayed/arbesk:11131246
+              image: ahmadsayed/arbesk:11131503
               imagePullPolicy: IfNotPresent
               command: ["./arbesk-server", "gc", "--live"]
               env:
