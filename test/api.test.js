@@ -114,6 +114,9 @@ describe("Arbesk API", () => {
     // getLogs returns a decoded mint Transfer log per registered GC token.
     const mockPublicClient = {
       getBlockNumber: jest.fn(() => Promise.resolve(1000n)),
+      // No .data/token-indexer-<id>.json exists for this id, so the GC
+      // scans mints from the deploy block.
+      getChainId: jest.fn(() => Promise.resolve(999999)),
       readContract: jest.fn(({ address, functionName, args }) => {
         const tokenId = args?.length ? String(args[0]) : undefined;
         const t = tokenId === undefined ? undefined : gcTokens.get(tokenId);

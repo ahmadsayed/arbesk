@@ -5,7 +5,8 @@ const storage = { backend: "kubo" };
 
 const realGc = await import("../../src/api/ipfs-gc.ts");
 mock.module("../../src/api/ipfs-gc.ts", () => ({ ...realGc, runIpfsGC }));
-mock.module("../../src/api/storage/index.ts", () => ({ createStorageAdapter: () => storage }));
+const createStorageAdapter = jest.fn(() => storage);
+mock.module("../../src/api/storage/index.ts", () => ({ createStorageAdapter }));
 
 const { runGcCli } = await import("../../src/api/ipfs-gc-cli.ts");
 
@@ -65,6 +66,12 @@ describe("runGcCli", () => {
     runIpfsGC.mockResolvedValue({ ...RESULT, aborted: true, errors: ["read bafy: timeout"] });
 
     expect(await runGcCli(["--live"])).toBe(2);
+  });
+
+  it("reads storage without warming the browser upload pool", async () => {
+    await runGcCli([]);
+
+    expect(createStorageAdapter).toHaveBeenCalledWith({ uploadPool: false });
   });
 
   it("exits 1 when the collector cannot run", async () => {

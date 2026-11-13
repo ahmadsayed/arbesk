@@ -62,7 +62,8 @@ export async function runGcCli(argv: string[]): Promise<number> {
         chainId: opts.chainId,
         graceMs: opts.graceHours === undefined ? undefined : opts.graceHours * HOUR_MS,
       },
-      createStorageAdapter(),
+      // The GC never uploads: skip minting browser upload URLs.
+      createStorageAdapter({ uploadPool: false }),
     );
     console.log("\n[GC-CLI] result:");
     console.log(JSON.stringify(result, null, 2));

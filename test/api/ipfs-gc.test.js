@@ -19,11 +19,17 @@ function revertError(functionName) {
   return new ContractFunctionRevertedError({ abi: [], functionName });
 }
 
+/** Mint logs in [fromBlock, toBlock]; a token's mintBlock defaults to 0. */
+function mintLogs({ address, fromBlock, toBlock }) {
+  return Object.entries(chain[address] || {})
+    .filter(([, t]) => BigInt(t.mintBlock ?? 0) >= fromBlock && BigInt(t.mintBlock ?? 0) <= toBlock)
+    .map(([id]) => ({ args: { tokenId: BigInt(id) } }));
+}
+
 const fakeClient = {
   getBlockNumber: jest.fn(async () => 10n),
-  getLogs: jest.fn(async ({ address }) =>
-    Object.keys(chain[address] || {}).map((id) => ({ args: { tokenId: BigInt(id) } })),
-  ),
+  getChainId: jest.fn(async () => 84532),
+  getLogs: jest.fn(async (query) => mintLogs(query)),
   readContract: jest.fn(async ({ address, functionName, args }) => {
     const id = String(args[0]);
     const failure = failures[`${address}:${functionName}:${id}`];
@@ -110,6 +116,7 @@ describe("runIpfsGC", () => {
         paidContractAddress: PAID,
         graceMs: 0,
         statePath,
+        indexerStatePath: path.join(path.dirname(statePath), "no-indexer-state.json"),
         ...opts,
       },
       storage,
@@ -133,6 +140,91 @@ describe("runIpfsGC", () => {
     expect(result.aborted).toBe(false);
     expect(result.unpinned).toBe(1);
     expect(Array.from(pinned).sort()).toEqual(["bafyLive", "bafyLiveSrc"]);
+  });
+
+  describe("mint scan", () => {
+    function writeIndexerState(state) {
+      const file = path.join(path.dirname(statePath), "token-indexer.json");
+      fs.writeFileSync(file, JSON.stringify(state));
+      return file;
+    }
+
+    it("narrows the getLogs range to the cap the RPC names", async () => {
+      putManifest("bafyLive", { version: 1, scene: { nodes: [] } });
+      chain[FREE]["1"] = { uri: "bafyLive", mintBlock: 650 };
+      fakeClient.getBlockNumber.mockImplementation(async () => 1000n);
+      fakeClient.getLogs.mockImplementation(async (query) => {
+        if (query.toBlock - query.fromBlock + 1n > 200n) {
+          throw new Error("RPC Request failed.\n\nDetails: eth_getLogs is limited to a 200 range");
+        }
+        return mintLogs(query);
+      });
+
+      try {
+        const result = await gc();
+
+        expect(result.errors).toEqual([]);
+        expect(result.liveTokens).toBe(1);
+        expect(pinned.has("bafyLive")).toBe(true);
+      } finally {
+        fakeClient.getBlockNumber.mockImplementation(async () => 10n);
+        fakeClient.getLogs.mockImplementation(async (query) => mintLogs(query));
+      }
+    });
+
+    it("starts from the token indexer's snapshot and scans only the blocks after it", async () => {
+      putManifest("bafyOld", { version: 1, scene: { nodes: [] } });
+      putManifest("bafyNew", { version: 1, scene: { nodes: [] } });
+      // Minted before the snapshot: no getLogs call may reach block 2.
+      chain[FREE]["1"] = { uri: "bafyOld", mintBlock: 2 };
+      chain[FREE]["5"] = { uri: "bafyNew", mintBlock: 9 };
+      const indexerStatePath = writeIndexerState({
+        contractAddress: FREE,
+        lastScannedBlock: 8,
+        ownership: { 1: OWNER },
+      });
+
+      const result = await gc({ indexerStatePath });
+
+      expect(result.errors).toEqual([]);
+      expect(result.liveTokens).toBe(2);
+      expect(result.unpinned).toBe(0);
+      const freeScans = fakeClient.getLogs.mock.calls.filter(([q]) => q.address === FREE);
+      expect(freeScans.length).toBeGreaterThan(0);
+      for (const [{ fromBlock }] of freeScans) {
+        expect(fromBlock).toBeGreaterThanOrEqual(8n);
+      }
+    });
+
+    it("ignores an indexer snapshot of another contract", async () => {
+      putManifest("bafyLive", { version: 1, scene: { nodes: [] } });
+      chain[FREE]["1"] = { uri: "bafyLive", mintBlock: 2 };
+      const indexerStatePath = writeIndexerState({
+        contractAddress: PAID,
+        lastScannedBlock: 8,
+        ownership: {},
+      });
+
+      const result = await gc({ indexerStatePath });
+
+      expect(result.liveTokens).toBe(1);
+      expect(fakeClient.getLogs.mock.calls[0][0].fromBlock).toBe(0n);
+    });
+  });
+
+  it("logs a progress line for each walked token", async () => {
+    putManifest("bafyA", { version: 1, scene: { nodes: [] } });
+    putManifest("bafyB", { version: 1, scene: { nodes: [] } });
+    chain[FREE]["1"] = { uri: "bafyA" };
+    chain[FREE]["2"] = { uri: "bafyB" };
+
+    await gc();
+
+    const lines = console.log.mock.calls.map(([line]) => String(line));
+    const progress = lines.filter((l) => l.startsWith("[GC] walked "));
+    expect(progress).toHaveLength(2);
+    expect(progress[0]).toMatch(/^\[GC\] walked 1\/2 ArbeskAssetFree#1 \| 1 CIDs, 1 reads, \d+ B, [\d.]+s$/);
+    expect(progress[1]).toMatch(/^\[GC\] walked 2\/2 ArbeskAssetFree#2 /);
   });
 
   it("keeps reference images of live tokens", async () => {
