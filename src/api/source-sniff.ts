@@ -46,6 +46,11 @@ function inflatePrefix(head: Uint8Array): Uint8Array | null {
   return null;
 }
 
+/** True when `head` starts a gzip or brotli-framed stream. */
+export function isCompressedHead(head: Uint8Array): boolean {
+  return isBrotliFramed(head) || (head[0] === 0x1f && head[1] === 0x8b);
+}
+
 /**
  * Classifies a source file from its first bytes (a few hundred are plenty),
  * looking inside gzip and brotli-framed streams the way maybeDecompress

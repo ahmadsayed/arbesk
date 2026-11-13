@@ -124,17 +124,28 @@ export async function catBytes(
 
 const IPFS_URI_RE = /ipfs:\/\/([a-zA-Z0-9]+)/g;
 
+/** A whole value that is a CIDv1 (base32, "baf…") or CIDv0 ("Qm…"). */
+const BARE_CID_RE = /^\s*(baf[a-z2-7]{50,}|Qm[1-9A-HJ-NP-Za-km-z]{44})\s*$/;
+/** A CID in a gateway URL path ("…/ipfs/<cid>"), anywhere in a string. */
+const IPFS_PATH_RE = /\/ipfs\/(baf[a-z2-7]{50,}|Qm[1-9A-HJ-NP-Za-km-z]{44})\b/g;
+
 /**
- * Recursively extracts all `ipfs://` CIDs from a JSON value.
+ * Recursively extracts every CID a JSON value refers to: a value that is a
+ * bare CID (`{"cid": "bafk…"}`, as the 3MF decomposer writes parts), or an
+ * `ipfs://` URI or gateway `/ipfs/<cid>` URL anywhere in a string.
+ * @remarks For the IPFS GC, where a missed reference unpins live data. A
+ *   bare CID only counts as a whole value, so one mentioned in free text (a
+ *   chat prompt, a comment) does not keep a file pinned for good.
  */
-export function extractIpfsCids(value: unknown, cids: Set<string>): void {
+export function extractCidRefs(value: unknown, cids: Set<string>): void {
   if (typeof value === "string") {
-    for (const match of value.matchAll(IPFS_URI_RE)) {
-      cids.add(match[1]);
-    }
+    for (const match of value.matchAll(IPFS_URI_RE)) cids.add(match[1]);
+    for (const match of value.matchAll(IPFS_PATH_RE)) cids.add(match[1]);
+    const bare = value.match(BARE_CID_RE);
+    if (bare) cids.add(bare[1]);
   } else if (Array.isArray(value)) {
-    for (const item of value) extractIpfsCids(item, cids);
+    for (const item of value) extractCidRefs(item, cids);
   } else if (value && typeof value === "object") {
-    for (const v of Object.values(value)) extractIpfsCids(v, cids);
+    for (const v of Object.values(value)) extractCidRefs(v, cids);
   }
 }
