@@ -104,7 +104,23 @@ describe("kubo adapter", () => {
       apiUrl: "http://127.0.0.1:5001",
       gatewayBase: "http://127.0.0.1:8080/ipfs/",
     });
-    expect(await a.listPinned()).toEqual(["bafyRoot1", "bafyRoot2", "bafyDirect"]);
+    expect(await a.listPinned()).toEqual([
+      { cid: "bafyRoot1" },
+      { cid: "bafyRoot2" },
+      { cid: "bafyDirect" },
+    ]);
+  });
+
+  it("pinnedBytes() returns the cumulative size under a root", async () => {
+    const ipfs = fakeIpfs();
+    ipfs.files = { stat: jest.fn(async () => ({ cumulativeSize: 4096n })) };
+    const a = createKuboAdapter(ipfs, {
+      apiUrl: "http://127.0.0.1:5001",
+      gatewayBase: "http://127.0.0.1:8080/ipfs/",
+    });
+
+    expect(await a.pinnedBytes("bafyRoot1")).toBe(4096);
+    expect(ipfs.files.stat).toHaveBeenCalledWith("/ipfs/bafyRoot1", { timeout: 5000 });
   });
 
   it("mintUploadCredential() returns the kubo shape", async () => {
@@ -406,7 +422,7 @@ describe("pinata adapter", () => {
         page++;
         if (page === 1) {
           resolve({
-            files: [{ id: "f1", cid: "cid-1" }],
+            files: [{ id: "f1", cid: "cid-1", size: 100 }],
             next_page_token: "token-1",
           });
         } else if (page === 2) {
@@ -429,8 +445,8 @@ describe("pinata adapter", () => {
     });
 
     try {
-      const cids = await a.listPinned();
-      expect(cids).toEqual(["cid-1", "cid-2"]);
+      const pins = await a.listPinned();
+      expect(pins).toEqual([{ cid: "cid-1", bytes: 100 }, { cid: "cid-2", bytes: undefined }]);
     } finally {
       process.env.PINATA_GC_MAX_PAGES = previousEnv;
     }
@@ -457,7 +473,7 @@ describe("pinata adapter", () => {
       gatewayBase: "https://gw.mypinata.cloud/ipfs/",
       uploadTtl: 60,
     });
-    expect(await a.listPinned()).toEqual(["cid-2"]);
+    expect(await a.listPinned()).toEqual([{ cid: "cid-2", bytes: undefined }]);
   });
 
   it("gatewayBase() returns the configured gateway", async () => {

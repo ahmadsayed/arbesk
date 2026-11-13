@@ -3,12 +3,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, jest, mock, spyO
 const runIpfsGC = jest.fn();
 const storage = { backend: "kubo" };
 
-mock.module("../../src/api/ipfs-gc.ts", () => ({ runIpfsGC }));
+const realGc = await import("../../src/api/ipfs-gc.ts");
+mock.module("../../src/api/ipfs-gc.ts", () => ({ ...realGc, runIpfsGC }));
 mock.module("../../src/api/storage/index.ts", () => ({ createStorageAdapter: () => storage }));
 
 const { runGcCli } = await import("../../src/api/ipfs-gc-cli.ts");
 
-const RESULT = { dryRun: true, aborted: false, liveTokens: 1, reachable: 2, pinned: 2, orphans: 0, eligible: 0, unpinned: 0, errors: [] };
+const RESULT = { dryRun: true, aborted: false, liveTokens: 1, reachable: 2, pinned: 2, orphans: 0, eligible: 0, unpinned: 0, orphanBytes: 0, eligibleBytes: 0, unpinnedBytes: 0, sizeUnknown: 0, errors: [] };
 
 describe("runGcCli", () => {
   const spies = [];
@@ -44,6 +45,19 @@ describe("runGcCli", () => {
     expect(runIpfsGC).toHaveBeenCalledWith(
       { dryRun: false, maxUnpin: 500, graceMs: 24 * 3600000, chainId: "84532" },
       storage,
+    );
+  });
+
+  it("ends with a readable line of files and storage", async () => {
+    runIpfsGC.mockResolvedValue({
+      ...RESULT, dryRun: false, orphans: 5, eligible: 2, unpinned: 2,
+      orphanBytes: 5 * 1024 * 1024, eligibleBytes: 2 * 1024 * 1024, unpinnedBytes: 2 * 1024 * 1024, sizeUnknown: 1,
+    });
+
+    await runGcCli(["--live"]);
+
+    expect(console.log).toHaveBeenLastCalledWith(
+      "[GC-CLI] removed 2 files, 2.0 MB freed | 3 unused files, 3.0 MB, still pinned (1 of unknown size not counted)",
     );
   });
 

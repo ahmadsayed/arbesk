@@ -20,7 +20,8 @@
 # ignores the argument and starts a second server on the data volume.
 #
 # Run it now:   kubectl create job --from=cronjob/arbesk-ipfs-gc gc-manual
-# Last result:  kubectl logs job/<name>   (ends with the JSON summary)
+# Last result:  kubectl logs job/<name>   (ends with the JSON summary and a
+#               line of files and storage freed / still unused)
 apiVersion: batch/v1
 kind: CronJob
 metadata:

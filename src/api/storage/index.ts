@@ -3,6 +3,12 @@ import { PinataSDK } from "pinata";
 import { createKuboAdapter } from "./kubo-adapter.ts";
 import { createPinataAdapter } from "./pinata-adapter.ts";
 
+/** A pinned root, with its stored size when the backend's listing reports it. */
+export interface PinnedFile {
+  cid: string;
+  bytes?: number;
+}
+
 export interface StorageAdapter {
   backend: string;
   add(payload: string | Uint8Array, filename?: string): Promise<string>;
@@ -10,7 +16,9 @@ export interface StorageAdapter {
   cat(cid: string): Promise<string>;
   catBytes(cid: string): Promise<Buffer>;
   unpin(cid: string): Promise<boolean>;
-  listPinned(): Promise<string[]>;
+  listPinned(): Promise<PinnedFile[]>;
+  /** Stored size of one pinned root, for backends whose listing has no sizes. */
+  pinnedBytes?(cid: string): Promise<number>;
   mintUploadCredential(): Promise<{ strategy: string; [key: string]: any }>;
   mintUploadCredentials(
     count: number,

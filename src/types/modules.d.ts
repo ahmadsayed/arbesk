@@ -33,6 +33,12 @@ declare module "ipfs-http-client" {
       cid: string,
       options?: { signal?: AbortSignal; timeout?: number },
     ): AsyncIterable<Uint8Array | string>;
+    files: {
+      stat(
+        path: string,
+        options?: { timeout?: number },
+      ): Promise<{ cumulativeSize: number | bigint }>;
+    };
   }
 
   export function create(url: URL | string): KuboClient;
@@ -42,6 +48,8 @@ declare module "pinata" {
   export interface PinataFile {
     id: string;
     cid: string;
+    /** Bytes, as the file list reports it. */
+    size?: number;
   }
 
   export interface PinataListResponse {
