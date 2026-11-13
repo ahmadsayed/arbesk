@@ -208,3 +208,24 @@ test("successful init schedules the background poll", async () => {
     indexer.stop();
   }
 });
+
+test("saved state names the contract it indexes, for the IPFS GC to match", async () => {
+  const fs = (await import("fs")).default;
+  const os = (await import("os")).default;
+  const path = (await import("path")).default;
+  const { getIndexer } = await loadModule();
+
+  const indexer = getIndexer(TEST_CHAIN_OK, { cat: jest.fn() });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "arbesk-indexer-"));
+  indexer.stateFile = path.join(dir, "token-indexer.json");
+  indexer.ownership.set("7", "0xabc");
+  indexer.lastScannedBlock = 42;
+
+  indexer._saveState();
+
+  const saved = JSON.parse(fs.readFileSync(indexer.stateFile, "utf8"));
+  expect(saved.contractAddress).toBe("0x0000000000000000000000000000000000000001");
+  expect(saved.lastScannedBlock).toBe(42);
+  expect(saved.ownership).toEqual({ 7: "0xabc" });
+  expect(fs.readdirSync(dir)).toEqual(["token-indexer.json"]);
+});

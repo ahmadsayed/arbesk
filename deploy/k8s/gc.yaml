@@ -10,7 +10,11 @@
 # A run that hits any error (RPC failure, unreadable manifest) unpins nothing
 # and the job fails; the next day's run tries again.
 # Single-node cluster: the job lands on the same node as the app pod, so the
-# ReadWriteOnce volume can be mounted alongside it.
+# ReadWriteOnce volume can be mounted alongside it. The volume also gives the
+# job the app's token indexer state (token-indexer-<chain>.json): the GC
+# takes the minted tokens from it and scans only the blocks after it. Without
+# it, the scan starts at CONTRACT_DEPLOY_BLOCK, which can outlast the job's
+# deadline on a public RPC that caps eth_getLogs at a few hundred blocks.
 #
 # The pod carries no `app: arbesk` label on purpose: the Service selects on
 # it and would route traffic here.

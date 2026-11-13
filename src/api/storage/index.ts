@@ -33,7 +33,15 @@ export interface StorageAdapter {
  *   working. Pure factory: caches nothing, and no module should call this to
  *   look up storage on demand.
  */
-export function createStorageAdapter(): StorageAdapter {
+export interface CreateStorageAdapterOptions {
+  /** Pre-mint the pool of browser upload URLs (Pinata only). Default true;
+   * read-only callers such as the IPFS GC pass false. */
+  uploadPool?: boolean;
+}
+
+export function createStorageAdapter({
+  uploadPool = true,
+}: CreateStorageAdapterOptions = {}): StorageAdapter {
   const backend = process.env.IPFS_BACKEND || "kubo";
   if (backend === "pinata") {
     const gateway = process.env.PINATA_GATEWAY;
@@ -44,7 +52,7 @@ export function createStorageAdapter(): StorageAdapter {
     const adapter = createPinataAdapter(pinata, {
       gatewayBase: `https://${gateway}/ipfs/`,
       uploadTtl: Number(process.env.PINATA_UPLOAD_TTL || 60),
-      poolSize: Number(process.env.PINATA_POOL_SIZE || 20),
+      poolSize: uploadPool ? Number(process.env.PINATA_POOL_SIZE || 20) : 0,
       poolExpiryMarginSeconds: Number(process.env.PINATA_POOL_EXPIRY_MARGIN || 60),
     });
     console.log(`[STORAGE] backend=pinata gateway=${gateway}`);

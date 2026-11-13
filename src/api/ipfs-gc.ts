@@ -14,6 +14,7 @@
 import fs from "fs";
 import path from "path";
 import { getPublicClient, getContractAddress } from "../config.ts";
+import { isGetLogsRangeRejection, narrowGetLogsChunk } from "./get-logs-range.ts";
 import { PROJECT_ROOT } from "./project-root.ts";
 import type { PinnedFile, StorageAdapter } from "./storage/index.ts";
 import { walkManifestChain } from "./manifest-chain-walker.ts";
@@ -35,10 +36,8 @@ const GC_MAX_CHAIN_DEPTH = 10000;
 const HOUR_MS = 3600000;
 /** Default grace: covers in-flight publishes and recently saved drafts. */
 const DEFAULT_GRACE_HOURS = 168;
-const DEFAULT_STATE_PATH = path.join(
-  path.resolve(PROJECT_ROOT, ".data"),
-  "ipfs-gc-state.json",
-);
+const DATA_DIR = path.resolve(PROJECT_ROOT, ".data");
+const DEFAULT_STATE_PATH = path.join(DATA_DIR, "ipfs-gc-state.json");
 
 /**
  * Persisted orphan first-seen times, per scan scope.
@@ -139,33 +138,114 @@ function isContractRevert(e: unknown): boolean {
   );
 }
 
-/** Token IDs minted (Transfer from the zero address) since `deployBlock`. */
+/** What the app's token indexer has already seen of one contract. */
+interface IndexerSnapshot {
+  /** Last block the indexer scanned (inclusive). */
+  lastScannedBlock: number;
+  /** Token IDs it saw minted up to that block. */
+  tokenIds: string[];
+}
+
+/**
+ * Reads the token indexer's state file (token-indexer.ts) if it covers
+ * `address`.
+ * @remarks The app keeps the file current on the shared data volume, so the
+ *   GC only has to scan the blocks after it; a full scan from the deploy
+ *   block takes tens of thousands of requests on a public RPC capped at a
+ *   few hundred blocks per getLogs. Returns null (full scan) when the file
+ *   is missing, unreadable, or names another contract.
+ */
+function loadIndexerSnapshot(file: string, address: string): IndexerSnapshot | null {
+  if (!fs.existsSync(file)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
+    if (
+      typeof parsed?.contractAddress !== "string" ||
+      parsed.contractAddress.toLowerCase() !== address.toLowerCase() ||
+      typeof parsed.lastScannedBlock !== "number" ||
+      !parsed.ownership ||
+      typeof parsed.ownership !== "object"
+    ) {
+      return null;
+    }
+    return { lastScannedBlock: parsed.lastScannedBlock, tokenIds: Object.keys(parsed.ownership) };
+  } catch (e) {
+    console.warn(`[GC] indexer state ${file} unreadable - full mint scan: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Token IDs minted (Transfer from the zero address) from `startBlock` to the
+ * chain tip.
+ * @remarks A getLogs rejected as too wide is retried narrower (the cap the
+ *   RPC names, else half), the same rule the token indexer follows.
+ */
 async function scanMintedTokenIds(
   contract: ContractRef,
-  deployBlock: number,
+  startBlock: number,
   batchSize: number,
 ): Promise<Set<string>> {
   const { client } = contract;
   const endBlock = Number(await client.getBlockNumber());
 
   const minted = new Set<string>();
-
-  for (let fromBlock = deployBlock; fromBlock <= endBlock; fromBlock += batchSize) {
-    const toBlock = Math.min(fromBlock + batchSize - 1, endBlock);
-    const logs = await client.getLogs({
-      address: contract.address,
-      event: TRANSFER_EVENT_ABI_ITEM,
-      args: { from: ZERO_ADDRESS },
-      fromBlock: BigInt(fromBlock),
-      toBlock: BigInt(toBlock),
-    });
+  let chunk = batchSize;
+  let fromBlock = startBlock;
+  while (fromBlock <= endBlock) {
+    const toBlock = Math.min(fromBlock + chunk - 1, endBlock);
+    let logs;
+    try {
+      logs = await client.getLogs({
+        address: contract.address,
+        event: TRANSFER_EVENT_ABI_ITEM,
+        args: { from: ZERO_ADDRESS },
+        fromBlock: BigInt(fromBlock),
+        toBlock: BigInt(toBlock),
+      });
+    } catch (e) {
+      const message = String((e as Error).message);
+      if (!isGetLogsRangeRejection(message) || chunk <= 1) throw e;
+      chunk = narrowGetLogsChunk(chunk, message);
+      console.warn(`[GC] getLogs ${fromBlock}..${toBlock} too wide - retrying ${chunk} blocks at a time`);
+      continue;
+    }
     for (const log of logs) {
       const tokenId = (log as any).args?.tokenId;
       if (tokenId !== undefined && tokenId !== null) {
         minted.add(String(tokenId));
       }
     }
+    fromBlock = toBlock + 1;
   }
+  return minted;
+}
+
+/**
+ * Token IDs ever minted on `contract`: the indexer snapshot's, plus a scan
+ * of the blocks after it (or of everything from `deployBlock` without one).
+ */
+async function findMintedTokenIds(
+  contract: ContractRef,
+  deployBlock: number,
+  batchSize: number,
+  indexerStatePath: string | undefined,
+): Promise<Set<string>> {
+  const file =
+    indexerStatePath ??
+    path.join(DATA_DIR, `token-indexer-${await contract.client.getChainId()}.json`);
+  const snapshot = loadIndexerSnapshot(file, contract.address);
+  if (!snapshot) {
+    return scanMintedTokenIds(contract, deployBlock, batchSize);
+  }
+  // Rescanning the snapshot's last block costs nothing and covers an
+  // indexer that saved mid-block.
+  const startBlock = Math.max(deployBlock, snapshot.lastScannedBlock);
+  console.log(
+    `[GC] ${contract.address}: ${snapshot.tokenIds.length} tokens from the indexer snapshot, scanning from block ${startBlock}`,
+  );
+  const minted = await scanMintedTokenIds(contract, startBlock, batchSize);
+  for (const id of snapshot.tokenIds) minted.add(id);
   return minted;
 }
 
@@ -178,9 +258,10 @@ async function scanMintedTokenIds(
 async function discoverLiveTokenIds(
   contract: ContractRef,
   deployBlock: number,
-  batchSize = 10000,
+  batchSize: number,
+  indexerStatePath: string | undefined,
 ): Promise<{ live: string[]; errors: string[] }> {
-  const minted = await scanMintedTokenIds(contract, deployBlock, batchSize);
+  const minted = await findMintedTokenIds(contract, deployBlock, batchSize, indexerStatePath);
   const { client } = contract;
 
   const live: string[] = [];
@@ -218,6 +299,48 @@ interface GCContractEntry {
  * Builds the set of CIDs reachable from each contract's live tokens.
  * @remarks Also protects the current editor list URI.
  */
+/** Reads between heartbeat lines while one token's history is walked. */
+const WALK_HEARTBEAT_READS = 50;
+
+/** Long token IDs (hashes) cut to their ends, for log lines. */
+function shortTokenId(tokenId: string): string {
+  return tokenId.length > 12 ? `${tokenId.slice(0, 4)}…${tokenId.slice(-4)}` : tokenId;
+}
+
+/**
+ * Wraps `storage` so the walk can report what it read: the walk downloads
+ * every manifest and source file of a token's history, which can take
+ * minutes per token and otherwise logs nothing.
+ */
+function countingReads(storage: StorageAdapter) {
+  let label = "";
+  let count = 0;
+  let bytes = 0;
+  let start = Date.now();
+  const summary = () =>
+    `${count} reads, ${formatBytes(bytes)}, ${((Date.now() - start) / 1000).toFixed(1)}s`;
+  return {
+    storage: {
+      ...storage,
+      async catBytes(cid: string) {
+        const data = await storage.catBytes(cid);
+        count++;
+        bytes += data.length;
+        if (count % WALK_HEARTBEAT_READS === 0) console.log(`[GC] walking ${label} | ${summary()}`);
+        return data;
+      },
+    } as StorageAdapter,
+    /** Starts counting afresh for the token named `next`. */
+    reset(next: string) {
+      label = next;
+      count = 0;
+      bytes = 0;
+      start = Date.now();
+    },
+    summary,
+  };
+}
+
 async function buildReachableSet(
   liveByContract: { entry: GCContractEntry; tokenIds: string[] }[],
   storage: StorageAdapter,
@@ -225,10 +348,15 @@ async function buildReachableSet(
   const reachable = new Set<string>();
   const errors: string[] = [];
   let tokensProcessed = 0;
+  const total = liveByContract.reduce((n, { tokenIds }) => n + tokenIds.length, 0);
+  let walked = 0;
+  const reads = countingReads(storage);
 
   for (const { entry, tokenIds } of liveByContract) {
     const { contract, name } = entry;
     for (const tokenId of tokenIds) {
+      walked++;
+      reads.reset(`${name}#${shortTokenId(tokenId)}`);
       let manifestCid: string;
       try {
         manifestCid = (await contract.client.readContract({
@@ -254,10 +382,14 @@ async function buildReachableSet(
             recurseIntoCollectionAssets: true,
             maxDepth: GC_MAX_CHAIN_DEPTH,
           },
-          storage,
+          reads.storage,
         );
         for (const cid of allReachable) reachable.add(cid);
         if (walkErrors?.length) errors.push(...walkErrors);
+        console.log(
+          `[GC] walked ${walked}/${total} ${name}#${shortTokenId(tokenId)} | ` +
+            `${allReachable.size} CIDs, ${reads.summary()}`,
+        );
       } catch (e) {
         errors.push(`${name}#${tokenId} walk ${manifestCid}: ${(e as Error).message}`);
       }
@@ -307,6 +439,9 @@ export interface IpfsGCOptions {
   graceMs?: number;
   /** Orphan first-seen state file (default: .data/ipfs-gc-state.json). */
   statePath?: string;
+  /** Token indexer state file to seed the mint scan from (default:
+   * .data/token-indexer-<chain id>.json). */
+  indexerStatePath?: string;
   /** Clock, for tests. */
   now?: () => number;
 }
@@ -467,6 +602,7 @@ async function unpinEligible(
 async function discoverAllLiveTokens(
   contracts: GCContractEntry[],
   eventBatchSize: number,
+  indexerStatePath: string | undefined,
   errors: string[],
 ): Promise<{ entry: GCContractEntry; tokenIds: string[] }[]> {
   const liveByContract: { entry: GCContractEntry; tokenIds: string[] }[] = [];
@@ -477,6 +613,7 @@ async function discoverAllLiveTokens(
         contract,
         deployBlock,
         eventBatchSize,
+        indexerStatePath,
       );
       liveByContract.push({ entry, tokenIds: live });
       for (const msg of ownerErrors) errors.push(`${name} ${msg}`);
@@ -554,7 +691,12 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
 
   // 1. Discover live tokens per contract (IDs overlap across contracts).
   const errors: string[] = [];
-  const liveByContract = await discoverAllLiveTokens(contracts, eventBatchSize, errors);
+  const liveByContract = await discoverAllLiveTokens(
+    contracts,
+    eventBatchSize,
+    options.indexerStatePath,
+    errors,
+  );
 
   // 2. Build reachable CID set.
   const { reachable, errors: walkErrors, tokensProcessed } = await buildReachableSet(

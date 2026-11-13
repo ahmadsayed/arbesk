@@ -3,6 +3,7 @@ import path from "path";
 import type { PublicClient } from "viem";
 import { DEPLOYMENT_BLOCKS, LOG_CHUNK_SIZES } from "../../constants/chains.js";
 import { getPublicClient, getContractAddress, NETWORK_CONFIGS } from "../config.ts";
+import { isGetLogsRangeRejection, narrowGetLogsChunk } from "./get-logs-range.ts";
 import { maybeDecompress } from "./ipfs-utils.ts";
 import { PROJECT_ROOT } from "./project-root.ts";
 import type { StorageAdapter } from "./storage/index.ts";
@@ -42,26 +43,7 @@ const INDEXER_EVENTS = [
   },
 ] as const;
 
-/**
- * Matches RPC rejections caused by an over-wide (or over-full) getLogs query.
- * Public RPCs enforce unpublished caps that tighten under load, so the exact
- * phrasing varies by provider and over time.
- */
-const RANGE_REJECTION =
-  /limited to a [\d,]+ (?:block )?range|block range (?:is )?too (?:large|wide)|exceeds (?:the )?max(?:imum)?[^\n]*range|returned more than [\d,]+ results/i;
-
-/**
- * Extracts the provider's advertised eth_getLogs block-range cap from an RPC
- * error message ("eth_getLogs is limited to a 500 range" → 500; also handles
- * thousands separators like "1,000"). Returns null when no explicit cap is
- * named, in which case the caller should halve the chunk instead.
- */
-export function parseGetLogsRangeCap(message: string): number | null {
-  const m = message.match(/limited to a ([\d,]+) (?:block )?range/i);
-  if (!m) return null;
-  const n = Number(m[1].replace(/,/g, ""));
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
-}
+export { parseGetLogsRangeCap } from "./get-logs-range.ts";
 
 /** Consecutive successes required before the chunk grows back (doubling). */
 const CHUNK_GROWTH_THRESHOLD = 5;
@@ -78,6 +60,9 @@ const EDITOR_LIST_URI_ABI = [
 ] as const;
 
 interface IndexerState {
+  /** Lowercase address of the contract indexed; the IPFS GC (ipfs-gc.ts)
+   * seeds its mint scan from this file only when it names the same contract. */
+  contractAddress?: string | null;
   lastScannedBlock: number;
   /** tokenId (decimal string) -> owner address (lowercase) */
   ownership: Record<string, string>;
@@ -209,12 +194,17 @@ class TokenIndexer {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
       const state: IndexerState = {
+        contractAddress: this.contractAddress?.toLowerCase() ?? null,
         lastScannedBlock: this.lastScannedBlock,
         ownership: Object.fromEntries(this.ownership),
         tokenEditors: Object.fromEntries(this.tokenEditors),
         editorTokens: Object.fromEntries(this.editorTokens),
       };
-      fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));
+      // Write-then-rename: the IPFS GC job reads this file from another
+      // process and must never see it half written.
+      const tmp = `${this.stateFile}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+      fs.renameSync(tmp, this.stateFile);
     } catch (err) {
       console.warn(
         `[${ts()}] [INDEXER] failed to save state for chain ${this.chainId}:`,
@@ -395,7 +385,7 @@ class TokenIndexer {
         return { logs, to };
       } catch (err) {
         const message = String((err as Error).message);
-        if (!RANGE_REJECTION.test(message) || this.logChunkSize <= 1) throw err;
+        if (!isGetLogsRangeRejection(message) || this.logChunkSize <= 1) throw err;
         this._shrinkChunk(from, to, message);
       }
     }
@@ -406,14 +396,7 @@ class TokenIndexer {
    * advertised cap when the error names one, halves otherwise.
    */
   _shrinkChunk(from: number, to: number, message: string): void {
-    const cap = parseGetLogsRangeCap(message);
-    let next =
-      cap !== null ? Math.min(this.logChunkSize, cap) : Math.floor(this.logChunkSize / 2);
-    // Never retry the same span: the advertised cap can be off by one
-    // (inclusive vs exclusive counting), so a non-shrinking snap halves
-    // instead — this guarantees the retry loop converges.
-    if (next >= this.logChunkSize) next = Math.floor(this.logChunkSize / 2);
-    this.logChunkSize = Math.max(1, next);
+    this.logChunkSize = narrowGetLogsChunk(this.logChunkSize, message);
     this._chunkSuccesses = 0;
     console.warn(
       `[${ts()}] [INDEXER] getLogs ${from}..${to} rejected (${message}); ` +
