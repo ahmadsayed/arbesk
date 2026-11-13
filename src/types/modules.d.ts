@@ -66,6 +66,8 @@ declare module "pinata" {
 
   export class PinataSDK {
     constructor(opts: { pinataJwt?: string; pinataGateway?: string });
+    /** The constructor options, as the SDK keeps them. */
+    config?: { pinataJwt?: string; endpointUrl?: string };
     upload: {
       public: {
         file(file: File): Promise<{ cid: string }>;

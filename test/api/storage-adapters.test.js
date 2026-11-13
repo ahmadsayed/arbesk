@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, jest, spyOn } from "bun:test";
 import { createKuboAdapter } from "../../src/api/storage/kubo-adapter.ts";
 import { createPinataAdapter } from "../../src/api/storage/pinata-adapter.ts";
 
@@ -158,6 +158,7 @@ describe("pinata adapter", () => {
   function fakePinata() {
     let signCalls = 0;
     return {
+      config: { pinataJwt: "jwt-test" },
       upload: {
         public: {
           file: jest.fn(async () => ({ id: "id-1", cid: "bafyFakeCid" })),
@@ -260,14 +261,125 @@ describe("pinata adapter", () => {
     expect(JSON.stringify(creds)).not.toMatch(/jwt|JWT|Bearer/);
   });
 
-  it("unpin() resolves cid -> file id(s) and deletes them", async () => {
-    const p = fakePinata();
-    const a = createPinataAdapter(p, {
-      gatewayBase: "https://gw.mypinata.cloud/ipfs/",
-      uploadTtl: 60,
+  describe("unpin() deletes", () => {
+    let fetchSpy;
+    const deleteUrls = () =>
+      fetchSpy.mock.calls.filter(([, init]) => init?.method === "DELETE").map(([url]) => String(url));
+
+    function respond(...statuses) {
+      for (const status of statuses) {
+        fetchSpy.mockImplementationOnce(async () =>
+          new Response(status === 200 ? "{}" : `status ${status}`, {
+            status,
+            headers: status === 429 ? { "Retry-After": "0" } : {},
+          }),
+        );
+      }
+    }
+
+    function adapter(p) {
+      return createPinataAdapter(p, { gatewayBase: "https://gw.mypinata.cloud/ipfs/", uploadTtl: 60 });
+    }
+
+    beforeEach(() => {
+      fetchSpy = spyOn(globalThis, "fetch");
     });
-    expect(await a.unpin("bafyFakeCid")).toBe(true);
-    expect(p.files.public.delete).toHaveBeenCalledWith(["id-1"]);
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    it("looks the cid's file id(s) up and deletes them", async () => {
+      respond(200);
+      expect(await adapter(fakePinata()).unpin("bafyFakeCid")).toBe(true);
+      expect(deleteUrls()).toEqual(["https://api.pinata.cloud/v3/files/public/id-1"]);
+      expect(fetchSpy.mock.calls[0][1].headers.Authorization).toBe("Bearer jwt-test");
+    });
+
+    it("reuses the file ids listPinned() saw instead of looking them up", async () => {
+      const p = fakePinata();
+      p.files.public.list = jest.fn(() => ({
+        limit() {
+          return this;
+        },
+        then(resolve) {
+          resolve({ files: [{ id: "f1", cid: "cid-1", size: 10 }], next_page_token: null });
+        },
+      }));
+      const a = adapter(p);
+      await a.listPinned();
+      respond(200);
+
+      expect(await a.unpin("cid-1")).toBe(true);
+      expect(p.files.public.list).toHaveBeenCalledTimes(1); // the listing only
+      expect(deleteUrls()).toEqual(["https://api.pinata.cloud/v3/files/public/f1"]);
+    });
+
+    it("throws when Pinata refuses the delete", async () => {
+      respond(403);
+      await expect(adapter(fakePinata()).unpin("bafyFakeCid")).rejects.toThrow(/403/);
+    });
+
+    it("treats a file Pinata no longer has as unpinned", async () => {
+      respond(404);
+      expect(await adapter(fakePinata()).unpin("bafyFakeCid")).toBe(true);
+    });
+
+    it("retries a rate-limited delete", async () => {
+      respond(429, 200);
+      expect(await adapter(fakePinata()).unpin("bafyFakeCid")).toBe(true);
+      expect(deleteUrls()).toHaveLength(2);
+    });
+
+    it("retries a server error after backing off", async () => {
+      respond(503, 200);
+      const start = Date.now();
+      expect(await adapter(fakePinata()).unpin("bafyFakeCid")).toBe(true);
+      expect(deleteUrls()).toHaveLength(2);
+      expect(Date.now() - start).toBeGreaterThanOrEqual(450);
+    });
+
+    it("gives up after four rate-limited attempts", async () => {
+      respond(429, 429, 429, 429);
+      await expect(adapter(fakePinata()).unpin("bafyFakeCid")).rejects.toThrow(/HTTP 429/);
+      expect(deleteUrls()).toHaveLength(4);
+    });
+
+    it("sends deletes to a configured endpoint", async () => {
+      const p = fakePinata();
+      p.config.endpointUrl = "https://pinata.example/v3";
+      respond(200);
+      await adapter(p).unpin("bafyFakeCid");
+      expect(deleteUrls()).toEqual(["https://pinata.example/v3/files/public/id-1"]);
+    });
+
+    it("deletes every file a CID is pinned as, and lists the CID once", async () => {
+      const p = fakePinata();
+      p.files.public.list = jest.fn(() => ({
+        limit() {
+          return this;
+        },
+        then(resolve) {
+          resolve({
+            files: [
+              { id: "f1", cid: "cid-1", size: 10 },
+              { id: "f2", cid: "cid-1", size: 10 },
+              { id: "f3" },
+            ],
+            next_page_token: null,
+          });
+        },
+      }));
+      const a = adapter(p);
+      expect(await a.listPinned()).toEqual([{ cid: "cid-1", bytes: 10 }]);
+      respond(200, 200);
+
+      expect(await a.unpin("cid-1")).toBe(true);
+      expect(deleteUrls()).toEqual([
+        "https://api.pinata.cloud/v3/files/public/f1",
+        "https://api.pinata.cloud/v3/files/public/f2",
+      ]);
+    });
   });
 
   it("unpin() returns true when no file matches the cid", async () => {
@@ -277,8 +389,13 @@ describe("pinata adapter", () => {
       gatewayBase: "https://gw.mypinata.cloud/ipfs/",
       uploadTtl: 60,
     });
-    expect(await a.unpin("bafyMissing")).toBe(true);
-    expect(p.files.public.delete).not.toHaveBeenCalled();
+    const fetchSpy = spyOn(globalThis, "fetch");
+    try {
+      expect(await a.unpin("bafyMissing")).toBe(true);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("catBytes() returns raw bytes from the authenticated gateway", async () => {
@@ -384,16 +501,6 @@ describe("pinata adapter", () => {
       },
       (a) => a.unpin("bafyFail"),
       "list failed",
-    ],
-    [
-      "unpin() delete",
-      (p) => {
-        p.files.public.delete = jest.fn(async () => {
-          throw new Error("delete failed");
-        });
-      },
-      (a) => a.unpin("bafyFakeCid"),
-      "delete failed",
     ],
   ])("%s propagates write/pin errors", async (_name, configure, call, message) => {
     const p = fakePinata();

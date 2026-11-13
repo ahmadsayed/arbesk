@@ -227,6 +227,27 @@ describe("runIpfsGC", () => {
     expect(progress[1]).toMatch(/^\[GC\] walked 2\/2 ArbeskAssetFree#2 /);
   });
 
+  it("unpins several orphans at a time", async () => {
+    for (let i = 0; i < 12; i++) pinned.add(`bafyOrphan${i}`);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    storage.unpin.mockImplementation(async (cid) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      pinned.delete(cid);
+      return true;
+    });
+
+    const result = await gc();
+
+    expect(result.unpinned).toBe(12);
+    expect(pinned.size).toBe(0);
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(5);
+  });
+
   it("keeps reference images of live tokens", async () => {
     putManifest("bafyLive", {
       version: 1,
