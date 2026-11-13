@@ -12,6 +12,7 @@ import { extFromMimeType } from "./image-mime.ts";
 import { resolveGlbImageBytes } from "./glb-image-resolve.ts";
 import { imageRemovalFor, pruneBufferImageData } from "./glb-image-prune.ts";
 import type { ImageRemoval } from "./glb-image-prune.ts";
+import { splitBuffersByMesh } from "./gltf-buffer-split.ts";
 import {
   uploadWithDedup,
   attachDedupMeta,
@@ -398,11 +399,16 @@ export async function decompose(
     pruneBufferImageData(composite, bufferBytesByIndex, imageRemovals, "[GLB-DECOMPOSE]");
   }
 
-  // Upload buffers after pruning so the geometry payloads are consistent;
-  // the uploads themselves can overlap.
-  const bufferUploadTasks = collectBufferUploadTasks(buffers, bufferBytesByIndex, stats);
+  // One buffer per mesh, so an unchanged mesh keeps its CID across versions
+  // and across assets.
+  splitBuffersByMesh(composite, bufferBytesByIndex);
+
+  // Upload buffers after pruning and splitting so the geometry payloads are
+  // consistent; the uploads themselves can overlap.
+  const splitBuffers = composite.buffers || [];
+  const bufferUploadTasks = collectBufferUploadTasks(splitBuffers, bufferBytesByIndex, stats);
   await Promise.all(
-    bufferUploadTasks.map((task) => uploadBufferTask(task, uploadCtx, buffers))
+    bufferUploadTasks.map((task) => uploadBufferTask(task, uploadCtx, splitBuffers))
   );
 
   console.log(

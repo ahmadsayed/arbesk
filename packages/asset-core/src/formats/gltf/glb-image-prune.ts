@@ -149,6 +149,30 @@ function anyRemainingViewOverlaps(
   return false;
 }
 
+/**
+ * Extends each range over the padding that follows it, then re-merges.
+ * @remarks Exporters pad an image to a 4-byte boundary. Left behind, those
+ *   1-3 bytes make the buffer's content depend on the image sizes, so the
+ *   same geometry with another texture would get a different CID. A gap is
+ *   padding when it is under 4 bytes and no remaining bufferView covers it.
+ */
+function absorbTrailingPadding(
+  composite: any,
+  bufferIndex: number,
+  ranges: ByteRange[],
+  bufferLength: number
+): ByteRange[] {
+  const boundaries = [bufferLength, ...ranges.map((r) => r.start)];
+  for (const bv of composite.bufferViews) {
+    if (bv.buffer === bufferIndex) boundaries.push(bv.byteOffset || 0);
+  }
+  const extended = ranges.map((r) => {
+    const next = Math.min(...boundaries.filter((b) => b >= r.end));
+    return { start: r.start, end: next - r.end < 4 ? next : r.end };
+  });
+  return mergeRanges(extended);
+}
+
 /** Build new buffer bytes with the given ranges excised. */
 function spliceOutRanges(bytes: Uint8Array, ranges: ByteRange[]): Uint8Array {
   const parts: Uint8Array[] = [];
@@ -252,7 +276,9 @@ export function pruneBufferImageData(
     const bytes = bufferBytesByIndex[bufferIndex];
     if (!bytes) continue;
 
-    const merged = mergeRanges(ranges);
+    const merged = absorbTrailingPadding(
+      composite, bufferIndex, mergeRanges(ranges), bytes.length
+    );
 
     if (anyRemainingViewOverlaps(composite, bufferIndex, merged)) {
       console.warn(

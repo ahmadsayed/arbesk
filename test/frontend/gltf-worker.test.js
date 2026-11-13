@@ -372,7 +372,7 @@ describe("gltf-worker decomposeGlb", () => {
       expect(composite.accessors).toEqual([{ bufferView: 0 }]);
     });
 
-    test("stores the same geometry buffer as the main-thread parser for a textured model", async () => {
+    test("stores the same buffers as the main-thread parser for a textured model", async () => {
       const file = readFileSync("mock-gltf-assets/howdy.glb");
       const arrayBuffer = () =>
         file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
@@ -391,13 +391,20 @@ describe("gltf-worker decomposeGlb", () => {
       );
 
       const imageBytes = images.reduce((sum, img) => sum + img.bytes.length, 0);
+      const bufferBytes = buffers.reduce((sum, buf) => sum + buf.bytes.length, 0);
       expect(imageBytes).toBeGreaterThan(1_000_000);
-      expect(buffers).toHaveLength(1);
-      expect(buffers[0].bytes.length).toBeLessThan(file.length - imageBytes);
-      expect(Buffer.from(buffers[0].bytes).equals(Buffer.from(written.get("howdy_buffer_0.bin")))).toBe(true);
+      // The textures are stored once: the buffers hold geometry only.
+      expect(bufferBytes).toBeLessThan(file.length - imageBytes);
+      // One buffer per large mesh, the same ones on both paths.
+      expect(buffers.length).toBeGreaterThan(1);
+      expect(buffers).toHaveLength(parsed.buffers.length);
+      buffers.forEach((buffer, i) => {
+        const fromParser = written.get(`howdy_buffer_${i}.bin`);
+        expect(Buffer.from(buffer.bytes).equals(Buffer.from(fromParser))).toBe(true);
+      });
       expect(composite.bufferViews).toEqual(parsed.bufferViews);
       expect(composite.accessors).toEqual(parsed.accessors);
-      expect(composite.buffers[0].byteLength).toBe(parsed.buffers[0].byteLength);
+      expect(composite.buffers.map((b) => b.byteLength)).toEqual(parsed.buffers.map((b) => b.byteLength));
       expect(composite.images.some((img) => "bufferView" in img)).toBe(false);
     });
   });

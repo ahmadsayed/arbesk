@@ -94,7 +94,10 @@ fallback `"gltf"`) and dispatches to a `FormatCodec` (`formats/codec.ts`).
   `glb-codec.ts`/`glb-parser.ts` (binary GLB), `gltf-core.ts` (compose entry),
   `image-mime.ts` (magic-byte MIME sniff + extension map, shared with the
   worker), `glb-image-resolve.ts` (image bytes from data-URI/bufferView,
-  shared with the worker),
+  shared with the worker), `glb-image-prune.ts` (removes extracted images
+  from the buffer, shared with the worker), `gltf-buffer-split.ts` (one
+  buffer per mesh for cross-version and cross-asset dedup, shared with the
+  worker),
   `material-editor.ts`/`source-color-editor.ts` (parametric color/scale),
   `apply-node-colors.ts` (pure per-node color baking — worker-safe, no bare
   imports; the worker and the inline executor both use it),

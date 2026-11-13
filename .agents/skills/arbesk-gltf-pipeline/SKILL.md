@@ -19,6 +19,7 @@ description: Use when working with glTF/GLB loading, materials, or the compose/d
 1. **GLB is decomposed on save, not at load** — loads as a raw blob; runtime edits via `post_processor` overlays; on save/publish `decomposeGLB()` turns it into a composite glTF directly (no `.gltf` conversion step).
 2. **glTF → composite on first save** — one-way; stays composite once decomposed.
 3. **Material edits = new composite CID only** — buffers/images keep original CIDs.
+   **One buffer per mesh** (`gltf-buffer-split.ts`): a mesh or texture change re-stores only that mesh or texture, and assets sharing a mesh share its buffer. Never assume `buffers[0]` holds all geometry.
 4. **Scale is always `post_processor`** — geometry transform, not material, even for decomposed nodes.
 5. **Composer deep-clones** — `composeGlTF()` clones via `JSON.parse(JSON.stringify())` before modifying.
 6. **IPFS reads via gateway** — browser `127.0.0.1:8080`; backend `127.0.0.1:5001`.

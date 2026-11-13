@@ -222,6 +222,72 @@ test("image bytes are pruned from the buffer after extraction", async () => {
   expect(new Uint8Array(bufferCall.bytes)).toEqual(MESH);
 });
 
+test("the padding after a pruned image goes with it, so the geometry buffer does not depend on image sizes", async () => {
+  /** MESH followed by one image padded to 4 bytes, as exporters write it. */
+  const geometryBuffer = async (image) => {
+    const padded = new Uint8Array(Math.ceil(image.length / 4) * 4);
+    padded.set(image);
+    const gltf = {
+      asset: { version: "2.0" },
+      buffers: [{ byteLength: MESH.length + padded.length }],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: MESH.length },
+        { buffer: 0, byteOffset: MESH.length, byteLength: image.length },
+      ],
+      accessors: [{ bufferView: 0 }],
+      images: [{ bufferView: 1 }],
+    };
+    const { writer, calls } = makeWriter();
+    await decompose(buildGLB(gltf, concat(MESH, padded)), writer, { assetName: "a", storeComposite: false });
+    return calls.find((c) => c.filename === "a_buffer_0.bin").bytes;
+  };
+
+  const withShortImage = await geometryBuffer(concat(PNG, new Uint8Array([1])));
+  const withLongImage = await geometryBuffer(concat(PNG, new Uint8Array([1, 2, 3, 4, 5, 6])));
+
+  expect([...withShortImage]).toEqual([...MESH]);
+  expect([...withLongImage]).toEqual([...MESH]);
+});
+
+test("geometry after a padded image stays 4-byte aligned once the image is pruned", async () => {
+  const image = concat(PNG, new Uint8Array([1])); // 9 bytes, padded to 12
+  const gltf = {
+    asset: { version: "2.0" },
+    buffers: [{ byteLength: 12 + MESH.length }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: image.length },
+      { buffer: 0, byteOffset: 12, byteLength: MESH.length },
+    ],
+    accessors: [{ bufferView: 1 }],
+    images: [{ bufferView: 0 }],
+  };
+  const { writer, calls } = makeWriter();
+  const { composite } = await decompose(
+    buildGLB(gltf, concat(image, new Uint8Array(3), MESH)), writer, { assetName: "a", storeComposite: false }
+  );
+
+  expect([...calls.find((c) => c.filename === "a_buffer_0.bin").bytes]).toEqual([...MESH]);
+  expect(composite.bufferViews).toEqual([{ buffer: 0, byteOffset: 0, byteLength: MESH.length }]);
+});
+
+test("a gap of 4 bytes or more after a pruned image is not treated as padding", async () => {
+  const gap = new Uint8Array([9, 9, 9, 9]);
+  const gltf = {
+    asset: { version: "2.0" },
+    buffers: [{ byteLength: PNG.length + gap.length + MESH.length }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: PNG.length },
+      { buffer: 0, byteOffset: PNG.length + gap.length, byteLength: MESH.length },
+    ],
+    accessors: [{ bufferView: 1 }],
+    images: [{ bufferView: 0 }],
+  };
+  const { writer, calls } = makeWriter();
+  await decompose(buildGLB(gltf, concat(PNG, gap, MESH)), writer, { assetName: "a", storeComposite: false });
+
+  expect([...calls.find((c) => c.filename === "a_buffer_0.bin").bytes]).toEqual([...gap, ...MESH]);
+});
+
 test("bufferViews after a pruned image get their offsets shifted down", async () => {
   // Image FIRST in the buffer, mesh second — pruning shifts the mesh to 0.
   const binary = concat(PNG, MESH);

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { serializeGLB } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
+import { packComposedBuffers } from "./pack-composed-buffers.ts";
 import {
   isCompressedPayload,
   decompressAuto,
@@ -113,40 +114,6 @@ function validateComposedUris(composed: any): void {
       throw new TripoApiError(`${MSG_SOURCE_UNRESOLVABLE_PREFIX} (image uri: ${img.uri})`, 0, 400);
     }
   }
-}
-
-function packComposedBuffers(composed: any): Buffer {
-  const binParts: Buffer[] = [];
-  const bufOffsets: number[] = [];
-  let cumulative = 0;
-  for (const buf of composed.buffers || []) {
-    bufOffsets.push(cumulative);
-    if (buf.uri && buf.uri.startsWith("data:")) {
-      const b64 = buf.uri.split(",")[1];
-      const bytes = Buffer.from(b64, "base64");
-      binParts.push(bytes);
-      cumulative += bytes.length;
-    } else {
-      const len = buf.byteLength || 0;
-      binParts.push(Buffer.alloc(len));
-      cumulative += len;
-    }
-  }
-
-  for (let i = 0; i < (composed.buffers || []).length; i++) {
-    composed.buffers[i] = { byteLength: binParts[i].length };
-  }
-
-  if (composed.bufferViews) {
-    for (const bv of composed.bufferViews) {
-      if (bv.buffer > 0 && bv.buffer < bufOffsets.length) {
-        bv.byteOffset = (bv.byteOffset || 0) + bufOffsets[bv.buffer];
-        bv.buffer = 0;
-      }
-    }
-  }
-
-  return Buffer.concat(binParts);
 }
 
 async function resolveCompositeToGlb(

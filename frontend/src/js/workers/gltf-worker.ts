@@ -32,6 +32,7 @@ import { extFromMimeType } from "@arbesk/asset-core/formats/gltf/image-mime.js";
 import { resolveGlbImageBytes } from "@arbesk/asset-core/formats/gltf/glb-image-resolve.js";
 import { imageRemovalFor, pruneBufferImageData } from "@arbesk/asset-core/formats/gltf/glb-image-prune.js";
 import type { ImageRemoval } from "@arbesk/asset-core/formats/gltf/glb-image-prune.js";
+import { splitBuffersByMesh } from "@arbesk/asset-core/formats/gltf/gltf-buffer-split.js";
 import { bakeSourceColorsOp } from "@arbesk/asset-core/formats/gltf/apply-node-colors.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
@@ -437,6 +438,9 @@ async function decomposeGlb(payload: any) {
   if (removals.length > 0) {
     pruneBufferImageData(composite, bufferBytesByIndex, removals, "[WORKER-DECOMPOSE] GLB");
   }
+  // One buffer per mesh, so an unchanged mesh keeps its CID across versions
+  // and across assets.
+  splitBuffersByMesh(composite, bufferBytesByIndex);
   const buffers = extractGlbBuffers(composite, bufferBytesByIndex);
 
   return { composite, buffers, images };

@@ -5,6 +5,7 @@ import { decompose as decomposeMain, isComposite } from "./decomposer.ts";
 import { decompose as decomposeGlbMain, isGLB } from "./glb-parser.ts";
 import { editSourceColors as editSourceColorsMain } from "./source-color-editor.ts";
 import type { DecomposeResult } from "../codec.ts";
+import { MAX_MESH_BUFFERS } from "./gltf-buffer-split.ts";
 
 type PooledUploadCredential = UploadCredential;
 
@@ -31,8 +32,16 @@ function sanitizeAsyncName(name: any) {
   );
 }
 
+/**
+ * Upper bound on the files a decompose uploads: each image, the composite,
+ * and the buffers. The per-mesh split replaces an inline buffer with at most
+ * one buffer per mesh (up to the cap) plus a shared one.
+ */
 function estimateUploadCount(gltfJson: any) {
-  return (gltfJson?.buffers?.length || 0) + (gltfJson?.images?.length || 0) + 1;
+  const meshBuffers = Math.min(gltfJson?.meshes?.length || 0, MAX_MESH_BUFFERS);
+  return (
+    (gltfJson?.buffers?.length || 0) + meshBuffers + (gltfJson?.images?.length || 0) + 1
+  );
 }
 
 const GLB_MAGIC = 0x46546c67;
