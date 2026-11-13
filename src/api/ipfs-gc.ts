@@ -17,8 +17,18 @@ import { getPublicClient, getContractAddress } from "../config.ts";
 import { isGetLogsRangeRejection, narrowGetLogsChunk } from "./get-logs-range.ts";
 import { PROJECT_ROOT } from "./project-root.ts";
 import type { PinnedFile, StorageAdapter } from "./storage/index.ts";
-import { walkManifestChain, type GCWalkRunState } from "./manifest-chain-walker.ts";
+import {
+  walkManifestChain,
+  type GCWalkRunState,
+  type WalkOptions,
+} from "./manifest-chain-walker.ts";
 import { loadRefCache, type GCRefCache } from "./ipfs-gc-ref-cache.ts";
+import {
+  findDraftRoots,
+  resolveDraftRetentionMs,
+  trackDrafts,
+  type DraftKindCache,
+} from "./ipfs-gc-drafts.ts";
 import {
   BaseError,
   ContractFunctionRevertedError,
@@ -46,7 +56,14 @@ const DEFAULT_REF_CACHE_PATH = path.join(DATA_DIR, "ipfs-gc-ref-cache.json");
  * @remarks Scope = storage backend + chain, so a mark made while scanning
  *   one chain never satisfies the grace period of another.
  */
-type GCState = Record<string, { orphanSince: Record<string, number> }>;
+type GCState = Record<
+  string,
+  {
+    orphanSince: Record<string, number>;
+    /** First run that saw each unpublished draft root (see ipfs-gc-drafts.ts). */
+    draftSince?: Record<string, number>;
+  }
+>;
 
 /** A missing or corrupt file starts empty: every orphan restarts its grace. */
 function loadGCState(file: string): GCState {
@@ -72,17 +89,103 @@ function saveGCState(file: string, state: GCState): void {
  * @remarks Losing the cache only costs re-reading sources next run, so a
  *   failed save is a warning, not a GC error.
  */
-function saveRefCache(cache: GCRefCache, reachable: Set<string>): void {
+function saveRefCache(cache: GCRefCache, reachable: Set<string>, pinned: Set<string>): void {
   try {
-    cache.save(reachable);
+    cache.save(reachable, pinned);
   } catch (e) {
     console.warn(`[GC] source ref cache not saved: ${(e as Error).message}`);
   }
 }
 
+/**
+ * Finds the unpublished drafts among `unreferenced`, starts or keeps their
+ * retention clocks, and adds every draft still within retention - with all
+ * it refers to - to `reachable`.
+ * @returns the clocks for the current draft roots, the draft tips kept, and
+ *   the files that could not be checked (each may be a draft)
+ * @remarks Walks the newest version of each draft first; a chain stops at a
+ *   manifest whose history this run already walked (`walked`), so a long
+ *   draft costs one read per version. lenientSources: a draft whose source
+ *   or earlier version is gone (not pinned) is already broken and must not
+ *   stop the GC. A pinned file that cannot be read is still an error.
+ */
+async function keepDrafts(args: {
+  unreferenced: string[];
+  previous: Record<string, number>;
+  now: number;
+  retentionMs: number;
+  walk: Pick<WalkOptions, "sourceRefCache" | "isPinned" | "runState">;
+  kinds: DraftKindCache;
+  walked: Set<string>;
+  reachable: Set<string>;
+  storage: StorageAdapter;
+  errors: string[];
+}): Promise<{ draftSince: Record<string, number>; tips: string[]; unchecked: string[] }> {
+  const { unreferenced, previous, now, retentionMs, walk, kinds, walked, reachable, storage, errors } = args;
+  if (retentionMs <= 0) return { draftSince: {}, tips: [], unchecked: [] }; // retention off
+  const { roots, unreadable } = await findDraftRoots(unreferenced, storage, kinds);
+  const { draftSince, kept, tips } = trackDrafts(roots, previous, now, retentionMs);
+  const tipSet = new Set(tips);
+  for (const cid of [...tips, ...kept.filter((root) => !tipSet.has(root))]) {
+    if (walked.has(cid)) continue;
+    const result = await walkManifestChain(
+      cid,
+      { ...walk, recurseIntoSources: true, maxDepth: GC_MAX_CHAIN_DEPTH, lenientSources: true, stopAt: walked },
+      storage,
+    );
+    for (const reached of result.allReachable) reachable.add(reached);
+    for (const manifest of result.visited) walked.add(manifest);
+    errors.push(...result.errors);
+  }
+  for (const cid of unreadable) console.warn(`[GC] could not check ${cid} for a draft - sparing young orphans this run`);
+  console.log(
+    `[GC] drafts | kept=${tips.length} (${kept.length} draft manifests) expired=${roots.length - kept.length} unchecked=${unreadable.length} retentionDays=${retentionMs / (24 * HOUR_MS)}`,
+  );
+  return { draftSince, tips, unchecked: unreadable };
+}
+
+/**
+ * Starts new draft clocks in the GC state right away, before the sweep: a
+ * run that later aborts must still start them, or a draft that keeps causing
+ * errors looks new on every run and never expires. Add-only; a run that
+ * completes trims clocks of drafts now gone.
+ */
+function saveDraftProgress(
+  statePath: string,
+  state: GCState,
+  scope: string,
+  previous: Record<string, number>,
+  current: Record<string, number>,
+): void {
+  if (Object.keys(current).every((cid) => cid in previous)) return;
+  recordDraftClocks(statePath, state, scope, { ...previous, ...current });
+}
+
+/**
+ * Saves draft clocks into the GC state, leaving orphan marks as they were.
+ * Failure only means the clocks start again next run.
+ */
+function recordDraftClocks(
+  statePath: string,
+  state: GCState,
+  scope: string,
+  draftSince: Record<string, number>,
+): void {
+  try {
+    saveGCState(statePath, {
+      ...state,
+      [scope]: { orphanSince: state[scope]?.orphanSince ?? {}, draftSince },
+    });
+  } catch (e) {
+    console.warn(`[GC] draft clocks not saved: ${(e as Error).message}`);
+  }
+}
+
 function resolveGraceMs(graceMs: number | undefined): number {
   if (graceMs !== undefined) return Number(graceMs);
-  const hours = Number(process.env.IPFS_GC_GRACE_HOURS ?? DEFAULT_GRACE_HOURS);
+  // Blank (`IPFS_GC_GRACE_HOURS=`, as in .env.example) is unset, not 0.
+  const raw = process.env.IPFS_GC_GRACE_HOURS?.trim();
+  const hours = raw ? Number(raw) : DEFAULT_GRACE_HOURS;
   return (Number.isFinite(hours) && hours >= 0 ? hours : DEFAULT_GRACE_HOURS) * HOUR_MS;
 }
 
@@ -363,11 +466,44 @@ function countingReads(storage: StorageAdapter) {
   };
 }
 
+/**
+ * Keeps a token's editor list: its URI is stored on-chain and must stay
+ * pinned.
+ * @remarks Older contracts may not expose editorListURI (a revert, ignored);
+ *   an RPC failure leaves the list's pin unprotected, so it is an error.
+ */
+async function addEditorList(
+  entry: GCContractEntry,
+  tokenId: string,
+  reachable: Set<string>,
+  errors: string[],
+): Promise<void> {
+  const { contract, name } = entry;
+  try {
+    const editorListUri = (await contract.client.readContract({
+      address: contract.address,
+      abi: contract.abi,
+      functionName: "editorListURI",
+      args: [BigInt(tokenId)],
+    })) as string;
+    if (editorListUri && typeof editorListUri === "string") {
+      const cid = editorListUri.replace(/^ipfs:\/\//, "");
+      if (cid) reachable.add(cid);
+    }
+  } catch (e) {
+    if (!isContractRevert(e)) {
+      errors.push(`${name}#${tokenId} editorListURI: ${(e as Error).message}`);
+    }
+  }
+}
+
 async function buildReachableSet(
   liveByContract: { entry: GCContractEntry; tokenIds: string[] }[],
   storage: StorageAdapter,
   sourceRefCache: GCRefCache,
   pinnedCids: Set<string>,
+  runState: GCWalkRunState,
+  walkedChains: Set<string>,
 ): Promise<{ reachable: Set<string>; errors: string[]; tokensProcessed: number }> {
   const reachable = new Set<string>();
   const errors: string[] = [];
@@ -375,7 +511,6 @@ async function buildReachableSet(
   const total = liveByContract.reduce((n, { tokenIds }) => n + tokenIds.length, 0);
   let walked = 0;
   const reads = countingReads(storage);
-  const runState: GCWalkRunState = { followed: new Set(), sourcesRead: new Set() };
 
   for (const { entry, tokenIds } of liveByContract) {
     const { contract, name } = entry;
@@ -400,7 +535,7 @@ async function buildReachableSet(
       tokensProcessed++;
 
       try {
-        const { allReachable, errors: walkErrors } = await walkManifestChain(
+        const { allReachable, visited, errors: walkErrors } = await walkManifestChain(
           manifestCid,
           {
             recurseIntoSources: true,
@@ -413,6 +548,7 @@ async function buildReachableSet(
           reads.storage,
         );
         for (const cid of allReachable) reachable.add(cid);
+        for (const cid of visited) walkedChains.add(cid);
         if (walkErrors?.length) errors.push(...walkErrors);
         console.log(
           `[GC] walked ${walked}/${total} ${name}#${shortTokenId(tokenId)} | ` +
@@ -422,25 +558,7 @@ async function buildReachableSet(
         errors.push(`${name}#${tokenId} walk ${manifestCid}: ${(e as Error).message}`);
       }
 
-      // Editor list URI is stored on-chain and must stay pinned.
-      try {
-        const editorListUri = (await contract.client.readContract({
-          address: contract.address,
-          abi: contract.abi,
-          functionName: "editorListURI",
-          args: [BigInt(tokenId)],
-        })) as string;
-        if (editorListUri && typeof editorListUri === "string") {
-          const cid = editorListUri.replace(/^ipfs:\/\//, "");
-          if (cid) reachable.add(cid);
-        }
-      } catch (e) {
-        // Older contracts may not expose editorListURI (revert); an RPC
-        // failure leaves the list's pin unprotected.
-        if (!isContractRevert(e)) {
-          errors.push(`${name}#${tokenId} editorListURI: ${(e as Error).message}`);
-        }
-      }
+      await addEditorList(entry, tokenId, reachable, errors);
     }
   }
 
@@ -469,6 +587,9 @@ export interface IpfsGCOptions {
   statePath?: string;
   /** Source reference cache file (default: .data/ipfs-gc-ref-cache.json). */
   refCachePath?: string;
+  /** How long an unpublished draft is kept after the run that first saw it
+   * (default: env IPFS_GC_DRAFT_RETENTION_DAYS, else 90 days). */
+  draftRetentionMs?: number;
   /** Token indexer state file to seed the mint scan from (default:
    * .data/token-indexer-<chain id>.json). */
   indexerStatePath?: string;
@@ -494,6 +615,8 @@ export interface IpfsGCResult {
   unpinnedBytes: number;
   /** Orphans whose size could not be read; they count as 0 bytes above. */
   sizeUnknown: number;
+  /** Unpublished drafts kept this run (draft tips: one per draft branch). */
+  drafts: number;
   errors: string[];
 }
 
@@ -705,18 +828,25 @@ function resolveGCContracts(
   return contracts;
 }
 
+/** A run's settings, with defaults filled in. */
+function resolveRunOptions(options: IpfsGCOptions) {
+  return {
+    dryRun: options.dryRun !== false,
+    maxUnpin: options.maxUnpin === undefined ? Infinity : Number(options.maxUnpin),
+    chainId: options.chainId ?? null,
+    eventBatchSize: Number(options.eventBatchSize ?? 10000),
+    graceMs: resolveGraceMs(options.graceMs),
+    statePath: options.statePath ?? DEFAULT_STATE_PATH,
+    now: options.now ? options.now() : Date.now(),
+  };
+}
+
 /**
  * Run the IPFS reachability garbage collector.
  */
 export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAdapter): Promise<IpfsGCResult> {
-  const dryRun = options.dryRun !== false;
-  const maxUnpin =
-    options.maxUnpin === undefined ? Infinity : Number(options.maxUnpin);
-  const chainId = options.chainId ?? null;
-  const eventBatchSize = Number(options.eventBatchSize ?? 10000);
-  const graceMs = resolveGraceMs(options.graceMs);
-  const statePath = options.statePath ?? DEFAULT_STATE_PATH;
-  const now = options.now ? options.now() : Date.now();
+  const { dryRun, maxUnpin, chainId, eventBatchSize, graceMs, statePath, now } =
+    resolveRunOptions(options);
 
   const contracts = resolveGCContracts(options, chainId);
 
@@ -761,17 +891,23 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
       eligibleBytes: 0,
       unpinnedBytes: 0,
       sizeUnknown: 0,
+      drafts: 0,
       errors,
     };
   }
 
   // 3. Build reachable CID set.
   const refCache = loadRefCache(options.refCachePath ?? DEFAULT_REF_CACHE_PATH);
+  const pinnedCids = new Set(pinned.map((pin) => pin.cid));
+  const runState: GCWalkRunState = { followed: new Set(), sourcesRead: new Set() };
+  const walked = new Set<string>(); // manifests whose chains this run walked
   const { reachable, errors: walkErrors, tokensProcessed } = await buildReachableSet(
     liveByContract,
     storage,
     refCache,
-    new Set(pinned.map((pin) => pin.cid)),
+    pinnedCids,
+    runState,
+    walked,
   );
   if (walkErrors?.length) errors.push(...walkErrors);
 
@@ -779,34 +915,58 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     `[GC] reachable set built | tokens=${tokensProcessed} cids=${reachable.size} ` +
       `| sources: ${refCache.hits} cached, ${refCache.learned} read`,
   );
-  if (!dryRun) saveRefCache(refCache, reachable);
 
-  // 4. Compute orphans.
-  const orphans = pinned.map((pin) => pin.cid).filter((cid) => !reachable.has(cid));
-  console.log(`[GC] orphans found | count=${orphans.length}`);
-
-  // 5. Grace period.
+  // 4. Keep unpublished drafts: asset manifests no live token reaches, while
+  // within retention, and everything they refer to.
   const scope = `${storage.backend}:${chainId ?? "default"}`;
   const state = loadGCState(statePath);
+  const unreferenced = pinned.map((pin) => pin.cid).filter((cid) => !reachable.has(cid));
+  const previousDrafts = state[scope]?.draftSince ?? {};
+  const retentionMs = resolveDraftRetentionMs(options.draftRetentionMs);
+  const drafts = await keepDrafts({
+    unreferenced,
+    previous: previousDrafts,
+    now,
+    retentionMs,
+    walk: { sourceRefCache: refCache, isPinned: (cid) => pinnedCids.has(cid), runState },
+    kinds: refCache,
+    walked,
+    reachable,
+    storage,
+    errors,
+  });
+  if (!dryRun) {
+    saveRefCache(refCache, reachable, pinnedCids);
+    saveDraftProgress(statePath, state, scope, previousDrafts, drafts.draftSince);
+  }
+
+  // 5. Compute orphans.
+  const orphans = unreferenced.filter((cid) => !reachable.has(cid));
+  console.log(`[GC] orphans found | count=${orphans.length}`);
+
+  // 6. Grace period. A file that could not be checked may be a draft: this
+  // run then spares every orphan young enough to belong to a kept draft.
+  const effectiveGraceMs = drafts.unchecked.length ? Math.max(graceMs, retentionMs) : graceMs;
   const { orphanSince, eligible } = markOrphans(
     orphans,
     state[scope]?.orphanSince ?? {},
     now,
-    graceMs,
+    effectiveGraceMs,
   );
   console.log(
-    `[GC] past grace | eligible=${eligible.length} graceHours=${graceMs / HOUR_MS}`,
+    `[GC] past grace | eligible=${eligible.length} graceHours=${effectiveGraceMs / HOUR_MS}`,
   );
 
-  // 6. Measure the orphans while they are still pinned.
+  // 7. Measure the orphans while they are still pinned.
   const { bytesOf, sizeUnknown } = await measureOrphans(orphans, pinned, storage);
 
-  // 7. Unpin eligible orphans (unless dry run).
+  // 8. Unpin eligible orphans (unless dry run).
   const { aborted, unpinned } = await sweep({
     dryRun,
     toUnpin: eligible.slice(0, maxUnpin),
     orphanSince,
-    commitState: () => saveGCState(statePath, { ...state, [scope]: { orphanSince } }),
+    commitState: () =>
+      saveGCState(statePath, { ...state, [scope]: { orphanSince, draftSince: drafts.draftSince } }),
     storage,
     errors,
   });
@@ -818,7 +978,7 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     `[GC] storage | freed=${formatBytes(unpinnedBytes)} stillOrphaned=${formatBytes(orphanBytes - unpinnedBytes)} pastGrace=${formatBytes(eligibleBytes)} sizeUnknown=${sizeUnknown}`,
   );
   console.log(
-    `[GC] done | dryRun=${dryRun} aborted=${aborted} liveTokens=${tokensProcessed} reachable=${reachable.size} pinned=${pinned.length} orphans=${orphans.length} eligible=${eligible.length} unpinned=${unpinned.length} errors=${errors.length}`,
+    `[GC] done | dryRun=${dryRun} aborted=${aborted} liveTokens=${tokensProcessed} drafts=${drafts.tips.length} reachable=${reachable.size} pinned=${pinned.length} orphans=${orphans.length} eligible=${eligible.length} unpinned=${unpinned.length} errors=${errors.length}`,
   );
 
   return {
@@ -834,6 +994,7 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     eligibleBytes,
     unpinnedBytes,
     sizeUnknown,
+    drafts: drafts.tips.length,
     errors: errors.length > 0 ? errors : [],
   };
 }

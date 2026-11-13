@@ -31,7 +31,7 @@ declare module "ipfs-http-client" {
     };
     cat(
       cid: string,
-      options?: { signal?: AbortSignal; timeout?: number },
+      options?: { signal?: AbortSignal; timeout?: number; length?: number },
     ): AsyncIterable<Uint8Array | string>;
     files: {
       stat(
