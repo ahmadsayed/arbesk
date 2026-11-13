@@ -7,6 +7,7 @@
  */
 
 import { arrayBufferToBase64 } from "../../utils/encoding.ts";
+import { isBrotliFramed } from "../../utils/brotli-frame.ts";
 import { SUPPORTED_HASH_ALGORITHMS } from "../../utils/hash.ts";
 import {
   getPayload,
@@ -19,10 +20,25 @@ interface CidFetchers {
   fetchRaw: (cid: string) => Promise<ArrayBufferLike>;
   /** returns uncompressed bytes */
   fetchDecompressed: (cid: string) => Promise<ArrayBuffer>;
-  /** decompresses gzipped bytes */
+  /** decompresses a compressed stored payload (brotli frame or gzip) */
   decompress: (bytes: Uint8Array) => Uint8Array | Promise<Uint8Array>;
   /** base64 encoder (defaults to the pure util; main thread injects the kernel) */
   base64Encode?: (bytes: Uint8Array | ArrayBuffer) => string;
+}
+
+/**
+ * Returns the payload's plain bytes, decompressing only when the bytes
+ * themselves are compressed (brotli frame or gzip magic).
+ * @remarks Decided from the bytes, not `_arbesk.compressed`: textures are
+ *   stored uncompressed now, older ones are brotli or gzip, and a dedup hit
+ *   can point new metadata at a payload stored with another encoding.
+ */
+async function plainBytes(
+  bytes: Uint8Array,
+  decompress: CidFetchers["decompress"]
+): Promise<Uint8Array> {
+  const gzipped = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+  return gzipped || isBrotliFramed(bytes) ? decompress(bytes) : bytes;
 }
 
 function bytesFromBuffer(buffer: ArrayBufferLike): Uint8Array {
@@ -49,9 +65,7 @@ export async function fetchCIDAsBase64(
   if (useCache) {
     const cached = await getPayload(arbeskMeta.hash);
     if (cached) {
-      const bytes = cached.compressed
-        ? await decompress(cached.bytes)
-        : cached.bytes;
+      const bytes = await plainBytes(cached.bytes, decompress);
       return base64Encode(bytes.buffer as ArrayBuffer);
     }
 
@@ -60,7 +74,7 @@ export async function fetchCIDAsBase64(
     putPayload(arbeskMeta.hash, cid, !!arbeskMeta.compressed, rawBytes).catch(
       (err) => console.warn(`[CACHE-FETCH] cache write failed: ${err.message}`)
     );
-    const bytes = arbeskMeta.compressed ? await decompress(rawBytes) : rawBytes;
+    const bytes = await plainBytes(rawBytes, decompress);
     return base64Encode(bytes.buffer as ArrayBuffer);
   }
 

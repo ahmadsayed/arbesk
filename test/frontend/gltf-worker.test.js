@@ -89,6 +89,103 @@ function buildGlb(json, binBytes = null) {
 
 const PNG_BYTES = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4];
 
+describe("gltf-worker decomposeAndUploadGlb", () => {
+  const GEOMETRY = [10, 11, 12, 13, 14, 15, 16, 17];
+
+  /** Fake Kubo: records every uploaded file and answers with one CID per file. */
+  function mockKubo() {
+    const uploaded = new Map();
+    const realFetch = globalThis.fetch;
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      // Anything else (the worker loading its brotli WASM) goes through.
+      if (!String(url).startsWith("http://kubo.test")) return realFetch(url, init);
+      if (!String(url).includes("/api/v0/add")) return new Response("{}");
+      const lines = [];
+      for (const file of init.body.getAll("file")) {
+        uploaded.set(file.name, new Uint8Array(await file.arrayBuffer()));
+        lines.push(JSON.stringify({ Name: file.name, Hash: `cid-${file.name}` }));
+      }
+      return new Response(lines.join("\n"));
+    });
+    return { uploaded, restore: () => fetchSpy.mockRestore() };
+  }
+
+  function glbWithTexture(texture) {
+    return buildGlb(
+      {
+        asset: { version: "2.0" },
+        buffers: [{ byteLength: GEOMETRY.length + texture.length }],
+        bufferViews: [
+          { buffer: 0, byteOffset: 0, byteLength: GEOMETRY.length },
+          { buffer: 0, byteOffset: GEOMETRY.length, byteLength: texture.length },
+        ],
+        accessors: [{ bufferView: 0 }],
+        images: [{ bufferView: 1 }],
+      },
+      new Uint8Array([...GEOMETRY, ...texture]),
+    );
+  }
+
+  const upload = (arrayBuffer) =>
+    registered.decomposeAndUploadGlb({
+      arrayBuffer,
+      credential: { strategy: "kubo-api", apiUrl: "http://kubo.test", reusable: true },
+      options: { storeComposite: false },
+    });
+
+  test("stores a PNG texture as it is and still compresses the geometry buffer", async () => {
+    const kubo = mockKubo();
+    try {
+      const { composite } = unwrap(await upload(glbWithTexture(PNG_BYTES)));
+
+      expect([...kubo.uploaded.keys()].sort()).toEqual(["buffer_0.bin.br", "texture_0.png"]);
+      expect([...kubo.uploaded.get("texture_0.png")]).toEqual(PNG_BYTES);
+      // "ARB\x01": the brotli frame.
+      expect([...kubo.uploaded.get("buffer_0.bin.br").slice(0, 4)]).toEqual([0x41, 0x52, 0x42, 0x01]);
+      expect(composite.images[0].uri).toBe("ipfs://cid-texture_0.png");
+      expect(composite.images[0]._arbesk.compressed).toBe(false);
+      expect(composite.buffers[0]._arbesk.compressed).toBe(true);
+    } finally {
+      kubo.restore();
+    }
+  });
+
+  test("still compresses a texture in a format that is not already compressed", async () => {
+    const ktx2 = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x31, 0x31, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
+    const kubo = mockKubo();
+    try {
+      const { composite } = unwrap(await upload(glbWithTexture(ktx2)));
+
+      expect([...kubo.uploaded.keys()].sort()).toEqual(["buffer_0.bin.br", "texture_0.ktx2.br"]);
+      expect(composite.images[0]._arbesk.compressed).toBe(true);
+    } finally {
+      kubo.restore();
+    }
+  });
+
+  test("reuses a texture an older save stored compressed", async () => {
+    const kubo = mockKubo();
+    try {
+      const first = unwrap(await upload(glbWithTexture(PNG_BYTES)));
+      const hash = first.composite.images[0]._arbesk.hash;
+      kubo.uploaded.clear();
+
+      const { composite } = unwrap(
+        await registered.decomposeAndUploadGlb({
+          arrayBuffer: glbWithTexture(PNG_BYTES),
+          credential: { strategy: "kubo-api", apiUrl: "http://kubo.test", reusable: true },
+          options: { storeComposite: false, dedupMap: new Map([[hash, "bafyOldCompressedTexture"]]) },
+        }),
+      );
+
+      expect([...kubo.uploaded.keys()]).toEqual(["buffer_0.bin.br"]);
+      expect(composite.images[0].uri).toBe("ipfs://bafyOldCompressedTexture");
+    } finally {
+      kubo.restore();
+    }
+  });
+});
+
 describe("gltf-worker decomposeGlb", () => {
   test("extracts the BIN chunk of a real GLB into a placeholder buffer entry", async () => {
     const buf = readFileSync("mock-gltf-assets/triangle.glb");

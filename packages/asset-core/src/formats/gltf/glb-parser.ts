@@ -15,6 +15,7 @@ import type { ImageRemoval } from "./glb-image-prune.ts";
 import { splitBuffersByMesh } from "./gltf-buffer-split.ts";
 import {
   uploadWithDedup,
+  imageCompression,
   attachDedupMeta,
   ipfsUriFromCid,
 } from "./dedup.ts";
@@ -240,7 +241,7 @@ async function uploadImageTask(
     bytes,
     filename,
     ctx.credential,
-    { compress: ctx.compress },
+    { compress: imageCompression(bytes, ctx.compress) },
     ctx.dedupMap
   );
   let newImg = { ...img, uri: ipfsUriFromCid(cid) };

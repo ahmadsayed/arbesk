@@ -87,6 +87,36 @@ describe("fetchCIDAsBase64 cache-aware fetch", () => {
     expect(Buffer.from(payload).equals(Buffer.from(original))).toBe(true);
   });
 
+  it("decompresses a compressed payload even when the metadata says it is not", async () => {
+    // A dedup hit can point new metadata (compressed: false) at a texture
+    // that an older save stored compressed.
+    const original = new Uint8Array(BIG_BYTES).fill(0x5a);
+    const stored = gzipSync(original, { level: 1 });
+    const hash = "55667788";
+    const { fetchCIDAsBase64 } = await load();
+
+    const fetchRaw = jest.fn(async () => stored.buffer.slice(stored.byteOffset, stored.byteOffset + stored.byteLength));
+    const base64 = await fetchCIDAsBase64("bafyOldTexture", { hash, hashAlgo: "murmur3-128", compressed: false, bytes: BIG_BYTES }, { fetchRaw, fetchDecompressed: jest.fn(), decompress: gunzipSync });
+
+    const payload = dataUriPayload(`data:application/octet-stream;base64,${base64}`);
+    expect(Buffer.from(payload).equals(Buffer.from(original))).toBe(true);
+  });
+
+  it("returns an uncompressed payload as it is even when the metadata says compressed", async () => {
+    const png = new Uint8Array(BIG_BYTES).fill(0x77);
+    png.set([0x89, 0x50, 0x4e, 0x47]);
+    const hash = "99aabbcc";
+    const { fetchCIDAsBase64 } = await load();
+
+    const decompress = jest.fn(gunzipSync);
+    const fetchRaw = jest.fn(async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength));
+    const base64 = await fetchCIDAsBase64("bafyPlainTexture", { hash, hashAlgo: "murmur3-128", compressed: true, bytes: BIG_BYTES }, { fetchRaw, fetchDecompressed: jest.fn(), decompress });
+
+    expect(decompress).not.toHaveBeenCalled();
+    const payload = dataUriPayload(`data:application/octet-stream;base64,${base64}`);
+    expect(Buffer.from(payload).equals(Buffer.from(png))).toBe(true);
+  });
+
   it("bypasses the cache for small payloads", async () => {
     const raw = new Uint8Array(1024).fill(0xef);
     const cid = "bafySmall";

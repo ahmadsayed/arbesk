@@ -18,6 +18,9 @@ import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 const { decompose, parseGLB, isGLB } = await import(
   "../packages/asset-core/src/formats/gltf/glb-parser.ts"
 );
+const { isPrecompressedImage } = await import(
+  "../packages/asset-core/src/formats/gltf/image-mime.ts"
+);
 
 // ─── Fixtures ───
 
@@ -90,6 +93,20 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+});
+
+// ─── isPrecompressedImage ───
+
+test("isPrecompressedImage is true only for image formats that are already compressed", () => {
+  expect(isPrecompressedImage(PNG)).toBe(true);
+  expect(isPrecompressedImage(JPEG)).toBe(true);
+  expect(isPrecompressedImage(WEBP)).toBe(true);
+  expect(isPrecompressedImage(GIF)).toBe(true);
+  // KTX2 may hold uncompressed texel data, so it is still compressed on store.
+  expect(isPrecompressedImage(KTX2)).toBe(false);
+  expect(isPrecompressedImage(UNKNOWN)).toBe(false);
+  expect(isPrecompressedImage(MESH)).toBe(false);
+  expect(isPrecompressedImage(new Uint8Array(0))).toBe(false);
 });
 
 // ─── isGLB / parseGLB ───
