@@ -569,8 +569,12 @@ async function sweep(args: {
   return { aborted, unpinned };
 }
 
+/** Unpins in flight at once: each is a network round trip to the backend. */
+const UNPIN_CONCURRENCY = 5;
+
 /**
- * Unpins `toUnpin`, dropping each success from `orphanSince`.
+ * Unpins `toUnpin`, UNPIN_CONCURRENCY at a time, dropping each success from
+ * `orphanSince`.
  * @returns the CIDs that were unpinned; failures are appended to `errors`
  */
 async function unpinEligible(
@@ -580,18 +584,23 @@ async function unpinEligible(
   errors: string[],
 ): Promise<string[]> {
   const unpinned: string[] = [];
-  for (const cid of toUnpin) {
-    try {
-      await storage.unpin(cid);
-      unpinned.push(cid);
-      delete orphanSince[cid];
-      console.log(`[GC] unpinned orphan → ${cid}`);
-    } catch (e) {
-      const msg = `unpin ${cid}: ${(e as Error).message}`;
-      console.warn(`[GC] ${msg}`);
-      errors.push(msg);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < toUnpin.length) {
+      const cid = toUnpin[next++];
+      try {
+        await storage.unpin(cid);
+        unpinned.push(cid);
+        delete orphanSince[cid];
+        console.log(`[GC] unpinned orphan → ${cid}`);
+      } catch (e) {
+        const msg = `unpin ${cid}: ${(e as Error).message}`;
+        console.warn(`[GC] ${msg}`);
+        errors.push(msg);
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(UNPIN_CONCURRENCY, toUnpin.length) }, worker));
   return unpinned;
 }
 

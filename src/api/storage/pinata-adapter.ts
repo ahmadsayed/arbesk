@@ -1,6 +1,6 @@
 import type { BlobPart } from "node:buffer";
 import type { PinataFile, PinataSDK } from "pinata";
-import type { StorageAdapter } from "./index.ts";
+import type { PinnedFile, StorageAdapter } from "./index.ts";
 
 let _signCallSeq = 0;
 
@@ -89,6 +89,78 @@ export interface PinataAdapterOptions {
  *   pre-minted pool so the request path is never blocked on `/files/sign`
  *   latency.
  */
+/** Attempts per file delete; 429 and 5xx answers are retried. */
+const DELETE_ATTEMPTS = 4;
+/** Backoff before a retry when Pinata sends no Retry-After. */
+const DELETE_RETRY_BASE_MS = 500;
+
+/**
+ * Adds one page of the Pinata file listing to `pins` and `seen` (CID → file
+ * ids).
+ * @remarks One CID can be pinned as several files: list it once, keep every id.
+ */
+function collectPinnedPage(
+  files: PinataFile[],
+  pins: PinnedFile[],
+  seen: Map<string, string[]>,
+): void {
+  for (const f of files) {
+    if (!f?.cid) continue;
+    const ids = seen.get(f.cid);
+    if (ids) {
+      ids.push(f.id);
+      continue;
+    }
+    seen.set(f.cid, [f.id]);
+    pins.push({ cid: f.cid, bytes: f.size });
+  }
+}
+
+/** One DELETE request for a Pinata file id, on the SDK's endpoint and JWT. */
+function sendPinataDelete(pinata: PinataSDK, id: string): Promise<Response> {
+  const endpoint = pinata.config?.endpointUrl || "https://api.pinata.cloud/v3";
+  const url = `${endpoint}/files/public/${id}`;
+  return fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${pinata.config?.pinataJwt}` },
+  });
+}
+
+/** How long to wait before retrying a delete: Retry-After, else backoff. */
+function deleteRetryDelayMs(res: Response, attempt: number): number {
+  const retryAfter = Number(res.headers.get("retry-after"));
+  return Number.isFinite(retryAfter) && res.headers.has("retry-after")
+    ? retryAfter * 1000
+    : DELETE_RETRY_BASE_MS * 2 ** (attempt - 1);
+}
+
+/**
+ * Deletes one Pinata file by id.
+ * @remarks Calls the v3 endpoint directly instead of the SDK's
+ *   `files.public.delete`: the SDK (pinata@2.5) sleeps 300 ms after every
+ *   file and reports a failed delete as a status string with the HTTP code
+ *   dropped, never throwing, so a refused delete looked like success and
+ *   429s could not be told apart. A 404 means the file is already gone.
+ * @throws when Pinata refuses the delete, after retrying 429 and 5xx
+ */
+async function deletePinataFile(pinata: PinataSDK, id: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    const res = await sendPinataDelete(pinata, id);
+    if (res.ok || res.status === 404) {
+      await res.body?.cancel();
+      return;
+    }
+    const detail = (await res.text()).slice(0, 200);
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= DELETE_ATTEMPTS) {
+      throw new Error(`pinata delete ${id}: HTTP ${res.status} ${detail}`);
+    }
+    const waitMs = deleteRetryDelayMs(res, attempt);
+    console.warn(`[IPFS] pinata delete ${id}: HTTP ${res.status}, retrying in ${waitMs} ms`);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+}
+
 export function createPinataAdapter(
   pinata: PinataSDK,
   {
@@ -109,6 +181,8 @@ export function createPinataAdapter(
   }
 
   const pool: PoolEntry[] = [];
+  /** File ids per CID from the last `listPinned`, so `unpin` skips a lookup. */
+  let fileIdsByCid = new Map<string, string[]>();
   let refillPromise: Promise<void> | null = null;
 
   function pruneExpired(): void {
@@ -237,10 +311,18 @@ export function createPinataAdapter(
       return Buffer.alloc(0);
     },
 
+    /**
+     * @remarks Uses the file ids the last `listPinned` saw for `cid`, else
+     *   looks them up (one extra request).
+     */
     async unpin(cid) {
-      const { files } = await pinata.files.public.list().cid(cid);
-      if (!files || files.length === 0) return true;
-      await pinata.files.public.delete(files.map((f: PinataFile) => f.id));
+      let ids = fileIdsByCid.get(cid);
+      if (!ids) {
+        const { files } = await pinata.files.public.list().cid(cid);
+        ids = (files || []).map((f: PinataFile) => f.id);
+      }
+      for (const id of ids) await deletePinataFile(pinata, id);
+      fileIdsByCid.delete(cid);
       return true;
     },
 
@@ -250,6 +332,7 @@ export function createPinataAdapter(
      */
     async listPinned() {
       const pins: { cid: string; bytes?: number }[] = [];
+      const seen = new Map<string, string[]>();
       let pageToken: string | null = null;
       const limit = 100;
       let pages = 0;
@@ -261,13 +344,12 @@ export function createPinataAdapter(
           query = query.pageToken(pageToken);
         }
         const { files, next_page_token } = await query;
-        for (const f of files || []) {
-          if (f?.cid) pins.push({ cid: f.cid, bytes: f.size });
-        }
+        collectPinnedPage(files || [], pins, seen);
         pageToken = next_page_token;
         pages++;
       } while (pageToken && pages < maxPages);
 
+      fileIdsByCid = seen;
       return pins;
     },
 
