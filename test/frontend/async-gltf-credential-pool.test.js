@@ -41,6 +41,20 @@ describe("estimateUploadCount", () => {
     expect(estimateUploadCount(gltf)).toBe(4);
   });
 
+  it("adds one upload per mesh, since each mesh may get its own buffer", () => {
+    const gltf = {
+      buffers: [{ uri: "data:..." }],
+      images: [{ uri: "data:..." }],
+      meshes: [{}, {}, {}],
+    };
+    expect(estimateUploadCount(gltf)).toBe(6);
+  });
+
+  it("stops counting meshes at the per-mesh buffer cap", () => {
+    const gltf = { buffers: [{ uri: "data:..." }], meshes: Array(500).fill({}) };
+    expect(estimateUploadCount(gltf)).toBe(1 + 64 + 1);
+  });
+
   it("returns 1 (composite only) when there are no buffers/images", () => {
     expect(estimateUploadCount({})).toBe(1);
     expect(estimateUploadCount(null)).toBe(1);

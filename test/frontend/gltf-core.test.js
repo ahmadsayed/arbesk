@@ -113,6 +113,61 @@ describe("composeGltfJson", () => {
   });
 });
 
+describe("decomposeGltfJson per-mesh buffers", () => {
+  /** Two meshes, each large enough for a buffer of its own, in one data-URI buffer. */
+  function twoMeshGltf() {
+    const vertices = 3000; // 36 kB of positions per mesh
+    const bytes = new Uint8Array(vertices * 12 * 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 13) & 0xff;
+    const meshBytes = vertices * 12;
+    return {
+      bytes,
+      gltf: {
+        asset: { version: "2.0" },
+        buffers: [{
+          uri: `data:application/octet-stream;base64,${Buffer.from(bytes).toString("base64")}`,
+          byteLength: bytes.length,
+        }],
+        bufferViews: [
+          { buffer: 0, byteOffset: 0, byteLength: meshBytes },
+          { buffer: 0, byteOffset: meshBytes, byteLength: meshBytes },
+        ],
+        accessors: [
+          { bufferView: 0, componentType: 5126, count: vertices, type: "VEC3" },
+          { bufferView: 1, componentType: 5126, count: vertices, type: "VEC3" },
+        ],
+        meshes: [
+          { primitives: [{ attributes: { POSITION: 0 } }] },
+          { primitives: [{ attributes: { POSITION: 1 } }] },
+        ],
+      },
+    };
+  }
+
+  it("hands each mesh's bytes to onBuffer as its own buffer", async () => {
+    const { gltf, bytes } = twoMeshGltf();
+    const seen = [];
+
+    const composite = await decomposeGltfJson(gltf, {
+      onBuffer: (i, buf, extracted) => {
+        seen[i] = extracted.bytes;
+        return { ...buf, uri: `ipfs://cid-${i}` };
+      },
+    });
+
+    expect(seen).toHaveLength(2);
+    expect(Buffer.from(seen[0]).equals(Buffer.from(bytes.subarray(0, 36000)))).toBe(true);
+    expect(Buffer.from(seen[1]).equals(Buffer.from(bytes.subarray(36000)))).toBe(true);
+    expect(composite.buffers).toEqual([
+      { byteLength: 36000, uri: "ipfs://cid-0" },
+      { byteLength: 36000, uri: "ipfs://cid-1" },
+    ]);
+    expect(composite.bufferViews.map((v) => v.buffer)).toEqual([0, 1]);
+    // The input still has its single inline buffer.
+    expect(gltf.buffers).toHaveLength(1);
+  });
+});
+
 describe("decomposeGltfJson", () => {
   it("extracts data URIs and applies the callback replacements", async () => {
     const onBuffer = jest.fn((i, buf, _extracted) => ({

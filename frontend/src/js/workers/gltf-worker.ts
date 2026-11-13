@@ -30,6 +30,9 @@ import {
 } from "@arbesk/asset-core/formats/gltf/gltf-core.js";
 import { extFromMimeType } from "@arbesk/asset-core/formats/gltf/image-mime.js";
 import { resolveGlbImageBytes } from "@arbesk/asset-core/formats/gltf/glb-image-resolve.js";
+import { imageRemovalFor, pruneBufferImageData } from "@arbesk/asset-core/formats/gltf/glb-image-prune.js";
+import type { ImageRemoval } from "@arbesk/asset-core/formats/gltf/glb-image-prune.js";
+import { splitBuffersByMesh } from "@arbesk/asset-core/formats/gltf/gltf-buffer-split.js";
 import { bakeSourceColorsOp } from "@arbesk/asset-core/formats/gltf/apply-node-colors.js";
 
 const downloadLimiter = createConcurrencyLimiter(6);
@@ -273,16 +276,44 @@ function resolveBufferBytes(
 }
 
 /**
- * Resolves each embedded GLB buffer to bytes and rewrites the composite
- * entries to worker placeholders.
- * @remarks Skips ipfs:// refs and external URIs; mutates composite.buffers.
+ * Resolves each embedded GLB buffer to its bytes, indexed like
+ * composite.buffers.
+ * @remarks ipfs:// refs and external URIs have no entry.
+ */
+function resolveGlbBuffers(
+  composite: any,
+  binaryChunk: ArrayBuffer | Uint8Array | null
+): Uint8Array[] {
+  const bufferBytesByIndex: Uint8Array[] = [];
+  const gltfBuffers = composite.buffers || [];
+  for (let i = 0; i < gltfBuffers.length; i++) {
+    const buf = gltfBuffers[i];
+    if (buf.uri && !buf.uri.startsWith("data:")) continue;
+
+    const bytes = resolveBufferBytes(buf, binaryChunk);
+    if (!bytes) {
+      console.warn(
+        `[WORKER-DECOMPOSE] GLB buffer[${i}] could not be resolved, skipping`
+      );
+      continue;
+    }
+    bufferBytesByIndex[i] = bytes;
+  }
+  return bufferBytesByIndex;
+}
+
+/**
+ * Builds the upload entry for each resolved GLB buffer and rewrites the
+ * composite entries to worker placeholders.
+ * @remarks Runs after image pruning so the entries carry geometry only.
+ *   ipfs:// refs become skip entries; external URIs stay as-is. Mutates
+ *   composite.buffers.
  */
 function extractGlbBuffers(
   composite: any,
-  binaryChunk: ArrayBuffer | Uint8Array | null
-): { buffers: ExtractedBufferEntry[]; bufferBytesByIndex: Uint8Array[] } {
+  bufferBytesByIndex: Uint8Array[]
+): ExtractedBufferEntry[] {
   const buffers: ExtractedBufferEntry[] = [];
-  const bufferBytesByIndex: Uint8Array[] = [];
   const gltfBuffers = composite.buffers || [];
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
@@ -304,36 +335,43 @@ function extractGlbBuffers(
       continue;
     }
 
-    const bytes = resolveBufferBytes(buf, binaryChunk);
-    if (!bytes) {
-      console.warn(
-        `[WORKER-DECOMPOSE] GLB buffer[${i}] could not be resolved, skipping`
-      );
-      continue;
-    }
+    const bytes = bufferBytesByIndex[i];
+    if (!bytes) continue;
 
-    const name = `buffer_${i}.bin`;
-    buffers.push({ name, bytes, mime: "application/octet-stream" });
-    bufferBytesByIndex[i] = bytes;
+    buffers.push({ name: `buffer_${i}.bin`, bytes, mime: "application/octet-stream" });
     composite.buffers[i] = {
       ...buf,
       uri: WORKER_BUFFER_PLACEHOLDER(buffers.length - 1),
     };
   }
-  return { buffers, bufferBytesByIndex };
+  return buffers;
+}
+
+/**
+ * Composite entry for an image that now lives in its own file: the uri
+ * replaces the bufferView, and a sniffed MIME type fills a missing one.
+ */
+function extractedImageEntry(img: any, uri: string, mimeType: string | null): any {
+  const { bufferView: _bufferView, ...rest } = img;
+  const entry = { ...rest, uri };
+  if (mimeType && !entry.mimeType) entry.mimeType = mimeType;
+  return entry;
 }
 
 /**
  * Extracts each embedded GLB image and rewrites the composite entries to
  * worker placeholders.
- * @remarks ipfs:// refs become skip entries; external URIs stay as-is.
- *   Mutates composite.images.
+ * @remarks ipfs:// refs become skip entries; external URIs stay as-is. An
+ *   extracted image drops its bufferView, and the range it occupied is
+ *   returned so the caller can prune it from the buffer. Mutates
+ *   composite.images.
  */
 function extractGlbImages(
   composite: any,
   bufferBytesByIndex: Uint8Array[]
-): ExtractedImageEntry[] {
+): { images: ExtractedImageEntry[]; removals: ImageRemoval[] } {
   const images: ExtractedImageEntry[] = [];
+  const removals: ImageRemoval[] = [];
   const gltfImages = composite.images || [];
   for (let i = 0; i < gltfImages.length; i++) {
     const img = gltfImages[i];
@@ -360,18 +398,17 @@ function extractGlbImages(
     if (!resolved) continue;
     const { bytes, mimeType } = resolved;
 
+    const removal = imageRemovalFor(composite, img);
+    if (removal) removals.push(removal);
+
     const ext = extFromMimeType(mimeType);
     const name = `texture_${i}.${ext}`;
     images.push({ name, bytes, mime: mimeType });
-    composite.images[i] = {
-      ...img,
-      uri: WORKER_IMAGE_PLACEHOLDER(images.length - 1),
-    };
-    if (mimeType && !composite.images[i].mimeType) {
-      composite.images[i].mimeType = mimeType;
-    }
+    composite.images[i] = extractedImageEntry(
+      img, WORKER_IMAGE_PLACEHOLDER(images.length - 1), mimeType
+    );
   }
-  return images;
+  return { images, removals };
 }
 
 async function decomposeGlb(payload: any) {
@@ -392,8 +429,19 @@ async function decomposeGlb(payload: any) {
     : null;
 
   const composite = JSON.parse(JSON.stringify(json));
-  const { buffers, bufferBytesByIndex } = extractGlbBuffers(composite, binaryChunk);
-  const images = extractGlbImages(composite, bufferBytesByIndex);
+  const bufferBytesByIndex = resolveGlbBuffers(composite, binaryChunk);
+  const { images, removals } = extractGlbImages(composite, bufferBytesByIndex);
+
+  // The images are stored as their own files, so take their bytes out of the
+  // buffer: it then holds geometry only and keeps its CID when a texture
+  // changes (the main-thread parser does the same).
+  if (removals.length > 0) {
+    pruneBufferImageData(composite, bufferBytesByIndex, removals, "[WORKER-DECOMPOSE] GLB");
+  }
+  // One buffer per mesh, so an unchanged mesh keeps its CID across versions
+  // and across assets.
+  splitBuffersByMesh(composite, bufferBytesByIndex);
+  const buffers = extractGlbBuffers(composite, bufferBytesByIndex);
 
   return { composite, buffers, images };
 }

@@ -82,12 +82,21 @@ Each buffer and image is stored as an individual IPFS blob and referenced by CID
 
 ```
 Composite glTF JSON (stored as CID_A)
-├── buffers[0].uri = "ipfs://bafkreibuf0cid..."  ← binary .bin stored separately
+├── buffers[0].uri = "ipfs://bafkreimesh0..."    ← one buffer per mesh
+├── buffers[1].uri = "ipfs://bafkreimesh1..."
+├── buffers[2].uri = "ipfs://bafkreishared..."   ← shared buffer (last)
 ├── images[0].uri  = "ipfs://bafybeimg0cid..."   ← PNG/JPG stored separately
 ├── images[1].uri  = "ipfs://bafybeimg1cid..."
 ├── materials[0].pbrMetallicRoughness.baseColorFactor = [0.8, 0.2, 0.1, 1.0]
 ├── meshes, nodes, scenes, accessors...       ← kept inline in JSON
 ```
+
+**One buffer per mesh** (`gltf-buffer-split.ts`, called by the GLB parser, the glTF decomposer and the glTF worker). A buffer is the unit of content addressing, so each mesh's accessor bytes are copied into a buffer of their own: an unchanged mesh keeps its CID when another mesh, a texture or a material changes, and two assets that share a mesh share its buffer. The split only moves bytes; accessor data is never re-encoded.
+
+- **Shared buffer** — everything no single mesh owns: animation and skin data, accessors used by several meshes, meshes under `MIN_MESH_BUFFER_BYTES` (32 kB), and the smallest meshes beyond `MAX_MESH_BUFFERS` (64).
+- **Not split** — a document with a bufferView extension (`EXT_meshopt_compression`), an unreferenced bufferView, or an accessor that cannot be measured keeps its buffers as they are.
+- **Embedded images** are removed from the buffer first (`glb-image-prune.ts`), together with the 1-3 padding bytes after each, so the geometry bytes do not depend on texture sizes.
+- **Older composites** have a single buffer and still load: compose resolves any number of buffers.
 
 ---
 

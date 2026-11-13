@@ -9,6 +9,7 @@
  */
 
 import { extractDataURI } from "../../utils/uri.ts";
+import { splitBuffersByMesh } from "./gltf-buffer-split.ts";
 
 export const IPFS_URI_PREFIX = "ipfs://";
 
@@ -203,6 +204,28 @@ export async function composeGltfJson(
   return composed;
 }
 
+const BUFFER_MIME_TYPE = "application/octet-stream";
+
+/**
+ * Decodes each data-URI buffer to bytes, indexed like `composite.buffers`.
+ * @remarks Already-decomposed (`ipfs://`) buffers have no entry.
+ */
+function inlineBufferBytes(composite: any, logPrefix: string): Array<Uint8Array | undefined> {
+  const bytesByIndex: Array<Uint8Array | undefined> = [];
+  (composite.buffers || []).forEach((buf: any, i: number) => {
+    if (!buf.uri || buf.uri.startsWith(IPFS_URI_PREFIX)) return;
+    const extracted = extractDataURI(buf.uri);
+    if (!extracted) {
+      console.warn(
+        `${logPrefix} buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`
+      );
+      return;
+    }
+    bytesByIndex[i] = extracted.bytes;
+  });
+  return bytesByIndex;
+}
+
 interface DecomposeCallbacks {
   onBuffer?: (index: number, item: any, extracted: { bytes: Uint8Array; mimeType: string }) => Promise<object> | object;
   onImage?: (index: number, item: any, extracted: { bytes: Uint8Array; mimeType: string }) => Promise<object> | object;
@@ -225,22 +248,18 @@ export async function decomposeGltfJson(
 
   const composite = structuredClone(gltfJson);
 
-  if (composite.buffers) {
-    await Promise.all(
-      composite.buffers.map(async (buf: any, i: number) => {
-        if (!buf.uri || buf.uri.startsWith(IPFS_URI_PREFIX)) return;
-        const extracted = extractDataURI(buf.uri);
-        if (!extracted) {
-          console.warn(
-            `${logPrefix} buffer[${i}] unrecognized URI: ${buf.uri.substring(0, 80)}...`
-          );
-          return;
-        }
-        const next = await onBuffer?.(i, buf, extracted);
-        if (next) composite.buffers[i] = next;
-      })
-    );
-  }
+  // Resolve every inline buffer first, then split them one per mesh so an
+  // unchanged mesh keeps its CID across versions and across assets.
+  const bufferBytesByIndex = inlineBufferBytes(composite, logPrefix);
+  splitBuffersByMesh(composite, bufferBytesByIndex);
+  await Promise.all(
+    (composite.buffers || []).map(async (buf: any, i: number) => {
+      const bytes = bufferBytesByIndex[i];
+      if (!bytes) return;
+      const next = await onBuffer?.(i, buf, { bytes, mimeType: BUFFER_MIME_TYPE });
+      if (next) composite.buffers[i] = next;
+    })
+  );
 
   if (composite.images) {
     await Promise.all(

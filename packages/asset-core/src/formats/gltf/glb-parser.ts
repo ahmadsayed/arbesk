@@ -10,6 +10,9 @@ import { getRuntime } from "../../runtime-state.ts";
 import { sanitizeFileName, extractDataURI } from "../../utils/uri.ts";
 import { extFromMimeType } from "./image-mime.ts";
 import { resolveGlbImageBytes } from "./glb-image-resolve.ts";
+import { imageRemovalFor, pruneBufferImageData } from "./glb-image-prune.ts";
+import type { ImageRemoval } from "./glb-image-prune.ts";
+import { splitBuffersByMesh } from "./gltf-buffer-split.ts";
 import {
   uploadWithDedup,
   attachDedupMeta,
@@ -151,13 +154,6 @@ function resolveBufferBytes(
   return null;
 }
 
-interface ImageRemoval {
-  bufferIndex: number;
-  oldBvIndex: number;
-  start: number;
-  end: number;
-}
-
 interface ImageUploadTask {
   index: number;
   img: any;
@@ -225,17 +221,7 @@ function collectImageUploadTasks(
     const resolved = resolveGlbImageBytes(composite, bufferBytesByIndex, img, i, "[GLB-DECOMPOSE]");
     if (!resolved) continue;
 
-    let removal: ImageRemoval | null = null;
-    if (img.bufferView !== undefined) {
-      const bv = composite.bufferViews[img.bufferView];
-      removal = {
-        bufferIndex: bv.buffer,
-        oldBvIndex: img.bufferView,
-        start: bv.byteOffset || 0,
-        end: (bv.byteOffset || 0) + bv.byteLength,
-      };
-    }
-
+    const removal = imageRemovalFor(composite, img);
     tasks.push({ index: i, img, bytes: resolved.bytes, mimeType: resolved.mimeType, removal });
   }
   return tasks;
@@ -403,27 +389,26 @@ export async function decompose(
   // many textures don't pay a serial upload penalty.
   const images = composite.images || [];
   const imageUploadTasks = collectImageUploadTasks(composite, bufferBytesByIndex, stats);
-  const imageRemovals = await Promise.all(
+  const uploaded = await Promise.all(
     imageUploadTasks.map((task) => uploadImageTask(task, uploadCtx, images))
   );
-  const imageRemovalsByBuffer = new Map<number, ImageRemoval[]>();
-  for (const removal of imageRemovals) {
-    if (!removal) continue;
-    const list = imageRemovalsByBuffer.get(removal.bufferIndex) || [];
-    list.push(removal);
-    imageRemovalsByBuffer.set(removal.bufferIndex, list);
-  }
+  const imageRemovals = uploaded.filter((r): r is ImageRemoval => r !== null);
 
   // Remove extracted image bytes from the buffer(s) so we don't store them twice.
-  if (imageRemovalsByBuffer.size > 0) {
-    pruneBufferImageData(composite, bufferBytesByIndex, imageRemovalsByBuffer);
+  if (imageRemovals.length > 0) {
+    pruneBufferImageData(composite, bufferBytesByIndex, imageRemovals, "[GLB-DECOMPOSE]");
   }
 
-  // Upload buffers after pruning so the geometry payloads are consistent;
-  // the uploads themselves can overlap.
-  const bufferUploadTasks = collectBufferUploadTasks(buffers, bufferBytesByIndex, stats);
+  // One buffer per mesh, so an unchanged mesh keeps its CID across versions
+  // and across assets.
+  splitBuffersByMesh(composite, bufferBytesByIndex);
+
+  // Upload buffers after pruning and splitting so the geometry payloads are
+  // consistent; the uploads themselves can overlap.
+  const splitBuffers = composite.buffers || [];
+  const bufferUploadTasks = collectBufferUploadTasks(splitBuffers, bufferBytesByIndex, stats);
   await Promise.all(
-    bufferUploadTasks.map((task) => uploadBufferTask(task, uploadCtx, buffers))
+    bufferUploadTasks.map((task) => uploadBufferTask(task, uploadCtx, splitBuffers))
   );
 
   console.log(
@@ -454,223 +439,4 @@ export async function decompose(
   }
 
   return { composite, compositeCid };
-}
-
-interface ByteRange {
-  start: number;
-  end: number;
-}
-
-/**
- * Rewrites holder.bufferView through fn when present; fn returning a number
- * replaces the reference.
- */
-function mapBufferViewSlot(holder: any, fn: (index: number) => number | void): void {
-  if (holder?.bufferView === undefined) return;
-  const mapped = fn(holder.bufferView);
-  if (mapped !== undefined) holder.bufferView = mapped;
-}
-
-/**
- * Calls fn with every bufferView index referenced by an accessor (direct +
- * sparse), rewriting the reference when fn returns a number.
- */
-function forEachAccessorBufferView(
-  accessors: any,
-  fn: (index: number) => number | void
-): void {
-  for (const acc of accessors) {
-    mapBufferViewSlot(acc, fn);
-    mapBufferViewSlot(acc.sparse?.indices, fn);
-    mapBufferViewSlot(acc.sparse?.values, fn);
-  }
-}
-
-/**
- * Calls fn with every bufferView index referenced by Draco mesh extensions,
- * rewriting the reference when fn returns a number.
- */
-function forEachDracoBufferView(
-  meshes: any,
-  fn: (index: number) => number | void
-): void {
-  for (const mesh of meshes) {
-    for (const prim of mesh.primitives || []) {
-      mapBufferViewSlot(prim.extensions?.KHR_draco_mesh_compression, fn);
-    }
-  }
-}
-
-/**
- * Calls fn with every bufferView index referenced by accessors (incl. sparse)
- * or mesh extensions (Draco), rewriting the reference when fn returns a
- * number.
- * @remarks Pruning one of these would corrupt geometry.
- */
-function forEachBufferViewRef(
-  composite: any,
-  fn: (index: number) => number | void
-): void {
-  forEachAccessorBufferView(composite.accessors || [], fn);
-  forEachDracoBufferView(composite.meshes || [], fn);
-}
-
-/**
- * Collects the bufferViews referenced by accessors (incl. sparse) or mesh
- * extensions (Draco).
- */
-function collectReferencedBufferViews(composite: any): Set<number> {
-  const referenced = new Set<number>();
-  forEachBufferViewRef(composite, (index) => {
-    referenced.add(index);
-  });
-  return referenced;
-}
-
-/**
- * Rewrite every bufferView reference (accessors, sparse, Draco) through the
- * old→new index mapping after bufferViews were compacted.
- */
-function renumberBufferViewRefs(composite: any, mapping: Map<number, number>): void {
-  forEachBufferViewRef(composite, (index) => mapping.get(index));
-}
-
-/** Sort ranges by start and merge overlapping/adjacent ones. */
-function mergeRanges(ranges: ByteRange[]): ByteRange[] {
-  const sorted = [...ranges].sort((a, b) => a.start - b.start);
-  const merged: ByteRange[] = [];
-  for (const r of sorted) {
-    if (merged.length === 0 || r.start > merged[merged.length - 1].end) {
-      merged.push({ start: r.start, end: r.end });
-    } else {
-      merged[merged.length - 1].end = Math.max(
-        merged[merged.length - 1].end,
-        r.end
-      );
-    }
-  }
-  return merged;
-}
-
-/**
- * Reports whether any surviving bufferView overlaps a range about to be
- * pruned.
- * @remarks The caller must abort the prune in that case.
- */
-function anyRemainingViewOverlaps(
-  composite: any,
-  bufferIndex: number,
-  ranges: ByteRange[]
-): boolean {
-  for (const bv of composite.bufferViews) {
-    if (bv.buffer !== bufferIndex) continue;
-    const start = bv.byteOffset || 0;
-    const end = start + bv.byteLength;
-    for (const r of ranges) {
-      if (end <= r.start || start >= r.end) continue;
-      return true;
-    }
-  }
-  return false;
-}
-
-/** Build new buffer bytes with the given ranges excised. */
-function spliceOutRanges(bytes: Uint8Array, ranges: ByteRange[]): Uint8Array {
-  const parts: Uint8Array[] = [];
-  let last = 0;
-  for (const r of ranges) {
-    if (r.start > last) parts.push(bytes.subarray(last, r.start));
-    last = r.end;
-  }
-  if (last < bytes.length) parts.push(bytes.subarray(last));
-
-  const newBytes = new Uint8Array(parts.reduce((sum, p) => sum + p.length, 0));
-  let pos = 0;
-  for (const p of parts) {
-    newBytes.set(p, pos);
-    pos += p.length;
-  }
-  return newBytes;
-}
-
-/** Shift surviving bufferViews' byteOffsets down past the excised ranges. */
-function adjustBufferViewOffsets(
-  composite: any,
-  bufferIndex: number,
-  ranges: ByteRange[]
-): void {
-  for (const bv of composite.bufferViews) {
-    if (bv.buffer !== bufferIndex) continue;
-    const oldOffset = bv.byteOffset || 0;
-    let adjustment = 0;
-    for (const r of ranges) {
-      if (r.end <= oldOffset) adjustment += r.end - r.start;
-    }
-    bv.byteOffset = oldOffset - adjustment;
-  }
-}
-
-/**
- * Removes image byte ranges from GLB buffers after the images were extracted
- * to separate IPFS objects.
- * @remarks Updates bufferViews, accessors, and byteLength so geometry is
- *   preserved and image bytes aren't stored twice. Both inputs are mutated.
- */
-function pruneBufferImageData(
-  composite: any,
-  bufferBytesByIndex: Array<Uint8Array | undefined>,
-  removalsByBuffer: Map<number, ImageRemoval[]>
-): void {
-  const allRemovedIndices = new Set<number>();
-  for (const list of removalsByBuffer.values()) {
-    for (const r of list) allRemovedIndices.add(r.oldBvIndex);
-  }
-
-  const referenced = collectReferencedBufferViews(composite);
-  const indicesToRemove = new Set<number>();
-  for (const idx of allRemovedIndices) {
-    if (referenced.has(idx)) {
-      console.warn(
-        `[GLB-DECOMPOSE] bufferView ${idx} is also referenced by accessors/extensions, not pruning`
-      );
-    } else {
-      indicesToRemove.add(idx);
-    }
-  }
-
-  if (indicesToRemove.size === 0) return;
-
-  // Compact the bufferView array, remembering old→new indices.
-  const oldBufferViews = composite.bufferViews || [];
-  const newBufferViews: any[] = [];
-  const mapping = new Map<number, number>();
-  for (let i = 0; i < oldBufferViews.length; i++) {
-    if (indicesToRemove.has(i)) continue;
-    mapping.set(i, newBufferViews.length);
-    newBufferViews.push(oldBufferViews[i]);
-  }
-  composite.bufferViews = newBufferViews;
-  renumberBufferViewRefs(composite, mapping);
-
-  for (const [bufferIndex, removals] of removalsByBuffer) {
-    const bytes = bufferBytesByIndex[bufferIndex];
-    if (!bytes) continue;
-
-    const relevant = removals.filter((r) => indicesToRemove.has(r.oldBvIndex));
-    if (relevant.length === 0) continue;
-
-    const merged = mergeRanges(relevant);
-
-    if (anyRemainingViewOverlaps(composite, bufferIndex, merged)) {
-      console.warn(
-        `[GLB-DECOMPOSE] buffer ${bufferIndex}: remaining bufferView overlaps pruned image range, aborting prune`
-      );
-      continue;
-    }
-
-    const newBytes = spliceOutRanges(bytes, merged);
-    adjustBufferViewOffsets(composite, bufferIndex, merged);
-    bufferBytesByIndex[bufferIndex] = newBytes;
-    composite.buffers[bufferIndex].byteLength = newBytes.length;
-  }
 }
