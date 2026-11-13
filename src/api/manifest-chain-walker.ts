@@ -160,6 +160,13 @@ export interface WalkOptions {
   /** With recurseIntoSources: whether a CID is pinned, so an unreadable
    * reference that is not pinned is skipped instead of failing the walk. */
   isPinned?: (cid: string) => boolean;
+  /** With recurseIntoSources: a node source that cannot be read and is not
+   * pinned is skipped instead of being an error. For draft roots: a draft
+   * whose source is gone is already broken, and must not stop the GC. */
+  lenientSources?: boolean;
+  /** Manifests whose chains an earlier walk of this run walked in full: a
+   * chain stops there instead of reading that history again. */
+  stopAt?: Set<string>;
   /** With recurseIntoSources: what earlier walks of the same GC run have
    * already followed and read, so content shared between tokens is handled
    * once per run. Their reachable CIDs are in those walks' results. */
@@ -194,6 +201,8 @@ export async function walkManifestChain(
     maxDepth = 100,
     sourceRefCache,
     isPinned,
+    lenientSources = false,
+    stopAt,
     runState = { followed: new Set<string>(), sourcesRead: new Set<string>() },
   } = options;
 
@@ -209,6 +218,8 @@ export async function walkManifestChain(
     maxDepth,
     sourceRefCache,
     isPinned,
+    lenientSources,
+    stopAt,
     followed: runState.followed,
     sourcesRead: runState.sourcesRead,
     visited,
@@ -227,6 +238,8 @@ interface WalkContext {
   maxDepth: number;
   sourceRefCache?: SourceRefCache;
   isPinned?: (cid: string) => boolean;
+  lenientSources: boolean;
+  stopAt?: Set<string>;
   /** GC mode: references already followed in this run. */
   followed: Set<string>;
   /** GC mode: node sources already read strictly in this run. */
@@ -249,7 +262,11 @@ async function readManifest(
     return JSON.parse(decompressed);
   } catch (e) {
     console.warn(`[WALK] cannot read ${cid}: ${(e as Error).message}`);
-    ctx.errors.push(`read ${cid}: ${(e as Error).message}`);
+    // A draft walk ends quietly at an earlier version that is gone: it is not
+    // pinned, so it hides nothing the GC could unpin.
+    if (!ctx.lenientSources || !ctx.isPinned || ctx.isPinned(cid)) {
+      ctx.errors.push(`read ${cid}: ${(e as Error).message}`);
+    }
     return null;
   }
 }
@@ -339,8 +356,10 @@ async function followNodeSource(
   ctx.sourcesRead.add(cid);
   ctx.followed.add(cid);
   const refs = await readRefs(cid, ctx, storage, true);
-  if (refs === null) ctx.errors.push(`read refs from ${cid}: unreadable`);
-  else await followRefs(refs, ctx, storage);
+  if (refs !== null) await followRefs(refs, ctx, storage);
+  else if (!ctx.lenientSources || !ctx.isPinned || ctx.isPinned(cid)) {
+    ctx.errors.push(`read refs from ${cid}: unreadable`);
+  }
 }
 
 /** Collects a node's source and bundle CIDs (shared via dedup). */
@@ -453,7 +472,7 @@ async function walkSingleChain(
   let depth = 0;
 
   while (currentCid) {
-    if (ctx.visited.has(currentCid)) {
+    if (ctx.visited.has(currentCid) || ctx.stopAt?.has(currentCid)) {
       break;
     }
     if (depth >= ctx.maxDepth) {

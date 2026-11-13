@@ -118,6 +118,8 @@ describe("runIpfsGC", () => {
         statePath,
         indexerStatePath: path.join(path.dirname(statePath), "no-indexer-state.json"),
         refCachePath: path.join(path.dirname(statePath), "ref-cache.json"),
+        // Draft retention off unless a test is about drafts ("unpublished drafts").
+        draftRetentionMs: 0,
         ...opts,
       },
       storage,
@@ -738,6 +740,200 @@ describe("runIpfsGC", () => {
       expect(result.errors).toEqual([]);
       for (const cid of [gone, src, designCid, textureCid, thumbCid]) expect(pinned.has(cid)).toBe(false);
       for (const cid of [col2, col1, kept]) expect(pinned.has(cid)).toBe(true);
+    });
+  });
+
+  describe("unpublished drafts", () => {
+    const DAY = 24 * 3600000;
+    const RETENTION = 90 * DAY;
+    const T0 = Date.UTC(2026, 10, 13);
+    const cidOf = (tag) => `bafkrei${tag.toLowerCase().replace(/[^a-z2-7]/g, "")}`.padEnd(59, "q");
+    const json = (value) => JSON.stringify(value);
+    function pin(cid, body) {
+      blobs.set(cid, body);
+      pinned.add(cid);
+      return cid;
+    }
+    const at = (t, opts = {}) => gc({ now: () => t, draftRetentionMs: RETENTION, ...opts });
+
+    beforeEach(() => {
+      storage.catHead = jest.fn(async (cid, length) => {
+        if (!blobs.has(cid)) throw new Error(`gateway 403 for ${cid}`);
+        return Buffer.from(blobs.get(cid), "utf-8").subarray(0, length);
+      });
+      // One live token, so the run has something to walk.
+      putManifest("bafyLive", { version: 1, scene: { nodes: [] } });
+      chain[FREE]["1"] = { uri: "bafyLive" };
+    });
+
+    /** A never-published CAD asset: generation v1, then a Save-draft v2. */
+    function cadDraft(tag) {
+      const raw = pin(cidOf(`${tag}raw`), "PK\u0003\u0004zip");
+      const v1 = pin(cidOf(`${tag}vone`), json({ asset_id: `asset_${tag}`, version: 1, scene: { nodes: [{ node_id: "n", source: { cid: raw, format: "3mf" } }] } }));
+      const design = pin(cidOf(`${tag}design`), json({ arbesk_cad: 1, code: "return box()" }));
+      const composite = pin(cidOf(`${tag}composite`), json({ arbesk_format: "composite-3mf", parts: { "Metadata/arbesk_cad.json": { cid: design } } }));
+      const v2 = pin(cidOf(`${tag}vtwo`), json({ asset_id: `asset_${tag}`, version: 2, prev_asset_manifest_cid: v1, scene: { nodes: [{ node_id: "n", source: { cid: composite, format: "3mf" } }] } }));
+      return { raw, v1, design, composite, v2, all: [raw, v1, design, composite, v2] };
+    }
+
+    it("keeps an unpublished draft and everything it references", async () => {
+      const draft = cadDraft("xwing");
+
+      const result = await at(T0);
+
+      expect(result.errors).toEqual([]);
+      expect(result.drafts).toBe(1);
+      for (const cid of draft.all) expect(pinned.has(cid)).toBe(true);
+    });
+
+    it("keeps both branches of a forked draft", async () => {
+      const draft = cadDraft("guard");
+      const regen = pin(cidOf("guardregen"), json({ asset_id: "asset_guard", version: 2, prev_asset_manifest_cid: draft.v1, scene: { nodes: [] } }));
+
+      const result = await at(T0);
+
+      expect(result.drafts).toBe(2);
+      for (const cid of [...draft.all, regen]) expect(pinned.has(cid)).toBe(true);
+    });
+
+    it("keeps a draft for the retention period, then reclaims it", async () => {
+      const draft = cadDraft("coaster");
+
+      await at(T0);
+      await at(T0 + 60 * DAY); // still kept: its clock must not restart
+      for (const cid of draft.all) expect(pinned.has(cid)).toBe(true);
+
+      const expired = await at(T0 + RETENTION + DAY);
+
+      expect(expired.drafts).toBe(0);
+      for (const cid of draft.all) expect(pinned.has(cid)).toBe(false);
+    });
+
+    it("gives a newer save of the draft its own clock", async () => {
+      const draft = cadDraft("filter");
+      await at(T0);
+      const v3 = pin(cidOf("filtervthree"), json({ asset_id: "asset_filter", version: 3, prev_asset_manifest_cid: draft.v2, scene: { nodes: [] } }));
+
+      await at(T0 + 60 * DAY);
+      const result = await at(T0 + RETENTION + DAY);
+
+      expect(result.errors).toEqual([]);
+      for (const cid of [...draft.all, v3]) expect(pinned.has(cid)).toBe(true);
+    });
+
+    it("forgets a draft once it is published", async () => {
+      const draft = cadDraft("stand");
+      await at(T0);
+      putManifest("bafyCol", { version: 1, type: "collection", assets: { stand: draft.v2 } });
+      chain[FREE]["2"] = { uri: "bafyCol" };
+
+      const result = await at(T0 + DAY);
+
+      expect(result.drafts).toBe(0);
+      for (const cid of draft.all) expect(pinned.has(cid)).toBe(true);
+    });
+
+    it("does not count staged uploads without a manifest as drafts", async () => {
+      const rawUpload = pin(cidOf("chavflaraw"), "PK\u0003\u0004zip");
+      const staged = pin(cidOf("chavflacomposite"), json({ arbesk_format: "composite-3mf", parts: { "3D/x.model": { cid: cidOf("chavflamodel") } } }));
+      pin(cidOf("chavflamodel"), "<model/>");
+
+      const result = await at(T0);
+
+      expect(result.drafts).toBe(0);
+      for (const cid of [rawUpload, staged]) expect(pinned.has(cid)).toBe(false);
+    });
+
+    it("keeps a draft whose source is no longer pinned anywhere, without failing", async () => {
+      const v1 = pin(cidOf("brokenvone"), json({ asset_id: "asset_broken", version: 1, scene: { nodes: [{ node_id: "n", source: { cid: cidOf("lostsource") } }] } }));
+
+      const result = await at(T0);
+
+      expect(result.errors).toEqual([]);
+      expect(result.aborted).toBe(false);
+      expect(pinned.has(v1)).toBe(true);
+    });
+
+    it("dry runs do not start a draft's clock", async () => {
+      const draft = cadDraft("servo");
+      await at(T0, { dryRun: true });
+
+      const result = await at(T0 + RETENTION + DAY);
+
+      expect(result.drafts).toBe(1);
+      for (const cid of draft.all) expect(pinned.has(cid)).toBe(true);
+    });
+
+    // Review 1: an earlier version already gone must not stop the GC.
+    it("keeps a draft whose earlier version is no longer pinned, without failing", async () => {
+      const v2 = pin(cidOf("lonelyvtwo"), json({ asset_id: "asset_lonely", version: 2, prev_asset_manifest_cid: cidOf("lonelyvonegone"), scene: { nodes: [] } }));
+
+      const first = await at(T0);
+      const later = await at(T0 + RETENTION + DAY);
+
+      expect(first.errors).toEqual([]);
+      expect(first.aborted).toBe(false);
+      expect(first.drafts).toBe(1);
+      expect(later.drafts).toBe(0); // its clock was recorded, so it expires
+      expect(pinned.has(v2)).toBe(false);
+    });
+
+    // Review 2: a run that aborts for another reason still starts draft clocks.
+    it("records draft clocks even when the run aborts", async () => {
+      const draft = cadDraft("servo");
+      putManifest("bafyLive", { version: 1, scene: { nodes: [] } });
+      failures[`${FREE}:ownerOf:1`] = "rpc";
+      const aborted = await at(T0);
+      delete failures[`${FREE}:ownerOf:1`];
+
+      const later = await at(T0 + RETENTION + DAY);
+
+      expect(aborted.aborted).toBe(true);
+      expect(later.drafts).toBe(0);
+      for (const cid of draft.all) expect(pinned.has(cid)).toBe(false);
+    });
+
+    // Review 3: a long draft is read in linear, not quadratic, time.
+    it("reads each manifest of a long draft about once per run", async () => {
+      let prev = null;
+      for (let v = 1; v <= 30; v++) {
+        prev = pin(cidOf(`longv${"abcdefghijklmnopqrstuvwxyz234567"[v]}x${v > 26 ? "z" : ""}`), json({ asset_id: "asset_long", version: v, prev_asset_manifest_cid: prev, scene: { nodes: [] } }));
+      }
+      storage.catBytes.mockClear();
+
+      await at(T0);
+
+      expect(storage.catBytes.mock.calls.length).toBeLessThanOrEqual(2 * 30 + 5);
+    });
+
+    // Review 4: unreferenced files are classified once, ever.
+    it("does not re-check unreferenced files it has already classified", async () => {
+      const staged = pin(cidOf("stagedcomposite"), json({ arbesk_format: "composite-3mf", parts: {} }));
+      await at(T0, { graceMs: 30 * DAY });
+      storage.catHead.mockClear();
+      storage.catBytes.mockClear();
+
+      await at(T0 + DAY, { graceMs: 30 * DAY });
+
+      expect(storage.catHead.mock.calls.map(([cid]) => cid)).not.toContain(staged);
+      expect(storage.catBytes.mock.calls.map(([cid]) => cid)).not.toContain(staged);
+    });
+
+    // Review 4: an unreadable unreferenced file must not block the GC; it only
+    // narrows that run to files older than the draft retention.
+    it("does not fail on an unreadable unreferenced file, and spares anything that could be a draft", async () => {
+      const unreadable = cidOf("unreadable");
+      pinned.add(unreadable); // pinned, every read fails
+      const old = pin(cidOf("oldjunk"), "\u0000bin");
+      await at(T0, { graceMs: 0 }); // marks both
+      const fresh = pin(cidOf("freshjunk"), "\u0000bin");
+
+      const result = await at(T0 + RETENTION + DAY, { graceMs: 0 });
+
+      expect(result.aborted).toBe(false);
+      expect(pinned.has(old)).toBe(false); // older than the retention: safe to reclaim
+      expect(pinned.has(unreadable)).toBe(false);
+      expect(pinned.has(fresh)).toBe(true); // could belong to the unreadable draft
     });
   });
 

@@ -70,6 +70,22 @@ export function createKuboAdapter(
       return catBytes(ipfs, cid);
     },
 
+    /**
+     * @remarks `ipfs cat` with a length limit; stops reading at `length`
+     *   bytes, so the IPFS GC can tell a binary from a JSON file cheaply.
+     */
+    async catHead(cid, length) {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of ipfs.cat(cid, { length, timeout: 15000 })) {
+        const bytes = typeof chunk === "string" ? Buffer.from(chunk, "utf-8") : Buffer.from(chunk);
+        chunks.push(bytes);
+        size += bytes.length;
+        if (size >= length) break;
+      }
+      return Buffer.concat(chunks).subarray(0, length);
+    },
+
     async unpin(cid) {
       try {
         await ipfs.pin.rm(cid);

@@ -75,6 +75,21 @@ describe("kubo adapter", () => {
     expect(bytes.toString("utf-8")).toBe('{"hello":"world"}');
   });
 
+  it("catHead() asks Kubo for the first bytes only and stops there", async () => {
+    const ipfs = fakeIpfs();
+    ipfs.cat = jest.fn(async function* () {
+      yield new Uint8Array(600).fill(0x41);
+      yield new Uint8Array(600).fill(0x42);
+      throw new Error("read past the limit");
+    });
+    const a = createKuboAdapter(ipfs, { apiUrl: "http://127.0.0.1:5001", gatewayBase: "http://127.0.0.1:8080/ipfs/" });
+
+    const head = await a.catHead("bafyX", 1024);
+
+    expect(head.length).toBe(1024);
+    expect(ipfs.cat).toHaveBeenCalledWith("bafyX", expect.objectContaining({ length: 1024 }));
+  });
+
   it("unpin() treats 'not pinned' as success", async () => {
     const ipfs = fakeIpfs();
     ipfs.pin.rm = jest.fn(async () => {

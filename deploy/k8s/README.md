@@ -31,7 +31,11 @@ The manual steps below document what the command does under the hood.
 
 `arbesk-ipfs-gc` unpins Pinata content that no live asset reaches any more
 (deleted assets, burned collections) once it has stayed unreachable for
-`IPFS_GC_GRACE_HOURS` (default 168). The first run only records what it saw,
+`IPFS_GC_GRACE_HOURS` (default 168). Unpublished drafts are kept: any
+pinned asset manifest no live token reaches (Save draft, Show in Studio, a
+generation, a deleted asset's history) is kept with everything it refers to
+for `IPFS_GC_DRAFT_RETENTION_DAYS` (default 90) after the run that first saw
+it, and its clock is in `ipfs-gc-state.json` (`draftSince`). The first run only records what it saw,
 and a run that hits any error unpins nothing and fails the job. It treats
 every pin on the Pinata account as Arbesk's: do not share that account with
 another deployment or chain. Check a run with
