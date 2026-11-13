@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: arbesk
-          image: ahmadsayed/arbesk:11091017
+          image: ahmadsayed/arbesk:11130843
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9090
