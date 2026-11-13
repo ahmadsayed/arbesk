@@ -17,6 +17,10 @@ export interface StorageAdapter {
   catBytes(cid: string): Promise<Buffer>;
   unpin(cid: string): Promise<boolean>;
   listPinned(): Promise<PinnedFile[]>;
+  /** The first `length` bytes of a file (or fewer, if it is shorter), for
+   * telling a JSON source from a binary one without downloading it. Optional:
+   * callers fall back to catBytes without it. */
+  catHead?(cid: string, length: number): Promise<Buffer>;
   /** Stored size of one pinned root, for backends whose listing has no sizes. */
   pinnedBytes?(cid: string): Promise<number>;
   mintUploadCredential(): Promise<{ strategy: string; [key: string]: any }>;
