@@ -7,9 +7,9 @@
 //   1. bun scripts/make-env-k3s.mjs  → .env.k3s from current .env files
 //   2. recreate the arbesk-env secret on the cluster from .env.k3s
 //   3. buildx arm64 build + push ahmadsayed/arbesk:<MMDDHHMM>
-//   4. stamp the new tag into deploy/k8s/deployment.yaml
+//   4. stamp the new tag into deploy/k8s/deployment.yaml and gc.yaml
 //   5. apply all deploy/k8s manifests (order: storage, backup, nostr, service,
-//      ingress, deployment) and wait for the rollout
+//      ingress, deployment, gc) and wait for the rollout
 //
 // Override the SSH target with K3S_SSH=user@host (default adam@192.168.68.60).
 
@@ -21,7 +21,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const SSH = process.env.K3S_SSH || "adam@192.168.68.60";
 const IMAGE = "ahmadsayed/arbesk";
 const TAG = new Date().toISOString().replace(/[-:T]/g, "").slice(4, 12); // MMDDHHMM
-const MANIFEST_ORDER = ["storage", "backup", "nostr", "service", "ingress", "deployment"];
+const MANIFEST_ORDER = ["storage", "backup", "nostr", "service", "ingress", "deployment", "gc"];
+/** Manifests that run the app image and get the new tag stamped in. */
+const IMAGE_MANIFESTS = ["deployment", "gc"];
 
 const log = (msg) => console.log(`[DEPLOY] ${msg}`);
 const run = (cmd, args, opts = {}) => {
@@ -71,13 +73,15 @@ if (usePodman) {
   ]);
 }
 
-// 4. Stamp the tag into the deployment manifest
-const deployFile = path.join(root, "deploy/k8s/deployment.yaml");
-const yaml = fs.readFileSync(deployFile, "utf8");
-const stamped = yaml.replace(/image: ahmadsayed\/arbesk:\S+/, `image: ${IMAGE}:${TAG}`);
-if (stamped === yaml) throw new Error("image tag not found in deploy/k8s/deployment.yaml");
-fs.writeFileSync(deployFile, stamped);
-log(`deployment.yaml → ${IMAGE}:${TAG}`);
+// 4. Stamp the tag into the manifests that run the app image
+for (const name of IMAGE_MANIFESTS) {
+  const file = path.join(root, `deploy/k8s/${name}.yaml`);
+  const yaml = fs.readFileSync(file, "utf8");
+  const stamped = yaml.replace(/image: ahmadsayed\/arbesk:\S+/, `image: ${IMAGE}:${TAG}`);
+  if (stamped === yaml) throw new Error(`image tag not found in deploy/k8s/${name}.yaml`);
+  fs.writeFileSync(file, stamped);
+  log(`${name}.yaml → ${IMAGE}:${TAG}`);
+}
 
 // 5. Apply manifests, then wait for the rollout
 for (const f of MANIFEST_ORDER) {

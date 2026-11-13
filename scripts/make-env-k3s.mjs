@@ -28,6 +28,15 @@ function parseEnvFile(file) {
   return out;
 }
 
+/** Block the Base Sepolia free-tier contract at `address` was deployed in. */
+function readDeployBlock(address) {
+  const file = path.join(root, "blockchain/deployments/baseSepolia/ArbeskAssetFree.json");
+  if (!fs.existsSync(file)) return null;
+  const record = JSON.parse(fs.readFileSync(file, "utf8"));
+  const matches = String(record.address).toLowerCase() === String(address).toLowerCase();
+  return matches && Number.isInteger(record.blockNumber) ? record.blockNumber : null;
+}
+
 const rootEnv = parseEnvFile(path.join(root, ".env"));
 const chainEnv = parseEnvFile(path.join(root, "blockchain", ".env"));
 
@@ -49,8 +58,9 @@ const FROM_ROOT_ENV = [
 
 // Optional: included when present, skipped with a note otherwise.
 // RESEND_API_KEY — Resend-based email OTP routes (CDP email login uses CDP's
-// own OTP and does not need it). GC_ADMIN_TOKEN — Kubo GC admin endpoint,
-// irrelevant in Pinata mode.
+// own OTP and does not need it). GC_ADMIN_TOKEN — guards the manual
+// POST /api/v1/ipfs/gc endpoint; the scheduled GC (deploy/k8s/gc.yaml) does
+// not use it.
 const OPTIONAL_FROM_ROOT_ENV = ["RESEND_API_KEY", "GC_ADMIN_TOKEN"];
 
 // Fixed values for the k3s deployment (non-secret).
@@ -89,9 +99,16 @@ if (missing.length) {
 }
 for (const k of skipped) console.log(`[ENV-K3S] optional ${k} not in root .env — skipped`);
 
+// The IPFS GC (deploy/k8s/gc.yaml) scans mint events from this block; without
+// it the scan starts at block 0. Taken from the committed deployment record,
+// and only when that record is for the contract being deployed against.
+const deployBlock = readDeployBlock(result.CONTRACT_ADDRESS);
+if (deployBlock) result.CONTRACT_DEPLOY_BLOCK = String(deployBlock);
+else console.log("[ENV-K3S] no deployment record for CONTRACT_ADDRESS — CONTRACT_DEPLOY_BLOCK skipped");
+
 const ORDER = [
   "IPFS_BACKEND", "PINATA_JWT", "PINATA_GATEWAY",
-  "DEFAULT_CHAIN_ID", "API_URL", "CONTRACT_ADDRESS",
+  "DEFAULT_CHAIN_ID", "API_URL", "CONTRACT_ADDRESS", "CONTRACT_DEPLOY_BLOCK",
   "NOSTR_RELAY_URL", "PUBLIC_NOSTR_URL", "PUBLIC_ORIGIN", "NOSTR_SERVICE_PRIVATE_KEY",
   "CDP_PROJECT_ID", "CDP_PAYMASTER_URL", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "CDP_WALLET_SECRET",
   "RESEND_API_KEY", "GC_ADMIN_TOKEN", "DEEPSEEK_API_KEY", "MOCK_3D_GENERATION",
