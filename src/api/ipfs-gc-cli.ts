@@ -7,10 +7,20 @@
  */
 
 import { Command } from "commander";
-import { runIpfsGC } from "./ipfs-gc.ts";
+import { formatBytes, runIpfsGC, type IpfsGCResult } from "./ipfs-gc.ts";
 import { createStorageAdapter } from "./storage/index.ts";
 
 const HOUR_MS = 3600000;
+
+/** One line a person can read at the end of a job log. */
+function summaryLine(r: IpfsGCResult): string {
+  const left = r.orphans - r.unpinned;
+  const unknown = r.sizeUnknown > 0 ? ` (${r.sizeUnknown} of unknown size not counted)` : "";
+  return (
+    `[GC-CLI] removed ${r.unpinned} files, ${formatBytes(r.unpinnedBytes)} freed | ` +
+    `${left} unused files, ${formatBytes(r.orphanBytes - r.unpinnedBytes)}, still pinned${unknown}`
+  );
+}
 
 /**
  * Parses `argv` (options only, no program name), runs the collector and
@@ -56,6 +66,7 @@ export async function runGcCli(argv: string[]): Promise<number> {
     );
     console.log("\n[GC-CLI] result:");
     console.log(JSON.stringify(result, null, 2));
+    console.log(summaryLine(result));
     return result.errors.length > 0 ? 2 : 0;
   } catch (err) {
     console.error("[GC-CLI] fatal error:", (err as Error).message);

@@ -88,7 +88,7 @@ describe("runIpfsGC", () => {
         if (!blobs.has(cid)) throw new Error(`missing block for ${cid}`);
         return Buffer.from(blobs.get(cid), "utf-8");
       }),
-      listPinned: jest.fn(async () => Array.from(pinned)),
+      listPinned: jest.fn(async () => Array.from(pinned, (cid) => ({ cid }))),
       unpin: jest.fn(async (cid) => {
         pinned.delete(cid);
         return true;
@@ -303,6 +303,76 @@ describe("runIpfsGC", () => {
       expect(result.aborted).toBe(false);
       expect(result.errors).toEqual([]);
       expect(pinned.has("srcA1")).toBe(false);
+    });
+  });
+
+  describe("storage figures", () => {
+    const HOUR = 3600000;
+    const T0 = 1_800_000_000_000;
+
+    function setupTwoOrphans() {
+      putManifest("bafyLive", { version: 1, scene: { nodes: [] } });
+      pinned.add("bafyOld");
+      pinned.add("bafyNew");
+      chain[FREE]["1"] = { uri: "bafyLive" };
+    }
+
+    it("sums the sizes the pin listing reports (Pinata)", async () => {
+      setupTwoOrphans();
+      const sizes = { bafyLive: 10, bafyOld: 3000, bafyNew: 500 };
+      storage.listPinned = jest.fn(async () =>
+        Array.from(pinned, (cid) => ({ cid, bytes: sizes[cid] })),
+      );
+      await gc({ graceMs: HOUR, now: () => T0 });
+
+      // Both are past grace now; maxUnpin leaves bafyNew for the next run.
+      const result = await gc({ graceMs: HOUR, now: () => T0 + HOUR, maxUnpin: 1 });
+
+      expect(Array.from(pinned).sort()).toEqual(["bafyLive", "bafyNew"]);
+      expect(result.orphanBytes).toBe(3500);
+      expect(result.eligibleBytes).toBe(3500);
+      expect(result.unpinnedBytes).toBe(3000);
+      expect(result.sizeUnknown).toBe(0);
+    });
+
+    it("looks sizes up per orphan when the listing has none (Kubo)", async () => {
+      setupTwoOrphans();
+      storage.pinnedBytes = jest.fn(async (cid) => ({ bafyOld: 2048, bafyNew: 1024 })[cid]);
+
+      const result = await gc();
+
+      expect(storage.pinnedBytes).toHaveBeenCalledTimes(2);
+      expect(storage.pinnedBytes).not.toHaveBeenCalledWith("bafyLive");
+      expect(result.unpinned).toBe(2);
+      expect(result.unpinnedBytes).toBe(3072);
+      expect(result.orphanBytes).toBe(3072);
+    });
+
+    it("still unpins when a size cannot be read, and counts it as unknown", async () => {
+      setupTwoOrphans();
+      storage.pinnedBytes = jest.fn(async (cid) => {
+        if (cid === "bafyOld") throw new Error("stat timed out");
+        return 1024;
+      });
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(result.aborted).toBe(false);
+      expect(result.unpinned).toBe(2);
+      expect(result.unpinnedBytes).toBe(1024);
+      expect(result.sizeUnknown).toBe(1);
+    });
+
+    it("reports sizes in a dry run without unpinning", async () => {
+      setupTwoOrphans();
+      storage.pinnedBytes = jest.fn(async () => 100);
+
+      const result = await gc({ dryRun: true });
+
+      expect(result.orphanBytes).toBe(200);
+      expect(result.unpinnedBytes).toBe(0);
+      expect(storage.unpin).not.toHaveBeenCalled();
     });
   });
 

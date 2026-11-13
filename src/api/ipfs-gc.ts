@@ -15,7 +15,7 @@ import fs from "fs";
 import path from "path";
 import { getPublicClient, getContractAddress } from "../config.ts";
 import { PROJECT_ROOT } from "./project-root.ts";
-import type { StorageAdapter } from "./storage/index.ts";
+import type { PinnedFile, StorageAdapter } from "./storage/index.ts";
 import { walkManifestChain } from "./manifest-chain-walker.ts";
 import {
   BaseError,
@@ -322,7 +322,61 @@ export interface IpfsGCResult {
   /** Orphans whose grace period has elapsed (what a live run unpins). */
   eligible: number;
   unpinned: number;
+  /** Stored size of all orphans, of those past grace, and of those this run
+   * unpinned. Lower bounds when `sizeUnknown` is not 0. */
+  orphanBytes: number;
+  eligibleBytes: number;
+  unpinnedBytes: number;
+  /** Orphans whose size could not be read; they count as 0 bytes above. */
+  sizeUnknown: number;
   errors: string[];
+}
+
+/** 1536 -> "1.5 KB". */
+export function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
+}
+
+/**
+ * Stored size of each orphan: from the pin listing when the backend reports
+ * it there (Pinata), else one lookup per orphan (Kubo).
+ * @remarks A failed lookup never becomes a GC error - errors stop a live run
+ *   from unpinning, and a missing figure must not.
+ */
+async function measureOrphans(
+  orphans: string[],
+  pinned: PinnedFile[],
+  storage: StorageAdapter,
+): Promise<{ bytesOf: Map<string, number>; sizeUnknown: number }> {
+  const listed = new Map<string, number>();
+  for (const pin of pinned) {
+    if (typeof pin.bytes === "number") listed.set(pin.cid, pin.bytes);
+  }
+  const bytesOf = new Map<string, number>();
+  let sizeUnknown = 0;
+  for (const cid of new Set(orphans)) {
+    try {
+      const bytes = listed.get(cid) ?? (await storage.pinnedBytes?.(cid));
+      if (typeof bytes === "number" && Number.isFinite(bytes)) bytesOf.set(cid, bytes);
+      else sizeUnknown++;
+    } catch {
+      sizeUnknown++;
+    }
+  }
+  return { bytesOf, sizeUnknown };
+}
+
+function sumBytes(cids: Iterable<string>, bytesOf: Map<string, number>): number {
+  let total = 0;
+  for (const cid of new Set(cids)) total += bytesOf.get(cid) ?? 0;
+  return total;
 }
 
 /**
@@ -357,7 +411,7 @@ async function sweep(args: {
   commitState: () => void;
   storage: StorageAdapter;
   errors: string[];
-}): Promise<{ aborted: boolean; unpinned: number }> {
+}): Promise<{ aborted: boolean; unpinned: string[] }> {
   const { dryRun, toUnpin, orphanSince, commitState, storage, errors } = args;
   const aborted = !dryRun && errors.length > 0;
   if (aborted) {
@@ -365,7 +419,7 @@ async function sweep(args: {
       `[GC] unpin skipped | ${errors.length} errors make the reachable set unreliable`,
     );
   }
-  let unpinned = 0;
+  let unpinned: string[] = [];
   if (!dryRun && !aborted) {
     unpinned = await unpinEligible(toUnpin, orphanSince, storage, errors);
     try {
@@ -382,19 +436,19 @@ async function sweep(args: {
 
 /**
  * Unpins `toUnpin`, dropping each success from `orphanSince`.
- * @returns how many were unpinned; failures are appended to `errors`
+ * @returns the CIDs that were unpinned; failures are appended to `errors`
  */
 async function unpinEligible(
   toUnpin: string[],
   orphanSince: Record<string, number>,
   storage: StorageAdapter,
   errors: string[],
-): Promise<number> {
-  let unpinned = 0;
+): Promise<string[]> {
+  const unpinned: string[] = [];
   for (const cid of toUnpin) {
     try {
       await storage.unpin(cid);
-      unpinned++;
+      unpinned.push(cid);
       delete orphanSince[cid];
       console.log(`[GC] unpinned orphan → ${cid}`);
     } catch (e) {
@@ -514,7 +568,7 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
   );
 
   // 3. List currently pinned CIDs.
-  let pinned: string[] = [];
+  let pinned: PinnedFile[] = [];
   try {
     pinned = await storage.listPinned();
     console.log(`[GC] pinned CIDs listed | count=${pinned.length}`);
@@ -531,12 +585,16 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
       orphans: 0,
       eligible: 0,
       unpinned: 0,
+      orphanBytes: 0,
+      eligibleBytes: 0,
+      unpinnedBytes: 0,
+      sizeUnknown: 0,
       errors,
     };
   }
 
   // 4. Compute orphans.
-  const orphans = pinned.filter((cid) => !reachable.has(cid));
+  const orphans = pinned.map((pin) => pin.cid).filter((cid) => !reachable.has(cid));
   console.log(`[GC] orphans found | count=${orphans.length}`);
 
   // 5. Grace period.
@@ -552,7 +610,10 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     `[GC] past grace | eligible=${eligible.length} graceHours=${graceMs / HOUR_MS}`,
   );
 
-  // 6. Unpin eligible orphans (unless dry run).
+  // 6. Measure the orphans while they are still pinned.
+  const { bytesOf, sizeUnknown } = await measureOrphans(orphans, pinned, storage);
+
+  // 7. Unpin eligible orphans (unless dry run).
   const { aborted, unpinned } = await sweep({
     dryRun,
     toUnpin: eligible.slice(0, maxUnpin),
@@ -562,8 +623,14 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     errors,
   });
 
+  const orphanBytes = sumBytes(orphans, bytesOf);
+  const eligibleBytes = sumBytes(eligible, bytesOf);
+  const unpinnedBytes = sumBytes(unpinned, bytesOf);
   console.log(
-    `[GC] done | dryRun=${dryRun} aborted=${aborted} liveTokens=${tokensProcessed} reachable=${reachable.size} pinned=${pinned.length} orphans=${orphans.length} eligible=${eligible.length} unpinned=${unpinned} errors=${errors.length}`,
+    `[GC] storage | freed=${formatBytes(unpinnedBytes)} stillOrphaned=${formatBytes(orphanBytes - unpinnedBytes)} pastGrace=${formatBytes(eligibleBytes)} sizeUnknown=${sizeUnknown}`,
+  );
+  console.log(
+    `[GC] done | dryRun=${dryRun} aborted=${aborted} liveTokens=${tokensProcessed} reachable=${reachable.size} pinned=${pinned.length} orphans=${orphans.length} eligible=${eligible.length} unpinned=${unpinned.length} errors=${errors.length}`,
   );
 
   return {
@@ -574,7 +641,11 @@ export async function runIpfsGC(options: IpfsGCOptions = {}, storage: StorageAda
     pinned: pinned.length,
     orphans: orphans.length,
     eligible: eligible.length,
-    unpinned,
+    unpinned: unpinned.length,
+    orphanBytes,
+    eligibleBytes,
+    unpinnedBytes,
+    sizeUnknown,
     errors: errors.length > 0 ? errors : [],
   };
 }

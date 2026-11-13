@@ -35,7 +35,9 @@ The manual steps below document what the command does under the hood.
 and a run that hits any error unpins nothing and fails the job. It treats
 every pin on the Pinata account as Arbesk's: do not share that account with
 another deployment or chain. Check a run with
-`kubectl logs job/<name>` (ends with a JSON summary); run one now with
+`kubectl logs job/<name>`: it ends with a JSON summary and one line such as
+`removed 12 files, 48.2 MB freed | 30 unused files, 110.5 MB, still pinned`
+(the second half is what waits out the grace period). Run one now with
 `kubectl create job --from=cronjob/arbesk-ipfs-gc gc-manual`.
 
 Both PVCs use the default `local-path` StorageClass (host disk). IPFS is

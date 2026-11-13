@@ -245,10 +245,11 @@ export function createPinataAdapter(
     },
 
     /**
-     * Lists all pinned CIDs from the public Pinata network.
+     * Lists all pinned CIDs from the public Pinata network, with the size
+     * Pinata reports for each file.
      */
     async listPinned() {
-      const cids: string[] = [];
+      const pins: { cid: string; bytes?: number }[] = [];
       let pageToken: string | null = null;
       const limit = 100;
       let pages = 0;
@@ -261,13 +262,13 @@ export function createPinataAdapter(
         }
         const { files, next_page_token } = await query;
         for (const f of files || []) {
-          if (f?.cid) cids.push(f.cid);
+          if (f?.cid) pins.push({ cid: f.cid, bytes: f.size });
         }
         pageToken = next_page_token;
         pages++;
       } while (pageToken && pages < maxPages);
 
-      return cids;
+      return pins;
     },
 
     /**
