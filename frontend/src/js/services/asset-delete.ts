@@ -14,7 +14,6 @@ import { loadEditorList, getEditorSetVersion } from "@arbesk/asset-core/domain/e
 import { getProof } from "@arbesk/asset-core/formats/gltf/merkle-editors.js";
 import { getFromRemoteIPFS } from "../ipfs/remote-ipfs.ts";
 import { writeJSONToIPFS } from "../ipfs/write-to-ipfs.ts";
-import { unpinAssetCids } from "./api.ts";
 import { showConfirmDialog } from "../ui/dialog.ts";
 import { showToast } from "../ui/toasts.ts";
 import { emit, EVENTS } from "@arbesk/asset-core/events/bus.js";
@@ -85,11 +84,6 @@ export async function deleteAssetFromCollection({
     return null;
   }
 
-  // Capture the deleted asset's manifest CID before removing it from the
-  // collection so we can unpin its IPFS footprint after the on-chain pointer
-  // has moved to the new collection manifest.
-  const deletedAssetManifestCid = collection.assets[assetId];
-
   const newCollection = {
     ...collection,
     assets: { ...collection.assets },
@@ -114,32 +108,8 @@ export async function deleteAssetFromCollection({
   );
   if (!txHash) throw new Error("Update tokenURI transaction failed");
 
-  // The on-chain tokenURI now points at the new collection, so the deleted
-  // asset's manifest chain is orphaned. Unpin it best-effort, non-blocking -
-  // the backend verifies ownership/editor rights on-chain (token still live)
-  // and checks the orphaned CID against the collection's previous version
-  // (prev_asset_manifest_cid), then walks the chain and unpins the manifest,
-  // source glTF, and thumbnail CIDs. Failures are non-fatal (the asset is
-  // already detached).
-  if (deletedAssetManifestCid) {
-    const capturedCid = deletedAssetManifestCid;
-    unpinAssetCids(capturedCid, {
-      tokenId,
-      chainId: Number(walletState.get().chainId),
-      contractAddress: walletState.get().contractAddress,
-      proof: proofResult.proof,
-    })
-      .then((result) => {
-        console.log(
-          `[DELETE] unpinned ${result.count} CIDs for asset ${assetId}`
-        );
-        if (result.errors?.length)
-          console.warn(`[DELETE] unpin errors:`, result.errors);
-      })
-      .catch((err) =>
-        console.warn(`[DELETE] unpin failed (non-fatal):`, err.message)
-      );
-  }
+  // Nothing is unpinned here: a fork in another collection shares this
+  // asset's version chain. The IPFS GC reclaims what no live asset reaches.
 
   if (
     String(getActiveAssetTokenId()) === String(tokenId) &&

@@ -43,8 +43,11 @@ export interface WalkOptions {
   /** For composite glTFs, also collect embedded buffer/image CIDs (unpin keeps
    * this false to avoid deleting shared mesh/texture data). */
   recurseIntoSources?: boolean;
-  /** For collection manifests, recurse into each `assets[assetId]` manifest
-   * chain. */
+  /** GC mode: recurse into the `assets[assetId]` manifest chains of the
+   * chain tip only. Older collection versions contribute just their own
+   * manifest CID, so an asset removed from the collection stops being
+   * reachable through it (a fork's own chain still reaches the versions it
+   * shares). */
   recurseIntoCollectionAssets?: boolean;
   /** Maximum manifests to walk per chain (each collection asset's chain
    * gets its own budget). Hitting it records an error. */
@@ -122,9 +125,13 @@ async function readManifest(
 
 async function processCollectionManifest(
   manifest: any,
+  isChainTip: boolean,
   ctx: WalkContext,
   storage: StorageAdapter,
 ): Promise<void> {
+  // In GC mode only the tip lists the collection's current assets; an older
+  // version may still list assets that were deleted since.
+  if (ctx.recurseIntoCollectionAssets && !isChainTip) return;
   // Collection manifests map asset IDs to asset manifest CIDs. Those asset
   // manifests may be shared with other collections, so treat them as shared
   // unless the caller explicitly wants full reachability (GC mode).
@@ -272,7 +279,7 @@ async function walkSingleChain(
     ctx.allReachable.add(currentCid);
 
     if (isCollection) {
-      await processCollectionManifest(manifest, ctx, storage);
+      await processCollectionManifest(manifest, depth === 1, ctx, storage);
     } else {
       await processAssetManifest(manifest, ctx, storage);
     }

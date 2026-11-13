@@ -140,8 +140,10 @@ export default function ipfsRoutes(storage: StorageAdapter) {
    * POST /api/v1/ipfs/unpin
    *
    * Unpins the asset-unique CIDs owned by a manifest chain (called before
-   * token burn or after asset removal).
-   * @remarks Shared CIDs (source glTFs, bundle dirs, embedded buffers/images)
+   * token burn).
+   * @remarks Removing an asset from a collection does not call this: a fork
+   *   in another collection shares the asset's version chain, so only the GC
+   *   can tell what is still in use. Shared CIDs (source glTFs, bundle dirs, embedded buffers/images)
    *   are NOT unpinned — they may be referenced by other tokens — so this
    *   only unpins manifest-chain CIDs, thumbnails, and comments archives;
    *   shared CIDs are reclaimed by the GC. The session wallet must own the

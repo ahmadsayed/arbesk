@@ -240,6 +240,72 @@ describe("runIpfsGC", () => {
     expect(storage.unpin).not.toHaveBeenCalled();
   });
 
+  describe("asset deleted from a collection", () => {
+    function putSource(cid) {
+      blobs.set(cid, "\u0000bin");
+      pinned.add(cid);
+    }
+    const asset = (source, prev) => ({
+      version: 1,
+      type: "asset",
+      thumbnail: { cid: `${source}Thumb` },
+      scene: { nodes: [{ node_id: "n", source: { cid: source } }] },
+      prev_asset_manifest_cid: prev,
+    });
+
+    /** Token 1: asset A (two versions) was deleted, asset B stays. */
+    function setupDeleted() {
+      for (const cid of ["srcA1", "srcA1Thumb", "srcA2", "srcA2Thumb", "srcB", "srcBThumb"]) putSource(cid);
+      putManifest("A1", asset("srcA1", null));
+      putManifest("A2", asset("srcA2", "A1"));
+      putManifest("B1", asset("srcB", null));
+      putManifest("COL1", { version: 1, type: "collection", assets: { a: "A2", b: "B1" } });
+      putManifest("COL2", { version: 2, type: "collection", assets: { b: "B1" }, prev_asset_manifest_cid: "COL1" });
+      chain[FREE]["1"] = { uri: "COL2" };
+    }
+
+    it("reclaims every version of the deleted asset and keeps the collection history", async () => {
+      setupDeleted();
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      expect(Array.from(pinned).sort()).toEqual(["B1", "COL1", "COL2", "srcB", "srcBThumb"]);
+    });
+
+    it("keeps the versions a fork in another collection has in its history", async () => {
+      setupDeleted();
+      // Forked at A1, then edited on its own.
+      putSource("srcF2");
+      putSource("srcF2Thumb");
+      putManifest("F2", asset("srcF2", "A1"));
+      putManifest("COLX", { version: 1, type: "collection", assets: { a: "F2" } });
+      chain[FREE]["2"] = { uri: "COLX" };
+
+      const result = await gc();
+
+      expect(result.errors).toEqual([]);
+      for (const cid of ["F2", "srcF2", "A1", "srcA1", "srcA1Thumb"]) expect(pinned.has(cid)).toBe(true);
+      // A2 was made after the fork: nothing reaches it.
+      for (const cid of ["A2", "srcA2", "srcA2Thumb"]) expect(pinned.has(cid)).toBe(false);
+    });
+
+    it("does not abort when the deleted asset's manifests are already gone", async () => {
+      setupDeleted();
+      // Deletes made before this rule unpinned the chain right away.
+      for (const cid of ["A1", "A2"]) {
+        blobs.delete(cid);
+        pinned.delete(cid);
+      }
+
+      const result = await gc();
+
+      expect(result.aborted).toBe(false);
+      expect(result.errors).toEqual([]);
+      expect(pinned.has("srcA1")).toBe(false);
+    });
+  });
+
   describe("grace period", () => {
     const HOUR = 3600000;
     const T0 = 1_800_000_000_000;

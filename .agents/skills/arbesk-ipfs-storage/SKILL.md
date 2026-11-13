@@ -31,6 +31,7 @@ description: Use for any IPFS read/write/pin/unpin issue, backend or frontend �
 12. Worker and main thread never share a live credential pool (structured clone) — reserve follow-up credential *before* the worker call (`reserveFollowUpCredential`, `async-gltf.js`). §3.
 13. Two pools, don't conflate: backend pre-minted (hides sign latency, §7) vs frontend per-publish (works around single-use, §3).
 14. Background "loop until caught up" jobs need a round cap — unbounded microtask loops starve the event loop, hanging the process. §7.
+15. Deleting an asset from a collection unpins nothing — forks share its version chain. Only the GC (`src/api/ipfs-gc.ts`) prunes it: reachable = each live token's current collection version, its assets, and their full histories; assets listed only by older collection versions are not followed.
 
 (§ = section of `references/pinata-mode.md`.)
 

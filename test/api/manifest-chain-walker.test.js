@@ -181,6 +181,18 @@ describe("walkManifestChain", () => {
     expect(Array.from(shared)).toEqual(["bafySource"]);
   });
 
+  it("follows only the tip collection's assets when recurseIntoCollectionAssets is true", async () => {
+    const kept = putManifest({ version: 1, type: "asset", scene: { nodes: [{ node_id: "n", source: { cid: "bafyKeptSource" } }] } });
+    const deleted = putManifest({ version: 1, type: "asset", scene: { nodes: [{ node_id: "n", source: { cid: "bafyDeletedSource" } }] } });
+    const before = putManifest({ version: 1, type: "collection", assets: { kept, deleted } });
+    const tip = putManifest({ version: 2, type: "collection", assets: { kept }, prev_asset_manifest_cid: before });
+
+    const { allReachable, errors } = await walk(tip, { recurseIntoCollectionAssets: true });
+
+    expect(errors).toHaveLength(0);
+    expect(Array.from(allReachable).sort()).toEqual([tip, before, kept, "bafyKeptSource"].sort());
+  });
+
   it("recurses into source JSON and collects embedded buffer/image CIDs when recurseIntoSources is true", async () => {
     ipfsStorage.set(
       "bafySource",
