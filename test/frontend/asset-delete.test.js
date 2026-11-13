@@ -22,7 +22,6 @@ let _getProofResult = { proof: EDITOR_PROOF, role: 2 };
 let _updateAssetURIResult = "0xUpdateTx";
 let _burnResult = "0xBurnTx";
 let _wroteCollection = null;
-let _unpinResult = { count: 1, errors: [] };
 
 beforeEach(() => {
   resetModules();
@@ -33,7 +32,6 @@ beforeEach(() => {
   _getProofResult = { proof: EDITOR_PROOF, role: 2 };
   _updateAssetURIResult = "0xUpdateTx";
   _burnResult = "0xBurnTx";
-  _unpinResult = { count: 1, errors: [] };
 
   _sourceAssetManifest = {
     type: "asset",
@@ -154,7 +152,7 @@ async function loadModule() {
   await mock.module(
     "../../frontend/src/js/services/api.js",
     () => ({
-      unpinAssetCids: jest.fn().mockResolvedValue(_unpinResult),
+      unpinAssetCids: jest.fn(),
       resolveUserEmail: jest.fn(),
     })
   );
@@ -228,7 +226,7 @@ describe("deleteAssetFromCollection", () => {
     expect(result).toBeNull();
   });
 
-  test("delete removes asset, writes new collection, calls updateAssetURI, emits ASSET_CLEARED if active, unpins old CID", async () => {
+  test("delete removes asset, writes new collection, calls updateAssetURI, emits ASSET_CLEARED if active, unpins nothing", async () => {
     _activeAssetTokenId = TOKEN_ID;
     _activeAssetId = "asset_1";
     const { deleteAssetFromCollection } = await loadModule();
@@ -264,12 +262,8 @@ describe("deleteAssetFromCollection", () => {
       NEW_COLLECTION_CID,
       EDITOR_PROOF
     );
-    expect(unpinAssetCids).toHaveBeenCalledWith(ASSET_CID, {
-      tokenId: TOKEN_ID,
-      chainId: 31415822,
-      contractAddress: "0xContractAddress0000000000000000000000000001",
-      proof: EDITOR_PROOF,
-    });
+    // A fork in another collection shares this chain; pruning is the GC's job.
+    expect(unpinAssetCids).not.toHaveBeenCalled();
     expect(emit).toHaveBeenCalledWith(EVENTS.ASSET_CLEARED);
   });
 

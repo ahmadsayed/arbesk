@@ -595,6 +595,8 @@ Batch version of `/ipfs/upload-url`. Session-gated and rate-limited per wallet (
 
 Runs the reachability garbage collector. Requires session auth **plus** an admin token in the `X-Admin-Token` header (configured via `GC_ADMIN_TOKEN`). Shared glTF source data (buffers/images) and bundle CIDs that were skipped by `/ipfs/unpin` are reclaimed here when no reachable manifest references them anymore.
 
+Reachable means: the current collection manifest of every live token, the collection's own version history, each asset the current version lists, and every version in those assets' histories (`prev_asset_manifest_cid`) with the files they reference. Assets listed only by an older collection version are not followed, so an asset deleted from a collection is reclaimed in full — except the versions another live asset still has in its history (a fork shares the chain up to the fork point). This is the only place a deleted asset's content is pruned.
+
 Unpinning is mark-and-sweep with a grace period: a live run unpins only CIDs that an earlier live run already saw orphaned at least `IPFS_GC_GRACE_HOURS` ago (default 168), because content is pinned before its mint or Publish lands. First-seen times persist in `.data/ipfs-gc-state.json`, per storage backend and chain. A live run that hit any error (RPC failure, unreadable manifest or source, truncated chain) skips unpinning, records no marks, and returns `aborted: true`. The response reports `orphans` (all unreachable pins) and `eligible` (those past the grace period).
 
 Request body (all optional):
@@ -610,7 +612,7 @@ Request body (all optional):
 
 ### `POST /api/v1/ipfs/unpin`
 
-Unpins asset-owned IPFS CIDs from a manifest chain. Called before token burn or after asset removal from a collection.
+Unpins asset-owned IPFS CIDs from a manifest chain. Called before token burn. Removing an asset from a collection does not call it: a fork in another collection shares the asset's version chain, so the deleted asset is left to `POST /api/v1/ipfs/gc`. Do not call it with an asset manifest CID that another collection may have forked.
 
 Walks `prev_asset_manifest_cid` backward, collecting manifest CIDs, thumbnails, and comments archive CIDs, then unpins them so they become eligible for garbage collection. **Shared glTF source data (buffers/images) and bundle CIDs are intentionally skipped:** they can be referenced by multiple assets via deduplication, so they are reported in `skipped` and reclaimed later by `POST /api/v1/ipfs/gc`.**
 

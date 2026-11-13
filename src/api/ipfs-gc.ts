@@ -1,8 +1,11 @@
 /**
  * Walks the blockchain for live tokens, builds the reachable CID set, and
  * identifies pinned CIDs outside it as orphaned (unpinnable).
- * @remarks Companion to the conservative POST /api/v1/ipfs/unpin: shared
- *   source CIDs are reclaimed here once no live token can reach them.
+ * @remarks The only place asset content is pruned: deleting an asset from a
+ *   collection unpins nothing. Reachable means the current collection
+ *   version of a live token, its assets, and every version in their history
+ *   - so a deleted asset's versions are reclaimed unless another live asset
+ *   (a fork) still has them in its own history.
  *   Mark-and-sweep with a grace period: content is pinned before its mint
  *   (or Publish) lands, so a CID is unpinned only once it has stayed orphaned
  *   for `graceMs`. First-seen times persist under .data/.
