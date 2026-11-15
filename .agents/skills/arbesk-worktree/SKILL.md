@@ -23,6 +23,8 @@ bun run test:e2e -- --project=chromium
 - It forces `IPFS_BACKEND=kubo`: local E2E asserts `Qm…` CIDs through `127.0.0.1:8080`.
 - Each worktree has its own Compose project, backend port and service ports, so E2E can run while the main checkout's dev server is up.
 - `test:contracts` without the `COMPOSE_PROJECT_NAME` prefix targets the main checkout's containers.
+- A fresh worktree fails two `deployment-integrity` tests ("deployment artifact matches configured …ADDRESS") until its own chain has a deployment. Run `bun scripts/ensure-local-chain.mjs` first, or any E2E run.
+- Only E2E runs get per-worktree ports. `start-dev.sh` and `ensure-local-chain.mjs` bind the stock ports (8545, 5001, 8080, 7777) in every checkout: stop the other checkout's stack first, and stop this one when done (`docker compose -p "$(./scripts/start-dev.sh --print-project)" down`).
 
 ## Clean up
 
