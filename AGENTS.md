@@ -1,6 +1,6 @@
 # AGENTS.md — Arbesk Developer Guide
 
-Conventions for AI agents and developers. Deep reference (load on demand): `docs/ARCHITECTURE.md` · `docs/API_SPEC.md`. Project skills in `.agents/skills/` — read the relevant one before working in its area.
+Conventions for AI agents and developers. Deep reference (load on demand): `docs/ARCHITECTURE.md` · `docs/API_SPEC.md`. Project skills in `.agents/skills/` — read the relevant one before working in its area. Every change follows **§13 Life of a Task** and lands through a pull request the human merges (their side: `HUMANS.md`).
 
 The four shared SDKs under `packages/` are treated as **black boxes** here — consume them by bare specifier, don't reimplement their internals. Each has its own guide: `packages/asset-core/AGENTS.md` · `packages/wallet/AGENTS.md` · `packages/authz/AGENTS.md` · `packages/ai-asset-gen/AGENTS.md` (asset-core's consumer API is also in `docs/ASSET_CORE_SDK.md`).
 
@@ -63,7 +63,7 @@ bun start                              # backend :9090 (runs under Bun);  bun ru
 # Production (Bun runtime)
 bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode); `-- --target=bun-linux-arm64` cross-compiles
 bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
-bun run deploy:k3s                     # one-command deploy to promptscad.com: regen .env.k3s → recreate secret → arm64 build+push → apply manifests → purge Cloudflare cache (deploy/k8s/README.md)
+bun run deploy:k3s                     # one-command deploy to promptscad.com: regen .env.k3s → recreate secret → arm64 build+push → apply manifests → purge Cloudflare cache (deploy/k8s/README.md). Only when the human asks, from the main checkout at origin/main; it changes no tracked file
 # start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config, sources .env.pinata,
 # forces IPFS_BACKEND=pinata + DEFAULT_CHAIN_ID=84532 + API_URL=https://sepolia.base.org, and
 # starts/probes the Nostr relay. Env layering: .env → .env.production (optional overrides) →
@@ -203,6 +203,52 @@ Env files (gitignored, never commit): `blockchain/.env` (deploy keys/addresses �
 
 ## 12. Misc
 
-- **Worktrees**: `bun run worktree:create -- feature-xyz` seeds `.worktrees/feature-xyz` with env files, built frontend, compiled contracts, own Docker stack + deterministic port (arbesk-worktree skill, `e2e/README.md § Git worktrees`).
+- **Worktrees**: `scripts/new-task.sh <kind> <name>` creates `.worktrees/<name>` on branch `<kind>/<name>` from `origin/main`, with env files, built frontend, compiled contracts, own Docker stack + deterministic ports (§13, arbesk-worktree skill, `e2e/README.md § Git worktrees`).
 - **CDP email wallet**: `@coinbase/cdp-core` SDK in `wallet-cdp.ts`, Base Sepolia only (cdp-base-wallet skill).
 - **Repository**: https://github.com/ahmadsayed/arbesk (private — always use the `gh` CLI; public fetches 404).
+
+## 13. Life of a Task
+
+**Nothing lands on `main` that the human didn't merge.** Every change, docs and one-line fixes included, goes through a pull request. `main` is protected on GitHub (a PR is required, admins included; no force push or deletion). Agents merge only when the human says so in the conversation ("merge it"); GitHub can't enforce that part, since agents use the human's `gh` account.
+
+0. **Start from fresh data.** At the start of a session, and before answering any question about the project's state (what's left, PRs, what was merged, what is running), run `scripts/session-start.sh`. Never answer from memory or from a checkout that may be behind. Act on what it reports: finalize merged tasks (step 9), mention open PRs and branches that can go.
+1. **Work in a worktree of your own**, never in the main checkout: it may hold the human's uncommitted work. `scripts/new-task.sh <kind> <name>` (`feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`) creates `.worktrees/<name>` on branch `<kind>/<name>` from `origin/main`. Add `--light` when the task needs neither a built frontend nor compiled contracts (docs, scripts).
+2. **Test first**, then make the change in small commits, then run the checks that cover it (§4: `bun run test`, `lint`, `typecheck`, `typecheck:frontend`). For a bug, reproduce it before fixing and say how.
+3. **Test the real thing, not only the mock.** Unit tests, the mock generator, Hardhat and Kubo never exercise Tripo, Pinata, Base Sepolia, CDP, the k3s cluster or Cloudflare. When a change touches one of those, run it for real (`./scripts/start-dev.sh --testnet` in the worktree) or ask the human to, saying exactly what to try and what they should see.
+4. **Run E2E before the PR** when the change is on the §10 list: rebase the branch onto the current `origin/main`, then `bun run test:e2e -- --project=chromium` in the worktree. A test that fails and passes on retry is reported, not ignored.
+5. **Take screenshots** of anything visible: before (from `main`) and after, in both themes when colours change. Look at them before using them.
+6. **Open the PR** (§14): push the branch, upload the screenshots, fill in the template.
+7. **Review your own PR**, post the review as a comment, then hand over to the human: the link, the verdict, what to look at or try. Stop there.
+8. **The human reviews and merges**, or says "merge it" (`gh pr merge <n> --merge`). If they ask for changes, commit them on the same branch, push, and update the review comment.
+9. **Finalize after the merge**, from the main checkout: `scripts/end-task.sh <name>`. It checks the work is on `origin/main` (or in a merged PR, for a squash merge), stops the worktree's Docker stacks, deletes the worktree, the local branch and the branch on GitHub, and fast-forwards the main checkout if it is clean.
+
+**Record what isn't verified.** Work that can't be checked here (a real provider, the live site, another wallet) is merged as done-but-unverified: the PR's "Not verified" section says so, one line per point.
+
+Run `gh`, `git` and the scripts as plain commands, without `cd … &&`, `;` or variables around them: permission rules match whole commands.
+
+## 14. Pull Requests
+
+- **Title:** conventional and short, like a commit subject (`fix(gc): follow references in any form`).
+- **Body:** follow `.github/pull_request_template.md`, readable in two minutes. Write it to a file outside the repository (the scratchpad) and run `gh pr create --base main --title "…" --body-file <file>`.
+- **Screenshots:** `scripts/pr-screenshots.sh before.png after.png` stores them on the `captures` branch (never `main`), in a folder named after the task branch, and prints the Markdown to paste. "No visible change" otherwise.
+- **How it was checked:** tick only what really ran, with the counts.
+- **Self-review comment**, posted with `gh pr comment <n> --body-file <file>` once the PR is open. Fix what you find before posting; anything you can't settle is ⚠️ with options, never improvised.
+
+  ```markdown
+  ## Review
+
+  **Verdict: ✅ ready to merge** (or ⚠️ needs a decision / ❌ blocked)
+
+  | Check | Result |
+  |---|---|
+  | Mergeable with main, no conflict | ✅ |
+  | Checks run locally (unit, lint, typecheck, pre-commit audit) | ✅ N passed |
+  | E2E, when the change is on the §10 list | ✅ N passed / not needed: … |
+  | Screenshots inspected | ✅ / no UI change |
+  | The real thing, where a provider, the chain or the live site is involved | ✅ … / not needed: … |
+  | Docs (AGENTS.md, HUMANS.md, skills, README) in sync | ✅ |
+
+  ### Findings
+  - Fixed: …
+  - For the human to decide: … (options A / B)
+  ```

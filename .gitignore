@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+# The same name without the slash: task worktrees link node_modules to the main checkout
+node_modules
 .pnp
 .pnp.js
 

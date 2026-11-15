@@ -79,10 +79,10 @@ E2E is worktree-aware. Each checkout gets its own Docker Compose project, its ow
 - The main checkout keeps the stock service ports (Hardhat `8545`, IPFS `5001`/`8080`, Nostr `7777`, +1 per worker); linked worktrees get their own deterministic block in `40000–56000`, so a worktree's E2E run never collides with the main checkout's stacks or a running dev server (up to 8 workers per worktree).
 - Docker containers are named by the Compose project (`arbesk-<worktree-id>_*`) instead of the old global `arbesk-hardhat`, `arbesk-private-ipfs`, and `arbesk-nostr-relay` names.
 
-To create a worktree already seeded with the current working-tree state, environment files, built frontend, and compiled contracts, use the helper script:
+Task worktrees come from `scripts/new-task.sh` (AGENTS.md, "Life of a task"), which branches from `origin/main` and seeds the environment files, a built frontend and compiled contracts:
 
 ```bash
-bun run worktree:create -- feature-xyz
+scripts/new-task.sh feat feature-xyz
 ```
 
 Then run tests from `.worktrees/feature-xyz` as usual. The script also forces `IPFS_BACKEND=kubo` in the worktree `.env` because local E2E relies on the Kubo gateway and `Qm...` CIDs.
