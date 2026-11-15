@@ -51,6 +51,38 @@ test.describe("parametric versioning + time-travel", () => {
     await expect(page.locator(SELECTORS.vtTicks)).toHaveCount(3);
     await expect(page.locator(SELECTORS.vtActiveTick)).toHaveText("3");
     await expect(page.locator(SELECTORS.vtCurrent)).toContainText("v3 · Today");
+
+    // A one-day history compresses its gaps to fit the track: it must not
+    // scroll while it still has gap width to give up. Measured on a detached
+    // copy of the strip (12 saves, 5 minutes apart) so the live one is untouched.
+    const TICKS = 12;
+    const fit = await page.evaluate((ticks) => {
+      const strip = document.querySelector("#versionTimeline");
+      const copy = strip.cloneNode(true);
+      copy.removeAttribute("id");
+      const [day, ...otherDays] = copy.querySelectorAll(".vt-day");
+      otherDays.forEach((d) => d.remove());
+      const row = day.querySelector(".vt-day-ticks");
+      const tick = row.querySelector(".vt-tick");
+      row.replaceChildren();
+      for (let i = 0; i < ticks; i++) {
+        if (i > 0) {
+          const gap = document.createElement("span");
+          gap.className = "vt-gap";
+          gap.style.setProperty("--vt-gap", "1.792");
+          row.append(gap);
+        }
+        row.append(tick.cloneNode(true));
+      }
+      day.style.setProperty("--vt-ticks", String(ticks));
+      day.style.setProperty("--vt-span", String((ticks - 1) * 1.792));
+      strip.after(copy);
+      const track = copy.querySelector(".vt-track");
+      const sizes = { content: track.scrollWidth, track: track.clientWidth };
+      copy.remove();
+      return sizes;
+    }, TICKS);
+    expect(fit.content).toBeLessThanOrEqual(Math.max(fit.track, TICKS * 24));
     await expect(page.locator(SELECTORS.versionTimeline)).toHaveAttribute(
       "aria-valuemax",
       "3",

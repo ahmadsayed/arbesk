@@ -25,9 +25,14 @@ function el(tag: string, className: string, text?: string): HTMLElement {
   return node;
 }
 
-/** @returns the first line of the version's first chat prompt, if any. */
+/**
+ * @returns the first line of the version's first chat prompt, if any.
+ * @remarks `metadata.chat` comes from the manifest unvalidated, so anything
+ *   but a string is ignored rather than allowed to throw mid-render.
+ */
 function firstPromptLine(entry: any): string | undefined {
-  return entry.chat?.[0]?.prompt?.split("\n")[0];
+  const prompt = entry.chat?.[0]?.prompt;
+  return typeof prompt === "string" ? prompt.split("\n")[0] : undefined;
 }
 
 function hideTooltip(): void {

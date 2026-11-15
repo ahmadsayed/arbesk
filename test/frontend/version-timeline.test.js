@@ -256,6 +256,14 @@ test("the prompt is rendered as text, never as markup", () => {
   expect(q(".vt-current-prompt").textContent).toBe("<img src=x onerror=alert(1)>");
 });
 
+test("a non-text prompt is ignored instead of breaking the render", () => {
+  setChain(2);
+  versionStore.entries[1].chat = [{ prompt: 42 }];
+  expect(() => notify()).not.toThrow();
+  expect(q(".vt-current-meta").textContent).toMatch(/^v2/);
+  expect(q(".vt-current-prompt")).toBeNull();
+});
+
 test("the active tick is scrolled into view on every render", () => {
   const scrolled = [];
   HTMLElement.prototype.scrollIntoView = function () {

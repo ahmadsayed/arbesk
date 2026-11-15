@@ -41,8 +41,12 @@ $vt-unit: var(--size-7);
   flex-grow: 0;
   // Shrink by the gap share only (slot : unit = 3 : 4), so every gap on the
   // strip compresses by the same factor however many ticks its day holds.
+  // The share is always below 1, and flex factors that sum to less than 1
+  // give up only that fraction of the overflow (a one-day history would
+  // scroll with its gaps still wide), hence the large multiplier.
   flex-shrink: calc(
-    (var(--vt-span, 0) * 4) / (var(--vt-ticks, 1) * 3 + var(--vt-span, 0) * 4)
+    1000000 * (var(--vt-span, 0) * 4) /
+      (var(--vt-ticks, 1) * 3 + var(--vt-span, 0) * 4)
   );
   // Ticks and the label are never squeezed; only the gaps shrink.
   min-width: min-content;
