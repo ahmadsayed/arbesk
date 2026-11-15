@@ -355,6 +355,37 @@ test("end-task refuses names that are not a task worktree, and touches nothing",
   expect(fs.existsSync(path.join(sandbox, "docker.log"))).toBe(false);
 }, SLOW);
 
+test("end-task counts commits that were rebased or cherry-picked onto main as merged", () => {
+  newTask("fix", "picked");
+  const dir = worktree("picked");
+  commitFile(dir, "p.txt", "p\n", "fix");
+  git(dir, "push", "-q", "-u", "origin", "fix/picked");
+  const other = path.join(sandbox, "picker");
+  git(sandbox, "clone", "-q", path.join(sandbox, "origin.git"), other);
+  commitFile(other, "unrelated.txt", "u\n", "main moved");
+  git(other, "cherry-pick", "origin/fix/picked");
+  git(other, "push", "-q", "origin", "main");
+
+  expect(script("end-task.sh", ["picked"]).status).toBe(0);
+  expect(fs.existsSync(dir)).toBe(false);
+}, SLOW);
+
+test("end-task refuses a worktree on a detached HEAD", () => {
+  git(repo, "worktree", "add", "-q", "--detach", path.join(repo, ".worktrees", "detached"), "main");
+  const result = script("end-task.sh", ["detached"]);
+  expect(result.status).toBe(1);
+  expect(result.out).toContain("detached HEAD");
+  expect(fs.existsSync(worktree("detached"))).toBe(true);
+}, SLOW);
+
+test("new-task refuses when the branch exists locally without its worktree", () => {
+  git(repo, "branch", "fix/orphan");
+  const result = newTask("fix", "orphan");
+  expect(result.status).toBe(1);
+  expect(result.out).toContain("already exists");
+  expect(fs.existsSync(worktree("orphan"))).toBe(false);
+}, SLOW);
+
 test("end-task never deletes main, even from a hand-made worktree that has it checked out", () => {
   git(repo, "checkout", "-q", "-b", "elsewhere");
   git(repo, "worktree", "add", "-q", path.join(repo, ".worktrees", "handmade"), "main");
