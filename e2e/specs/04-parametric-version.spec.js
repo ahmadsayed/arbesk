@@ -50,6 +50,7 @@ test.describe("parametric versioning + time-travel", () => {
     await expect(page.locator(SELECTORS.versionTimeline)).toBeVisible();
     await expect(page.locator(SELECTORS.vtTicks)).toHaveCount(3);
     await expect(page.locator(SELECTORS.vtActiveTick)).toHaveText("3");
+    await expect(page.locator(SELECTORS.vtCurrent)).toContainText("v3 · Today");
     await expect(page.locator(SELECTORS.versionTimeline)).toHaveAttribute(
       "aria-valuemax",
       "3",
@@ -78,6 +79,7 @@ test.describe("parametric versioning + time-travel", () => {
     // 6. Time-travel back to v1 (oldest): the original GLB source re-renders.
     await scrubVersionTimeline(page, "oldest");
     await expect(page.locator(SELECTORS.vtActiveTick)).toHaveText("1");
+    await expect(page.locator(SELECTORS.vtCurrent)).toContainText("v1 · Today");
     await expect(page.locator(SELECTORS.versionTimeline)).toHaveAttribute(
       "aria-busy",
       "false",
