@@ -49,7 +49,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: gc
-              image: ahmadsayed/arbesk:11151333
+              image: ahmadsayed/arbesk:REPLACE_TAG  # stamped at deploy time by scripts/deploy-k3s.mjs
               imagePullPolicy: IfNotPresent
               command: ["./arbesk-server", "gc", "--live"]
               env:
