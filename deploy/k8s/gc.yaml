@@ -49,7 +49,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: gc
-              image: ahmadsayed/arbesk:11131503
+              image: ahmadsayed/arbesk:11151333
               imagePullPolicy: IfNotPresent
               command: ["./arbesk-server", "gc", "--live"]
               env:
