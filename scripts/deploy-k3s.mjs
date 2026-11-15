@@ -7,16 +7,19 @@
 //   1. bun scripts/make-env-k3s.mjs  → .env.k3s from current .env files
 //   2. recreate the arbesk-env secret on the cluster from .env.k3s
 //   3. buildx arm64 build + push ahmadsayed/arbesk:<MMDDHHMM>
-//   4. stamp the new tag into deploy/k8s/deployment.yaml and gc.yaml
-//   5. apply all deploy/k8s manifests (order: storage, backup, nostr, service,
-//      ingress, deployment, gc) and wait for the rollout
-//   6. purge the Cloudflare cache (needs CLOUDFLARE_API_TOKEN and
+//   4. apply all deploy/k8s manifests (order: storage, backup, nostr, service,
+//      ingress, deployment, gc) with the new tag stamped into the copies of
+//      deployment.yaml and gc.yaml that are sent — no tracked file changes —
+//      and wait for the rollout
+//   5. purge the Cloudflare cache (needs CLOUDFLARE_API_TOKEN and
 //      CLOUDFLARE_ZONE_ID in the environment or the root .env; without them
 //      the step is skipped with a warning)
-//   7. smoke-check the CLI login page
-//   8. confirm Cloudflare serves this build of /js/app.js and /css/styles.css
+//   6. smoke-check the CLI login page
+//   7. confirm Cloudflare serves this build of /js/app.js and /css/styles.css
 //
-// Override the SSH target with K3S_SSH=user@host (default adam@192.168.68.60).
+// Run it from the main checkout once it matches origin/main (AGENTS.md,
+// "Life of a task"). Override the SSH target with K3S_SSH=user@host (default
+// adam@192.168.68.60).
 
 import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
@@ -26,13 +29,14 @@ import {
   readCloudflareCredentials,
   staleAssets,
 } from "./lib/cloudflare-cache.mjs";
+import { stampImage } from "./lib/k8s-image.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const SSH = process.env.K3S_SSH || "adam@192.168.68.60";
 const IMAGE = "ahmadsayed/arbesk";
 const TAG = new Date().toISOString().replace(/[-:T]/g, "").slice(4, 12); // MMDDHHMM
 const MANIFEST_ORDER = ["storage", "backup", "nostr", "service", "ingress", "deployment", "gc"];
-/** Manifests that run the app image and get the new tag stamped in. */
+/** Manifests that run the app image; the copy that is applied gets the new tag. */
 const IMAGE_MANIFESTS = ["deployment", "gc"];
 /** Unversioned files every page loads; checked against the edge after a deploy. */
 const EDGE_PATHS = ["/js/app.js", "/css/styles.css"];
@@ -44,6 +48,14 @@ const run = (cmd, args, opts = {}) => {
 };
 const kubectl = (remote) =>
   execSync(`ssh ${SSH} "sudo -n k3s kubectl ${remote}"`, { cwd: root, stdio: "inherit" });
+
+// Read and stamp every manifest before anything is built or sent, so a
+// manifest problem stops the deploy at once. The app manifests carry a
+// placeholder tag; the stamped copies are never written back.
+const MANIFESTS = MANIFEST_ORDER.map((name) => {
+  const yaml = fs.readFileSync(path.join(root, `deploy/k8s/${name}.yaml`), "utf8");
+  return { name, yaml: IMAGE_MANIFESTS.includes(name) ? stampImage(yaml, IMAGE, TAG) : yaml };
+});
 
 // 1. Regenerate .env.k3s from the current local .env / blockchain/.env
 run("bun", ["scripts/make-env-k3s.mjs"]);
@@ -85,26 +97,19 @@ if (usePodman) {
   ]);
 }
 
-// 4. Stamp the tag into the manifests that run the app image
-for (const name of IMAGE_MANIFESTS) {
-  const file = path.join(root, `deploy/k8s/${name}.yaml`);
-  const yaml = fs.readFileSync(file, "utf8");
-  const stamped = yaml.replace(/image: ahmadsayed\/arbesk:\S+/, `image: ${IMAGE}:${TAG}`);
-  if (stamped === yaml) throw new Error(`image tag not found in deploy/k8s/${name}.yaml`);
-  fs.writeFileSync(file, stamped);
-  log(`${name}.yaml → ${IMAGE}:${TAG}`);
-}
-
-// 5. Apply manifests, then wait for the rollout
-for (const f of MANIFEST_ORDER) {
-  execSync(`ssh ${SSH} "sudo -n k3s kubectl apply -f -" < deploy/k8s/${f}.yaml`, {
-    cwd: root, stdio: "inherit", shell: "/bin/bash",
+// 4. Apply manifests (each goes to kubectl on stdin), then wait for the rollout
+for (const { name, yaml } of MANIFESTS) {
+  if (IMAGE_MANIFESTS.includes(name)) log(`${name}.yaml → ${IMAGE}:${TAG}`);
+  execSync(`ssh ${SSH} "sudo -n k3s kubectl apply -f -"`, {
+    cwd: root,
+    input: yaml,
+    stdio: ["pipe", "inherit", "inherit"],
   });
 }
 kubectl("rollout status deploy/arbesk --timeout=180s");
 kubectl("rollout status deploy/nostr --timeout=60s");
 
-// 6. Purge the Cloudflare cache. Static files have unversioned URLs and the
+// 5. Purge the Cloudflare cache. Static files have unversioned URLs and the
 // edge keeps each for 4 hours, so without this the site serves the previous
 // build (or new CSS next to old JS) long after the rollout. The credentials
 // stay local: make-env-k3s.mjs copies an allowlist, so they never reach the
@@ -118,13 +123,13 @@ if (cloudflare) {
   log("WARNING: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID not set — Cloudflare cache NOT purged");
 }
 
-// 7. Smoke-check what the app bundle does not cover: the CLI login page and
+// 6. Smoke-check what the app bundle does not cover: the CLI login page and
 // the @arbesk/wallet module it loads from /js/vendor/ (#137). The query
 // string keeps Cloudflare from answering with a cached 404.
 const SMOKE_PATHS = ["/api/v1/cli-auth", "/js/vendor/wallet/facade.js"];
 for (const p of SMOKE_PATHS) await expectOk(`${origin}${p}?deploy=${TAG}`);
 
-// 8. Confirm visitors get this build. After a purge a stale file is a failure;
+// 7. Confirm visitors get this build. After a purge a stale file is a failure;
 // without one it is expected, so it is only reported.
 const stale = await staleAfterPurge(cloudflare ? 5 : 1);
 if (stale.length && cloudflare) {

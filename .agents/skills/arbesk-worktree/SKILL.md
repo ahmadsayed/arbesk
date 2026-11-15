@@ -5,32 +5,31 @@ description: Use when the user asks to create a git worktree, run tests in a lin
 
 # Arbesk Worktree
 
-In this repo this replaces `superpowers:using-git-worktrees`, also when `executing-plans` or `subagent-driven-development` asks for a worktree. The generic skill skips the per-worktree Compose project, ports and `IPFS_BACKEND=kubo`.
+In this repo this replaces `superpowers:using-git-worktrees`, also when `executing-plans` or `subagent-driven-development` asks for a worktree. The generic skill skips the per-worktree Compose project, ports and `IPFS_BACKEND=kubo`. Where the worktree sits in the whole task: AGENTS.md §13.
 
 ## Create and test
 
 ```bash
-bun run worktree:create -- feature-xyz   # scripts/create-worktree.sh; prints the Compose project and ports
+scripts/new-task.sh feat feature-xyz     # .worktrees/feature-xyz on branch feat/feature-xyz, from origin/main
 cd .worktrees/feature-xyz
-git switch -c feat/feature-xyz           # the worktree starts on a detached HEAD
 bun run test:frontend && bun run test:api
 COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) bun run test:contracts
 bun run test:e2e -- --project=chromium
 ```
 
-- Always use the script. It copies modified and untracked files, the real root `.env` and `blockchain/.env`, symlinks `node_modules`, builds the frontend and compiles the contracts. Never hand-copy `.env.example`.
+- Kinds: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`. `--light` skips the frontend build and the contract compile, for tasks that need neither (docs, scripts); `test:frontend` and E2E need both.
+- The worktree starts from `origin/main`, not from the main checkout: uncommitted work there is not copied and not touched.
+- The script copies the real `.env`, `blockchain/.env` and `.env.pinata`, and links `node_modules` to the main checkout's. Never hand-copy `.env.example`.
+- `@arbesk/*` is the exception: it resolves to the worktree's own `packages/`, so the backend, the bundle and E2E run this branch's packages. With `--light` they are not built: run `bun run build:packages` before starting the backend.
+- Don't run `bun install` or `bun add` in a worktree: it writes through the links into the main checkout. Add a dependency in the task's `package.json`, and ask the user before installing.
 - It forces `IPFS_BACKEND=kubo`: local E2E asserts `Qm…` CIDs through `127.0.0.1:8080`.
-- It does not copy `.env.pinata`. Copy it from the main checkout before `./scripts/start-dev.sh --testnet`.
-- Each worktree has its own Compose project, backend port and service ports, so E2E can run while the main checkout's dev server is up.
+- For E2E, each worktree has its own Compose project, backend port and service ports, so E2E can run while the main checkout's dev server is up.
 - `test:contracts` without the `COMPOSE_PROJECT_NAME` prefix targets the main checkout's containers.
+- A fresh worktree fails two `deployment-integrity` tests ("deployment artifact matches configured …ADDRESS") until its own chain has a deployment. Run `bun scripts/ensure-local-chain.mjs` first, or any E2E run.
+- Everything else shares the stock ports. `start-dev.sh` and `ensure-local-chain.mjs` bind the stock ports (8545, 5001, 8080, 7777) in every checkout: stop the other checkout's stack first, and stop this one when done (`docker compose -p "$(./scripts/start-dev.sh --print-project)" down`).
 
-## Clean up (in this order)
+## Clean up
 
-```bash
-cd .worktrees/feature-xyz
-docker compose -p "$(./scripts/start-dev.sh --print-project)" down
-# Docker leaves root-owned build output; without this, `git worktree remove` fails with permission denied
-docker run --rm -v "$(pwd):/ws" alpine sh -c \
-  'chown -R $(stat -c "%u:%g" /ws) /ws/blockchain/artifacts /ws/blockchain/deployments 2>/dev/null || true'
-cd ../.. && git worktree remove .worktrees/feature-xyz --force && git worktree prune
-```
+After the PR is merged, from the main checkout: `scripts/end-task.sh feature-xyz`. It refuses while the worktree has uncommitted files or unmerged commits, then stops the worktree's Docker stacks and removes their volumes, fixes root-owned build output, and deletes the worktree and its branch locally and on GitHub. Ignored files go with it, including edits to the worktree's copied `.env` files.
+
+To drop a worktree whose work you do not want, say so to the user first; `end-task.sh` will not do it.

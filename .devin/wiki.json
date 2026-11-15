@@ -261,7 +261,7 @@
     },
     {
       "title": "Scripts & Worktree Workflow",
-      "purpose": "The scripts/ directory: start-dev.sh modes, create-worktree.sh for parallel feature branches, sync-deployed-addresses.mjs for contract address patching, merge-all-coverage.mjs for unified JS+Solidity coverage, and run-ipfs-gc.mjs for manual GC.",
+      "purpose": "The scripts/ directory: start-dev.sh modes, new-task.sh / end-task.sh / session-start.sh for task worktrees and pull requests, sync-deployed-addresses.mjs for contract address patching, merge-all-coverage.mjs for unified JS+Solidity coverage, and run-ipfs-gc.mjs for manual GC.",
       "parent": "Infrastructure & DevOps",
       "page_notes": [
         {

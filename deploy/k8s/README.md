@@ -12,11 +12,14 @@ bun run deploy:k3s   # = scripts/deploy-k3s.mjs
 
 Every run regenerates `.env.k3s` from the current local `.env` /
 `blockchain/.env`, recreates the `arbesk-env` secret, rebuilds and pushes the
-arm64 image with a fresh `MMDDHHMM` tag, stamps the tag into
-`deployment.yaml`, applies all manifests, and waits for the rollout. No
-staleness checks — latest code and config ship every time. The same tag is
-stamped into `gc.yaml`. Override the SSH
-target with `K3S_SSH=user@host`.
+arm64 image with a fresh `MMDDHHMM` tag, applies all manifests, and waits for
+the rollout. No staleness checks — latest code and config ship every time.
+`deployment.yaml` and `gc.yaml` carry the placeholder tag `REPLACE_TAG`; the
+script stamps the new tag into the copies it sends to the cluster, so a deploy
+changes no tracked file and needs no commit. Run it from the main checkout
+once it matches `origin/main`. The running tag is on the cluster:
+`sudo k3s kubectl get deploy arbesk -o jsonpath='{.spec.template.spec.containers[0].image}'`.
+Override the SSH target with `K3S_SSH=user@host`.
 
 After the rollout it purges the Cloudflare cache and then checks that the edge
 serves this build of `/js/app.js` and `/css/styles.css`. Static files have
@@ -79,7 +82,7 @@ in-cluster.
    `deploy:k3s` also passes `--build-arg SOURCE_DATE_EPOCH=0` and
    `rewrite-timestamp=true`, so unchanged layers keep their digest and the
    Pi only pulls what changed (e.g. ~8 MB for a frontend-only deploy).
-   Set the tag in `deployment.yaml` and `gc.yaml` (replace `REPLACE_TAG`).
+   Keep the tag for step 4.
 
 2. Prepare `.env.k3s` (never commit it) with the testnet values — see
    `.env.example` for the full reference. Required:
@@ -114,10 +117,12 @@ in-cluster.
      --from-file=.env=/dev/stdin' < .env.k3s
    ```
 
-4. Apply in order:
+4. Apply in order, replacing the placeholder tag on the way (do not edit the
+   tracked files):
    ```bash
    for f in storage backup nostr deployment service ingress gc; do
-     ssh adam@192.168.68.60 'sudo k3s kubectl apply -f -' < deploy/k8s/$f.yaml
+     sed "s/REPLACE_TAG/<tag>/" deploy/k8s/$f.yaml |
+       ssh adam@192.168.68.60 'sudo k3s kubectl apply -f -'
    done
    ```
 
