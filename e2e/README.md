@@ -153,7 +153,7 @@ Validates two of the platform's Golden Rules — **Parametric Coexistence** and 
 1. Generates `cowboy` (version 1).
 2. Selects the node in the **Outliner**, which auto-opens the component colour editor.
 3. Changes the colour and **Save**s — asserts a new version `2` whose `prev_asset_manifest_cid` is the generation CID.
-4. Asserts the version timeline strip (`#versionTimeline`) now spans three ticks and the active tick is `3`.
+4. Asserts the version timeline strip (`#versionTimeline`) now spans three ticks, the active tick is `3`, and the strip's details name it (`v3 · Today`).
 5. Scrubs the strip back to the oldest version (focus + `Home`) and asserts the active tick follows to `1` (and forward again to `3`).
 6. Selects the outliner node, asserts the model-clock badge (`#modelClockBadge`) shows `v3`, presses `Home` to step the 3D gizmo to the oldest version, and returns to the newest scene version before publishing.
 

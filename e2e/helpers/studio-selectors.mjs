@@ -101,6 +101,7 @@ export const SELECTORS = {
   vtTicks: "#versionTimeline .vt-tick",
   vtActiveTick: "#versionTimeline .vt-tick[aria-current='true']",
   vtTooltip: ".vt-tooltip",
+  vtCurrent: "#versionTimeline .vt-current",
   modelClockBadge: "#modelClockBadge",
   timeModeButton: '#transformToolbar [data-mode="time"]',
   // Undo/redo (viewport toolbar) + inspector scale field

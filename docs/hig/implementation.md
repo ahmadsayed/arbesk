@@ -66,7 +66,7 @@ frontend/src/scss/
 - Brand icon only (no text)
 - Page switcher tabs linking `/library.html` and `/studio.html`
 - Document title (read-only span, `#assetStatusName`)
-- Version-control UI (`#versionTimeline` version timeline strip, `#modelClock` per-model clock)
+- Version-control UI (`#versionTimeline` version timeline strip — ticks spaced by time, grouped by day, active version named beside them; `#modelClock` per-model clock)
 - Save + Besk it as header buttons (`#saveAssetBtn`, `#publishAssetBtn`)
 - Wallet connect/disconnect button remains in header actions (`#connectWalletBtn`, `#disconnectWalletBtn`)
 - New footer: `<footer class="bottombar">` with status text + keyboard-help button
@@ -188,7 +188,7 @@ Three breakpoints:
 | `ui/ledger-panel.ts` | Refactored to `[data-view="ledger"]` (Activity) |
 | `ui/comments-panel.ts` | **New** — asset-level comments in inspector |
 | `engine/parametric-preview.ts` | **New** — node inspector / parametric color binding |
-| `domain/version-history-store.ts`, `ui/version-timeline.ts`, `ui/model-clock-gizmo.ts` | Version history store + timeline strip / model clock |
+| `domain/version-history-store.ts`, `ui/version-timeline.ts`, `ui/version-timeline-layout.ts`, `ui/model-clock-gizmo.ts` | Version history store + timeline strip / model clock |
 | `ui/asset-save.ts` | Buttons in headerbar, Publish hidden for non-token nested worlds |
 | `ui/asset-drop-zone.ts` | Drop overlay → viewport border + Outliner highlight |
 | `engine/scene-graph.ts` | Minor: expose dive/ascend hooks |
