@@ -63,7 +63,7 @@ bun start                              # backend :9090 (runs under Bun);  bun ru
 # Production (Bun runtime)
 bun run build:server                   # compile backend → dist/arbesk-server (single-file, embedded bytecode); `-- --target=bun-linux-arm64` cross-compiles
 bun run start:prod                     # scripts/start-prod.sh: frozen install → builds → compile → NODE_ENV=production exec
-bun run deploy:k3s                     # one-command deploy to promptscad.com: regen .env.k3s → recreate secret → arm64 build+push → apply manifests (deploy/k8s/README.md)
+bun run deploy:k3s                     # one-command deploy to promptscad.com: regen .env.k3s → recreate secret → arm64 build+push → apply manifests → purge Cloudflare cache (deploy/k8s/README.md)
 # start-prod.sh requires CONTRACT_ADDRESS; --testnet validates Pinata config, sources .env.pinata,
 # forces IPFS_BACKEND=pinata + DEFAULT_CHAIN_ID=84532 + API_URL=https://sepolia.base.org, and
 # starts/probes the Nostr relay. Env layering: .env → .env.production (optional overrides) →

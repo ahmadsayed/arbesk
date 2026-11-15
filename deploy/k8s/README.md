@@ -18,6 +18,24 @@ staleness checks — latest code and config ship every time. The same tag is
 stamped into `gc.yaml`. Override the SSH
 target with `K3S_SSH=user@host`.
 
+After the rollout it purges the Cloudflare cache and then checks that the edge
+serves this build of `/js/app.js` and `/css/styles.css`. Static files have
+unversioned URLs and Cloudflare keeps each for 4 hours, so without the purge
+the site answers with the previous build (or new CSS next to old JS) long
+after the deploy. The purge needs two values, in the environment or the root
+`.env`:
+
+- `CLOUDFLARE_API_TOKEN` — an API token with the **Zone → Cache Purge**
+  permission for the promptscad.com zone (Cloudflare dashboard → My Profile →
+  API Tokens).
+- `CLOUDFLARE_ZONE_ID` — the zone ID from the zone's Overview page.
+
+Both stay local: `make-env-k3s.mjs` copies an allowlist of keys, so they never
+reach the cluster secret. Without them the purge is skipped with a warning and
+a stale file is reported, not fatal. With them, a failed purge or a file that
+is still stale afterwards fails the command (the rollout itself has already
+succeeded at that point).
+
 The manual steps below document what the command does under the hood.
 
 ## Workloads

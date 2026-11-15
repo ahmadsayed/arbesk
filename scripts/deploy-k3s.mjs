@@ -10,12 +10,22 @@
 //   4. stamp the new tag into deploy/k8s/deployment.yaml and gc.yaml
 //   5. apply all deploy/k8s manifests (order: storage, backup, nostr, service,
 //      ingress, deployment, gc) and wait for the rollout
+//   6. purge the Cloudflare cache (needs CLOUDFLARE_API_TOKEN and
+//      CLOUDFLARE_ZONE_ID in the environment or the root .env; without them
+//      the step is skipped with a warning)
+//   7. smoke-check the CLI login page
+//   8. confirm Cloudflare serves this build of /js/app.js and /css/styles.css
 //
 // Override the SSH target with K3S_SSH=user@host (default adam@192.168.68.60).
 
 import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  purgeCloudflareCache,
+  readCloudflareCredentials,
+  staleAssets,
+} from "./lib/cloudflare-cache.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const SSH = process.env.K3S_SSH || "adam@192.168.68.60";
@@ -24,6 +34,8 @@ const TAG = new Date().toISOString().replace(/[-:T]/g, "").slice(4, 12); // MMDD
 const MANIFEST_ORDER = ["storage", "backup", "nostr", "service", "ingress", "deployment", "gc"];
 /** Manifests that run the app image and get the new tag stamped in. */
 const IMAGE_MANIFESTS = ["deployment", "gc"];
+/** Unversioned files every page loads; checked against the edge after a deploy. */
+const EDGE_PATHS = ["/js/app.js", "/css/styles.css"];
 
 const log = (msg) => console.log(`[DEPLOY] ${msg}`);
 const run = (cmd, args, opts = {}) => {
@@ -92,14 +104,56 @@ for (const f of MANIFEST_ORDER) {
 kubectl("rollout status deploy/arbesk --timeout=180s");
 kubectl("rollout status deploy/nostr --timeout=60s");
 
-// 6. Smoke-check what the app bundle does not cover: the CLI login page and
+// 6. Purge the Cloudflare cache. Static files have unversioned URLs and the
+// edge keeps each for 4 hours, so without this the site serves the previous
+// build (or new CSS next to old JS) long after the rollout. The credentials
+// stay local: make-env-k3s.mjs copies an allowlist, so they never reach the
+// cluster secret.
+const origin = readPublicOrigin();
+const cloudflare = readCloudflareCredentials(process.env, readRootEnv());
+if (cloudflare) {
+  await purgeCloudflareCache(cloudflare);
+  log("Cloudflare cache purged");
+} else {
+  log("WARNING: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID not set — Cloudflare cache NOT purged");
+}
+
+// 7. Smoke-check what the app bundle does not cover: the CLI login page and
 // the @arbesk/wallet module it loads from /js/vendor/ (#137). The query
 // string keeps Cloudflare from answering with a cached 404.
-const origin = readPublicOrigin();
 const SMOKE_PATHS = ["/api/v1/cli-auth", "/js/vendor/wallet/facade.js"];
 for (const p of SMOKE_PATHS) await expectOk(`${origin}${p}?deploy=${TAG}`);
 
+// 8. Confirm visitors get this build. After a purge a stale file is a failure;
+// without one it is expected, so it is only reported.
+const stale = await staleAfterPurge(cloudflare ? 5 : 1);
+if (stale.length && cloudflare) {
+  throw new Error(`rollout succeeded, but Cloudflare still serves a previous build of ${stale.join(", ")}`);
+}
+if (stale.length) {
+  log(`WARNING: Cloudflare still serves a previous build of ${stale.join(", ")} (for up to 4 hours)`);
+} else {
+  log(`edge OK — Cloudflare serves this build of ${EDGE_PATHS.join(", ")}`);
+}
+
 log(`done — ${origin} running ${IMAGE}:${TAG}`);
+
+/** Root .env text, or "" when there is none. */
+function readRootEnv() {
+  const file = path.join(root, ".env");
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+}
+
+/** Stale EDGE_PATHS, re-checked a few times while the purge spreads. */
+async function staleAfterPurge(attempts) {
+  let stale = [];
+  for (let i = 1; i <= attempts; i++) {
+    stale = await staleAssets(origin, EDGE_PATHS, TAG);
+    if (stale.length === 0 || i === attempts) break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return stale;
+}
 
 /** PUBLIC_ORIGIN from the .env.k3s written in step 1. */
 function readPublicOrigin() {
