@@ -43,6 +43,20 @@ function setChain(n, { active = n - 1, published = null } = {}) {
 }
 const strip = () => document.getElementById("versionTimeline");
 const ticks = () => [...strip().querySelectorAll(".vt-tick")];
+const q = (sel) => strip().querySelector(sel);
+const gaps = () =>
+  [...strip().querySelectorAll(".vt-gap")].map((g) =>
+    g.style.getPropertyValue("--vt-gap")
+  );
+// Local-time constructor: independent of the runner's time zone.
+const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
+function setTimes(times, opts) {
+  setChain(times.length, opts);
+  versionStore.entries.forEach((e, i) => {
+    e.timestamp = times[i];
+  });
+  notify();
+}
 
 beforeAll(async () => {
   await mock.module(
@@ -178,4 +192,93 @@ test("tooltip dismisses on pointerleave and Escape", () => {
   expect(document.querySelector(".vt-tooltip")).toBeTruthy();
   strip().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   expect(document.querySelector(".vt-tooltip")).toBeNull();
+});
+
+// ─── Time strip: spacing, days, active-version details ───
+
+test("gaps between ticks carry the time weight", () => {
+  setTimes([local(2026, 10, 3, 10, 0), local(2026, 10, 3, 10, 5), local(2026, 10, 3, 13, 5)]);
+  expect(gaps()).toEqual(["1.792", "5.198"]);
+});
+
+test("a day change starts a new day group and splits the gap across the divider", () => {
+  // July: no DST change anywhere, so the two saves are exactly 1440 minutes apart.
+  setTimes([local(2026, 7, 14, 10, 0), local(2026, 7, 15, 10, 0)]);
+  expect(strip().querySelectorAll(".vt-day").length).toBe(2);
+  expect(strip().querySelectorAll(".vt-day-label").length).toBe(2);
+  expect(gaps().map(Number)).toEqual([3.6365, 3.6365]);
+  expect(ticks().map((t) => t.textContent.trim())).toEqual(["1", "2"]);
+});
+
+test("each day group carries its tick count and total gap weight for sizing", () => {
+  setTimes([local(2026, 7, 14, 10, 0), local(2026, 7, 14, 10, 5), local(2026, 7, 15, 10, 5)]);
+  const days = [...strip().querySelectorAll(".vt-day")];
+  expect(days.map((d) => d.style.getPropertyValue("--vt-ticks"))).toEqual(["2", "1"]);
+  const spans = days.map((d) => Number(d.style.getPropertyValue("--vt-span")));
+  expect(spans[0]).toBeCloseTo(1.792 + 3.6365, 2); // 5-minute gap + half the overnight gap
+  expect(spans[1]).toBeCloseTo(3.6365, 2); // the other half
+});
+
+test("undated versions pack together under one unlabelled day", () => {
+  setTimes([undefined, undefined, undefined]);
+  expect(strip().querySelectorAll(".vt-day").length).toBe(1);
+  expect(q(".vt-day-label")).toBeNull();
+  expect(gaps()).toEqual(["0", "0"]);
+  expect(q(".vt-current-meta").textContent).toBe("v3");
+});
+
+test("details show the active version's number, save time and first prompt line", () => {
+  setTimes([Date.now(), Date.now()]);
+  versionStore.entries[1].chat = [{ prompt: "make the hat red\nsecond line" }];
+  notify();
+  expect(q(".vt-current-meta").textContent).toMatch(/^v2 · Today \d{2}:\d{2}$/);
+  expect(q(".vt-current-prompt").textContent).toBe("make the hat red");
+});
+
+test("details omit the prompt line when the version has none", () => {
+  setChain(2);
+  expect(q(".vt-current-meta")).toBeTruthy();
+  expect(q(".vt-current-prompt")).toBeNull();
+});
+
+test("details mark the published version only while it is the active one", () => {
+  setChain(3, { active: 1, published: "cid-2" });
+  expect(q(".vt-current-published").textContent).toBe("Published");
+  setChain(3, { active: 0, published: "cid-2" });
+  expect(q(".vt-current-published")).toBeNull();
+});
+
+test("the prompt is rendered as text, never as markup", () => {
+  setChain(1);
+  versionStore.entries[0].chat = [{ prompt: "<img src=x onerror=alert(1)>" }];
+  notify();
+  expect(q(".vt-current img")).toBeNull();
+  expect(q(".vt-current-prompt").textContent).toBe("<img src=x onerror=alert(1)>");
+});
+
+test("the active tick is scrolled into view on every render", () => {
+  const scrolled = [];
+  HTMLElement.prototype.scrollIntoView = function () {
+    scrolled.push(this);
+  };
+  setChain(3, { active: 1 });
+  expect(scrolled.at(-1)).toBe(ticks()[1]);
+  delete HTMLElement.prototype.scrollIntoView;
+});
+
+test("track and details elements persist across renders", () => {
+  setChain(2);
+  const track = q(".vt-track");
+  const current = q(".vt-current");
+  expect(track && current).toBeTruthy();
+  notify();
+  expect(q(".vt-track")).toBe(track);
+  expect(q(".vt-current")).toBe(current);
+});
+
+test("details are empty when the chain is empty", () => {
+  setChain(2);
+  setChain(0);
+  expect(strip().hidden).toBe(true);
+  expect(q(".vt-current").children.length).toBe(0);
 });
