@@ -49,6 +49,9 @@ unset GIT_INDEX_FILE
 
 commit=$(git commit-tree "$tree" ${parent:+-p "$parent"} -m "captures: $folder")
 # GitHub answers a new branch with "Create a pull request for 'captures'":
-# never for this branch, so drop its remote: lines (errors still show).
-git push --quiet origin "$commit:refs/heads/captures" 2>&1 | { grep -v '^remote:' >&2 || true; }
+# never for this branch, so the push's output is shown only when it fails.
+if ! output=$(git push --quiet origin "$commit:refs/heads/captures" 2>&1); then
+  echo "$output" >&2
+  exit 1
+fi
 printf '%s\n' "${markdown[@]}"

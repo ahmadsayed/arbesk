@@ -15,14 +15,37 @@ const SCRIPTS = path.resolve(import.meta.dirname, "..", "scripts");
 const TASK_SCRIPTS = ["new-task.sh", "end-task.sh", "session-start.sh", "pr-screenshots.sh", "github.sh"];
 const SLOW = 30_000;
 
-/** Answers the REST calls of scripts/github.sh; FAKE_MERGED_PR is the merged PR, if any. */
-const FAKE_GH = `#!/bin/sh
-case "$*" in
-  *"pulls?state=closed"*) [ -n "$FAKE_MERGED_PR" ] && echo "$FAKE_MERGED_PR" ;;
+/**
+ * Answers the REST calls of scripts/github.sh. Closed pull requests come from
+ * FAKE_PRS (a JSON array) and go through the caller's real --jq filter, as
+ * `gh api --jq` would apply it.
+ */
+const FAKE_GH = `#!/bin/bash
+filter=""
+while [ $# -gt 0 ]; do
+  case "$1" in --jq) filter="$2"; shift ;; esac
+  url="$url $1"
+  shift
+done
+case "$url" in
+  *"pulls?state=closed"*) echo "\${FAKE_PRS:-[]}" | jq -r "$filter" ;;
   *"pulls?state=open"*|*"issues?"*) ;;
   *) echo "owner/repo" ;;
 esac
-exit 0
+`;
+
+/** One closed pull request as the REST API lists it. */
+const pr = (number, sha, { merged = true, base = "main" } = {}) => ({
+  number,
+  merged_at: merged ? "2026-11-15T00:00:00Z" : null,
+  head: { sha },
+  base: { ref: base },
+});
+const withPrs = (...prs) => ({ FAKE_PRS: JSON.stringify(prs) });
+
+/** Stands in for scripts/start-dev.sh --print-project, with its real env override. */
+const FAKE_START_DEV = `#!/bin/sh
+echo "\${COMPOSE_PROJECT_NAME:-proj-$(basename "$PWD")}"
 `;
 
 let sandbox;
@@ -232,11 +255,135 @@ test("end-task accepts a squash merge only when GitHub reports the merged PR", (
   git(dir, "push", "-q", "-u", "origin", "feat/squashed");
   mergeOnOrigin("feat/squashed", { squash: true });
 
+  const head = git(dir, "rev-parse", "HEAD");
   expect(script("end-task.sh", ["squashed"]).status).toBe(1);
-  const result = script("end-task.sh", ["squashed"], { FAKE_MERGED_PR: "42" });
+  expect(script("end-task.sh", ["squashed"], withPrs(pr(40, head, { merged: false }))).status).toBe(1);
+  expect(script("end-task.sh", ["squashed"], withPrs(pr(41, head, { base: "release" }))).status).toBe(1);
+  expect(script("end-task.sh", ["squashed"], withPrs(pr(39, "0000000000000000000000000000000000000000"))).status).toBe(1);
+  expect(fs.existsSync(dir)).toBe(true);
+  const result = script("end-task.sh", ["squashed"], withPrs(pr(42, head)));
   expect(result.out).toContain("PR #42");
   expect(result.status).toBe(0);
   expect(fs.existsSync(dir)).toBe(false);
+}, SLOW);
+
+test("end-task refuses a squash-merged branch that got another commit afterwards", () => {
+  newTask("feat", "more");
+  const dir = worktree("more");
+  commitFile(dir, "a.txt", "a\n", "one");
+  commitFile(dir, "b.txt", "b\n", "two");
+  git(dir, "push", "-q", "-u", "origin", "feat/more");
+  const merged = git(dir, "rev-parse", "HEAD");
+  mergeOnOrigin("feat/more", { squash: true });
+  commitFile(dir, "c.txt", "c\n", "after the merge");
+
+  expect(script("end-task.sh", ["more"], withPrs(pr(7, merged))).status).toBe(1);
+  expect(fs.existsSync(path.join(dir, "c.txt"))).toBe(true);
+}, SLOW);
+
+test("end-task leaves a GitHub branch alone when its tip is not the work it checked", () => {
+  newTask("fix", "shared");
+  const dir = worktree("shared");
+  commitFile(dir, "s.txt", "s\n", "mine");
+  git(dir, "push", "-q", "-u", "origin", "fix/shared");
+  mergeOnOrigin("fix/shared");
+  // Someone else pushes more work to the same branch on GitHub.
+  const other = path.join(sandbox, "teammate");
+  git(sandbox, "clone", "-q", path.join(sandbox, "origin.git"), other);
+  git(other, "checkout", "-q", "fix/shared");
+  commitFile(other, "t.txt", "t\n", "theirs, unmerged");
+  git(other, "push", "-q", "origin", "fix/shared");
+
+  const result = script("end-task.sh", ["shared"]);
+  expect(result.status).toBe(0);
+  expect(result.out).toContain("Left fix/shared on GitHub");
+  expect(git(repo, "ls-remote", "--heads", "origin", "fix/shared")).toContain("refs/heads/fix/shared");
+  expect(fs.existsSync(dir)).toBe(false);
+}, SLOW);
+
+test("new-task refuses a branch name that already exists on GitHub", () => {
+  const other = path.join(sandbox, "elsewhere");
+  git(sandbox, "clone", "-q", path.join(sandbox, "origin.git"), other);
+  git(other, "checkout", "-q", "-b", "fix/taken");
+  commitFile(other, "x.txt", "x\n", "unmerged work");
+  git(other, "push", "-q", "origin", "fix/taken");
+
+  const result = newTask("fix", "taken");
+  expect(result.status).toBe(1);
+  expect(result.out).toContain("already exists on GitHub");
+  expect(fs.existsSync(worktree("taken"))).toBe(false);
+}, SLOW);
+
+test("new-task refuses a name that ends in a dash or a dot", () => {
+  expect(script("new-task.sh", ["fix", "foo-"]).status).toBe(2);
+  expect(script("new-task.sh", ["fix", "foo."]).status).toBe(2);
+});
+
+test("a task branch has no upstream, so a bare push or pull cannot reach main", () => {
+  newTask("fix", "noup");
+  const result = sh(worktree("noup"), "git", ["rev-parse", "--abbrev-ref", "fix/noup@{upstream}"]);
+  expect(result.status).not.toBe(0);
+}, SLOW);
+
+test("new-task links @arbesk packages to the worktree's own packages, not the main checkout's", () => {
+  fs.mkdirSync(path.join(repo, "packages", "core"), { recursive: true });
+  commitFile(repo, "packages/core/index.js", "export {};\n", "package");
+  git(repo, "push", "-q", "origin", "main");
+  fs.mkdirSync(path.join(repo, "node_modules", "@arbesk"), { recursive: true });
+  fs.mkdirSync(path.join(repo, "node_modules", "leftpad"));
+  fs.symlinkSync("../../packages/core", path.join(repo, "node_modules", "@arbesk", "core"));
+
+  expect(newTask("feat", "scoped").status).toBe(0);
+  const dir = worktree("scoped");
+  const real = (...parts) => fs.realpathSync(path.join(...parts));
+  expect(real(dir, "node_modules", "@arbesk", "core")).toBe(real(dir, "packages", "core"));
+  expect(real(dir, "node_modules", "leftpad")).toBe(real(repo, "node_modules", "leftpad"));
+  expect(git(dir, "status", "--porcelain")).toBe("");
+  expect(script("end-task.sh", ["scoped"]).status).toBe(0);
+  expect(fs.existsSync(dir)).toBe(false);
+  expect(fs.existsSync(path.join(repo, "node_modules", "leftpad"))).toBe(true);
+  expect(fs.existsSync(path.join(repo, "packages", "core", "index.js"))).toBe(true);
+}, SLOW);
+
+test("end-task refuses names that are not a task worktree, and touches nothing", () => {
+  fs.mkdirSync(path.join(repo, "node_modules"));
+  newTask("fix", "bystander");
+  for (const name of [".", "..", "", "no-such-task", "../.."]) {
+    expect(script("end-task.sh", [name]).status).not.toBe(0);
+  }
+  expect(fs.lstatSync(path.join(worktree("bystander"), "node_modules")).isSymbolicLink()).toBe(true);
+  expect(fs.existsSync(path.join(sandbox, "docker.log"))).toBe(false);
+}, SLOW);
+
+test("end-task never deletes main, even from a hand-made worktree that has it checked out", () => {
+  git(repo, "checkout", "-q", "-b", "elsewhere");
+  git(repo, "worktree", "add", "-q", path.join(repo, ".worktrees", "handmade"), "main");
+  const result = script("end-task.sh", ["handmade"]);
+  expect(result.status).toBe(1);
+  expect(git(repo, "branch", "--list", "main")).toContain("main");
+  expect(git(repo, "ls-remote", "--heads", "origin", "main")).toContain("refs/heads/main");
+}, SLOW);
+
+test("end-task stops the task's own Docker stacks and volumes, whatever COMPOSE_PROJECT_NAME says", () => {
+  fs.writeFileSync(path.join(repo, "scripts", "start-dev.sh"), FAKE_START_DEV, { mode: 0o755 });
+  git(repo, "add", "-A");
+  git(repo, "commit", "-q", "-m", "start-dev");
+  git(repo, "push", "-q", "origin", "main");
+  newTask("fix", "stack");
+
+  const result = script("end-task.sh", ["stack"], { COMPOSE_PROJECT_NAME: "the-owners-stack" });
+  expect(result.status).toBe(0);
+  const calls = fs.readFileSync(path.join(sandbox, "docker.log"), "utf8").trim().split("\n").map((l) => l.split("|")[1]);
+  expect(calls).not.toContainEqual(expect.stringContaining("the-owners-stack"));
+  expect(calls).toContain("compose -p proj-stack down --volumes");
+  expect(calls).toContain("compose -p proj-stack-w7 down --volumes");
+}, SLOW);
+
+test("session-start does not call a task that has no commits yet merged", () => {
+  newTask("feat", "fresh");
+  const result = script("session-start.sh", []);
+  expect(result.out).toMatch(/\.worktrees\/fresh \(feat\/fresh\): no commits yet, 0 uncommitted/);
+  expect(result.out).not.toContain("end-task.sh fresh");
 }, SLOW);
 
 test("session-start says which worktrees are merged and which still hold work", () => {

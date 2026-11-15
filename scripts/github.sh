@@ -1,17 +1,15 @@
-# GitHub queries for the task scripts, through the REST API only (`gh api`):
-# it works in every kind of session, including ones without GitHub's GraphQL
-# API, which most `gh pr|issue|repo` subcommands use. `gh api` fills in
-# {owner} and {repo} from the git remote. Source this file; each function
-# prints its result and fails when the request fails.
+# GitHub queries for the task scripts, through the REST API (`gh api`), which
+# fills in {owner} and {repo} from the git remote. Source this file; each
+# function prints its result and fails when the request fails.
 
 # owner/name of the repository.
 gh_repo() { gh api 'repos/{owner}/{repo}' --jq .full_name; }
 
-# The number of the PR merged from branch $1 whose last commit was $2 (a
-# squash merge leaves the branch's own commits off main). Empty when none.
+# The number of the PR merged into main from branch $1 whose last commit was
+# $2 (a squash merge leaves the branch's own commits off main). Empty when none.
 gh_merged_pr() {
   gh api "repos/{owner}/{repo}/pulls?state=closed&head={owner}:$1&per_page=100" \
-    --jq ".[] | select(.merged_at != null and .head.sha == \"$2\") | .number" | head -1
+    --jq ".[] | select(.merged_at != null and .base.ref == \"main\" and .head.sha == \"$2\") | .number" | head -1
 }
 
 # Open PRs, one per line: number, draft mark, title, link.

@@ -49,6 +49,14 @@ const run = (cmd, args, opts = {}) => {
 const kubectl = (remote) =>
   execSync(`ssh ${SSH} "sudo -n k3s kubectl ${remote}"`, { cwd: root, stdio: "inherit" });
 
+// Read and stamp every manifest before anything is built or sent, so a
+// manifest problem stops the deploy at once. The app manifests carry a
+// placeholder tag; the stamped copies are never written back.
+const MANIFESTS = MANIFEST_ORDER.map((name) => {
+  const yaml = fs.readFileSync(path.join(root, `deploy/k8s/${name}.yaml`), "utf8");
+  return { name, yaml: IMAGE_MANIFESTS.includes(name) ? stampImage(yaml, IMAGE, TAG) : yaml };
+});
+
 // 1. Regenerate .env.k3s from the current local .env / blockchain/.env
 run("bun", ["scripts/make-env-k3s.mjs"]);
 
@@ -89,16 +97,12 @@ if (usePodman) {
   ]);
 }
 
-// 4. Apply manifests, then wait for the rollout. The app manifests carry a
-// placeholder tag; the stamped copy goes to kubectl on stdin and is never
-// written back.
-for (const name of MANIFEST_ORDER) {
-  const yaml = fs.readFileSync(path.join(root, `deploy/k8s/${name}.yaml`), "utf8");
-  const stamped = IMAGE_MANIFESTS.includes(name);
-  if (stamped) log(`${name}.yaml → ${IMAGE}:${TAG}`);
+// 4. Apply manifests (each goes to kubectl on stdin), then wait for the rollout
+for (const { name, yaml } of MANIFESTS) {
+  if (IMAGE_MANIFESTS.includes(name)) log(`${name}.yaml → ${IMAGE}:${TAG}`);
   execSync(`ssh ${SSH} "sudo -n k3s kubectl apply -f -"`, {
     cwd: root,
-    input: stamped ? stampImage(yaml, IMAGE, TAG) : yaml,
+    input: yaml,
     stdio: ["pipe", "inherit", "inherit"],
   });
 }

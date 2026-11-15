@@ -38,10 +38,13 @@ in AGENTS.md. To change the protection: Settings › Branches on GitHub.
    - ⚠️ something for you to decide, with options;
    - ❌ blocked, and why.
 6. **You merge** (any merge button works: merge, squash or rebase), or
-   comment with what to change; the agent pushes fixes to the same PR.
+   comment with what to change; the agent pushes fixes to the same PR. If
+   you add a commit on GitHub yourself ("Update branch", a suggestion), the
+   agent pulls it before it finalizes.
 7. The agent finalizes: `scripts/end-task.sh <name>` stops the task's Docker
-   stacks, deletes the worktree and the branch (local and on GitHub), and
-   fast-forwards your `main` if it has no uncommitted changes.
+   stacks and removes their volumes, deletes the worktree and the branch
+   (local and on GitHub), and fast-forwards your `main` if it has no
+   uncommitted changes.
 
 ## Useful commands
 

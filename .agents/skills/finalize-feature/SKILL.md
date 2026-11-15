@@ -38,7 +38,7 @@ Not for committing work in progress: commit first, then finalize.
 
 ## Part 3 — after the merge
 
-From the main checkout: `scripts/end-task.sh <name>`. Then report: the merged commit, test and E2E counts, anything pre-existing that still fails, what was removed. If the script refuses, read why; do not force it.
+From the main checkout: `scripts/end-task.sh <name>`. Then report: the merged commit, test and E2E counts, anything pre-existing that still fails, what was removed. If the script refuses, read why; do not force it. After a squash merge it refuses when GitHub added a commit to the branch ("Update branch", an applied suggestion): `git pull origin <branch>` in the worktree, then run it again.
 
 ## Common mistakes
 
