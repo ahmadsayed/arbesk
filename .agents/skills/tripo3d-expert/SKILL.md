@@ -5,7 +5,7 @@ description: Use when working with the Tripo3D API (v3) — generation, retopolo
 
 # Tripo3D Expert (v3 API)
 
-Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/api/adapters/tripo3d-adapter.ts`). Every rule below was verified against the official docs (developers.tripo3d.com) or reproduced live against the API — dates noted where behavior was observed to differ from docs.
+Trap guide for the Tripo3D v3 API. Arbesk's adapter is `packages/ai-asset-gen/src/providers/tripo.ts`; the animation preset catalog is `src/api/animation-presets.ts` (Tripo has no preset-listing API, so presets are edited only there). Every rule below was verified against the official docs (developers.tripo3d.com) or reproduced live against the API — dates noted where behavior was observed to differ from docs.
 
 ## Quick Decision Table
 
@@ -67,7 +67,7 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 - `model_seed` / `texture_seed` / `image_seed` — reproducibility; vary `texture_seed` alone for same mesh, new texture.
 - `negative_prompt`, `export_uv`, `compress: "geometry"` (meshopt).
 - Image-to-3D quality is dominated by the source image: prefer 3D-render/photographic look, even lighting, no outlines, plain background, full-body T/A-pose for characters. 2D stylization (line art, cel shading) becomes geometry artifacts that retopo then bakes in.
-- **Multiview**: `POST /generation/multiview-to-model` builds from 2–4 views of the same object — `inputs` is a view-key array (`[{"front": token}, {"back": token}]`, values are file_tokens/URLs; front is REQUIRED, ≥2 images, views ∈ front/left/back/right, server canonicalizes to front/left/back/right order). Same model versions/params as image-to-model; no text prompt. Big geometry/texture-coverage win over single-image guessing. Arbesk: `createMultiviewTask(viewTokens, apiKey, options)` in the adapter, wire field `images[]` on `POST /generations`, frontend chips in `ui/attach-views.ts`.
+- **Multiview**: `POST /generation/multiview-to-model` builds from 2–4 views of the same object — `inputs` is a view-key array (`[{"front": token}, {"back": token}]`, values are file_tokens/URLs; front is REQUIRED, ≥2 images, views ∈ front/left/back/right, server canonicalizes to front/left/back/right order). Same model versions/params as image-to-model; no text prompt. Big geometry/texture-coverage win over single-image guessing. Arbesk: `createMultiviewTask()` in the adapter, wire field `images[]` on `POST /generations`.
 
 ## Recipes
 
@@ -78,13 +78,6 @@ Reference and trap guide for the Tripo3D v3 API as integrated in Arbesk (`src/ap
 4. `animations/retarget` — `input: <rig task>`, `animations: [...]`, `out_format: "glb"`.
 
 **Adapter/driver checklist (any provider):** async create+poll with terminal-state mapping · auth/credit errors mapped to 401/402 · provider model versions as env-overridable constants (providers retire versions) · validate output format AND magic bytes before handing to the renderer · BYOK keys transient per request, never logged.
-
-## Key Files (Arbesk)
-
-- `src/api/adapters/tripo3d-adapter.ts` — the reference adapter (create/image/refine/decimate/rig/retarget/poll/download, `TripoApiError`)
-- `src/api/assets/generate-node.ts` — routes: BYOK gating, task registry, animate chain (rig-check → rig → retarget + retarget-only path), retopo route
-- `src/api/animation-presets.ts` — the ONE preset catalog (Tripo has no preset-listing API; mirrors the retarget docs): id/label/category/skeleton/rigModel/motion for 11 short-form biped + 16 curated `preset:biped:*` + 5 creature presets; served to Studio via `/api/v1/config` `animationPresets`, read by `schemas.ts` validation and Jev; `presetMisfit()` maps a preset to its rig_type and the animate chain fails `ANIMATION_RIG_MISMATCH` after rig-check, before the paid rig; `rigCheck: true` runs the free probe alone — the Animate dialog lists only the skeleton's presets, `ui/animate-compat.ts`)
-- Frontend: `services/api.ts` (`generateAsset`), `ui/create-panel.ts` (HQ checkbox, retopo/animate chips)
 
 ## References
 

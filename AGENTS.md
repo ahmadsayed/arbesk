@@ -22,7 +22,7 @@ The four shared SDKs under `packages/` are treated as **black boxes** here — c
 
 **Client-side first** — logic belongs in the browser; the Hono backend is a thin gatekeeper. Add a server route only to: validate signatures/transactions/sessions, enforce global rate limits/replay guards, access browser-invisible secrets, or perform cross-user/admin actions (`docs/ARCHITECTURE.md §1.5`).
 
-**Contracts**: `ArbeskAssetFree` (`CONTRACT_ADDRESS`, **default**, 10 gen/day/wallet) and `ArbeskAsset` (`PAID_CONTRACT_ADDRESS`, USDC PayGo) share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn). Max 5000 editors/token, client-enforced (`merkle-editors.ts`). Generation UI goes through `wallet-payments.ts` → `isFreeTierContract()` — never hard-code the paid path. Contract `owner()` bypasses the free-tier quota; Merkle editor checks still apply (owner ≠ editor). **After any `.sol` change**: compile → deploy → sync root `.env` → `bun run test:frontend` (+ E2E). Stale ABIs cause `c.methods.X is not a function`.
+**Contracts**: `ArbeskAssetFree` (`CONTRACT_ADDRESS`, **default**, 10 gen/day/wallet) and `ArbeskAsset` (`PAID_CONTRACT_ADDRESS`, USDC PayGo) share `ArbeskAssetBase.sol` (ERC-721 + Merkle editor auth + burn). Max 5000 editors/token, client-enforced (`merkle-editors.ts`). Generation UI goes through `wallet-payments.ts` → `isFreeTierContract()` — never hard-code the paid path. Contract `owner()` bypasses the free-tier quota; Merkle editor checks still apply (owner ≠ editor). **After any `.sol` change**: compile → deploy → sync root `.env` → `bun run test:frontend` (+ E2E). Stale ABIs cause `c.methods.X is not a function`. A new contract function is also listed in `REQUIRED_PAID_ABI_FUNCTIONS` / `REQUIRED_FREE_ABI_FUNCTIONS` (`test/frontend/deployment-integrity.test.js`).
 
 ## 3. Repo Layout
 
@@ -182,7 +182,7 @@ Never commit `.env` · validate all route bodies/params · `ReentrancyGuard` on 
 
 **Run E2E before merging changes to**: Studio UI/UX · wallet/session auth · generation flow · save/publish · parametric editing/version history · nesting/child assets · contracts/ABI/deploy · manifest schema · IPFS format/CIDs · asset comments. `bun run test` is **not enough** for these.
 
-**UI changes must sync E2E**: update `e2e/helpers/studio-selectors.mjs`, spec assertions, and `e2e/helpers/manifest.mjs` as the flow changes (`e2e/README.md`, edit-ui skill's E2E Sync guide).
+**UI changes must sync E2E**: update `e2e/helpers/studio-selectors.mjs`, spec assertions, and `e2e/helpers/manifest.mjs` as the flow changes (`e2e/README.md`, edit-ui skill § E2E sync).
 
 **UI design**: follow the `edit-ui` skill for Studio conventions; `frontend-design` may guide visual choices, treating the Arbesk design language (`docs/superpowers/specs/2026-10-04-ui-refresh-roadmap.md`: Graphite/Paper themes, WCAG 2.2 AA) as the fixed brief.
 

@@ -3,88 +3,49 @@ name: edit-ui
 description: Use when making any user-facing change to the Arbesk Studio frontend (Pug/SCSS/JS) — "add a panel/button/dialog", "add a keyboard shortcut", "update the layout", "style a component", "rebuild the frontend", or any change to app.pug, SCSS, or JS UI modules. Also use when the UI "feels wrong" or must stay consistent with the Arbesk design language (Graphite/Paper themes, WCAG 2.2 AA).
 ---
 
-# Arbesk Studio UI / UX
+# Arbesk Studio UI
 
-Scope: user-facing UI in `frontend/src/` + `frontend/scripts/` — panels, buttons, controls, viewport, keyboard shortcuts, selection feedback, drag/drop, empty states. Goal: an asset repository with a viewer — minimal chrome, keyboard-driven, immediately responsive, accessible (WCAG 2.2 AA).
+Source in `frontend/src/` (`pug/includes/`, `scss/components/`, `js/ui/`, `js/engine/`). The backend serves `frontend/dist/`, so run `bun run build:frontend` after every change.
 
-## Design authority
+## Design authority, in order
 
-1. **WCAG 2.2 AA** — accessibility truth. Enforced by `test/frontend/theme-contrast.test.js`.
-2. **Web platform conventions** — WAI-ARIA APG patterns (`ui/menu-button.ts` for menus), browser keyboard defaults, `prefers-*` and `forced-colors` media.
-3. **Arbesk design language** — `docs/superpowers/specs/2026-10-04-ui-refresh-roadmap.md`:
-   flat surfaces, `--hairline` structure, one accent used only for the primary action,
-   sentence-case headings, Inter for UI, JetBrains Mono (`.tabular`) only for data.
+1. **WCAG 2.2 AA**, enforced by `test/frontend/theme-contrast.test.js`.
+2. **Web platform conventions**: WAI-ARIA APG patterns, browser keyboard defaults, `prefers-*` and `forced-colors`.
+3. **Arbesk design language** (`docs/superpowers/specs/2026-10-04-ui-refresh-roadmap.md`): flat surfaces, `--hairline` structure, one accent used only for the primary action, sentence case, Inter for UI text, JetBrains Mono (`.tabular`) only for data such as sizes, CIDs, versions and addresses.
 
-GNOME HIG layout heuristics (header bar, 4px spacing) are non-binding references.
+## Colour and type
 
-## Layout (library-first, Phase 2)
+- Only theme tokens from `scss/themes/_graphite.scss` and `_paper.scss`. No hex in `components/`. Spacing, radii and durations also come from tokens, not raw px.
+- A new colour role goes into both theme files and into `CONTRACT` in `theme-contrast.test.js`.
+- Text on a `color-mix()` tint you build goes into `DERIVED_TEXT_PAIRS` in the same test.
+- Light/dark selectors use `[data-scheme="dark|light"]`, never theme names.
+- `test/frontend/style-guards.test.js` fails on `--gradient-*`, `text-transform: uppercase` and hand-written mono stacks in `components/`.
+- Never signal state by colour alone (WCAG 1.4.1): add a shape, icon or text.
 
-App entry links land in the Library. Studio header, left to right: page
-switcher, New ▾ (Generate with AI / Upload model… Ctrl+O / Parametric CAD /
-separator / Empty asset Ctrl+N), asset name + `v<N> · Draft|Published`,
-Save draft, Publish (the only filled accent), network status dot + label,
-theme menu, account avatar (the network select lives inside the avatar's
-wallet popover). Studio rail: Outline (Ctrl+1) · Assets — click a card to
-open it, ⋯ to insert as live link or copy, drag to insert a live link
-(Ctrl+2) · Create (Ctrl+3) · Activity (Ctrl+4). Studio lands on Create when
-no asset is open (no `asset`/`assetId`/`manifest` in the URL), without
-overwriting the stored tab; the provider select lives in Create's closed
-"Advanced" disclosure. Asset name/collection/tier/team live in Properties →
-Asset.
+## Rules
 
-- Header element ids are load-bearing for E2E: `#newAssetBtn` is the New ▾
-  "Empty asset" item, `#disconnectWalletBtn` is the avatar,
-  `#headerbarNetworkSelect` lives in the wallet popover.
+1. **Minimal chrome.** The viewport shows the grid, the gizmo and the drop indicator. No in-scene axes, view cube or toolbar overlay. Chrome meshes carry `metadata.isViewportChrome = true`.
+2. **The Studio is view-first and perspective-only.** `E` enters Edit mode; there is no scale gizmo and no ortho view. Do not re-add `1/3/7` views.
+3. **A shortcut must earn its place.** Add one only if it is used several times a minute, the browser or OS does not own it, a visible button would not be better, and you add it to `ui/keyboard-help.ts` plus a `title` tooltip (label with `MOD` from `utils/platform.ts`).
+4. **No new `keydown` listener per module.** Add the key to an existing dispatcher, skip it when `isTypingInField()` (`utils/typing-guard.ts`) is true, and do not add an Escape handler that fires in parallel with the open dialog, popover or menu.
+5. **Menus use `initMenuButton()`** (`ui/menu-button.ts`) with a `.menu-popover` list. Never hand-roll a dropdown.
+6. **Stateful panels use Alpine.js.** Read `references/alpine.md` before writing or converting one.
+7. **Pug**: markup lives in `src/pug/includes/`, written at column 0; `app.pug` only includes. `#appDialogHost` stays a body-level sibling of `#app`. A new SCSS file needs `@use` in `styles.scss`.
+8. **Icons** come from the sprite `frontend/public/icons.svg` via `use(href="/icons.svg#id")`. No inline paths, no `<img>`.
+9. **Selection** is the HighlightLayer in `--selection`; viewport colours come from `readViewportTheme()` and follow `THEME_CHANGED`. Camera moves animate (about 300 ms).
+10. **Panels do not call each other.** They `emit()` and `on()` events from `@arbesk/asset-core/events/bus.js`.
 
-## Colour rules
+## E2E sync
 
-- Use only theme-contract tokens (`themes/_graphite.scss`, `themes/_paper.scss`). Never hex in `components/`.
-- New colour role? Add it to **both** theme files and to `CONTRACT` in `theme-contrast.test.js`.
-- Selectors that depend on light vs dark use `[data-scheme="dark|light"]`, never theme names.
-- Text on a `color-mix()` tint you build in a component (badges, banners) goes in `DERIVED_TEXT_PAIRS` in `theme-contrast.test.js` so both themes stay ≥ 4.5:1.
-- `test/frontend/style-guards.test.js` fails on `--gradient-*`, `text-transform: uppercase` or a hand-written mono stack in `components/`.
+Ids, classes, labels and status texts are a contract with `e2e/`. When one changes: update `e2e/helpers/studio-selectors.mjs`, then the spec assertions, then `e2e/helpers/manifest.mjs` if the manifest shape changed, then run `bun run test:e2e -- --project=chromium`. `e2e/README.md` lists what each spec covers.
 
-## Hard Rules
+Things that bite when writing specs:
 
-1. **Minimal chrome** — no in-scene axes, view cube, toolbar overlay. Only grid, gizmo, drop indicator.
-2. **Shortcuts earn their place** — add a chord only if it passes the 4-question bar: (1) frequent enough, (2) the browser/OS doesn't already own it, (3) not better as a visible button, (4) you'll document it in `keyboard-help.ts` + a `title` tooltip. Viewport keys: `F` frame selected, `Home` frame all, `0` reset view, `V` time, `Esc` deselect. The Studio is **view by default**: `E` enters Edit, then `T` move / `R` rotate / `G` drop to floor / `Shift+R` reset. There is no scale gizmo (scale is the Inspector's numeric field, Edit-only) and the grid toggle has no key. **The viewport is perspective-only** — `1/3/7` ortho views were removed because they forced custom projection code that broke and became unstable; we reverted to Babylon's default viewer. Never re-add them.
-3. **Form fields steal keystrokes** — every global `keydown` handler guards `document.activeElement` (input/textarea/select/contentEditable). Prefer ONE shared guard helper + ONE dispatcher/keymap over per-module listeners — ~20 listeners across ~17 modules already exist and drift; don't add more.
-4. **Selection feedback = HighlightLayer** in `--selection` (re-coloured live on `THEME_CHANGED`); background and grid come from `--viewport-bg` / `--viewport-grid` via `readViewportTheme()`; camera framing = 300ms animation.
-5. **All viewport chrome gets `metadata.isViewportChrome = true`** so `clearScene()` preserves it.
-6. **Rebuild after every change** — `bun run build:frontend`; backend serves `dist/`, not `src/`.
-7. **Babylon.js is a CDN global** — never `import` it; loaded via `<script>`.
-8. **Pug partials live in `src/pug/includes/`** — `app.pug` is a slim shell that `include`s them (head / header / studio-sidebar / studio-main / bottombar / library-view / wallet-popover / dialog-host); `build-pug.js` skips files with `include`/`mixin`/`layouts` in the path so partials never render standalone. Partials are written at column 0 (Pug re-indents at the include site); `#appDialogHost` must stay a body-level sibling of `#app`. Entry pages remain `app.pug` (unified SPA shell: Studio + Library views) and `index.pug` (landing page).
-9. **New SCSS file needs `@use` in `styles.scss`** or it won't be built.
-10. **Icons come from the sprite** — never inline SVG paths in Pug. Add a `<symbol>` to `frontend/public/icons.svg` and reference `use(href="/icons.svg#id")`; keep symbol children bare so host `stroke="currentColor"` inherits (no `<img>` — kills theming).
-11. **CSS variables, not raw px** — spacing, colors, radii, durations from tokens.
-12. **E2E is a public contract** — renaming an id/class/label, changing status text, or reordering a flow breaks specs. Update `e2e/helpers/studio-selectors.mjs` + specs and run the suite.
-13. **Stateful panels use Alpine.js** — register via `registerAlpineComponent()` in `ui/alpine.ts`; shared reactive state lives in `Alpine.store(...)` (component factories return getters over the store, `init()` seeds before subscribing). Alpine renders asynchronously — `await Alpine.nextTick()` before imperative post-render DOM work (Babylon canvas mounts), and `Alpine.initTree()`/`Alpine.destroyTree()` for dynamically-injected subtrees. Keep engine DOM (canvases, focus traps) imperative. See `references/alpine.md`.
-14. **Menus use `initMenuButton()`** (`ui/menu-button.ts`, WAI-ARIA APG) with a `.menu-popover` list — never a hand-rolled dropdown. It fixed-positions the menu (the headerbar is `overflow: hidden`), keeps keys inside the open menu, and takes `align: "start" | "end"`.
-15. **Type** — UI text inherits `--font-family` (Inter); data (sizes, CIDs, versions, addresses) uses `.tabular` (JetBrains Mono + tabular figures). Sentence case everywhere; no `text-transform: uppercase`.
-
-## File Map
-
-| File | Role |
-|------|------|
-| `frontend/src/pug/app.pug` | unified SPA shell — includes only; real markup in `src/pug/includes/` |
-| `frontend/src/pug/index.pug` | landing/marketing page |
-| `frontend/src/scss/styles.scss` | imports all component files |
-| `frontend/src/js/engine/scene-graph.ts` | Babylon engine, camera, selection, keyboard |
-| `frontend/src/js/engine/state.ts` | shared mutable `state` object |
-| `frontend/src/js/engine/parametric-preview.ts` | inspector live editing |
-| `frontend/src/js/ui/asset-library.ts` | gallery of saved assets |
-| `frontend/src/js/ui/asset-drop-zone.ts` | drop target for dragged cards |
-| `frontend/src/js/ui/asset-save.ts` | Save draft / Publish wiring |
-| `frontend/src/js/ui/outliner.ts` | scene graph tree |
-| `frontend/src/js/ui/keyboard-help.ts` | `Ctrl+/` shortcuts reference — the discoverability gatekeeper: every new shortcut lands here |
-| `frontend/src/js/engine/undo-controller.ts` | `Ctrl+Z`/`Ctrl+Y` undo/redo dispatcher |
-| `frontend/src/js/utils/platform.ts` | `MOD` (Ctrl on Linux/Win, ⌘ on Mac) for shortcut labels |
-
-## Supporting Files (read on demand)
-
-- Read `references/checklists.md` when adding a panel or keyboard shortcut (4-question bar, shared guard, dispatcher, Escape stack).
-- Read `references/patterns.md` when you need an empty state, drop zone, or spinner.
-- Read `references/pitfalls.md` when something feels off (ortho frustum, HighlightLayer stencil, mesh disposal, form guards).
-- Read `references/alpine.md` when converting an imperative panel to Alpine.js (store/getter/template pattern, dynamic components, async render timing, bun test + jsdom testing).
-- Read `references/e2e-sync.md` when changing any button/id/label/flow/status text.
-- Read `references/deep-dive.md` for architecture, shell, interaction principles, state, events, Babylon, and SCSS internals.
+- Wait on durable state (`page.waitForURL`), not on `#srStatus`, which is overwritten between steps.
+- A token id is hex in the URL (`?asset=0x…`) and decimal on gallery cards (`data-token-id`). Compare as `BigInt`.
+- Studio opens on the Create tab when the URL has no `asset`/`assetId`/`manifest`; switch to Outline explicitly.
+- `#emptyViewport` covers the viewport centre when no asset is open and can swallow canvas clicks.
+- The open asset's own card is hidden in the Assets panel, and cards are disabled until an asset is open.
+- The outliner labels a child node `Token #<id>` and shows a newly linked child only after a save.
+- The provider select sits inside the closed `#composerAdvanced` details: open it first (`selectProvider()` in `flows.mjs`).
+- The rate-limit reset call must send `Content-Type: application/json`, or it fails with 415 and limits pile up across runs.

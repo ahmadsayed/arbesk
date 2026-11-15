@@ -5,55 +5,38 @@ description: Use for any IPFS read/write/pin/unpin issue, backend or frontend �
 
 # Arbesk IPFS & Storage
 
-## Quick Decision
+Two backends behind `src/api/storage/index.ts`: a private Kubo node (local, E2E) and Pinata (testnet, production). The browser uploads asset content itself with a credential minted by `POST /api/v1/ipfs/upload-url(s)` (`src/api/routes/ipfs.ts`); asset bytes do not pass through the backend.
 
-| Symptom / need | Action |
-|----------------|--------|
-| Content not found after `ipfs.add()` | Node init / corrupted repo / `StorageMax` — read `references/troubleshooting.md` |
-| Frontend writes fail with CORS | Read `references/docker-config.md` |
-| `WRONG_CONTRACT` with smart account | Validate events, not `receipt.to` — see `solidity-smart-contracts` skill |
-| Manual unpin after burn | `POST /api/v1/ipfs/unpin` — read `references/api-reference.md` |
-| Pinata: slow mints, signed-URL reuse, 403/404, "pool misconfigured" | Read `references/pinata-mode.md` (`PINATA_UPLOAD_TTL` must exceed `PINATA_POOL_EXPIRY_MARGIN`) |
+## Rules (both backends)
 
-## Key Rules
+1. Backend manifest reads go through `catManifest()` (`src/api/ipfs-utils.ts`): timeout plus decoding.
+2. Pin failures are non-fatal: log with `[IPFS]` and continue. Kubo's `add` already pins; the browser writer pins again on purpose (`packages/asset-core/src/storage/ipfs/upload-with-credential.ts`).
+3. Unpin **before** burning. After the burn `tokenURI` reverts and `/ipfs/unpin` can no longer verify ownership. The call is best-effort and must never block the burn.
+4. Never unpin `child_ref` content: it belongs to another token.
+5. Deleting an asset from a collection unpins nothing, because forks share its version chain. Only the GC (`src/api/ipfs-gc.ts`) prunes. Reachable = each live token's current collection version, its assets and their full histories. Assets listed only by older collection versions are not followed.
+6. No prefetching in the browser cache (`frontend/src/js/ipfs/remote-ipfs.ts`); it is on-demand by design.
+7. "not pinned or pinned indirectly" on unpin counts as success.
 
-1. Every `ipfs.add()` must be followed by explicit `ipfs.pin.add()` — defense-in-depth.
-2. Pin failures non-fatal — try/catch, log, continue.
-3. Backend manifest reads via `catManifest()` only (timeout + chunk decoding).
-4. Never unpin other tokens' content — `child_ref` CIDs excluded from unpin-on-burn.
-5. No prefetching in the frontend cache — on-demand by design.
-6. IPFS ports loopback-only (`127.0.0.1`) — node stays private.
-7. Log IPFS ops with `[IPFS]` tag.
-8. Storage cap 100 GB (`Datastore.StorageMax`).
-9. Unpin before `ipfs repo gc`.
-10. Test with backend running — `./scripts/start-dev.sh`.
-11. Pinata signed URLs strictly single-use (verified 409 "duplicate file id" on reuse, no `max_uses`) — never reuse across files; batch-mint. §2–3.
-12. Worker and main thread never share a live credential pool (structured clone) — reserve follow-up credential *before* the worker call (`reserveFollowUpCredential`, `async-gltf.js`). §3.
-13. Two pools, don't conflate: backend pre-minted (hides sign latency, §7) vs frontend per-publish (works around single-use, §3).
-14. Background "loop until caught up" jobs need a round cap — unbounded microtask loops starve the event loop, hanging the process. §7.
-15. Deleting an asset from a collection unpins nothing — forks share its version chain. Only the GC (`src/api/ipfs-gc.ts`) prunes it: reachable = each live token's current collection version, its assets, and their full histories; assets listed only by older collection versions are not followed.
+## Kubo
 
-(§ = section of `references/pinata-mode.md`.)
+Private by configuration in `docker/entrypoint.sh`: no DHT, no bootstrap peers, loopback ports, `StorageMax` 100 GB, daemon started with `--enable-gc`. Keep it private.
 
-## File Map
+```bash
+docker compose logs -f ipfs
+docker compose exec ipfs ipfs cat <CID>     # does the content exist?
+docker compose exec ipfs ipfs pin ls        # also: repo stat, repo gc
+```
 
-| File | Role |
-|------|------|
-| `src/api/routes/ipfs.ts` | `POST /ipfs/upload-url`, `/upload-urls` (batch), `/unpin` — all session-gated |
-| `src/api/ipfs-utils.ts` | `catManifest()` — read with timeout |
-| `src/api/assets/generate-node.ts` | Generation: add, build manifest, pin |
-| `src/api/storage/pinata-adapter.ts` | Pinata `add`, pooled `mintUploadCredential(s)`, gateway reads, sign diagnostics |
-| `src/api/storage/index.ts` | Kubo/Pinata selection; pool env vars |
-| `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser-side writer |
-| `frontend/src/js/ipfs/upload-with-credential.ts` | Worker-safe upload; pool consumption |
-| `packages/asset-core/src/formats/gltf/async-gltf.ts` | Pool sizing/reservation for worker-offloaded decompose |
-| `frontend/src/js/ipfs/remote-ipfs.ts` | Browser-side reader + cache |
-| `docker/Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml` | Kubo image, init/isolation config, orchestration |
+## Pinata (`IPFS_BACKEND=pinata`, `src/api/storage/pinata-adapter.ts`)
 
-## Reference Files
+Facts below were verified against the live account on 2026-07-14; Pinata's docs do not state them.
 
-- Read `references/deep-dive.md` for architecture, pinning, write/read paths, cache, manifest chain model.
-- Read `references/api-reference.md` for `/ipfs/upload-urls` and `/ipfs/unpin` specs.
-- Read `references/docker-config.md` for Kubo container, isolation config, volumes.
-- Read `references/troubleshooting.md` for manual pin/GC ops and symptom/cause/fix.
-- Read `references/pinata-mode.md` for `IPFS_BACKEND=pinata` — single-use URLs, batch-mint, credential pools, diagnostics, latency.
+- **Reads use the authenticated gateway.** A 404 "owner of this gateway does not have this content pinned" means the CID was never uploaded to this account (for example it came from a Kubo run). It is not a bug.
+- **A signed upload URL accepts exactly one upload.** A second one returns 409 "duplicate file id". There is no `max_uses`. N files need N URLs.
+- **Mint in one batch**: `POST /api/v1/ipfs/upload-urls {count}` (1–200), wrapped by `getPooledUploadCredential(count)` in asset-core `async-gltf.ts`. Estimate `count` as an upper bound: unused URLs just expire, too few starve the upload midway.
+- **A retry must draw a fresh URL.** The failed request may have reached Pinata, so the same URL gives a false 409.
+- **A worker gets a copy of the credential pool** (structured clone), so the main thread still holds URLs the worker spent. Any flow that uploads in a worker and then writes from the main thread must call `reserveFollowUpCredential()` before the worker call.
+- **Two pools, do not conflate them.** The browser pool exists because URLs are single-use. The backend pool pre-mints URLs to hide signing latency: `PINATA_POOL_SIZE` (20, 0 disables), `PINATA_POOL_EXPIRY_MARGIN` (60 s), `PINATA_UPLOAD_TTL` (300 s). TTL must exceed the margin or every entry is stale at birth; the adapter logs `pool misconfigured`.
+- **Keep `MAX_REFILL_ROUNDS`.** A "loop until caught up" refill without a cap spins on microtasks under that misconfiguration and hangs the whole process with no output.
+- **Latency**: one mint is 0.4–0.6 s warm, 1–2 s on a cold connection. About 9–10 s is the SDK's own retry backoff (1 + 2 + 4 s) after a transient failure, not a code regression. Grep the backend log for `pinata sign` to see each attempt.
+- **When behaviour is unclear, test the real account** with a throwaway script (import the SDK from `node_modules/pinata/dist/index.mjs`). Delete the test files afterwards with `pinata.files.public.delete([...ids])`; the raw bulk DELETE endpoint returned 404.

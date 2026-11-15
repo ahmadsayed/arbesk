@@ -3,51 +3,34 @@ name: arbesk-worktree
 description: Use when the user asks to create a git worktree, run tests in a linked worktree, isolate Docker/test infrastructure from the main checkout, or verify changes from a fresh worktree. In this repo, use this instead of superpowers:using-git-worktrees.
 ---
 
-# Arbesk Worktree Testing
+# Arbesk Worktree
 
-Create a git worktree and run the full test stack without colliding with the main checkout's Docker containers or ports.
+In this repo this replaces `superpowers:using-git-worktrees`, also when `executing-plans` or `subagent-driven-development` asks for a worktree. The generic skill skips the per-worktree Compose project, ports and `IPFS_BACKEND=kubo`.
 
-**Precedence:** in this repo, this skill replaces `superpowers:using-git-worktrees` — including when `executing-plans` or `subagent-driven-development` asks for a worktree. The generic skill skips the per-worktree Compose project, port and `IPFS_BACKEND=kubo` setup.
-
-## Quick Decision
-
-| Question | Action |
-|----------|--------|
-| Clean env to test current changes? | `scripts/create-worktree.sh <name>` |
-| Port/container clashes with main checkout? | Worktree gets its own Compose project, backend port and service ports (Hardhat/IPFS/Nostr) — E2E can run while the main checkout's dev server is up |
-| E2E but main `.env` uses Pinata? | Script forces `IPFS_BACKEND=kubo` in worktree `.env` |
-| Done with worktree? | `docker compose -p <project> down` → `git worktree remove .worktrees/<name>` |
-
-## Key Rules
-
-1. **Always use the helper script** — seeds worktree with current changes, real env files, node_modules symlinks.
-2. **Never hand-copy `.env.example`** — script copies the real root `.env` + `blockchain/.env`.
-3. **E2E requires Kubo** — local E2E asserts `Qm...` CIDs via `127.0.0.1:8080`.
-4. **Prefix `COMPOSE_PROJECT_NAME` for contract tests** — else `test:contracts` targets the wrong containers.
-5. **Clean up in order** — stop Docker project → chown root-owned artifacts → remove worktree.
-6. **Don't commit worktree files** — `.worktrees/` is gitignored; apply changes to the main checkout.
-
-## Workflow
+## Create and test
 
 ```bash
-bun run worktree:create -- feature-xyz   # prints COMPOSE_PROJECT_NAME + backend/service ports
+bun run worktree:create -- feature-xyz   # scripts/create-worktree.sh; prints the Compose project and ports
 cd .worktrees/feature-xyz
+git switch -c feat/feature-xyz           # the worktree starts on a detached HEAD
 bun run test:frontend && bun run test:api
 COMPOSE_PROJECT_NAME=$(./scripts/start-dev.sh --print-project) bun run test:contracts
 bun run test:e2e -- --project=chromium
 ```
 
-## Troubleshooting
+- Always use the script. It copies modified and untracked files, the real root `.env` and `blockchain/.env`, symlinks `node_modules`, builds the frontend and compiles the contracts. Never hand-copy `.env.example`.
+- It forces `IPFS_BACKEND=kubo`: local E2E asserts `Qm…` CIDs through `127.0.0.1:8080`.
+- It does not copy `.env.pinata`. Copy it from the main checkout before `./scripts/start-dev.sh --testnet`.
+- Each worktree has its own Compose project, backend port and service ports, so E2E can run while the main checkout's dev server is up.
+- `test:contracts` without the `COMPOSE_PROJECT_NAME` prefix targets the main checkout's containers.
 
-| Symptom | Cause / Fix |
-|---------|-------------|
-| `test:frontend` fails on `frontend/dist/js` | Frontend not built — script builds it automatically |
-| `deployment-integrity` can't find ABI artifacts | Contracts not compiled — script compiles them |
-| `test:contracts` can't find containers | Missing `COMPOSE_PROJECT_NAME=<worktree-project>` prefix |
-| E2E 03 `fetch failed` | Was a hardcoded port — fixed via `fetchTokenManifest()`; never re-hardcode |
-| E2E 06 save timeout | Upload-credential rate limit — fixed by raising `UPLOAD_URL_RATE_LIMIT_MAX` in E2E global setup |
-| `git worktree remove` permission denied | Run chown cleanup on `blockchain/artifacts` + `blockchain/deployments` (see `reference.md`) |
+## Clean up (in this order)
 
-## Reference
-
-Read `reference.md` when you need the full `create-worktree.sh` behavior list, the infra file map, or the complete cleanup/chown commands.
+```bash
+cd .worktrees/feature-xyz
+docker compose -p "$(./scripts/start-dev.sh --print-project)" down
+# Docker leaves root-owned build output; without this, `git worktree remove` fails with permission denied
+docker run --rm -v "$(pwd):/ws" alpine sh -c \
+  'chown -R $(stat -c "%u:%g" /ws) /ws/blockchain/artifacts /ws/blockchain/deployments 2>/dev/null || true'
+cd ../.. && git worktree remove .worktrees/feature-xyz --force && git worktree prune
+```

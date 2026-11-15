@@ -3,51 +3,25 @@ name: arbesk-gltf-pipeline
 description: Use when working with glTF/GLB loading, materials, or the compose/decompose pipeline — "model not showing", "change material colors", "texture not rendering", "mesh is black", buffer/image URI formats, IPFS content-addressing, post_processor overlays, or save/publish persistence. When in doubt whether a rendering problem is Babylon or pipeline, invoke this first.
 ---
 
-# Arbesk glTF 2.0 / GLB Pipeline
+# Arbesk glTF / GLB Pipeline
 
-## Quick Decision
+Stored form: a **composite** glTF (`node.source.path === "composite.gltf"`) whose buffers and images are `ipfs://<CID>` blobs. Render form: the same JSON with data URIs. Code lives in `packages/asset-core/src/formats/gltf/`; host-agnostic usage is in `docs/ASSET_CORE_SDK.md`.
 
-| Symptom | Action |
-|---------|--------|
-| glTF loading failure? | composite → monolithic → legacy CID-prefix → valid CID. → `references/troubleshooting.md` |
-| Colors not applying after save? | Check node is decomposed (`source.path === "composite.gltf"`). → `references/troubleshooting.md` |
-| New material property? | Setter in `material-editor.js`, wire to inspector, update save flow. → `references/deep-dive.md` |
-| OBJ/FBX support? | Update `detectAssetFormat()`, `loadAsset()`, save flow. → `references/deep-dive.md` |
+## Rules
 
-## Key Rules
+1. **One implementation.** `gltf-core.ts` (`composeGltfJson`, `decomposeGltfJson`, `isComposite`) holds the transforms. `composer.ts`, `decomposer.ts` and the worker (`frontend/src/js/workers/gltf-worker.ts`) only inject ports. Change behaviour in `gltf-core.ts`.
+2. **Decompose happens on save, not at load.** A GLB or monolithic glTF loads as-is and becomes composite at the first Save draft or Publish (`prepareManifestForWrite()` in `frontend/src/js/services/asset-save/manifest-builder.ts`). It never goes back.
+3. **One buffer per mesh** (`gltf-buffer-split.ts`). Never assume `buffers[0]` holds all geometry. Small meshes, animation and skin data, and accessors shared by several meshes go to one shared buffer, which comes last. A document with a bufferView extension such as `EXT_meshopt_compression` is not split. Older single-buffer composites still load.
+4. **A material edit changes only the composite JSON CID.** Buffer and image CIDs stay, which is the point of the format.
+5. **Where an edit is stored depends on the node.** Composite node: colours and mesh overrides are baked into the composite (`editCompositeColors`). Monolithic node: they stay in `node.post_processor` and are applied at load. Scale is always `post_processor.scale`, on every node.
+6. **Stored bytes are sniffed, not assumed.** Textures already in a compressed format (PNG, JPEG, WebP, GIF) are stored raw; buffers and the composite JSON are brotli-framed. Readers detect which.
+7. **Token child nodes (`child_ref`) have no glTF source** and never enter this pipeline.
+8. **Worker calls fall back to the main thread** (`async-gltf.ts`), so a worker bug can hide behind a slow but working save. The worker has no import map: see AGENTS.md §3 for what it may import.
 
-1. **GLB is decomposed on save, not at load** — loads as a raw blob; runtime edits via `post_processor` overlays; on save/publish `decomposeGLB()` turns it into a composite glTF directly (no `.gltf` conversion step).
-2. **glTF → composite on first save** — one-way; stays composite once decomposed.
-3. **Material edits = new composite CID only** — buffers/images keep original CIDs.
-   **One buffer per mesh** (`gltf-buffer-split.ts`): a mesh or texture change re-stores only that mesh or texture, and assets sharing a mesh share its buffer. Never assume `buffers[0]` holds all geometry.
-4. **Scale is always `post_processor`** — geometry transform, not material, even for decomposed nodes.
-5. **Composer deep-clones** — `composeGlTF()` clones via `JSON.parse(JSON.stringify())` before modifying.
-6. **IPFS reads via gateway** — browser `127.0.0.1:8080`; backend `127.0.0.1:5001`.
-7. **Legacy CID-prefix (`data:application/cid;base64,<CID>`) no longer produced** — new code uses composer/decomposer.
-8. **Token child nodes have no glTF source** — skip `loadAsset()` entirely.
+## Debugging
 
-## File Map
-
-All row details: `references/deep-dive.md`.
-
-| File | Role |
-|------|------|
-| `packages/asset-core/src/formats/gltf/gltf-core.ts` | **Shared pure transforms** — `isComposite`, dedup-meta helpers, `composeGltfJson`, `decomposeGltfJson` (side effects injected). Single implementation used by composer, decomposer, AND the worker — change compose/decompose behavior here only |
-| `packages/asset-core/src/formats/gltf/composer.ts` | Main-thread compose wrapper (IPFS read port + cache injection) |
-| `packages/asset-core/src/formats/gltf/decomposer.ts` | Main-thread decompose wrapper (IPFS write port + dedup injection) |
-| `packages/asset-core/src/formats/gltf/material-editor.ts` | PBR prop edits, commits new CID |
-| `frontend/src/js/engine/scene-graph.ts` | `loadAsset()` dispatcher, `loadNode()` orchestration |
-| `frontend/src/js/engine/time-travel.ts` | `applyColor()`, `applyScale()` runtime overlays |
-| `frontend/src/js/engine/parametric-preview.ts` | Inspector UI: color/scale/mesh overrides |
-| `frontend/src/js/services/asset-save/manifest-builder.ts` | `prepareManifestForWrite()` — save/publish |
-| `packages/asset-core/src/formats/gltf/async-gltf.ts` | Worker-pool wrappers: compose, decompose, GLB parse, source-color edits (main-thread fallback) |
-| `frontend/src/js/workers/gltf-worker-pool.ts` | `workerpool` of `gltf-worker.js` for off-main-thread glTF work |
-| `frontend/src/js/workers/gltf-worker.ts` | Worker entry: `compose`, `composeToBytes`, `decomposeGltf`, `decomposeGlb`, `decomposeAndStore`, `editSourceColors` |
-| `frontend/src/js/ipfs/write-to-ipfs.ts` | Browser IPFS write |
-| `frontend/src/js/ipfs/remote-ipfs.ts` | Browser IPFS read |
-
-## References
-
-- Read `references/deep-dive.md` when working on architecture, URI formats, compose/decompose, scene graph, post-processor, materials, or the save flow.
-- Read `references/troubleshooting.md` when debugging loading/colors, adding properties or formats, or forcing re-decomposition.
-- For embedding the glTF pipeline in another host (backend/script/desktop), see `docs/ASSET_CORE_SDK.md`; the pipeline is part of the `packages/asset-core/src/` SDK and is consumed through `createArbeskCore()` ports.
+| Symptom | Check |
+|---|---|
+| Model not showing | Is the source composite (`ipfs://` URIs)? Then compose must run and every referenced CID must resolve: `docker compose exec ipfs ipfs cat <CID>`. Console tags: `[SCENE]`, `[COMPOSE]`, `[DECOMPOSE]`. |
+| Colour lost after save | Composite node: the colour should be in the new composite CID and `post_processor.color` absent. Monolithic node: it should be in `post_processor.color`. |
+| Geometry loads but is black, clipped or leaks memory | Not this pipeline: see the `babylon-3d-engine` skill. |

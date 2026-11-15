@@ -1,190 +1,40 @@
-# Alpine.js — stateful-panel migration playbook
+# Alpine.js in Arbesk Studio
 
-How Arbesk Studio uses Alpine.js for stateful panels. Follow this when
-converting an imperative DOM module to Alpine, or adding a new reactive panel.
-The canonical consumers are dialog.ts, wallet-popover.ts, ledger-panel.ts,
-header-wallet-button.ts, collaborators-panel.ts, and chat-messages.ts.
+Working examples: `ui/dialog.ts`, `ui/wallet-popover.ts`, `ui/ledger-panel.ts`, `ui/collaborators-panel.ts`, `ui/chat-messages.ts`. Copy the shape of the closest one.
 
-## The canonical pattern (store + getter + template)
+## Pattern
 
-1. **Register** the component via registerAlpineComponent(name, factory) in
-   frontend/src/js/ui/alpine.ts (never call Alpine.start() yourself — the
-   loader schedules it once on DOMContentLoaded).
+- Register with `registerAlpineComponent(name, factory)` from `ui/alpine.ts`. Never call `Alpine.start()`; the loader does it once.
+- Shared state lives in `Alpine.store(name, {...})`; the component exposes getters over it. Code outside Alpine changes the **store**. Changing a component's `this` from outside does not re-render.
+- `Alpine.store(name, value)` is a setter and returns undefined. Read the store back with `Alpine.store(name)`.
+- `init()` seeds from the source stores first, then subscribes. Page-load flows such as wallet auto-connect can emit before `Alpine.start()`.
+- Several hosts of one component: per-instance `Alpine.reactive({...})` in a module `Map`, not one global store.
+- A subtree added after start: set `x-data`, call `Alpine.initTree(el)`; tear down with `Alpine.destroyTree(el)` and remove `x-data`. `initTree` does nothing before `Alpine.start()` has run.
+- Parameters: `x-data="name({...})"` with the object `JSON.stringify`-ed into the attribute.
 
-   ~~~ts
-   import { Alpine, registerAlpineComponent } from "./alpine.ts";
+## Template traps
 
-   // Shared reactive state lives in a store. NOTE: Alpine.store(name, value)
-   // is a SETTER (returns undefined) — read it back afterward.
-   let _state: MyState | null = null;
-   function state(): MyState {
-     if (!_state) {
-       if (!Alpine.store("myPanel")) Alpine.store("myPanel", { /* defaults */ });
-       _state = Alpine.store("myPanel") as MyState;
-     }
-     return _state;
-   }
+- `x-for` needs exactly one root element per iteration. If items must be direct flex children, make that root the item and nest `<template x-if>` inside it.
+- `:class="'a b'"` (string) **replaces** the class attribute. `:class="{ active: cond }"` (object) keeps the static classes.
+- `x-if` removes the node; `x-show` hides it. Keep whichever matches the DOM the E2E specs expect.
+- `x-model` needs a getter and a setter on the component.
 
-   export function myPanel() {
-     return {
-       get someField() { return state().someField; },   // getters read the store
-       doThing() { /* mutate state() or delegate */ },
-     };
-   }
-   registerAlpineComponent("myPanel", myPanel);
-   ~~~
+## Timing
 
-2. **Template** (x-data="myPanel" in Pug) uses x-text / x-show / x-if / x-for /
-   x-model / @click / :class / :key.
+Alpine renders on the next microtask. A `querySelector` right after a store write finds nothing. `await Alpine.nextTick()` before imperative work such as mounting a Babylon canvas, focusing or measuring.
 
-3. **External code mutates the store, never the component's captured 'this'.**
-   Mutating a component's 'this' from outside an Alpine expression does NOT
-   trigger reactivity — store writes always do.
+## Keep imperative
 
-4. **init() must SEED from source stores before subscribing.** Page-load flows
-   (wallet auto-connect) can emit before Alpine.start(); a subscription-only
-   init() misses those earlier events.
+Babylon canvases, focus traps, promise queues and any DOM node. A DOM node placed in a reactive store is proxied and then fails `appendChild`. Keep those at module level and mount them after `nextTick()`.
 
-## Parameterized + dynamically-injected components
+## Unit tests (bun test + jsdom)
 
-registerAlpineComponent accepts (...args: any[]) => object factories, so
-x-data="name({...})" passes params (JSON.stringify them into the attribute):
+- First line `// @test-env dom`. Not happy-dom: it misparses `:class`.
+- jsdom is already `complete`, so Alpine starts on a microtask. Wait one real tick (`setTimeout(r, 0)`) after importing the module and before `Alpine.initTree`.
+- Flush with real ticks. Bun's fake timers do not cover `queueMicrotask` or `requestAnimationFrame`.
+- Assert on the store, not on the DOM straight after a write.
+- In `afterEach`: `Alpine.destroyTree(document.body)`, `Alpine.stopObservingMutations()`, reset the body, and reset any module-level state (modules load once per file).
 
-~~~ts
-function collaboratorPanel(params: { id: string; tokenId: string | number; editable: boolean }) {
-  const state = Alpine.reactive({ /* per-instance fields */ });
-  byId.set(params.id, state);
-  return { get canEdit() { return state.editable && state.isOwner; }, /* … */ };
-}
-registerAlpineComponent("collaboratorPanel", collaboratorPanel);
+## E2E
 
-export function initCollaboratorPanel(container, tokenId, opts) {
-  container.innerHTML = TEMPLATE;                          // static HTML string
-  container.setAttribute("x-data", "collaboratorPanel(" + JSON.stringify({ id, tokenId, editable }) + ")");
-  Alpine.initTree(container);                              // initialize the subtree
-  return { refresh, destroy: () => destroyCollaboratorPanel(container) };
-}
-function destroyCollaboratorPanel(container) {
-  if (container.hasAttribute("x-data")) {
-    Alpine.destroyTree(container);
-    container.removeAttribute("x-data");
-  }
-  container.innerHTML = "";
-}
-~~~
-
-- **Use Alpine.initTree(el)** for a subtree added after Alpine.start();
-  teardown with Alpine.destroyTree(el) + remove x-data.
-- **Per-instance state** (multiple hosts of one component) belongs in
-  Alpine.reactive({...}) + a module Map keyed by id/container — NOT a single
-  global store (two hosts would fight over it).
-- Put the injected template in a 'const TEMPLATE' string in the TS file (the
-  Library dialog's host is created at runtime, so it can't be a Pug partial).
-  The Studio's static host placeholder just gets replaced by the same string.
-
-## x-for template constraints
-
-- **One root element per iteration.** Multiple sibling <template x-if> roots
-  inside <template x-for> do not reconcile reliably.
-- **Direct flex children.** .chat-history-list uses display:flex;
-  flex-direction:column; gap + per-bubble align-self, so bubbles must be
-  DIRECT children. Solution: make the single root the bubble and compute its
-  class, with nested <template x-if> for per-kind content:
-
-  ~~~pug
-  template(x-for="msg in messages" :key="msg.id")
-    div(:class="bubbleClass(msg)" :data-msg-id="msg.id")
-      template(x-if="msg.kind === 'text'")
-        span.chat-bubble-content(x-text="msg.text")
-      // … one x-if per content block
-  ~~~
-
-- **:class semantics differ by shape:**
-  - :class="'a b c'" (STRING) **replaces** the whole class attribute — so
-    return the FULL class list, and don't rely on a static class="…" on the
-    same element.
-  - :class="{ active: cond }" (OBJECT) **toggles** keys while preserving the
-    static class — use this for conditional modifiers on a fixed base.
-- **x-if vs x-show:** <template x-if> removes the node from the DOM; x-show
-  sets display:none and keeps it. Match the pre-Alpine DOM contract (hidden
-  attribute → node present but hidden → x-show; a node that was only appended
-  conditionally → x-if).
-- **x-model needs getter + setter** on the component (two-way binding).
-
-## Async render timing (the #1 gotcha)
-
-Alpine re-renders on the **next microtask** after a store mutation. A
-synchronous querySelector right after addX()/store write returns nothing.
-
-- **For imperative post-render work** (Babylon canvas mount, focus, measuring),
-  'await Alpine.nextTick()' first, then query via an id/x-ref/data-attribute:
-
-  ~~~ts
-  await Alpine.nextTick();
-  const canvas = assetMessage.canvas;   // getter queries '[data-msg-id="…"] .chat-asset-canvas'
-  if (!canvas) { assetMessage.markFallback(); return; }
-  await createChatPreview(id, canvas, …);
-  ~~~
-
-- **Alpine.start() runs once** (DOMContentLoaded / microtask when readyState
-  is "complete"). Alpine.initTree(el) initializes a dynamically-added subtree
-  only AFTER start — do not rely on it working before start.
-
-## What stays imperative (AGENTS.md rule #5)
-
-Do NOT force these into reactive stores — hand-roll and leave a comment saying
-why:
-
-- **Babylon canvases / live 3D previews** — the engine renders into a real
-  <canvas> that must be created/disposed imperatively. Mount it post-render via
-  Alpine.nextTick().
-- **Focus traps, promise queues, DOM nodes** — storing a DOM node in a reactive
-  store proxies it and fails DOM brand checks (appendChild etc.). Keep those
-  module-level (dialog.ts does exactly this for the focus-trap + FIFO queue).
-- **The message/list state** goes in the store; **raw engine DOM** stays a
-  post-render imperative mount.
-
-## Testing Alpine components (bun test + jsdom)
-
-- Start the test file with `// @test-env dom` on its **first line**: the runner
-  (scripts/run-tests.mjs) then preloads jsdom. It must be a preload, because
-  alpinejs is CommonJS and is evaluated while the module graph links, before
-  any in-file import could register the DOM. Not happy-dom: it misparses
-  `:class` attributes, so class bindings read stale.
-- jsdom reports document.readyState === "complete", so registerAlpineComponent
-  schedules Alpine.start() on a microtask. **await a flush before calling
-  Alpine.initTree** in beforeAll:
-
-  ~~~js
-  const flush = () => new Promise((r) => setTimeout(r, 0));
-  beforeAll(async () => {
-    document.body.innerHTML = '<div id="host"></div>';
-    ({ initCollaboratorPanel } = await import("…/collaborators-panel.js"));
-    await flush();   // let Alpine.start() run
-  });
-  afterEach(async () => {
-    Alpine.destroyTree(document.body);
-    Alpine.stopObservingMutations();
-    document.body.innerHTML = '<div id="host"></div>';
-  });
-  ~~~
-
-- **Flush with real ticks, not fake timers.** Bun's fake timers do not cover
-  queueMicrotask or requestAnimationFrame, which Alpine's scheduler and focus
-  traps use (see test/frontend/dialog.test.js `flush()`).
-- **Assert on the store** (the source of truth), not synchronous DOM.
-  Alpine.store("chat").messages is where addChatMessage writes; the x-for
-  render is async and belongs to E2E/build coverage.
-- **Use mock.module(path, () => ({...}))** from `bun:test` for ESM deps. Match
-  the emitted specifier convention (.js paths). A module holding state across
-  tests (e.g. dialog.ts's FIFO queue) is imported once per file under Bun, so
-  reset that state in afterEach rather than re-importing per test.
-
-## E2E contract
-
-- **Keep every id/class byte-identical** when converting (#collaboratorList,
-  .chat-bubble-asset, [data-action], …). See references/e2e-sync.md.
-- Playwright's toContainText / toBeVisible auto-wait, so the async Alpine
-  render is fine in E2E — only synchronous unit-test DOM assertions break.
-- Run bun run test:e2e -- --project=chromium after converting any flow that
-  e2e covers (generation, wallet/session, save/publish, collaborators).
+Keep every id and class byte-identical when converting a panel. Playwright auto-waits, so the async render needs no change there.

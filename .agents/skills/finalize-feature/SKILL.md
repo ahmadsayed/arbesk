@@ -40,7 +40,7 @@ NODE_OPTIONS='' npx playwright test --config=e2e/playwright.config.js --project=
 **6. Push**: `git push origin main`. Confirm `git status -sb` shows `main...origin/main` with nothing ahead.
 
 **7. Clean up** — only after the push succeeded:
-- Each worktree you're removing (the E2E one and the feature's): run `docker compose -p "$P$s" down` for `s` in `""`, `-w1`, `-w2`, `-w3`, with `P=$(./scripts/start-dev.sh --print-project)` read inside that worktree. Then run the chown step from `arbesk-worktree`'s reference, then `git worktree remove <path> --force && git worktree prune`.
+- Each worktree you're removing (the E2E one and the feature's): run `docker compose -p "$P$s" down` for `s` in `""`, `-w1`, `-w2`, `-w3`, with `P=$(./scripts/start-dev.sh --print-project)` read inside that worktree. Then run the chown step from `arbesk-worktree`'s "Clean up" section, then `git worktree remove <path> --force && git worktree prune`.
 - Branch: `git branch -d <branch>` (lowercase `-d` refuses unmerged work — never `-D` here), then `git push origin --delete <branch>` if it exists on the remote.
 - Check: `git worktree list`, `git branch -a`, `docker ps`.
 
